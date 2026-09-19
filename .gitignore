@@ -1,0 +1,86 @@
+# ─────────────────────────────────────────────────────────────
+# Send It — .gitignore
+# Derived from PRD tech stack: React Native + Expo (TS), Supabase (hosted BaaS),
+# PostHog analytics. iOS-only Phase 1. No self-hosted backend or Docker.
+# ─────────────────────────────────────────────────────────────
+
+# Secrets & environment
+.env
+.env.local
+.env.*.local
+*.env.local
+*.env.*.local
+
+# Node / npm / yarn
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm/
+.yarn/
+
+# Expo
+.expo/
+.expo-shared/
+dist/
+web-build/
+
+# Expo Application Services (EAS)
+# NOTE: eas.json IS committed (it's non-secret config). Only local artifacts are ignored.
+.easignore
+
+# React Native / Metro bundler
+.metro-cache/
+.metro-health-check*
+
+# TypeScript
+*.tsbuildinfo
+
+# Build output
+build/
+.cache/
+
+# iOS build artifacts (in case native iOS project is generated via `expo prebuild`)
+ios/build/
+ios/Pods/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcuserdata/
+ios/Podfile.lock
+# Keep ios/Podfile.lock? Convention varies. Leaving it committed is safer for RN — remove this line if you want it tracked.
+
+# Testing
+coverage/
+.nyc_output/
+
+# Supabase local dev (if using `supabase start` locally)
+supabase/.branches/
+supabase/.temp/
+
+# Editors / IDEs
+.idea/
+*.iml
+.vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.swp
+*.swo
+*.swn
+.history/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+logs/

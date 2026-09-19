@@ -1,0 +1,169 @@
+# Project Status
+
+## Last Action
+<!-- Machine-readable block — handoff.sh parses this section -->
+agent: tech-lead
+mode: review
+module: n/a
+result: success
+commit: 7e7c3b7dec149f8ce28fc34524b0304dccffc9b4
+timestamp: 2026-09-19T17:15:00+08:00
+
+## Current Phase
+
+Phase 1 — iOS MVP (Taipei + New Taipei launch). PRD drafted; awaiting Tech Lead architectural review before [INIT] tag.
+
+## Phase Plan
+
+- Phase 1: iOS MVP — Taipei/New Taipei launch (MOD-001 through MOD-011)
+- Phase 2: Community depth + Android (offline queue, expanded notifications, comments, retire/reset voting, ascent pyramid, Cloudflare Stream migration if triggered, in-app moderation if needed)
+- Phase 3: Gym partnerships (gym claim, route-setter console, official publishing, gym analytics, optional monetization)
+
+## Build Config
+<!-- Filled by PM during init. PM asks the user for the project's build, lint, and test
+     commands and writes them here. Doc-Sync copies these to production.md Shared Conventions
+     during the initial sync. Leave a value blank if that step doesn't apply. -->
+
+Build:
+Lint:
+Test:
+
+## PM Updates
+
+- 2026-09-19 — [INIT-DRAFT] Wrote finalized Phase 1 PRD from confirmed decision set (React Native + Expo iOS-only, Supabase BaaS, 60-sec beta videos with client compression, fixed 9-color hold enum, forced V-scale, APNs push for beta-video likes only, offline queue deferred to Phase 2, Report + Block in Phase 1 for App Store 1.2, English + zh-TW, Light + Dark, Supabase Studio admin only, branch-level gym seeding excluding Camp4 and Wusa). Awaiting user to provide Build/Lint/Test commands and to confirm module directory naming before running init-project.sh scaffold and creating `modules/mod-*` directories. Next: Tech Lead architectural review.
+
+## Tech Lead Reviews
+
+### Review — 2026-09-19 — init
+
+Reviewed `prd.md` rev 1 in full against the confirmed decision set and the installed toolchain. `production.md` does not yet exist (expected at this stage). Findings organised as **Concerns** (must resolve before Engineer starts MOD-001), **Recommendations** (worth deciding but not blocking), **Approved** (looks solid), and **Proposed Shared Conventions** (for Doc-Sync to lift into `production.md`).
+
+**Concerns** (must address before proceeding):
+
+- **Node version mismatch**: Machine has Node v24.14.1. Expo SDK 51 officially supports Node 18 LTS and Node 20 LTS. Node 24 is not certified and has known incompatibilities with several React Native native modules. Decision needed: install Node 20 LTS (via `fnm` / `nvm`) and pin via `.nvmrc`. Documented in `setup.md` step 1.
+- **Xcode full IDE missing**: Only Command Line Tools are installed. `xcodebuild` fails. iOS simulator and TestFlight builds require the full Xcode.app (~7 GB from Mac App Store). Blocks any iOS smoke test, so must be resolved before Engineer scaffolds MOD-001. Documented in `setup.md` step 2.
+- **AC-032 says "playable inline within 60 seconds of upload completion" — but there is no transcoding pipeline in Phase 1**. Supabase Storage serves the file as-uploaded; playability depends entirely on iOS AVPlayer accepting whatever container/codec the client compression produced. Risk: an unusual codec (e.g., HEVC in a specific profile from an older iPhone) may not decode inline on all devices. Recommendation: standardise the client compression output to **H.264 baseline in MP4 (AAC audio)** in the MOD-005 spec. Add a validation step that rejects any upload whose muxed output is not H.264/AAC/MP4. This is a design decision the PM should reflect in AC-031 or a new AC before Engineer starts MOD-005.
+- **AC-055 fan-out has a race condition risk**: "on insert of a Reaction with target_type = beta_video, insert exactly one Notification row and enqueue exactly one APNs push per active device token". Two nearly-simultaneous likes on the same video from two users are fine, but a **double-tap or client retry on the same like** could re-fire the Edge Function. The `Reaction` unique constraint on `(user_id, target_type, target_id)` prevents duplicate rows, but the Edge Function must be triggered on Postgres INSERT (not client-side), and must be **idempotent** if the same trigger fires twice. Recommendation: (a) trigger the Edge Function via a Postgres trigger + `pg_net`/webhook rather than from the client, and (b) add a unique constraint or dedupe key on `Notification(recipient_user_id, actor_user_id, type, target_id)` so a second fire cannot create a second notification row. Add this to the MOD-007 spec.
+- **RLS complexity for feed + block interaction is understated**: The feed query is "sends and beta videos from followed users, minus users I've blocked, minus users who've blocked me, minus followers_only users I don't follow". Implementing this purely in RLS gets expensive at scale; RLS runs per-row. Realistic Phase 1 approach: keep RLS as the security fence but do the feed composition in a Postgres view or RPC function (`SECURITY INVOKER`) that joins Follow, Block, and privacy filters explicitly. Decision needed: PM should acknowledge that the MOD-006 spec must define this as an RPC, not a raw table select from the client. This is not a blocker for [INIT] but must be captured before MOD-006 is spec'd.
+- **`Block` symmetry is missing an explicit rule**: PRD says a blocked user cannot follow, like, or interact with the blocker (AC-083). But AC-082 says "immediately hide the blocked user's beta videos, sends, and profile from the blocker's feed and route pages" — it does not say the reverse (that the blocker's content is also hidden from the blocked user). App Store 1.2 review historically expects **symmetric** hiding: the blocked party should not be able to see or interact with the blocker's content either. Recommendation: PM should update AC-082 or add AC-084 to make the hiding symmetric. Otherwise App Store review may flag this.
+- **`Report` throughput / SLA is unspecified**: PRD Open Question flags this. App Store 1.2 requires "the ability to filter objectionable material" and "a mechanism for users to block abusive users" **and** "the developer to act on objectionable content and ejecting users engaging in abusive behavior within 24 hours". As a solo operator using Supabase Studio only, Leon has no automated alerting when a Report is filed. Recommendation: add a Phase 1 nice-to-have Edge Function (scheduled every 6 h) that emails Leon a digest of any open reports older than N hours. Not a blocker but should be captured as a known operational gap.
+- **`Route.match_key` — clarify storage vs. derivation**: Schema says "match_key (derived: gym_id + grade + color_tag)". Ambiguous whether this is a **stored generated column** (Postgres `GENERATED ALWAYS AS ... STORED`) or **derived on query**. Recommendation: make it a Postgres generated column with a **partial unique index** `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`. This enforces AC-020's "no active duplicates" invariant at the DB level, not just in application code. The partial predicate `WHERE status = 'active'` correctly allows historical retired routes to reuse the same key. This should be codified in the MOD-003 spec.
+
+**Recommendations** (suggested improvements):
+
+- **Video migration runbook (Supabase Storage → Cloudflare Stream)**: PRD open question notes this is undocumented. Even though the migration itself is Phase 2, the runbook should exist before Phase 1 GA so Leon isn't caught out. Suggested pattern: (1) dual-write new uploads to both providers during a cutover window, (2) batch-copy historical files, (3) rewrite `BetaVideo.video_url` in a single transaction, (4) verify random-sample playback, (5) delete Supabase originals after N days retention. Draft into `docs/runbooks/video-migration.md` when the Engineer touches MOD-005.
+- **PostHog free-tier ceiling**: Free tier is ~1M events/month. With signup + first-send + first-video + like + session-start firing at the volumes AC-100 implies, Leon could hit the cap with a few thousand active users. Recommendation: implement client-side sampling for `session_start` at ≥50% of DAU, and instrument event volume monitoring from day one. Not a Phase 1 blocker.
+- **Client-side video compression library choice is undecided**. `expo-video-manipulator` doesn't exist; `react-native-video-processing` is unmaintained; `ffmpeg-kit-react-native` is the most reliable but adds ~40 MB to the bundle. Recommendation: Tech Lead + Engineer to pick between `ffmpeg-kit-react-native` (heavy, reliable, H.264 output guaranteed) vs. using the raw asset from `expo-image-picker` with `videoQuality: 'medium'` (light, but codec/quality is device-dependent). Decision should land in the MOD-005 spec.
+- **i18n key completeness gate**: PRD NFR says "message catalogs must be complete (no missing keys) at ship". Recommend adding a lint step (e.g., `i18next-parser --fail-on-warnings` or a custom script) that fails CI if any English key lacks a zh-TW counterpart. Codify in MOD-010 spec.
+- **Dark mode + zh-TW combinatorial testing**: Neither is technically hard, but shipping both in Phase 1 means QA has to verify every screen in 4 combinations (light/dark × en/zh-TW). Recommend the QA agent build a screenshot matrix into every module's test plan rather than treat it as a one-off audit at the end.
+- **Bundle size discipline**: iOS-only + Expo managed workflow + `ffmpeg-kit-react-native` (if chosen) + PostHog + Supabase SDK could easily push the app past 100 MB. TestFlight tolerates this, but users on cellular hesitate. Recommend `expo-doctor` and `npx expo-bundle-analyzer` runs as part of the pre-TestFlight gate.
+- **Apple Sign-In hard requirement**: PRD correctly notes it's mandatory because Google Sign-In is offered. Also true whenever any third-party sign-in is offered. Ensure the Auth spec calls out that Apple Sign-In must be visually equivalent (not smaller/hidden) per App Store review guidelines.
+- **Section label as tie-breaker (schema already supports it)**: PRD Open Question flags color-collision risk. Recommend Engineer surface `section_label` as an optional field in the route submission form **from day one** even though it's nullable; this makes it painless to promote to required in Phase 2 without a schema change. Add to MOD-003 spec.
+- **Consider a `deleted_at` soft-delete column on BetaVideo and Ascent**: A user who is banned or self-deletes shouldn't purge historical data outright (analytics, moderation records). Standard soft-delete pattern; costs nothing at spec time to add. Not currently in the PRD data model.
+
+**Approved**:
+
+- **Overall architecture is coherent for a solo build**. Supabase as a single-vendor BaaS collapses backend concerns (auth, DB, storage, functions, RLS) into one dashboard; this is exactly the right choice for a solo AI-assisted build. No custom server code is a big win.
+- **Module boundaries and dependency order are sensible**. MOD-001 → MOD-002 → MOD-003 → MOD-004 → MOD-005 → MOD-006 → MOD-007 → MOD-008 → MOD-009 is a clean sequence with no circular dependencies. MOD-010 (localization + theming) correctly has no deps and can be shipped in parallel. MOD-011 (analytics) correctly depends only on MOD-001. Ship order can even be linear.
+- **Match-before-create + fixed color enum + forced V-scale** is a smart data-quality lever. Constraining the taxonomy prevents the "every user invents their own tag" mess that kills UGC route apps. Approved as-is.
+- **Report + Block scoped for Phase 1 is realistic** — the surface is small (report submit + block toggle + feed filter), and Supabase Studio for admin review is a defensible MVP. The main risk is response-time SLA, addressed in Concerns above.
+- **60-sec cap + client-side compression** is realistic on Supabase Storage for Phase 1 volumes. At ~10 MB per compressed 60-sec clip, 20 GB = ~2,000 videos before the migration trigger fires — that's roughly 400 uploads/month over 5 months of soft launch, which is a reasonable Phase 1 ceiling.
+- **Notification preference table shape is future-proof** — a single row per user with per-event-type boolean columns extends cleanly for Phase 2 push types.
+- **Explicit non-goals list is unusually thorough** — reads like it was pressure-tested. Reduces scope-creep risk considerably.
+
+**Proposed Shared Conventions** (for Doc-Sync to carry into production.md):
+
+- **Directory layout**: Group by feature/module inside `src/modules/<mod-name>/` matching the Module Map in `status.md`. Cross-cutting code (auth session, Supabase client singleton, theme provider, i18n init) lives in `src/lib/`.
+- **Supabase client**: One singleton exported from `src/lib/supabase.ts`. Never construct `createClient()` at call sites. Never import the `service_role` key in client code.
+- **RLS-first data access**: The client never sends `service_role`-authenticated requests. Every table has RLS enabled from the migration that creates it. Feed and other multi-table reads are exposed via Postgres RPC (`SECURITY INVOKER`), not raw table selects.
+- **Migrations**: All schema changes ship as Supabase CLI migrations in `supabase/migrations/`. Never edit tables via Studio in production without a corresponding migration file.
+- **Env vars**: Only vars prefixed `EXPO_PUBLIC_` are safe to inline into the bundle. Any secret (service_role, Expo access token) lives in `supabase secrets` and is only read inside Edge Functions.
+- **Video pipeline**: All client-side video compression outputs H.264 (baseline profile) + AAC in an MP4 container. Reject uploads that don't match on ingest.
+- **Match key**: `Route.match_key` is a Postgres `GENERATED ALWAYS AS ... STORED` column. Uniqueness is enforced via a **partial** unique index scoped to `status = 'active'`.
+- **Notifications**: Any push-triggering event is fired by a Postgres trigger → Edge Function, never by the client. Notification writes are idempotent via a unique constraint on `(recipient_user_id, actor_user_id, type, target_id)`.
+- **i18n**: All user-facing strings pulled through the i18n hook — no inline string literals in components. CI check fails on missing zh-TW keys.
+- **Theming**: Every screen uses tokens from the theme provider; no hardcoded hex colors in components.
+- **Commit convention**: Follow `~/.claude/skills/coding-conventions/SKILL.md` — conventional commits for code, agent-role prefixed for handoffs.
+- **Testing**: Jest + React Native Testing Library. One test file per source file. Test behaviour, not implementation.
+- **TypeScript**: Strict mode on. No `any` without a `// TODO(leon): why` comment.
+
+### Setup Confirmation — pending
+
+Setup is **not yet complete**. `setup.md` has been created with a step-by-step runbook. Before setup can be confirmed, Leon must:
+
+1. Install Node 20 LTS and pin the project (`.nvmrc`).
+2. Install full Xcode from the Mac App Store and run `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
+3. Install `eas-cli` (npm global) and `supabase` (Homebrew).
+4. Enrol in the Apple Developer Program and create an APNs Auth Key (`.p8`).
+5. Create the Supabase project (Singapore region), copy URL + anon key into `.env`.
+6. Create the PostHog project and copy the API key into `.env`.
+7. Create the Expo organisation + project, upload the APNs `.p8` via `eas credentials`, and set `EXPO_ACCESS_TOKEN` + `SUPABASE_SERVICE_ROLE_KEY` via `supabase secrets set`.
+8. Copy `.env.example` → `.env` and fill in real values.
+
+Once done, re-invoke Tech Lead with **"Setup is complete."** — Tech Lead will run verification checks and record confirmation before PM tags [INIT].
+
+## Sync Reports
+
+
+## Engineering Progress
+
+
+## QA Results
+
+
+## Decisions
+
+- Framework: React Native + Expo + TypeScript (iOS-only Phase 1; Android Phase 2)
+- BaaS: Supabase (Postgres + Auth + Storage + RLS + Edge Functions)
+- Video hosting: Supabase Storage Phase 1; migrate to Cloudflare Stream when monthly cost > US$25 OR storage > 20 GB
+- Auth: Email + Apple Sign-In + Google Sign-In
+- Video: 60-sec cap, client-side compression, client-generated thumbnail
+- Hold/tape color: fixed enum {red, orange, yellow, green, blue, purple, pink, white, black}
+- Grade system: V-scale forced across all Phase 1 gyms
+- Push: APNs via Expo Push, beta-video-likes only in Phase 1, with preference toggle
+- Offline send queue: Phase 2 (Phase 1 shows clear error on failure)
+- Report + Block: Phase 1 (App Store Guideline 1.2)
+- Localization: English + Traditional Chinese (zh-TW). Default = device locale, fallback = zh-TW. Settings toggle.
+- Theming: Light + Dark, OS default + Settings override
+- Admin tooling: Supabase Studio only in Phase 1
+- Analytics: PostHog free tier
+- Gym seeding: one row per branch for multi-branch gyms; exclude Camp4 達文西攀岩館 and Wusa 攀岩館 (top-rope only); split T-UP 原岩 into 5 branch rows; CORNER already 2 branches
+- Soft-launch timeframe: none set
+
+## Module Map
+
+<!-- Filled by PM after user confirms module directory names.
+     Format:
+     | MOD-ID  | Directory        | Module Name    |
+     |---------|------------------|----------------|
+     | MOD-001 | mod-login        | User Login     |
+-->
+
+Pending — proposed mapping (awaiting user confirmation before creating `modules/mod-*` directories):
+
+| MOD-ID  | Directory              | Module Name                  |
+|---------|------------------------|------------------------------|
+| MOD-001 | mod-auth-profile       | Auth & Profile               |
+| MOD-002 | mod-gym-directory      | Gym Directory                |
+| MOD-003 | mod-route-catalog      | Route Catalog                |
+| MOD-004 | mod-send-logging       | Send Logging                 |
+| MOD-005 | mod-beta-video         | Beta Video                   |
+| MOD-006 | mod-social-feed        | Social Graph & Feed          |
+| MOD-007 | mod-notifications      | Notifications                |
+| MOD-008 | mod-profile-history    | Profile History & Stats      |
+| MOD-009 | mod-moderation         | Moderation (Report & Block)  |
+| MOD-010 | mod-localization-theme | Localization & Theming       |
+| MOD-011 | mod-analytics          | Analytics                    |
+
+## Skill Recommendations
+
+Pattern: Supabase RLS + client-composed feed queries mixing Follow, Block, and privacy rules almost always outgrow raw table SELECTs and need to be wrapped in a `SECURITY INVOKER` Postgres RPC. Teams tend to discover this only after RLS query plans become unreadable.
+Why: Would save future Tech Leads from re-deriving the "RLS as fence, RPC as composer" pattern. A short skill capturing when to prefer RPC over raw select-with-RLS would be broadly useful for any Supabase project.
+Agent: tech-lead
+
+Pattern: Push notifications triggered from the client are a source of duplicate/orphaned pushes. The correct pattern (Postgres trigger → Edge Function → provider API) is well known but rarely surfaced up-front, leading to rework in MOD-Notifications-shaped modules.
+Why: A reusable skill entry "server-authoritative notification pattern" would let Tech Lead flag this on every project involving push, not just Send It.
+Agent: tech-lead
+
+## Checkpoint History
+
