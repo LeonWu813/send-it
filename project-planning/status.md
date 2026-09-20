@@ -2,11 +2,11 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-auth-profile
-mode: bugfix
+agent: qa-mod-auth-profile
+mode: regression
 module: mod-auth-profile
 result: success
-commit: a86a2e417b0d6fbac2e625b86098801f580a2800
+commit: 4b7fefd1754541816dc1be49d87574940a94ee1f
 timestamp: 2026-09-20T00:00:00+08:00
 
 ## Current Phase

@@ -206,3 +206,106 @@ PASS. Inputs (Supabase Auth payload, gym_id, profile fields) are correctly accep
 **Failure classification: implementation bug — route to Engineer**
 
 FAIL (inline string): `App.tsx` line 23 — `AppShell` component renders `<Text>Send It — coming soon</Text>` without wrapping the string through `useTranslation()`. Input=component renders after authentication; Actual=hardcoded string literal displayed; Expected per production.md shared convention=all user-facing strings go through i18n hook. Fix: wrap in a translation key or replace with a null/empty placeholder until downstream modules ship.
+
+---
+
+## QA Run 2 — Regression — 2026-09-20
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification after bug fix)
+**Original failure**: inline string literal in `App.tsx` `AppShell` component — production.md i18n convention violation
+
+### Bug Re-Verification
+
+**Original failure scenario**: `AppShell` component in `App.tsx` rendered `<Text>Send It — coming soon</Text>` (line 23) — a raw inline string literal without `useTranslation()`.
+
+REGRESSION PASS: Fix confirmed. `AppShell` now returns `null` with no Text content and no string literals of any kind. The `Text` and `View` imports from `react-native` have been removed entirely. Grep for `<Text` in `App.tsx` returns no matches. Grep for `#` hex colors and `rgba(` in `App.tsx` returns no matches. The component signature is `function AppShell(): null { return null; }` — no user-visible content.
+
+### Automated Test Suite (Regression Run)
+
+Command: `npm test -- --watchAll=false`
+Result: 25 tests, 4 suites — all PASS (unchanged from QA Run 1)
+Exit code: 0
+
+All four suites passed:
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — PASS
+- `src/lib/__tests__/supabase.test.ts` — PASS
+- `src/lib/__tests__/i18n.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — PASS
+
+### TypeScript Strict Mode (Regression Run)
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS (unchanged from QA Run 1)
+Exit code: 0
+
+### Re-Verification of All Previously Passing Items
+
+**AC-001** — PASS. No change to AuthNavigator or useSession logic; routing behavior unchanged.
+
+**AC-002** — PASS. No change to HomeGymSelectionScreen or auth-service setHomeGym(); gym selection and persistence unchanged.
+
+**AC-003** — PASS. No change to onboarding flow; happy path step count and blocking behavior unchanged.
+
+**AC-063** — PASS. No change to EditProfileScreen, upsertProfile(), or migration; privacy_setting column and UI unchanged.
+
+**Supabase singleton** — PASS. `createClient()` still appears only in `src/lib/supabase.ts`; no new call sites introduced.
+
+**No service_role key in client code** — PASS. Grep confirms zero occurrences of `service_role` or `SERVICE_ROLE` in `src/`. Fix touched only `App.tsx`; no new env var reads introduced.
+
+**No hardcoded hex colors in components** — PASS. Grep for `#[0-9A-Fa-f]{3,6}` and `rgba?(` in `App.tsx` and `src/modules/` returns no matches. No hex colors introduced by the fix.
+
+**No inline string literals in components (production.md convention)** — PASS. `App.tsx` contains no `<Text>` elements. No inline string literals in `src/modules/`. Fix resolves the original FAIL.
+
+**Both EN and zh-TW catalogs complete** — PASS. Fix correctly did not add any new i18n keys (the throwaway string was removed entirely, not translated). i18n.test.ts key-completeness check still passes as part of the 25-test suite.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0; no type errors introduced.
+
+**EXPO_PUBLIC_ prefix convention** — PASS. No new env var reads introduced by the fix.
+
+**Migration exists and RLS enabled** — PASS. No migration changes; schema unchanged.
+
+**Data model matches spec** — PASS. No schema or type changes.
+
+**home_gym_id is nullable** — PASS. No schema changes.
+
+**Apple Sign-In visually equivalent to Google Sign-In** — PASS. SignInScreen.tsx unchanged.
+
+**Avatar upload path** — PASS. auth-service.ts unchanged.
+
+**No gold-plating** — PASS. Fix removed content (the placeholder string); no new functionality introduced.
+
+**No HTML template comments in spec.md** — PASS. spec.md was not modified.
+
+**.env in .gitignore** — PASS. .gitignore was not modified.
+
+**Input/Output Contract adherence** — PASS. No changes to service or screen interfaces.
+
+### New Regressions
+
+None. All 15 previously-passing items continue to pass. No new failures introduced by the fix.
+
+### Summary
+
+| Item | QA Run 1 | QA Run 2 |
+|------|----------|----------|
+| AC-001: Signup via Email/Apple/Google → home gym screen | PASS | PASS |
+| AC-002: Select exactly one home gym, persist to profile | PASS | PASS |
+| AC-003: Signup + gym selection < 60s on 4G happy path | PASS | PASS |
+| AC-063: privacy_setting column with public/followers_only | PASS | PASS |
+| Automated test suite (25 tests, 4 suites) | PASS | PASS |
+| TypeScript strict mode (tsc --noEmit) | PASS | PASS |
+| createClient() only in src/lib/supabase.ts | PASS | PASS |
+| No hardcoded hex colors in components | PASS | PASS |
+| All user-facing strings through i18n | PASS | PASS |
+| Inline string literal in App.tsx AppShell | FAIL | PASS (fixed) |
+| EN and zh-TW catalogs complete, no missing keys | PASS | PASS |
+| RLS enabled from migration creation | PASS | PASS |
+| Data model matches spec | PASS | PASS |
+| No service_role key in client code | PASS | PASS |
+| No gold-plating | PASS | PASS |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
