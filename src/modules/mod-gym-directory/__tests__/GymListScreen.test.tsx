@@ -1,0 +1,190 @@
+/**
+ * Tests for GymListScreen.
+ *
+ * Tests behaviour: rendering, search filtering, navigation callbacks.
+ * gym-service is mocked to avoid real network calls.
+ */
+
+// ── Mocks ────────────────────────────────────────────────────────────────────
+jest.mock('../gym-service');
+jest.mock('../../../lib/supabase', () => ({
+  supabase: { from: jest.fn() },
+}));
+
+// ── Imports ───────────────────────────────────────────────────────────────────
+import React from 'react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import GymListScreen from '../screens/GymListScreen';
+import * as gymService from '../gym-service';
+import type { GymSummary } from '../types';
+import { renderOptions } from '../test-utils';
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const mockListGyms = gymService.listGyms as jest.MockedFunction<typeof gymService.listGyms>;
+
+const GYM_FIXTURES: GymSummary[] = [
+  {
+    id: 'gym-001',
+    name: 'MegaSTONE Climbing Gym',
+    name_zh: 'MegaSTONE 巨石攀岩館',
+    branch_label: null,
+    city: 'New Taipei',
+    district: 'Xinzhuang',
+    gym_type: 'bouldering',
+    photo_url: null,
+  },
+  {
+    id: 'gym-002',
+    name: 'T-UP 原岩攀岩館 — Wanhua',
+    name_zh: '原岩攀岩館',
+    branch_label: '萬華',
+    city: 'Taipei',
+    district: 'Wanhua',
+    gym_type: 'bouldering',
+    photo_url: null,
+  },
+  {
+    id: 'gym-003',
+    name: 'double8 Climbing Lab',
+    name_zh: 'double8 岩究所',
+    branch_label: null,
+    city: 'Taipei',
+    district: 'Dadaocheng',
+    gym_type: 'both',
+    photo_url: null,
+  },
+];
+
+// ── Tests ─────────────────────────────────────────────────────────────────────
+
+describe('GymListScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders gym cards after loading', async () => {
+    mockListGyms.mockResolvedValueOnce(GYM_FIXTURES);
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    // Initially shows a loading indicator
+    expect(screen.queryByText('MegaSTONE Climbing Gym')).toBeNull();
+
+    // After data loads, cards appear
+    await waitFor(() => {
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy();
+    });
+    expect(screen.getByText('T-UP 原岩攀岩館 — Wanhua')).toBeTruthy();
+    expect(screen.getByText('double8 Climbing Lab')).toBeTruthy();
+  });
+
+  it('shows empty state text when no gyms match the search query', async () => {
+    mockListGyms.mockResolvedValueOnce(GYM_FIXTURES);
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    const searchInput = screen.getByPlaceholderText('Search gyms…');
+    fireEvent.changeText(searchInput, 'zzz no match');
+
+    await waitFor(() => {
+      expect(screen.getByText('No gyms found.')).toBeTruthy();
+    });
+  });
+
+  it('calls onSelectGym with the gym id when a card is pressed', async () => {
+    const onSelectGym = jest.fn();
+    mockListGyms.mockResolvedValueOnce(GYM_FIXTURES);
+
+    render(
+      <GymListScreen
+        onSelectGym={onSelectGym}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByText('MegaSTONE Climbing Gym'));
+    expect(onSelectGym).toHaveBeenCalledWith('gym-001');
+  });
+
+  it('calls onRequestGym when the request link is pressed', async () => {
+    const onRequestGym = jest.fn();
+    mockListGyms.mockResolvedValueOnce(GYM_FIXTURES);
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={onRequestGym}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByText("Can't find your gym? Request it →"));
+    expect(onRequestGym).toHaveBeenCalled();
+  });
+
+  it('shows an error message and retry button when loading fails', async () => {
+    mockListGyms.mockRejectedValueOnce(new Error('Network error'));
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to load gyms. Please try again.')).toBeTruthy();
+    });
+    expect(screen.getByText('Retry')).toBeTruthy();
+  });
+
+  it('retries loading when the retry button is pressed', async () => {
+    mockListGyms
+      .mockRejectedValueOnce(new Error('Network error'))
+      .mockResolvedValueOnce(GYM_FIXTURES);
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('Failed to load gyms. Please try again.')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByText('Retry'));
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+  });
+});

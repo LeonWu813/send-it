@@ -10,14 +10,21 @@ import React from 'react';
 // Initialize i18n — must be imported before any component that uses useTranslation
 import './src/lib/i18n';
 import AuthNavigator from './src/modules/mod-auth-profile/AuthNavigator';
+import { useSession } from './src/modules/mod-auth-profile/hooks/useSession';
+import GymNavigator from './src/modules/mod-gym-directory/GymNavigator';
 import { ThemeProvider } from './src/lib/theme';
 
 /**
- * Placeholder for the authenticated app shell.
- * Will be replaced when downstream modules (gym directory, logging, etc.) ship.
+ * Authenticated app shell — rendered once the user is fully authenticated
+ * and has a session. Renders the gym directory as the home screen (MOD-002).
+ * Future modules (route catalog, send logging, etc.) will add tabs here.
  */
-function AppShell(): null {
-  return null;
+function AppShell(): React.JSX.Element | null {
+  const { session } = useSession();
+  if (!session) {
+    return null;
+  }
+  return <GymNavigator session={session} />;
 }
 
 export default function App(): React.JSX.Element {

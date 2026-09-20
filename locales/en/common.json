@@ -82,6 +82,46 @@
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service"
   },
+  "gymDirectory": {
+    "title": "Gyms",
+    "searchPlaceholder": "Search gyms…",
+    "noResults": "No gyms found.",
+    "gymTypeBadge": {
+      "bouldering": "Bouldering",
+      "topRope": "Top Rope",
+      "both": "Bouldering + Top Rope",
+      "mixed": "Mixed"
+    },
+    "detail": {
+      "location": "Location",
+      "coordinates": "Map pin",
+      "gradingSystem": "Grade System",
+      "noPhoto": "No photo available"
+    },
+    "requestGym": {
+      "cta": "Can't find your gym? Request it →",
+      "title": "Request a Gym",
+      "subtitle": "Let us know about a gym we haven't added yet. Requests are reviewed by our team.",
+      "nameLabel": "Gym Name",
+      "namePlaceholder": "e.g. My Climbing Gym",
+      "cityLabel": "City",
+      "cityPlaceholder": "e.g. Taipei",
+      "mapsUrlLabel": "Google Maps Link (optional)",
+      "mapsUrlPlaceholder": "https://maps.google.com/...",
+      "submit": "Submit Request",
+      "successTitle": "Request Submitted!",
+      "successBody": "Thanks! We'll review your request and add the gym if it meets our criteria.",
+      "errors": {
+        "nameRequired": "Gym name is required.",
+        "cityRequired": "City is required.",
+        "submitFailed": "Failed to submit request. Please try again."
+      }
+    },
+    "errors": {
+      "loadFailed": "Failed to load gyms. Please try again.",
+      "notFound": "Gym not found."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",

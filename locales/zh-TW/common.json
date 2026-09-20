@@ -82,6 +82,46 @@
     "privacyPolicy": "隱私政策",
     "termsOfService": "服務條款"
   },
+  "gymDirectory": {
+    "title": "岩館",
+    "searchPlaceholder": "搜尋岩館…",
+    "noResults": "找不到岩館。",
+    "gymTypeBadge": {
+      "bouldering": "抱石",
+      "topRope": "上方固定點",
+      "both": "抱石 + 上方固定點",
+      "mixed": "混合"
+    },
+    "detail": {
+      "location": "地點",
+      "coordinates": "地圖位置",
+      "gradingSystem": "難度系統",
+      "noPhoto": "目前沒有照片"
+    },
+    "requestGym": {
+      "cta": "找不到你的岩館？來申請加入 →",
+      "title": "申請新增岩館",
+      "subtitle": "告訴我們尚未收錄的岩館，我們的團隊將審核後加入。",
+      "nameLabel": "岩館名稱",
+      "namePlaceholder": "例如：我的攀岩館",
+      "cityLabel": "城市",
+      "cityPlaceholder": "例如：台北",
+      "mapsUrlLabel": "Google 地圖連結（選填）",
+      "mapsUrlPlaceholder": "https://maps.google.com/...",
+      "submit": "送出申請",
+      "successTitle": "申請已送出！",
+      "successBody": "謝謝你！我們將審核你的申請，符合條件的岩館將會加入目錄。",
+      "errors": {
+        "nameRequired": "請輸入岩館名稱。",
+        "cityRequired": "請輸入城市。",
+        "submitFailed": "送出申請失敗，請再試一次。"
+      }
+    },
+    "errors": {
+      "loadFailed": "載入岩館失敗，請再試一次。",
+      "notFound": "找不到該岩館。"
+    }
+  },
   "common": {
     "loading": "載入中…",
     "retry": "重試",

@@ -2,12 +2,12 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: qa-mod-auth-profile
-mode: regression
-module: mod-auth-profile
+agent: engineer-mod-gym-directory
+mode: implement
+module: mod-gym-directory
 result: success
-commit: 4b7fefd1754541816dc1be49d87574940a94ee1f
-timestamp: 2026-09-20T00:00:00+08:00
+commit: f7c46f07a413c96453768597dff8ded7eca1f8fb
+timestamp: 2026-09-20T12:00:00+08:00
 
 ## Current Phase
 
@@ -211,6 +211,14 @@ Final — confirmed at [INIT] (2026-09-20). Directories created under `project-p
 | MOD-011 | mod-analytics          | Analytics                    |
 
 ## Skill Recommendations
+
+Pattern: React Native component tests using useTheme() and useTranslation() both throw at render time if their providers are missing. The correct fix is a test-utils file (outside __tests__/) that exports a `wrapper` option for @testing-library/react-native's `render()`. Place it at `src/modules/<mod>/test-utils.tsx` (not inside `__tests__/`) so Jest doesn't try to run it as a test suite.
+Why: Every module that has screen components needing useTheme() + i18n will hit this same pattern. A skill entry codifying the `test-utils.tsx` wrapper approach (with the i18n side-effect import and ThemeProvider wrapping) would save each engineer agent from rediscovering it.
+Agent: engineer
+
+Pattern: The self-check.sh script parses build/lint/test commands using a grep pattern that expects `Key: value` format but production.md stores them in a markdown table. As a result all three checks are skipped. Engineers must run the commands manually and note the skip reason.
+Why: The script should support both markdown table format (| Step | Command |) and inline format. Adding a second grep pattern for table rows would prevent false-skip results on every project that uses production.md with a table layout.
+Agent: engineer
 
 Pattern: Supabase RLS + client-composed feed queries mixing Follow, Block, and privacy rules almost always outgrow raw table SELECTs and need to be wrapped in a `SECURITY INVOKER` Postgres RPC. Teams tend to discover this only after RLS query plans become unreadable.
 Why: Would save future Tech Leads from re-deriving the "RLS as fence, RPC as composer" pattern. A short skill capturing when to prefer RPC over raw select-with-RLS would be broadly useful for any Supabase project.
