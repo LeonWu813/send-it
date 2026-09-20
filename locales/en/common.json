@@ -190,6 +190,39 @@
       "retireFailed": "Failed to retire route. Please try again."
     }
   },
+  "sends": {
+    "logSend": "Log Send",
+    "selectRoute": "Select a Route",
+    "grade": "GRADE",
+    "gradeNote": "Grade comes from the route — not editable.",
+    "style": "STYLE",
+    "attempts": "ATTEMPTS",
+    "attemptsFlashHint": "Flash = 1 attempt only.",
+    "attemptsCount": "{{count}} attempt",
+    "attemptsCount_other": "{{count}} attempts",
+    "date": "DATE",
+    "note": "NOTE (private to you)",
+    "notePlaceholder": "Optional notes for yourself…",
+    "private": "Private",
+    "privateDescription": "Hide this send from other climbers.",
+    "privateLabel": "Private",
+    "submit": "Log Send",
+    "ascentsSectionTitle": "Sends",
+    "noAscents": "No sends yet — be the first!",
+    "gymIdPlaceholder": "Enter Gym ID to search routes",
+    "search": "Search",
+    "styles": {
+      "flash": "Flash",
+      "top": "Top",
+      "attempt": "Attempt",
+      "project": "Project"
+    },
+    "errors": {
+      "saveFailed": "Failed to save your send. Please check your connection and try again.",
+      "loadFailed": "Failed to load sends. Please try again.",
+      "routeSearchFailed": "Failed to search routes. Please try again."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",

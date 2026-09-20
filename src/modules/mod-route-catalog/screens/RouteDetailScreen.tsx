@@ -5,7 +5,8 @@
  *   - Grade, gym/section, color badge, photo, status (active/retired)
  *   - Submitted by, created_at, retired_at (when applicable)
  *   - Retire action (any authenticated user, active routes only — AC-024)
- *   - Placeholder slots for ascents (MOD-004) and beta videos (MOD-005)
+ *   - Ascent list (MOD-004) — wired via AscentList component
+ *   - Placeholder slot for beta videos (MOD-005)
  *
  * US-014: flag a route as retired.
  */
@@ -17,6 +18,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -25,6 +27,8 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../../../lib/theme';
+import AscentList from '../../mod-send-logging/components/AscentList';
+import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
 import RouteColorBadge from '../components/RouteColorBadge';
 import { loadRoute, retireRoute } from '../route-service';
 import type { Route } from '../types';
@@ -50,6 +54,7 @@ export default function RouteDetailScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRetiring, setIsRetiring] = useState(false);
+  const [isLogSendVisible, setIsLogSendVisible] = useState(false);
 
   const fetchRoute = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -85,6 +90,19 @@ export default function RouteDetailScreen({
         },
       ],
     );
+  }
+
+  function handleLogSendPress(): void {
+    setIsLogSendVisible(true);
+  }
+
+  function handleLogSendSuccess(): void {
+    setIsLogSendVisible(false);
+    // Ascent list will re-fetch automatically via its own useEffect when remounted.
+  }
+
+  function handleLogSendCancel(): void {
+    setIsLogSendVisible(false);
   }
 
   async function confirmRetire(): Promise<void> {
@@ -212,15 +230,28 @@ export default function RouteDetailScreen({
         </>
       ) : null}
 
-      {/* ── Placeholder: Ascents (MOD-004) ────────────────────────────────── */}
-      <View style={styles.placeholderSection}>
-        <Text style={styles.placeholderTitle}>
-          {t('routes.detail.ascentsPlaceholder')}
-        </Text>
-        <Text style={styles.placeholderSubtitle}>
-          {t('routes.detail.ascentsPlaceholderSub')}
-        </Text>
-      </View>
+      {/* ── Ascents (MOD-004) — wired via AscentList ──────────────────────── */}
+      <AscentList
+        routeId={route.id}
+        session={session}
+        onLogSend={handleLogSendPress}
+      />
+
+      {/* Log Send modal — opens on tap 1, route pre-selected (AC-010) */}
+      <Modal
+        visible={isLogSendVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleLogSendCancel}
+      >
+        <LogSendScreen
+          routeId={route.id}
+          routeGrade={route.grade}
+          session={session}
+          onSuccess={handleLogSendSuccess}
+          onCancel={handleLogSendCancel}
+        />
+      </Modal>
 
       {/* ── Placeholder: Beta Videos (MOD-005) ────────────────────────────── */}
       <View style={styles.placeholderSection}>

@@ -190,6 +190,39 @@
       "retireFailed": "標記退場失敗，請再試一次。"
     }
   },
+  "sends": {
+    "logSend": "記錄完攀",
+    "selectRoute": "選擇路線",
+    "grade": "難度",
+    "gradeNote": "難度來自路線設定，無法修改。",
+    "style": "完攀方式",
+    "attempts": "嘗試次數",
+    "attemptsFlashHint": "閃攀限定 1 次嘗試。",
+    "attemptsCount": "{{count}} 次",
+    "attemptsCount_other": "{{count}} 次",
+    "date": "日期",
+    "note": "備註（僅自己可見）",
+    "notePlaceholder": "個人筆記（選填）…",
+    "private": "設為私人",
+    "privateDescription": "隱藏此完攀紀錄，不讓其他攀岩者看到。",
+    "privateLabel": "私人",
+    "submit": "記錄完攀",
+    "ascentsSectionTitle": "完攀紀錄",
+    "noAscents": "還沒有紀錄，成為第一個吧！",
+    "gymIdPlaceholder": "輸入岩館 ID 搜尋路線",
+    "search": "搜尋",
+    "styles": {
+      "flash": "閃攀",
+      "top": "完攀",
+      "attempt": "嘗試",
+      "project": "項目"
+    },
+    "errors": {
+      "saveFailed": "儲存完攀紀錄失敗，請確認網路連線後重試。",
+      "loadFailed": "載入完攀紀錄失敗，請再試一次。",
+      "routeSearchFailed": "搜尋路線失敗，請再試一次。"
+    }
+  },
   "common": {
     "loading": "載入中…",
     "retry": "重試",
