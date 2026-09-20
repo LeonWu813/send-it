@@ -1,0 +1,95 @@
+{
+  "app": {
+    "name": "Send It"
+  },
+  "auth": {
+    "signIn": "登入",
+    "signUp": "註冊",
+    "signOut": "登出",
+    "email": "電子郵件",
+    "password": "密碼",
+    "confirmPassword": "確認密碼",
+    "forgotPassword": "忘記密碼？",
+    "continueWithApple": "以 Apple 繼續",
+    "continueWithGoogle": "以 Google 繼續",
+    "continueWithEmail": "以電子郵件繼續",
+    "orDivider": "或",
+    "noAccount": "還沒有帳號？",
+    "haveAccount": "已有帳號？",
+    "emailPlaceholder": "your@email.com",
+    "passwordPlaceholder": "••••••••",
+    "displayNameLabel": "顯示名稱",
+    "displayNamePlaceholder": "你的攀岩暱稱",
+    "errors": {
+      "emailRequired": "請輸入電子郵件。",
+      "passwordRequired": "請輸入密碼。",
+      "passwordMinLength": "密碼至少需要 8 個字元。",
+      "passwordMismatch": "密碼不一致。",
+      "displayNameRequired": "請輸入顯示名稱。",
+      "signInFailed": "登入失敗，請確認帳號密碼。",
+      "signUpFailed": "註冊失敗，請再試一次。",
+      "appleSignInFailed": "Apple 登入失敗，請再試一次。",
+      "googleSignInFailed": "Google 登入失敗，請再試一次。",
+      "signOutFailed": "登出失敗，請再試一次。",
+      "networkError": "網路錯誤，請確認連線狀態後重試。"
+    }
+  },
+  "onboarding": {
+    "homeGym": {
+      "title": "選擇你的主場岩館",
+      "subtitle": "選擇你最常去的岩館。",
+      "searchPlaceholder": "搜尋岩館…",
+      "skip": "稍後再說",
+      "confirm": "設為主場",
+      "noResults": "找不到岩館。",
+      "errors": {
+        "saveFailed": "儲存主場失敗，請再試一次。"
+      }
+    }
+  },
+  "profile": {
+    "title": "個人頁面",
+    "editTitle": "編輯個人資料",
+    "displayName": "顯示名稱",
+    "bio": "自我介紹",
+    "bioPlaceholder": "告訴其他攀岩者關於你的事…",
+    "homeGym": "主場岩館",
+    "noHomeGym": "尚未設定主場",
+    "changeHomeGym": "更換主場",
+    "avatar": "個人照片",
+    "changeAvatar": "更換照片",
+    "privacy": "個人隱私設定",
+    "privacyPublic": "公開",
+    "privacyFollowersOnly": "僅限追蹤者",
+    "privacyPublicDescription": "所有人都能看到你的完攀紀錄和 Beta 影片。",
+    "privacyFollowersOnlyDescription": "只有追蹤者才能看到你的完攀紀錄和 Beta 影片。",
+    "save": "儲存",
+    "cancel": "取消",
+    "errors": {
+      "saveFailed": "儲存個人資料失敗，請再試一次。",
+      "avatarUploadFailed": "上傳照片失敗，請再試一次。",
+      "loadFailed": "載入個人資料失敗。"
+    }
+  },
+  "settings": {
+    "title": "設定",
+    "language": "語言",
+    "theme": "外觀",
+    "themeSystem": "跟隨系統",
+    "themeLight": "淺色",
+    "themeDark": "深色",
+    "signOut": "登出",
+    "privacyPolicy": "隱私政策",
+    "termsOfService": "服務條款"
+  },
+  "common": {
+    "loading": "載入中…",
+    "retry": "重試",
+    "error": "發生錯誤。",
+    "ok": "確定",
+    "cancel": "取消",
+    "save": "儲存",
+    "done": "完成",
+    "back": "返回"
+  }
+}

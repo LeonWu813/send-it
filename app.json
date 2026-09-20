@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Send It",
+    "slug": "send-it-tw-bouldering-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "platforms": ["ios"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.sendit.twbouldering",
+      "usesAppleSignIn": true
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-apple-authentication",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Send It to access your photos to set a profile avatar."
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "send-it-tw-bouldering-app"
+      }
+    }
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "app": {
+    "name": "Send It"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signUp": "Sign Up",
+    "signOut": "Sign Out",
+    "email": "Email",
+    "password": "Password",
+    "confirmPassword": "Confirm Password",
+    "forgotPassword": "Forgot Password?",
+    "continueWithApple": "Continue with Apple",
+    "continueWithGoogle": "Continue with Google",
+    "continueWithEmail": "Continue with Email",
+    "orDivider": "or",
+    "noAccount": "Don't have an account?",
+    "haveAccount": "Already have an account?",
+    "emailPlaceholder": "your@email.com",
+    "passwordPlaceholder": "••••••••",
+    "displayNameLabel": "Display Name",
+    "displayNamePlaceholder": "Your climbing name",
+    "errors": {
+      "emailRequired": "Email is required.",
+      "passwordRequired": "Password is required.",
+      "passwordMinLength": "Password must be at least 8 characters.",
+      "passwordMismatch": "Passwords do not match.",
+      "displayNameRequired": "Display name is required.",
+      "signInFailed": "Sign in failed. Please check your credentials.",
+      "signUpFailed": "Sign up failed. Please try again.",
+      "appleSignInFailed": "Apple Sign-In failed. Please try again.",
+      "googleSignInFailed": "Google Sign-In failed. Please try again.",
+      "signOutFailed": "Sign out failed. Please try again.",
+      "networkError": "Network error. Please check your connection and retry."
+    }
+  },
+  "onboarding": {
+    "homeGym": {
+      "title": "Pick Your Home Gym",
+      "subtitle": "Select the gym you climb at most.",
+      "searchPlaceholder": "Search gyms…",
+      "skip": "Skip for now",
+      "confirm": "Set as Home Gym",
+      "noResults": "No gyms found.",
+      "errors": {
+        "saveFailed": "Failed to save home gym. Please try again."
+      }
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "editTitle": "Edit Profile",
+    "displayName": "Display Name",
+    "bio": "Bio",
+    "bioPlaceholder": "Tell other climbers about yourself…",
+    "homeGym": "Home Gym",
+    "noHomeGym": "No home gym set",
+    "changeHomeGym": "Change Home Gym",
+    "avatar": "Profile Photo",
+    "changeAvatar": "Change Photo",
+    "privacy": "Profile Privacy",
+    "privacyPublic": "Public",
+    "privacyFollowersOnly": "Followers Only",
+    "privacyPublicDescription": "Anyone can see your sends and beta videos.",
+    "privacyFollowersOnlyDescription": "Only followers can see your sends and beta videos.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "errors": {
+      "saveFailed": "Failed to save profile. Please try again.",
+      "avatarUploadFailed": "Failed to upload photo. Please try again.",
+      "loadFailed": "Failed to load profile."
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Appearance",
+    "themeSystem": "System",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "signOut": "Sign Out",
+    "privacyPolicy": "Privacy Policy",
+    "termsOfService": "Terms of Service"
+  },
+  "common": {
+    "loading": "Loading…",
+    "retry": "Retry",
+    "error": "Something went wrong.",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "save": "Save",
+    "done": "Done",
+    "back": "Back"
+  }
+}
