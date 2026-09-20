@@ -73,4 +73,118 @@
 
 ## QA Results
 
-<!-- Filled by qa-mod-auth-profile agent -->
+**QA agent**: qa-mod-auth-profile
+**Mode**: first-time verification (functional-test workflow)
+**Date**: 2026-09-20
+
+### Automated Test Suite
+
+Command: `npm test`
+Result: 25 tests, 4 suites — all PASS
+Exit code: 0
+
+### TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+
+### Acceptance Criteria Verification
+
+**AC-001** — The system shall allow a new user to complete signup via Email, Apple Sign-In, or Google Sign-In and reach the home gym selection screen when they open the app for the first time.
+PASS. AuthNavigator routes: no session → SignIn/SignUp screens; session + no home_gym_id → HomeGymSelectionScreen (isOnboarding=true). All three sign-in methods are implemented in auth-service.ts (signUpWithEmail, signInWithApple, signInWithGoogle). The onAuthStateChange listener in useSession.ts triggers re-render; the navigator then checks home_gym_id and shows HomeGymSelectionScreen before the app shell.
+
+**AC-002** — The system shall allow a signed-in user to select exactly one home gym from the curated directory and persist that selection to their profile.
+PASS. HomeGymSelectionScreen loads from Supabase `gyms` table, implements single-select via selectedGymId state (radio behavior: selecting any gym replaces the previous selection). On confirm, setHomeGym() issues `users.update({ home_gym_id })` for the authenticated user. The confirm button is disabled until a selection is made.
+
+**AC-003** — The system shall complete signup + home gym selection in under 60 seconds of user-perceived interaction time for a user on a normal 4G/LTE connection when they follow the happy path.
+PASS (by design inspection). The happy path is: fill email/display name/password on SignUpScreen → tap Sign Up → see HomeGymSelectionScreen → pick gym → tap Set as Home Gym. There are no blocking intermediary steps, no email-verification gate before navigation, and no wait states beyond the actual auth and DB calls. This is achievable under 60 seconds on 4G. Note: cannot be mechanically verified without a device and real Supabase connection; accepted based on code flow analysis as the spec intends.
+
+**AC-063** — The system shall enforce a profile privacy setting of `public` (default) or `followers_only`, and when set to `followers_only` shall return 403/hidden for logs and beta video listings requested by non-followers.
+PASS (ownership portion). MOD-001 owns the column: `privacy_setting` is defined as a Postgres ENUM ('public', 'followers_only') with DEFAULT 'public' in the migration. The EditProfileScreen exposes both options and persists via upsertProfile(). The spec explicitly notes that downstream enforcement (403/hidden behavior) belongs to MOD-004, MOD-005, MOD-008 via RLS/RPC — those are out of scope for MOD-001. The column is read and written correctly. The `privacy_setting: 'followers_only'` case is tested in auth-service.test.ts (upsertProfile test).
+
+### Manual Check Results
+
+**Supabase singleton (production.md convention)**
+PASS. `createClient()` appears only in `src/lib/supabase.ts`. The only other occurrences in `src/` are in the test file as a jest.mock() mock declaration (not a real call site) and a comment. All module files import `supabase` from `../../lib/supabase`.
+
+**No service_role key in client code (production.md convention)**
+PASS. Grep over all `src/` files finds zero occurrences of `service_role` or `SERVICE_ROLE`. The `.env.example` correctly documents that SERVICE_ROLE_KEY must only be set via `supabase secrets`, not in the client bundle.
+
+**No hardcoded hex colors in components (production.md convention)**
+PASS. All color values in module screen files (`SignInScreen.tsx`, `SignUpScreen.tsx`, `HomeGymSelectionScreen.tsx`, `EditProfileScreen.tsx`, `AuthNavigator.tsx`) reference `theme.colors.*` tokens exclusively. No `#RRGGBB` or `rgba(...)` literals appear in any `src/modules/` file. The palette definitions in `src/lib/theme.ts` are the intended single source of truth for hex values.
+
+**No inline string literals in components (production.md convention)**
+FAIL. `App.tsx` `AppShell` component (line 23) renders `<Text>Send It — coming soon</Text>` — a hardcoded inline string literal — without going through `useTranslation`. Production.md shared conventions state: "All user-facing strings are pulled through the i18n hook — no inline string literals in components." `AppShell` is a React component that renders to the screen; the placeholder string is user-visible.
+
+Input: the AppShell component renders when a user is fully authenticated and onboarded.
+Actual: `<Text>Send It — coming soon</Text>` — raw string literal, not i18n-wrapped.
+Expected per spec: all user-facing strings go through `useTranslation()`.
+
+Route to: **Engineer** (implementation does not match shared convention).
+
+Note: AppShell is labeled a placeholder in a comment and will be replaced by downstream modules. However, per the spec convention, even placeholder components must follow the i18n rule while they exist. The fix is trivial: either add a t() key or remove the text and render null / a loading state.
+
+**Both EN and zh-TW catalogs complete with no missing keys (production.md convention)**
+PASS. The i18n.test.ts key-completeness test (collectKeys recursion over both JSON catalogs, asserting every EN leaf key exists in zh-TW) passes as part of the 25-test run. Manual inspection of both catalog files confirms structural parity: all top-level sections (app, auth, onboarding, profile, settings, common) and all nested leaf keys are present in both files.
+
+**TypeScript strict mode — no `any` without TODO comment (production.md convention)**
+PASS. No unguarded `any` type in production files (`src/lib/`, `src/modules/`). The `any` uses in test files are all accompanied by `// eslint-disable-next-line @typescript-eslint/no-explicit-any` (the accepted test-mock pattern). `tsconfig.json` enables `strict: true`, `noImplicitAny: true`, `strictNullChecks: true`, and related flags; `npx tsc --noEmit` exits 0.
+
+**EXPO_PUBLIC_ prefix convention (production.md convention)**
+PASS. Only `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` are read by `src/lib/supabase.ts`. No non-prefixed environment variables are read in client code.
+
+**Migration exists and RLS enabled from creation (production.md convention)**
+PASS. `supabase/migrations/20260920000001_mod_001_user_profile.sql` creates the `users` table and immediately runs `ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;`. RLS policies for SELECT, UPDATE, and INSERT are defined in the same file. The avatars storage bucket is created with corresponding RLS policies on `storage.objects`.
+
+**Data model matches spec (spec Data Model section)**
+PASS. The `users` table has all required columns: `id`, `display_name`, `avatar_url`, `home_gym_id` (nullable), `bio`, `privacy_setting` (ENUM, DEFAULT 'public'), `created_at`. The `UserProfile` TypeScript interface in types.ts mirrors this exactly.
+
+**home_gym_id is nullable (spec requirement)**
+PASS. Column definition: `home_gym_id UUID` (no NOT NULL constraint). The FK to `gyms` is deferred to MOD-002 per the migration comment, which is consistent with the spec note: "FK references the Gym table owned by MOD-002."
+
+**Apple Sign-In visually equivalent to Google Sign-In (spec Key Implementation Notes + production.md)**
+PASS. In SignInScreen.tsx, the `AppleAuthentication.AppleAuthenticationButton` has `style={styles.appleButton}` where `appleButton: { height: 48, width: '100%' }`. The Google sign-in Pressable has `style={styles.googleButton}` where `googleButton: { height: 48, ... }`. Both buttons share the same 48pt height and full-width layout. The comment in the file confirms this is intentional.
+
+**Avatar upload path (spec Key Implementation Notes)**
+PASS. `uploadAvatar()` in auth-service.ts: fetches the image URI as a blob, uploads to `storage.from('avatars').upload(storagePath, blob, { upsert: true })`, then calls `storage.from('avatars').getPublicUrl(storagePath)` and returns the public URL. The returned URL is then passed to `upsertProfile()` to write `avatar_url` on the User row.
+
+**No gold-plating (spec compliance check)**
+PASS. All implemented functionality maps to spec requirements: signup (AC-001), gym selection (AC-002), profile CRUD with privacy setting (AC-063). The auth-service exposes only what is needed. The AppShell placeholder is a scaffolding artifact, not a feature addition.
+
+**No HTML template comments in spec.md**
+PASS. No `<!-- ... -->` comments found in `project-planning/modules/mod-auth-profile/spec.md`.
+
+**.env in .gitignore**
+PASS. `.gitignore` line 8 contains `.env`; confirmed by `grep '^.env' .gitignore`.
+
+**Input/Output Contract adherence**
+PASS. Inputs (Supabase Auth payload, gym_id, profile fields) are correctly accepted by the service functions and screens. Outputs (authenticated Supabase session stored via AsyncStorage through the supabase client, User row created/updated in Postgres, home_gym_id and privacy_setting persisted) are all implemented.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| AC-001: Signup via Email/Apple/Google → home gym screen | PASS |
+| AC-002: Select exactly one home gym, persist to profile | PASS |
+| AC-003: Signup + gym selection < 60s on 4G happy path | PASS |
+| AC-063: privacy_setting column with public/followers_only, default public | PASS |
+| Automated test suite (25 tests, 4 suites) | PASS |
+| TypeScript strict mode (tsc --noEmit) | PASS |
+| createClient() only in src/lib/supabase.ts | PASS |
+| No hardcoded hex colors in components | PASS |
+| All user-facing strings through i18n in module screens | PASS |
+| Inline string literal in App.tsx AppShell (production.md violation) | **FAIL** |
+| EN and zh-TW catalogs complete, no missing keys | PASS |
+| RLS enabled from migration creation | PASS |
+| Data model matches spec | PASS |
+| No service_role key in client code | PASS |
+| No gold-plating | PASS |
+
+**Overall verdict: FAIL**
+
+**Failure count: 1**
+**Failure classification: implementation bug — route to Engineer**
+
+FAIL (inline string): `App.tsx` line 23 — `AppShell` component renders `<Text>Send It — coming soon</Text>` without wrapping the string through `useTranslation()`. Input=component renders after authentication; Actual=hardcoded string literal displayed; Expected per production.md shared convention=all user-facing strings go through i18n hook. Fix: wrap in a translation key or replace with a null/empty placeholder until downstream modules ship.

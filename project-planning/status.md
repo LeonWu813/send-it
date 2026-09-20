@@ -2,11 +2,11 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: engineer-mod-auth-profile
-mode: implement
+agent: qa-mod-auth-profile
+mode: verify
 module: mod-auth-profile
-result: success
-commit: 7d75523e41a3f65b9a50598c22f4830c148f99ff
+result: bugs-found
+commit: 13c100e3d2a7d83ef5da3606cc182efb128b0843
 timestamp: 2026-09-20T00:00:00+08:00
 
 ## Current Phase
@@ -224,4 +224,8 @@ Pattern: Initial doc-sync for a new project involves creating 11+ module spec fi
 Why: The absence of a skill directory on first run is a predictable gap — codifying a lightweight inline verification (check spec count matches module map, check all AC-IDs resolve, check no cross-module content) would add confidence to every initial sync without requiring the skill directory to be pre-installed.
 Agent: doc-sync
 
+
+Pattern: Expo/React Native scaffold includes placeholder components (AppShell, stub screens) that often contain hardcoded inline strings and styles, bypassing i18n and theming conventions. These slip through automated linting because tsc does not enforce i18n usage.
+Why: A specific QA checklist item for placeholder components — scan all components for <Text> content not wrapped in t() before calling PASS — would catch this class of violation without requiring a runtime test.
+Agent: qa-mod-auth-profile
 ## Checkpoint History
