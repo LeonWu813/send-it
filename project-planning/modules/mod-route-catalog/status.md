@@ -68,4 +68,114 @@
 
 ## QA Results
 
-<!-- Filled by qa-mod-route-catalog agent -->
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-20
+**Workflow**: functional-test (first-time verification)
+**Overall verdict**: FAIL — 1 implementation bug found
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --forceExit`
+- Result: 94 tests passed, 0 failed across 12 suites (41 new + 53 pre-existing)
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+
+---
+
+### Infrastructure Checks
+
+- `.gitignore` present at project root and contains `.env` on a standalone line: PASS (verified via `grep '^\.env$' .gitignore`)
+- `setup.md` env vars cross-referenced with `.env.example`: PASS — all vars referenced in setup.md (EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, EXPO_PUBLIC_POSTHOG_API_KEY, EXPO_PUBLIC_POSTHOG_HOST) are present in `.env.example`
+- No HTML template comments (`<!-- -->`) in spec.md: PASS
+- Supabase client singleton: no `createClient()` call sites inside mod-route-catalog — only `import { supabase } from '../../lib/supabase'`: PASS
+
+---
+
+### Acceptance Criteria Results
+
+**AC-020**: match-before-create flow — on new-route submission for a given gym+grade+color, query existing active routes and present matches before allowing creation.
+- PASS. `RouteSubmitScreen.handleFormSubmit()` calls `findMatchingActiveRoutes(gymId, selectedGrade, selectedColor)` before advancing to the photo step. If matches > 0, the `match-check` step renders all matched routes as tappable cards. `findMatchingActiveRoutes` filters `status='active'` in the Supabase query. Service test at route-service.test.ts lines 89–132 verifies the `eq('status', 'active')` call. Screen test at RouteSubmitScreen.test.tsx lines 132–164 verifies the service is called with the correct gym/grade/color.
+
+**AC-021**: block new-route creation when no photo is attached; show validation message.
+- PASS. `handleFinalSubmit()` checks `if (!photoUri)` and calls `setPhotoError(t('routes.submit.errors.photoRequired'))` then returns without calling `uploadRoutePhoto` or `submitRoute`. The EN locale key `routes.submit.errors.photoRequired` = "A photo is required. Please take or choose a photo of the route." Both locale files contain this key. Screen test at RouteSubmitScreen.test.tsx lines 185–216 verifies `mockSubmitRoute` is not called when no photo is attached.
+
+**AC-022**: restrict hold/tape color selector to fixed enum {red, orange, yellow, green, blue, purple, pink, white, black}.
+- PASS. `ROUTE_COLORS` in types.ts is a `readonly` tuple of exactly 9 values matching the spec enum. `renderColorSelector()` in RouteSubmitScreen maps over `ROUTE_COLORS` exclusively — no `TextInput` for color, no free-text path. No additional values exist outside the 9. Screen test at RouteSubmitScreen.test.tsx lines 85–95 verifies all 9 colors render and no others.
+
+**AC-023**: enforce V-scale as the only grade system available for route creation.
+- PASS. `ROUTE_GRADES` in types.ts is `['VB', 'V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10']`. `renderGradeSelector()` maps over `ROUTE_GRADES` exclusively. No free-text grade input. DB `route_grade` enum contains the same 12 values. Screen test at RouteSubmitScreen.test.tsx lines 71–83 verifies V-scale grades are present and non-V-scale values ('V11', '5.10') are absent.
+- Note: spec Key Implementation Notes says "e.g., VB, V0–V17" — the "e.g." is an example and V0–V10 is a valid V-scale subset. Not a failure.
+
+**AC-024**: allow any authenticated user to flag an active route as retired; set `status='retired'`, `retired_at=now()`, `retired_by_user_id` set; immediately exclude from active-routes match pool.
+- PASS. `retireRoute(routeId, userId)` in route-service.ts updates `{status: 'retired', retired_at: new Date().toISOString(), retired_by_user_id: userId}` and applies `.eq('status', 'active')` to prevent re-retiring. The RLS policy `routes_retire_authenticated` uses `USING (auth.role() = 'authenticated' AND status = 'active')` so only authenticated users can update active routes, and `WITH CHECK (status = 'retired' AND retired_at IS NOT NULL AND retired_by_user_id = auth.uid())` enforces the transition. The partial unique index on `(gym_id, grade, color_tag) WHERE status = 'active'` automatically excludes retired routes from the uniqueness constraint (and from active-route queries that filter `status='active'`). `RouteDetailScreen` shows the retire button only when `route.status === 'active'` and calls `retireRoute` on confirmation. Service test at route-service.test.ts lines 329–346 verifies `status='retired'`, `retired_by_user_id`, and `retired_at` (string) are sent.
+
+**AC-040**: on a gym detail page, filter the route list by grade and by active/retired status based on user-selected filter controls.
+- PASS. `RouteListScreen` renders a two-tab status selector (Active/Retired) and grade filter chips. `toggleStatusFilter` updates `filters.status`; `toggleGradeFilter` toggles a single grade or clears it. `listRoutes` is re-called via `useEffect` on filter change. `listRoutes()` applies `.eq('status', filters.status)` and, when `filters.grade !== null`, `.eq('grade', filters.grade)`. No color filter is present — spec AC-040 specifies only grade and status filters, which is exactly what is implemented. Screen test at RouteListScreen.test.tsx lines 150–170 verifies the Retired tab triggers `listRoutes` with `status: 'retired'`.
+
+**AC-041**: default the gym route list to `active` status when no filter is explicitly set.
+- PASS. `useState<RouteListFilters>({ grade: null, status: 'active' })` in `RouteListScreen` initializes with `status: 'active'`. Screen test at RouteListScreen.test.tsx lines 89–100 verifies `listRoutes` is called with `{ status: 'active' }` on initial render.
+
+---
+
+### Data Model and Migration Checks
+
+**match_key — GENERATED ALWAYS AS STORED**: PASS. Migration line 48–50: `match_key TEXT GENERATED ALWAYS AS (gym_id::text || '-' || grade::text || '-' || color_tag::text) STORED`. The column is correctly declared as a stored generated column, not a regular column.
+
+**match_key formula deviation**: FAIL.
+- Input: migration defines formula as `gym_id::text || '-' || grade::text || '-' || color_tag::text`
+- Actual formula produces: e.g. `"f47ac10b-58cc-4372-a567-0e02b2c3d479-V4-blue"` (extra `-` separators between grade and color segments)
+- Expected per spec and production.md: `GENERATED ALWAYS AS (gym_id || grade || color_tag) STORED` — formula produces `"f47ac10b-58cc-4372-a567-0e02b2c3d479V4blue"` (no extra separators)
+- Both spec.md (Data Model section) and production.md (Shared Conventions — match_key Implementation) specify the formula without separators. The implementation adds `-` between grade and color_tag segments.
+- Impact: zero functional impact on uniqueness (the partial unique index is on `(gym_id, grade, color_tag)` columns, not on `match_key`); match-before-create queries do not use match_key. However, the stored match_key value does not match the documented formula in both spec and production.md.
+- Route to: Engineer (implementation bug — update migration formula to match spec, or update spec to document the separator — either direction, but they must agree).
+
+**Partial unique index WHERE status='active'**: PASS. Migration line 63–65: `CREATE UNIQUE INDEX routes_active_unique_idx ON public.routes (gym_id, grade, color_tag) WHERE status = 'active'`. Exactly matches spec requirement.
+
+**RLS — SELECT**: PASS. Policy `routes_select_authenticated` for `FOR SELECT USING (auth.role() = 'authenticated')` — all authenticated users can read all routes.
+
+**RLS — INSERT**: PASS. Policy `routes_insert_own` for `FOR INSERT WITH CHECK (auth.uid() = submitted_by_user_id AND auth.role() = 'authenticated')` — authenticated users can only insert their own rows.
+
+**RLS — UPDATE (retire)**: PASS. Policy `routes_retire_authenticated` for `FOR UPDATE USING (auth.role() = 'authenticated' AND status = 'active') WITH CHECK (status = 'retired' AND retired_at IS NOT NULL AND retired_by_user_id = auth.uid())` — any authenticated user can retire active routes.
+
+**RLS — No DELETE**: PASS. No `FOR DELETE` policy exists. Only `service_role` (via Supabase Studio) can delete rows.
+
+---
+
+### Integration and Conventions Checks
+
+**Supabase singleton**: PASS. All route-service.ts data access imports from `../../lib/supabase`. No `createClient()` at call sites.
+
+**No hardcoded hex colors**: PASS. `RouteColorBadge.tsx` uses `ROUTE_COLOR_TO_RN_COLOR` mapping of React Native named color strings ('red', 'orange', etc.) — device/OS-resolved, not hex literals. No `#RRGGBB` or `#RGB` patterns found in any mod-route-catalog file.
+
+**All strings through useTranslation()**: PASS. All three screen components import `useTranslation('common')` and use `t('routes.*')` for every user-facing string. No inline string literals in JSX text nodes.
+
+**EN locale completeness**: PASS. All keys used by mod-route-catalog components (`routes.noResults`, `routes.status.active/retired`, `routes.detail.*`, `routes.retire.*`, `routes.submit.*`, `routes.errors.*`) are present in `locales/en/common.json`.
+
+**zh-TW locale completeness**: PASS. All corresponding `routes.*` keys are present in `locales/zh-TW/common.json` with Traditional Chinese translations. No missing keys found.
+
+**EN/zh-TW key parity**: PASS. Both locale files have identical key structures under `routes.*`. No key present in EN that is missing from zh-TW or vice versa.
+
+**TypeScript strict mode**: PASS. `npx tsc --noEmit` exits 0. No `any` without comment found in non-test files (test mocks use `any` with a comment: `// test mock; type safety not required here`).
+
+**Module directory layout**: PASS. Files are under `src/modules/mod-route-catalog/` per production.md directory convention. Migration is in `supabase/migrations/`.
+
+**No gold-plating**: PASS. No features implemented beyond what the spec requires. Color filter (not in AC-040) is absent. Admin tooling is absent (spec says Supabase Studio only). Comments on routes are absent (spec says out of scope). No in-app grade override. No free-text color input.
+
+**No spec requirements left unimplemented**: PASS. All 6 ACs (AC-020–024, AC-040–041) are implemented. All three user stories (US-003, US-006, US-014) are covered. The `section_label` optional field is surfaced in the route submission form (as required by Key Implementation Notes).
+
+---
+
+### Failure Summary
+
+| ID | Severity | Type | Description |
+|----|----------|------|-------------|
+| FAIL match_key formula | Low | Implementation bug | Migration formula uses `gym_id::text \|\| '-' \|\| grade::text \|\| '-' \|\| color_tag::text` but spec and production.md specify `gym_id \|\| grade \|\| color_tag` (no extra separators). Zero functional impact since uniqueness is enforced by the partial index on the underlying columns, not on match_key. Route to: Engineer. |
+
+---
+
+### Routing
+
+- 1 implementation bug (match_key formula deviates from documented spec formula) → Engineer
+- No spec issues to escalate to PM

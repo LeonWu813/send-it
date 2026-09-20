@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-route-catalog
-mode: implement
+agent: qa-mod-route-catalog
+mode: verify
 module: mod-route-catalog
-result: success
-commit: d1ad470be0c8625b553835ec49b71d6db886da75
+result: bugs-found
+commit: 69fa8722bae4eb21ad011937df0262ab31dfb327
 timestamp: 2026-09-20T00:00:00Z
 ```
 
@@ -17,7 +17,7 @@ timestamp: 2026-09-20T00:00:00Z
 |---------|------------------------|-------------|---------------------------|
 | MOD-001 | mod-auth-profile       | QA Passed   | qa-mod-auth-profile       |
 | MOD-002 | mod-gym-directory      | QA Passed   | qa-mod-gym-directory      |
-| MOD-003 | mod-route-catalog      | Eng Done    | engineer-mod-route-catalog|
+| MOD-003 | mod-route-catalog      | QA Bugs     | qa-mod-route-catalog      |
 | MOD-004 | mod-send-logging       | Not started | —                         |
 | MOD-005 | mod-beta-video         | Not started | —                         |
 | MOD-006 | mod-social-feed        | Not started | —                         |
@@ -32,3 +32,5 @@ timestamp: 2026-09-20T00:00:00Z
 - **Cross-module i18n catalog updates**: When a module adds user-facing strings, the engineer must also update `locales/en/common.json` and `locales/zh-TW/common.json`. The self-check script's git scope check flags these as "out of scope" but they are required by the production.md i18n convention. The self-check script should be updated to whitelist `locales/` as an allowed cross-cutting path for any module implementing i18n strings. Alternatively, each module should own its own locale namespace file (e.g. `locales/en/routes.json`) to stay within the module boundary.
 
 - **React Native named colors for enum-to-color mappings**: When a domain enum (like route hold colors) needs to render as a visual chip, map enum values to React Native's built-in named color strings (e.g. `'red'`, `'blue'`) rather than hex literals. Named colors are OS-resolved (not hardcoded hex), satisfy the "no hardcoded hex" convention, and are visually accurate. Document this in the skill as an approved pattern for enum-color mapping in RN components.
+
+- **Generated column formula must match spec exactly**: When a spec and production.md both document a Postgres GENERATED ALWAYS AS formula, verify the migration SQL matches character-for-character (including separators). Even cosmetic differences (e.g., adding `-` separators not in the spec formula) are spec deviations that QA must flag, even when there is zero functional impact. Add this to qa-checklist references as a pattern to check on any module with a GENERATED ALWAYS AS column.
