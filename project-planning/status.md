@@ -2,16 +2,16 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: pm
-mode: init
+agent: doc-sync
+mode: initial
 module: n/a
 result: success
-commit: ac67da117eafbda177f73173cbc8c8098b2291c0
-timestamp: 2026-09-20T12:00:00+08:00
+commit: 9334bfcfb8f4be13db883c123704e6c7b3726e2b
+timestamp: 2026-09-19T00:00:00+08:00
 
 ## Current Phase
 
-Phase 1 — iOS MVP (Taipei + New Taipei launch). **[INIT] complete** — PRD rev 2 finalized with all Tech Lead concerns incorporated; setup confirmed by Tech Lead; module directories created; Build/Lint/Test config set. Engineering may begin with MOD-001 (Auth & Profile). Next handoff: Doc-Sync to create production.md and per-module specs.
+Phase 1 — iOS MVP (Taipei + New Taipei launch). **Doc-Sync [INIT] complete** — `production.md` created; all 11 module `spec.md` files created; all 11 module `status.md` files created. Per-module agent wrappers (`.claude/agents/engineer-mod-*.md` and `.claude/agents/qa-mod-*.md`) blocked — see Sync Reports for detail. Engineering may begin with MOD-001 (Auth & Profile).
 
 ## Phase Plan
 
@@ -121,6 +121,44 @@ Verified 2026-09-19 (nvm loaded before node/eas checks). All required Phase-1 de
 
 ## Sync Reports
 
+### 2026-09-19 — Initial Sync ([INIT])
+
+**Trigger**: [INIT] tag in PM Updates (2026-09-20 entry). PRD rev 2 finalized.
+
+**Files created:**
+
+- `project-planning/production.md` — shared conventions doc (tech stack, architecture overview, module index, directory layout, Supabase singleton, RLS-first access, migration conventions, env var rules, video pipeline, match_key, notification pattern, i18n rules, theming rules, TypeScript strict mode, testing conventions, commit conventions, build/lint/test commands, cross-cutting NFRs)
+- `project-planning/modules/mod-auth-profile/spec.md` — MOD-001
+- `project-planning/modules/mod-gym-directory/spec.md` — MOD-002
+- `project-planning/modules/mod-route-catalog/spec.md` — MOD-003
+- `project-planning/modules/mod-send-logging/spec.md` — MOD-004
+- `project-planning/modules/mod-beta-video/spec.md` — MOD-005
+- `project-planning/modules/mod-social-feed/spec.md` — MOD-006
+- `project-planning/modules/mod-notifications/spec.md` — MOD-007
+- `project-planning/modules/mod-profile-history/spec.md` — MOD-008
+- `project-planning/modules/mod-moderation/spec.md` — MOD-009
+- `project-planning/modules/mod-localization-theme/spec.md` — MOD-010
+- `project-planning/modules/mod-analytics/spec.md` — MOD-011
+- `project-planning/modules/mod-auth-profile/status.md` — empty Engineering Progress + QA Results template
+- `project-planning/modules/mod-gym-directory/status.md` — empty template
+- `project-planning/modules/mod-route-catalog/status.md` — empty template
+- `project-planning/modules/mod-send-logging/status.md` — empty template
+- `project-planning/modules/mod-beta-video/status.md` — empty template
+- `project-planning/modules/mod-social-feed/status.md` — empty template
+- `project-planning/modules/mod-notifications/status.md` — empty template
+- `project-planning/modules/mod-profile-history/status.md` — empty template
+- `project-planning/modules/mod-moderation/status.md` — empty template
+- `project-planning/modules/mod-localization-theme/status.md` — empty template
+- `project-planning/modules/mod-analytics/status.md` — empty template
+
+**Files NOT created (blocked):**
+
+- `.claude/agents/engineer-mod-*.md` (11 files) — write blocked by auto-mode classifier (self-modification rule). The task prompt explicitly requested these files and the doc-sync write scope lists them. Human must confirm permission to write to `.claude/agents/` before these can be created.
+- `.claude/agents/qa-mod-*.md` (11 files) — same block.
+
+**Ambiguity / Conflict markers placed**: none.
+
+**verify-sync.sh**: Not run — `~/.claude/skills/doc-sync-methodology/` directory does not exist in this project (no skill directory installed). Verification script unavailable. Manual check performed: all 11 spec.md files reference correct MOD-IDs, module names, and dependency lists matching the PRD and Module Map in status.md. All acceptance criteria referenced in specs match AC-IDs in PRD §8. No cross-module spec content leakage detected.
 
 ## Engineering Progress
 
@@ -182,5 +220,8 @@ Pattern: Push notifications triggered from the client are a source of duplicate/
 Why: A reusable skill entry "server-authoritative notification pattern" would let Tech Lead flag this on every project involving push, not just Send It.
 Agent: tech-lead
 
-## Checkpoint History
+Pattern: Initial doc-sync for a new project involves creating 11+ module spec files, status files, and per-module agent wrappers atomically. Without a pre-existing skill directory, the verify-sync.sh script cannot run, leaving manual verification as the only check. A portable "bootstrap verification" script that works before the skill directory exists would reduce human review burden on initial syncs.
+Why: The absence of a skill directory on first run is a predictable gap — codifying a lightweight inline verification (check spec count matches module map, check all AC-IDs resolve, check no cross-module content) would add confidence to every initial sync without requiring the skill directory to be pre-installed.
+Agent: doc-sync
 
+## Checkpoint History
