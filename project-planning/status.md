@@ -3,11 +3,11 @@
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
 agent: tech-lead
-mode: review
+mode: setup-verification
 module: n/a
 result: success
-commit: 7e7c3b7dec149f8ce28fc34524b0304dccffc9b4
-timestamp: 2026-09-19T17:15:00+08:00
+commit: fc9dd57744cd9c876f4ba32aeef48ddb30ae51ee
+timestamp: 2026-09-19T18:05:00+08:00
 
 ## Current Phase
 
@@ -87,20 +87,36 @@ Reviewed `prd.md` rev 1 in full against the confirmed decision set and the insta
 - **Testing**: Jest + React Native Testing Library. One test file per source file. Test behaviour, not implementation.
 - **TypeScript**: Strict mode on. No `any` without a `// TODO(leon): why` comment.
 
-### Setup Confirmation — pending
+### Setup Confirmation — complete
 
-Setup is **not yet complete**. `setup.md` has been created with a step-by-step runbook. Before setup can be confirmed, Leon must:
+Verified 2026-09-19 (nvm loaded before node/eas checks). All required Phase-1 development environment checks pass. Deferred items are Apple-Developer-gated and correctly out of scope for simulator-based development, per `setup.md` §4 and §8.
 
-1. Install Node 20 LTS and pin the project (`.nvmrc`).
-2. Install full Xcode from the Mac App Store and run `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
-3. Install `eas-cli` (npm global) and `supabase` (Homebrew).
-4. Enrol in the Apple Developer Program and create an APNs Auth Key (`.p8`).
-5. Create the Supabase project (Singapore region), copy URL + anon key into `.env`.
-6. Create the PostHog project and copy the API key into `.env`.
-7. Create the Expo organisation + project, upload the APNs `.p8` via `eas credentials`, and set `EXPO_ACCESS_TOKEN` + `SUPABASE_SERVICE_ROLE_KEY` via `supabase secrets set`.
-8. Copy `.env.example` → `.env` and fill in real values.
+**Passed:**
 
-Once done, re-invoke Tech Lead with **"Setup is complete."** — Tech Lead will run verification checks and record confirmation before PM tags [INIT].
+- ✅ Node.js v20.20.2 (via nvm; LTS, meets Expo SDK 51 requirement) — `.nvmrc` pinned to `20`
+- ✅ Xcode 26.6 (Build 17F113) — `xcodebuild -version` returns valid version
+- ✅ CocoaPods 1.17.0 installed (bonus — not required to pass, but ready for Expo prebuild)
+- ✅ EAS CLI — `eas whoami` returns `leon_wu` (leonwuya@gmail.com); Owner of both `leon_wu` and `send-it-tw-bouldering-app` Expo accounts
+- ✅ Supabase CLI 2.117.0 — `supabase --version` succeeds
+- ✅ `.env` exists at project root and is git-ignored — `git check-ignore -v .env` → `.gitignore:8:.env`; `git ls-files .env` returns empty (untracked)
+- ✅ `EXPO_PUBLIC_SUPABASE_URL` — real value `https://hxvzjpynhdexhtoccmmh.supabase.co`, no placeholder token
+- ✅ `EXPO_PUBLIC_SUPABASE_ANON_KEY` — real value (46 chars), no placeholder
+- ✅ `EXPO_PUBLIC_POSTHOG_API_KEY` — real value (52 chars), no placeholder
+- ✅ `EXPO_PUBLIC_POSTHOG_HOST` — present
+- ✅ Supabase project reachable — `curl` to `<SUPABASE_URL>/auth/v1/health` returned **HTTP 401** (host resolves, service live; 401 without key is expected and is a pass per the 200/401 criterion)
+
+**Deferred (not failures — Apple-Developer-gated, no fixed timeline):**
+
+- ⏳ Apple Developer Program enrollment (US$99/yr) — deferred until real-device testing / TestFlight (`setup.md` §4)
+- ⏳ APNs `.p8` Auth Key upload to Expo via `eas credentials` — deferred with the Apple Dev account (`setup.md` §8)
+
+**Notes (informational, non-blocking):**
+
+- No `package.json` / Expo app scaffold yet — expected; Engineer scaffolds during MOD-001.
+- Expo access token + `SUPABASE_SERVICE_ROLE_KEY` are stored via `supabase secrets` (not in `.env`), per the RLS/secrets convention. Reminder: the service-role secret name is `SERVICE_ROLE_KEY`, since Supabase reserves the `SUPABASE_` prefix for its own injected vars — Edge Function code must read `SERVICE_ROLE_KEY`, not `SUPABASE_SERVICE_ROLE_KEY`.
+- Push-notification testing (MOD-007 APNs delivery on a physical device) cannot be end-to-end verified until the Apple Developer account + APNs `.p8` are in place. This does not block [INIT] or any non-push module.
+
+**Verdict:** Environment confirmed for Phase-1 development. **PM agent may now tag [INIT].**
 
 ## Sync Reports
 
@@ -114,7 +130,7 @@ Once done, re-invoke Tech Lead with **"Setup is complete."** — Tech Lead will 
 ## Decisions
 
 - Framework: React Native + Expo + TypeScript (iOS-only Phase 1; Android Phase 2)
-- BaaS: Supabase (Postgres + Auth + Storage + RLS + Edge Functions)
+- BaaS: Supabase (Postgres + Auth + Storage + RLS + Edge Functions) — hosted in Tokyo (ap-northeast-1)
 - Video hosting: Supabase Storage Phase 1; migrate to Cloudflare Stream when monthly cost > US$25 OR storage > 20 GB
 - Auth: Email + Apple Sign-In + Google Sign-In
 - Video: 60-sec cap, client-side compression, client-generated thumbnail
