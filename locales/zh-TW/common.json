@@ -122,6 +122,74 @@
       "notFound": "找不到該岩館。"
     }
   },
+  "routes": {
+    "noResults": "找不到路線。",
+    "status": {
+      "active": "開放中",
+      "retired": "已退場"
+    },
+    "detail": {
+      "gym": "岩館",
+      "section": "區域",
+      "submittedBy": "由誰新增",
+      "addedOn": "新增日期",
+      "retiredOn": "退場日期",
+      "ascentsPlaceholder": "完攀紀錄",
+      "ascentsPlaceholderSub": "完攀記錄功能即將推出（MOD-004）。",
+      "betaVideosPlaceholder": "Beta 影片",
+      "betaVideosPlaceholderSub": "Beta 影片功能即將推出（MOD-005）。"
+    },
+    "retire": {
+      "action": "標記為已退場",
+      "confirmTitle": "確定標記為已退場？",
+      "confirmBody": "這將把路線標記為已退場，並從開放路線列表中移除。任何攀岩者都可以在牆面重置後執行此動作。",
+      "confirmAction": "標記為已退場"
+    },
+    "submit": {
+      "cta": "+ 新增路線",
+      "title": "新增路線",
+      "gradeLabel": "難度",
+      "colorLabel": "岩點顏色",
+      "sectionLabel": "區域（選填）",
+      "sectionPlaceholder": "例如：洞穴、板岩、斜板…",
+      "checkMatches": "確認是否有重複路線",
+      "submitRoute": "送出路線",
+      "submitting": "送出中…",
+      "matchCheck": {
+        "title": "找到現有路線",
+        "body": "這個岩館已有相同難度與顏色的開放路線。請確認是否是同一條路線？",
+        "thisIsIt": "就是這條路線 →",
+        "differentRoute": "都不是，這是新路線",
+        "addNew": "新增為全新路線"
+      },
+      "photo": {
+        "title": "新增照片",
+        "body": "需要照片才能讓其他攀岩者辨識路線。請拍攝起手點或整條路線的清晰照片。",
+        "placeholder": "尚未選擇照片",
+        "preview": "路線照片預覽",
+        "takePhoto": "拍照",
+        "choosePhoto": "從相簿選擇"
+      },
+      "matchIdentified": {
+        "title": "找到路線",
+        "body": "太好了，就是這條路線。請從路線詳情頁記錄完攀。"
+      },
+      "errors": {
+        "gradeRequired": "請選擇難度。",
+        "colorRequired": "請選擇岩點顏色。",
+        "matchCheckFailed": "確認重複路線失敗，請再試一次。",
+        "photoRequired": "必須附上照片。請拍攝或選擇路線照片。",
+        "photoPermissionDenied": "需要相簿存取權限才能選擇照片。",
+        "cameraPermissionDenied": "需要相機存取權限才能拍照。",
+        "submitFailed": "送出路線失敗，請再試一次。"
+      }
+    },
+    "errors": {
+      "loadFailed": "載入路線失敗，請再試一次。",
+      "notFound": "找不到該路線。",
+      "retireFailed": "標記退場失敗，請再試一次。"
+    }
+  },
   "common": {
     "loading": "載入中…",
     "retry": "重試",

@@ -122,6 +122,74 @@
       "notFound": "Gym not found."
     }
   },
+  "routes": {
+    "noResults": "No routes found.",
+    "status": {
+      "active": "Active",
+      "retired": "Retired"
+    },
+    "detail": {
+      "gym": "GYM",
+      "section": "SECTION",
+      "submittedBy": "SUBMITTED BY",
+      "addedOn": "ADDED",
+      "retiredOn": "RETIRED ON",
+      "ascentsPlaceholder": "Ascents",
+      "ascentsPlaceholderSub": "Send logging coming soon (MOD-004).",
+      "betaVideosPlaceholder": "Beta Videos",
+      "betaVideosPlaceholderSub": "Beta video support coming soon (MOD-005)."
+    },
+    "retire": {
+      "action": "Flag as Retired",
+      "confirmTitle": "Flag as Retired?",
+      "confirmBody": "This will mark the route as retired and remove it from the active routes list. Any climber can do this when a wall is reset.",
+      "confirmAction": "Flag as Retired"
+    },
+    "submit": {
+      "cta": "+ Add Route",
+      "title": "Add a Route",
+      "gradeLabel": "GRADE",
+      "colorLabel": "HOLD COLOR",
+      "sectionLabel": "SECTION (optional)",
+      "sectionPlaceholder": "e.g. Cave, Slab, Overhang…",
+      "checkMatches": "Check for Existing Routes",
+      "submitRoute": "Submit Route",
+      "submitting": "Submitting…",
+      "matchCheck": {
+        "title": "Existing Routes Found",
+        "body": "We found existing active routes with this grade and color at this gym. Is one of these the same route?",
+        "thisIsIt": "Yes, this is the route →",
+        "differentRoute": "None of these — it's a new route",
+        "addNew": "Add as New Route"
+      },
+      "photo": {
+        "title": "Add a Photo",
+        "body": "A photo is required so other climbers can identify the route. Take a clear photo of the start holds or the full route.",
+        "placeholder": "No photo selected",
+        "preview": "Route photo preview",
+        "takePhoto": "Take Photo",
+        "choosePhoto": "Choose from Library"
+      },
+      "matchIdentified": {
+        "title": "Route Found",
+        "body": "Great — that's the route. Log a send from the route detail page."
+      },
+      "errors": {
+        "gradeRequired": "Please select a grade.",
+        "colorRequired": "Please select a hold color.",
+        "matchCheckFailed": "Failed to check for existing routes. Please try again.",
+        "photoRequired": "A photo is required. Please take or choose a photo of the route.",
+        "photoPermissionDenied": "Photo library access is required to choose a photo.",
+        "cameraPermissionDenied": "Camera access is required to take a photo.",
+        "submitFailed": "Failed to submit route. Please try again."
+      }
+    },
+    "errors": {
+      "loadFailed": "Failed to load routes. Please try again.",
+      "notFound": "Route not found.",
+      "retireFailed": "Failed to retire route. Please try again."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",
