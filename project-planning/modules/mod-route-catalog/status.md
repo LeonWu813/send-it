@@ -185,3 +185,58 @@
 
 - 1 implementation bug (match_key formula deviates from documented spec formula) → Engineer
 - No spec issues to escalate to PM
+
+---
+
+## QA Regression Results
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-20
+**Workflow**: regression-test (re-verification after bug fix)
+**Overall verdict**: PASS — previously failing item fixed; no regressions
+
+---
+
+### Previously Failing Item — Verification
+
+**match_key formula (previously FAIL, now PASS)**
+- Fix verified: `supabase/migrations/20260920000003_mod_003_route_catalog.sql` lines 48–50 now read `gym_id::text || grade::text || color_tag::text` with no `'-'` separator strings between fields.
+- Verification method: `grep -n "match_key\|GENERATED ALWAYS\|gym_id::text\|grade::text\|color_tag::text\|'-'" supabase/migrations/20260920000003_mod_003_route_catalog.sql` — zero occurrences of `'-'` in the formula expression; only line 49 contains the concatenation operators `||` and no string literals.
+- Formula now produces values of the form `"f47ac10b-58cc-4372-a567-0e02b2c3d479V4blue"` — matching the spec and production.md documented formula exactly.
+- PASS.
+
+---
+
+### Regression — Automated Test Suite
+
+- Command: `npm test -- --forceExit`
+- Result: 94 tests passed, 0 failed across 12 suites
+- Exit code: 0
+- No previously-passing tests are now failing.
+- PASS.
+
+### Regression — TypeScript
+
+- Command: `npx tsc --noEmit`
+- Exit code: 0
+- No type errors introduced.
+- PASS.
+
+---
+
+### Regression — All Previously Passing Checks
+
+All items that PASS'd in the original functional-test remain PASS — no regressions detected. The only change to the module between the two QA runs is the single-line correction to the `match_key` GENERATED ALWAYS AS formula in the migration file. No other source files, tests, types, service functions, screens, locale files, or RLS policies were modified.
+
+---
+
+### Summary
+
+| Item | First-time result | Regression result |
+|------|-------------------|-------------------|
+| match_key formula | FAIL | PASS |
+| npm test (94 tests) | PASS | PASS |
+| npx tsc --noEmit | PASS | PASS |
+| AC-020 through AC-041 (all) | PASS | PASS |
+| Infrastructure checks | PASS | PASS |
+| Integration/conventions checks | PASS | PASS |
