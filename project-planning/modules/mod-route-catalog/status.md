@@ -66,6 +66,12 @@
 - `locales/en/common.json` — `routes.*` keys added (EN)
 - `locales/zh-TW/common.json` — `routes.*` keys added (zh-TW)
 
+### Bugfix (2026-09-20)
+
+- PASS: match_key formula corrected — removed `'-'` separator strings from GENERATED ALWAYS AS expression; formula now reads `(gym_id::text || grade::text || color_tag::text)` exactly as specified in spec.md and production.md
+- PASS: `npm test -- --forceExit` — 94 tests, 12 suites, 0 failures (unchanged)
+- PASS: `npx tsc --noEmit` — 0 errors (unchanged)
+
 ## QA Results
 
 **QA agent**: qa-mod-route-catalog

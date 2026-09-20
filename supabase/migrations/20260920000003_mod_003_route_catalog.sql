@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.routes (
   -- The partial unique index below (not a UNIQUE column) enforces that only one
   -- ACTIVE route may exist per gym+grade+color combination at any given time.
   match_key             TEXT GENERATED ALWAYS AS (
-                          gym_id::text || '-' || grade::text || '-' || color_tag::text
+                          gym_id::text || grade::text || color_tag::text
                         ) STORED,
   status                route_status  NOT NULL DEFAULT 'active',
   submitted_by_user_id  UUID          NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
