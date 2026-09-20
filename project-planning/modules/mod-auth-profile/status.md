@@ -71,6 +71,24 @@
 
 **Result: READY FOR QA** — all judgment-based items pass; automated failures are either script limitations (lint/test/build commands not parsed) or a pre-existing uncommitted diff not introduced by this session.
 
+---
+
+### Bugfix — 2026-09-20
+
+**QA failure addressed**: `App.tsx` `AppShell` component rendered `<Text>Send It — coming soon</Text>` as an inline string literal without `useTranslation()`, violating the production.md shared convention: "All user-facing strings are pulled through the i18n hook — no inline string literals in components."
+
+**Fix applied**: Replaced the `AppShell` return value with `return null` (and removed unused `Text`/`View` imports). Since `AppShell` is a throwaway scaffolding placeholder with no product value, eliminating the string entirely is cleaner than adding an i18n key that would be deleted when downstream modules ship.
+
+**Self-check results (bugfix)**
+- [PASS] `npx tsc --noEmit` — 0 errors (exit 0)
+- [PASS] `npm test` — 25 tests, 4 suites, all pass (exit 0)
+- [PASS] No inline string literals remain in `App.tsx` — only `return null`
+- [PASS] Unused `Text` and `View` imports removed — no dead imports
+- [PASS] No i18n catalog changes required — no throwaway key added to either locale
+- [PASS] No other files modified outside `App.tsx` (module boundary respected)
+
+---
+
 ## QA Results
 
 **QA agent**: qa-mod-auth-profile
