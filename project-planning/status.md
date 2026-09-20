@@ -2,16 +2,16 @@
 
 ## Last Action
 <!-- Machine-readable block — handoff.sh parses this section -->
-agent: tech-lead
-mode: setup-verification
+agent: pm
+mode: init
 module: n/a
 result: success
-commit: fc9dd57744cd9c876f4ba32aeef48ddb30ae51ee
-timestamp: 2026-09-19T18:05:00+08:00
+commit: ac67da117eafbda177f73173cbc8c8098b2291c0
+timestamp: 2026-09-20T12:00:00+08:00
 
 ## Current Phase
 
-Phase 1 — iOS MVP (Taipei + New Taipei launch). PRD drafted; awaiting Tech Lead architectural review before [INIT] tag.
+Phase 1 — iOS MVP (Taipei + New Taipei launch). **[INIT] complete** — PRD rev 2 finalized with all Tech Lead concerns incorporated; setup confirmed by Tech Lead; module directories created; Build/Lint/Test config set. Engineering may begin with MOD-001 (Auth & Profile). Next handoff: Doc-Sync to create production.md and per-module specs.
 
 ## Phase Plan
 
@@ -24,12 +24,13 @@ Phase 1 — iOS MVP (Taipei + New Taipei launch). PRD drafted; awaiting Tech Lea
      commands and writes them here. Doc-Sync copies these to production.md Shared Conventions
      during the initial sync. Leave a value blank if that step doesn't apply. -->
 
-Build:
-Lint:
-Test:
+Build: eas build --profile production --platform ios
+Lint:  npm run lint
+Test:  npm test
 
 ## PM Updates
 
+- 2026-09-20 — [INIT] Tagged INIT after verifying the Tech Lead `### Setup Confirmation — complete` entry. Incorporated all seven Tech Lead concerns into PRD rev 2: (1) MOD-005 video codec standardised to H.264 baseline + AAC in MP4 — updated AC-031 and added AC-035 to reject non-conforming uploads on ingest; (2) MOD-007 push idempotency — added spec note requiring Postgres-trigger-fired Edge Function (not client) plus unique constraint on `Notification(recipient_user_id, actor_user_id, type, target_id)`; (3) MOD-006 feed served by `SECURITY INVOKER` Postgres RPC composing Follow ∩ (¬Block, symmetric) ∩ privacy, not raw client SELECT; (4) added AC-084 for symmetric block hiding (App Store 1.2); (5) added AC-085 + NFR for scheduled 6h Edge Function emailing wu.tsan@northeastern.edu a digest of open reports >12h; (6) `Route.match_key` specified as `GENERATED ALWAYS AS ... STORED` with partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` in the data model; (7) noted Edge Functions must use `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`) in data model + NFR Security. Set Build/Lint/Test config for Expo + TypeScript stack. Finalized the 11-module Module Map and created all `modules/mod-*` directories with `.gitkeep`. Engineering may begin. Next: Doc-Sync.
 - 2026-09-19 — [INIT-DRAFT] Wrote finalized Phase 1 PRD from confirmed decision set (React Native + Expo iOS-only, Supabase BaaS, 60-sec beta videos with client compression, fixed 9-color hold enum, forced V-scale, APNs push for beta-video likes only, offline queue deferred to Phase 2, Report + Block in Phase 1 for App Store 1.2, English + zh-TW, Light + Dark, Supabase Studio admin only, branch-level gym seeding excluding Camp4 and Wusa). Awaiting user to provide Build/Lint/Test commands and to confirm module directory naming before running init-project.sh scaffold and creating `modules/mod-*` directories. Next: Tech Lead architectural review.
 
 ## Tech Lead Reviews
@@ -155,7 +156,7 @@ Verified 2026-09-19 (nvm loaded before node/eas checks). All required Phase-1 de
      | MOD-001 | mod-login        | User Login     |
 -->
 
-Pending — proposed mapping (awaiting user confirmation before creating `modules/mod-*` directories):
+Final — confirmed at [INIT] (2026-09-20). Directories created under `project-planning/modules/`.
 
 | MOD-ID  | Directory              | Module Name                  |
 |---------|------------------------|------------------------------|
