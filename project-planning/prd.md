@@ -2,8 +2,8 @@
 
 **Author**: Leon
 **Status**: [INIT] — engineering may begin
-**Date**: 2026-09-20
-**Revision**: 2
+**Date**: 2026-09-21
+**Revision**: 3
 
 ---
 
@@ -459,6 +459,8 @@ The data flow for the two most important loops:
 
 **AC-012**: The system shall, when the network request to save a send fails, display a clear error message to the user (Phase 1 does not queue sends offline).
 
+**AC-013**: After a send is successfully logged, the ascent list on the route detail screen refreshes immediately to show the new entry without requiring re-navigation.
+
 ---
 
 ### MOD-005 (Beta Video) Acceptance Criteria
@@ -474,6 +476,8 @@ The data flow for the two most important loops:
 **AC-034**: The system shall play beta videos inline in the activity feed for videos posted by followed users.
 
 **AC-035**: The system shall reject, on ingest, any beta video upload whose muxed output is not H.264 (baseline profile) video + AAC audio in an MP4 container, and shall surface a clear error to the user rather than storing an unplayable file.
+
+**AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
 
 ---
 

@@ -3,13 +3,20 @@
 ## Last Action
 
 ```
-agent: qa-mod-send-logging
-mode: verify
-module: mod-send-logging
-result: pending-human-signoff
-commit: ba83bb7007c2a67d100a07106af160753945dd97
-timestamp: 2026-09-20T00:00:00Z
+agent: pm
+mode: change
+module: n/a
+result: success
+commit: 38d975e119d41b7816e4b74ad369a9c626ae42d5
+timestamp: 2026-09-21T00:00:00Z
 ```
+
+## PM Updates
+
+- **2026-09-21 [SUBSTANTIVE]** — Two spec clarifications added to the PRD (Revision 3):
+  - **AC-013 (MOD-004 Send Logging)**: After a send is successfully logged, the ascent list on the route detail screen must refresh immediately to show the new entry without requiring re-navigation. Addresses the known stale-list-after-modal-submission pattern (see Skill Recommendations).
+  - **AC-036 (MOD-005 Beta Video)**: While a beta video is uploading, a progress overlay showing upload progress (0–100%) must be displayed. The overlay blocks further interaction until upload completes or fails, preventing double-submission.
+  - Module boundaries, dependencies, and the phase plan are unchanged. No new modules added. Impact is confined to MOD-004 and MOD-005 specs; Doc-Sync must sync both.
 
 ## Module Map
 
