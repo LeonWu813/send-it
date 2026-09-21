@@ -4,13 +4,19 @@
  * Provides three sign-in paths: Email, Apple Sign-In, Google Sign-In.
  *
  * Apple Sign-In is visually equivalent to Google Sign-In (same height, same
- * weight) per App Store review guidelines — it must never be smaller or hidden.
+ * weight) per App Store review guidelines — it must never be smaller or hidden
+ * when available. The button is conditionally rendered based on
+ * AppleAuthentication.isAvailableAsync() so that simulator builds without the
+ * Apple Sign-In entitlement (deferred until Apple Developer account is active)
+ * do not show a broken button. In production/TestFlight the entitlement is
+ * present and isAvailableAsync() returns true, making the button visible and
+ * App Store compliant.
  *
  * No hardcoded colors — all styling uses theme tokens.
  */
 
 import * as AppleAuthentication from 'expo-apple-authentication';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -46,6 +52,21 @@ export default function SignInScreen({
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Apple Sign-In is unavailable on simulator builds without the entitlement.
+  // Check on mount so the button only renders when the entitlement is present.
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') {
+      return;
+    }
+    AppleAuthentication.isAvailableAsync()
+      .then(setAppleAvailable)
+      .catch(() => {
+        // isAvailableAsync itself should not throw, but guard defensively
+        setAppleAvailable(false);
+      });
+  }, []);
 
   function clearError(): void {
     setErrorMessage(null);
@@ -169,18 +190,26 @@ export default function SignInScreen({
           <View style={styles.dividerLine} />
         </View>
 
-        {/* Apple Sign-In — MUST be visually equivalent to Google Sign-In */}
-        <AppleAuthentication.AppleAuthenticationButton
-          buttonType={
-            AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
-          }
-          buttonStyle={
-            AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-          }
-          cornerRadius={theme.borderRadius.md}
-          style={styles.appleButton}
-          onPress={handleAppleSignIn}
-        />
+        {/*
+          Apple Sign-In — MUST be visually equivalent to Google Sign-In when
+          available. Hidden on simulator builds that lack the Apple Developer
+          entitlement (isAvailableAsync returns false). Visible in
+          production/TestFlight where the entitlement is present, satisfying
+          App Store requirement that Apple Sign-In is not smaller or hidden.
+        */}
+        {appleAvailable && (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={
+              AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
+            }
+            buttonStyle={
+              AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+            }
+            cornerRadius={theme.borderRadius.md}
+            style={styles.appleButton}
+            onPress={handleAppleSignIn}
+          />
+        )}
 
         {/* Google Sign-In — same height/weight as Apple button */}
         <Pressable

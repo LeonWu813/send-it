@@ -68,10 +68,22 @@ export async function signInWithEmail(
  * Apple Sign-In is required by the App Store because Google Sign-In is offered.
  * It must be visually equivalent (not smaller or hidden) to Google Sign-In per
  * App Store review guidelines.
+ *
+ * Availability: The entitlement is only present in production/TestFlight builds
+ * signed with an Apple Developer account. On a simulator without the entitlement
+ * (or on any non-iOS platform), isAvailableAsync() returns false and this
+ * function returns early without error. The UI hides the button in that case.
  */
 export async function signInWithApple(): Promise<void> {
   if (Platform.OS !== 'ios') {
     throw new Error('Apple Sign-In is only available on iOS.');
+  }
+
+  const available = await AppleAuthentication.isAvailableAsync();
+  if (!available) {
+    // Not available on this device/build (e.g. simulator without the entitlement).
+    // Return silently — the UI must not show the button when unavailable.
+    return;
   }
 
   let credential: AppleAuthentication.AppleAuthenticationCredential;
