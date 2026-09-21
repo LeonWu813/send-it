@@ -157,7 +157,7 @@
 **AscentList refresh after log**
 - OBSERVATION: `handleLogSendSuccess()` closes the modal by setting `isLogSendVisible(false)`. The comment says "Ascent list will re-fetch automatically via its own useEffect when remounted" — but AscentList is always mounted in RouteDetailScreen (not inside the Modal). AscentList's `useEffect` only fires on mount and when `routeId` or `t` changes. Closing the modal does not cause AscentList to re-mount or re-fetch. The newly logged ascent will NOT appear in the list until the user leaves and re-enters RouteDetailScreen.
 - The spec does not explicitly require the list to refresh after logging. This is a UX gap but not a spec violation.
-- [SPEC ISSUE: The spec does not address whether the ascent list must refresh after a successful log. The current implementation has a stale-list issue. Escalate to PM to clarify whether list refresh after log is a requirement — if so, send back to Engineer.]
+- [SPEC ISSUE: The spec does not address whether the ascent list must refresh after a successful log. The current implementation will show a stale list until the user re-navigates to the route detail. **Route to PM to clarify requirement; if required, route to Engineer.**]
 
 ---
 
@@ -192,6 +192,16 @@ QA cannot verify React Native UI behavior from CLI. Complete the following test 
    - Modal closes automatically.
    - No error message is shown.
 8. **PASS CRITERIA:** Total taps from Route Detail to completion = 3 (Log Send button + style chip + submit). Satisfies ≤4. Record actual tap count.
+
+---
+
+#### TEST A2: AC-013 — Ascent list refreshes immediately after successful log
+
+1. Sign in with a test account.
+2. Navigate to a route detail page. Note the current ascents listed in the "Sends" section.
+3. Tap "Log Send" → fill in style and tap submit → modal closes.
+4. **Without navigating away**, observe the ascent list immediately below.
+5. **PASS CRITERIA:** The newly logged send appears in the ascent list without requiring the user to navigate away and back. The list should update within the same screen session, immediately after the modal dismisses.
 
 ---
 
@@ -280,7 +290,7 @@ QA cannot verify React Native UI behavior from CLI. Complete the following test 
 
 ---
 
-**Human sign-off required.** Complete Tests A through I in both light and dark mode and confirm each PASS before marking MOD-004 as QA PASS.
+**Human sign-off required.** Complete Tests A through I (including new Test A2 for AC-013) in both light and dark mode and confirm each PASS before marking MOD-004 as QA PASS.
 
 ---
 
@@ -288,7 +298,7 @@ QA cannot verify React Native UI behavior from CLI. Complete the following test 
 
 1. **Output contract ambiguity — "Success confirmation shown to user"**: The spec's Output Contract states this as a requirement but does not define what form the confirmation must take. The implementation uses modal dismissal as implicit confirmation. If a visible toast/banner is required, this is unimplemented. **Route to PM.**
 
-2. **Ascent list refresh after log not specified**: The spec does not state whether the ascent list must update after a successful log. The current implementation will show a stale list until the user re-navigates to the route detail. **Route to PM to clarify requirement; if required, route to Engineer.**
+2. **Ascent list refresh after log not specified** (original run): The spec did not state whether the ascent list must update after a successful log. **This was addressed by PM via AC-013 addition (Revision 3). See QA Run 2 below.**
 
 ---
 
@@ -309,3 +319,99 @@ QA cannot verify React Native UI behavior from CLI. Complete the following test 
 | Spec issues | 2 spec ambiguities escalated to PM |
 
 **Overall status: PENDING HUMAN SIGN-OFF** — all automated and inspection checks pass. The 2 spec issues are escalated to PM. Human must complete the test script above before this module is marked QA PASS.
+
+---
+
+## QA Run 2 — Regression — 2026-09-21
+
+**QA Agent:** qa-mod-send-logging
+**Workflow:** regression-test (re-verification after AC-013 spec addition + implementation)
+**Re-verifying:** AC-013 — ascent list must refresh immediately after a successful log without re-navigation (added to spec in Revision 3; stale-list pattern previously identified as a spec issue in QA Run 1).
+
+---
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npm test` (full suite) | PASS | 119/119 tests, 15 suites, exit 0 |
+| `npx tsc --noEmit` | PASS | Zero TypeScript errors, strict mode enabled |
+| i18n parity (EN/zh-TW) | PASS | 176 keys each, zero mismatch — no new keys added |
+
+---
+
+### AC-013 Verification (New Requirement)
+
+**Spec (AC-013):** After a send is successfully logged, the ascent list on the route detail screen refreshes immediately to show the new entry without requiring re-navigation.
+
+**Implementation inspected:**
+
+- `AscentList.tsx` — `AscentListProps` interface defines `refreshKey?: number` (optional, defaults to `0`) at line 36.
+- `AscentList.tsx` — `useEffect` dependency array includes both `fetchAscents` and `refreshKey` at line 88: `[fetchAscents, refreshKey]`. When `refreshKey` changes, the effect re-fires and calls `fetchAscents()`, which calls `loadAscentsForRoute()`. The pattern correctly separates the re-fetch trigger (in `useEffect`) from the fetch logic (in `useCallback`), so incrementing `refreshKey` does not widen the `fetchAscents` identity.
+- `RouteDetailScreen.tsx` — `ascentRefreshKey` state initialized to `0` at line 63.
+- `RouteDetailScreen.tsx` — `handleLogSendSuccess()` (lines 105–110): closes modal with `setIsLogSendVisible(false)`, then increments key with `setAscentRefreshKey((prev) => prev + 1)`.
+- `RouteDetailScreen.tsx` — `<AscentList ... refreshKey={ascentRefreshKey} />` at line 247: key wired from state.
+- `handleLogSendCancel()` (lines 112–114): only calls `setIsLogSendVisible(false)` — does NOT increment `ascentRefreshKey`. Cancellation correctly does not trigger a re-fetch.
+
+**Unit test:** `AscentList.test.tsx` line 157–182 — "re-fetches ascents when refreshKey increments (AC-013)":
+- Renders with `refreshKey={0}`, `loadAscentsForRoute` returns one ascent. Verifies called once and first ascent visible.
+- Re-renders with `refreshKey={1}`. Verifies `loadAscentsForRoute` called a second time and second ascent appears in list.
+- Test passes (confirmed by 119/119 suite pass).
+
+REGRESSION PASS AC-013: Implementation is correct. `AscentList` re-fetches when `refreshKey` increments; `RouteDetailScreen` increments it only on success (not on cancel). Unit test verifies the full re-fetch cycle.
+
+**Human sign-off item added:** Test A2 (above) added to the manual test script — verifies the ascent list updates in the simulator without re-navigation after a successful log.
+
+---
+
+### Previously Passing Items — Re-verification
+
+**AC-010 (≤4 taps):**
+- REGRESSION PASS: No changes to `LogSendScreen`, tap flow, or `handleLogSendPress`. The `handleLogSendSuccess` change only adds `setAscentRefreshKey` after `setIsLogSendVisible(false)` — no effect on the modal open/close tap flow. PASS (code inspection + no test regressions).
+- PENDING HUMAN SIGN-OFF: unchanged from QA Run 1.
+
+**AC-011 (grade not stored):**
+- REGRESSION PASS: No changes to `send-service.ts`, `types.ts`, or migration SQL. `logAscent()` payload and `Ascent` schema unchanged. 9/9 send-service tests pass including "does not include a grade field in the insert payload". PASS.
+
+**AC-012 (clear error on failure):**
+- REGRESSION PASS: No changes to `LogSendScreen.tsx` error handling path. `handleSubmit()` catch block, `errorMessage` state, and `onSuccess`-only-on-try logic all unchanged. 6/6 LogSendScreen tests pass. PASS.
+
+**i18n parity (EN/zh-TW):**
+- REGRESSION PASS: 176 keys in EN, 176 keys in zh-TW, zero mismatch. No new i18n keys were added in this fix. PASS.
+
+**No hardcoded hex colors:**
+- REGRESSION PASS: No new style definitions added to `AscentList.tsx` or `RouteDetailScreen.tsx`. All existing styles use theme tokens. PASS.
+
+**Supabase singleton convention:**
+- REGRESSION PASS: No changes to service imports. PASS.
+
+**Gold-plating check:**
+- REGRESSION PASS: `refreshKey` prop is exactly what AC-013 requires — an opaque counter for triggering re-fetch. No additional behavior added beyond the spec requirement. PASS.
+
+**TypeScript strict mode:**
+- REGRESSION PASS: `tsc --noEmit` exits with zero errors. `refreshKey?: number` is correctly typed as optional number with a default value. PASS.
+
+---
+
+### New Regressions
+
+None found. All 119 tests pass. No new TypeScript errors. No previously passing manual checks have changed.
+
+---
+
+### Summary — QA Run 2
+
+| Category | Result |
+|----------|--------|
+| Automated tests | PASS — 119/119 (+1 new test for AC-013) |
+| TypeScript | PASS — zero errors |
+| AC-013 (list refreshes after log) | REGRESSION PASS — code inspection + unit test |
+| AC-010 (≤4 taps) | REGRESSION PASS (code) / PENDING HUMAN SIGN-OFF (UI) |
+| AC-011 (grade not stored) | REGRESSION PASS |
+| AC-012 (error on failure) | REGRESSION PASS |
+| i18n parity (EN/zh-TW) | REGRESSION PASS — 176 keys each |
+| No hardcoded hex colors | REGRESSION PASS |
+| Supabase singleton convention | REGRESSION PASS |
+| New regressions | None |
+
+**Overall status: PENDING HUMAN SIGN-OFF** — AC-013 is implemented and verified via code inspection and unit test. All previously passing checks continue to pass. Human must complete the updated test script (Tests A through I, including new Test A2 for AC-013) before this module is marked QA PASS.
