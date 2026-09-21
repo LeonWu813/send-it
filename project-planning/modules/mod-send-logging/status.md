@@ -2,8 +2,8 @@
 
 ## Engineering Progress
 
-**Mode:** implement
-**Date:** 2026-09-20
+**Mode:** bugfix (AC-013 addition)
+**Date:** 2026-09-21
 **Engineer:** engineer-mod-send-logging
 
 ### Files Created
@@ -17,40 +17,47 @@
 - `src/modules/mod-send-logging/test-utils.tsx` — test providers (ThemeProvider + i18n)
 - `src/modules/mod-send-logging/__tests__/send-service.test.ts` — 9 tests
 - `src/modules/mod-send-logging/__tests__/LogSendScreen.test.tsx` — 6 tests
-- `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — 7 tests
+- `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — 8 tests (added AC-013 re-fetch test)
 
 ### Files Modified (spec-mandated cross-boundary)
 
-- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — wired AscentList + LogSendScreen Modal into the MOD-003 placeholder slot (spec explicitly requires this)
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — wired AscentList + LogSendScreen Modal into the MOD-003 placeholder slot (spec explicitly requires this); updated for AC-013: added `ascentRefreshKey` state incremented by `handleLogSendSuccess()`, passed as `refreshKey` prop to `AscentList`
 - `locales/en/common.json` — added `sends.*` i18n keys (required by production.md i18n rules)
 - `locales/zh-TW/common.json` — added `sends.*` zh-TW translations (required by production.md i18n parity rule)
 
-### Automated Self-Check Results
+### AC-013 Fix Summary
+
+**Problem:** After `logAscent()` succeeded, `handleLogSendSuccess()` in `RouteDetailScreen` closed the modal but did not trigger `AscentList` to re-fetch. The newly logged ascent was invisible until the user navigated away and back.
+
+**Fix:**
+- Added `ascentRefreshKey: number` state (initialized to `0`) in `RouteDetailScreen`
+- `handleLogSendSuccess()` now calls `setAscentRefreshKey((prev) => prev + 1)` after closing the modal
+- `AscentList` gained optional prop `refreshKey?: number` (default `0`)
+- `refreshKey` added to `AscentList`'s `useEffect` dependency array (not `useCallback`), so the effect re-fires — and re-fetches — whenever the parent increments the key
+
+**Test added:** `AscentList.test.tsx` — "re-fetches ascents when refreshKey increments (AC-013)" — verifies `loadAscentsForRoute` is called a second time when `refreshKey` goes from 0 to 1, and the new ascent appears in the rendered list.
+
+### Automated Self-Check Results (bugfix pass)
 
 | Check | Result | Notes |
 |-------|--------|-------|
-| Build (tsc --noEmit / npm run lint) | PASS | All TypeScript strict-mode checks pass |
-| Tests (npm test) | PASS | 118/118 tests pass (15 suites total including pre-existing) |
-| Git scope — module boundary | FLAGGED | Script flagged 3 spec-required cross-boundary writes + 2 pre-existing uncommitted files (.env.example, project-planning/setup.md) not authored by this agent |
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test) | PASS | 119/119 tests pass, 15 suites — 1 new test added for AC-013 |
+| Git scope — module boundary | FLAGGED | Same pattern as initial implement: RouteDetailScreen.tsx is a spec-required cross-boundary write; .env.example and project-planning/setup.md are pre-existing uncommitted Tech Lead files not touched by this agent |
 
-**Note on git scope flag:** The self-check script flags any change outside `project-planning/modules/mod-send-logging/`. Three of the flagged files are spec-mandated writes:
-1. `locales/en/common.json` — i18n rule: all strings must go through i18n catalog
-2. `locales/zh-TW/common.json` — i18n parity rule: every EN key needs zh-TW counterpart
-3. `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — spec says "wire up the placeholder slot left by MOD-003"
+**Note on git scope flag:** Identical situation to initial engineering pass. `RouteDetailScreen.tsx` is the spec-mandated cross-boundary file. Pre-existing uncommitted files (`.env.example`, `project-planning/setup.md`) are not authored by this agent.
 
-Two flagged files (`.env.example`, `project-planning/setup.md`) were already uncommitted from prior Tech Lead work and were not touched by this agent.
-
-### Judgment-Based Checklist
+### Judgment-Based Checklist (bugfix pass)
 
 | Item | Result |
 |------|--------|
-| Every spec requirement implemented | PASS — AC-010 (≤4 taps), AC-011 (grade not stored), AC-012 (clear error on failure) all covered |
-| Every acceptance criterion has observable behavior | PASS — AC-010: Log button (tap 1) → style (tap 2) → confirm (tap 3) = 3 taps from route detail. AC-011: no grade column in Ascent table or AscentLogInput. AC-012: error displayed, onSuccess not called on failure |
-| Edge cases handled | PASS — empty note → null, flash forces attempts=1, null data from Supabase → empty array, users join null → "Unknown" fallback |
+| Every spec requirement implemented | PASS — AC-010, AC-011, AC-012, AC-013 all covered |
+| Every acceptance criterion has observable behavior | PASS — AC-013: refreshKey increment verified by unit test; re-fetch confirmed with two sequential mockResolvedValue calls |
+| Edge cases handled | PASS — refreshKey defaults to 0 (backward-compatible); initial mount still fetches via useEffect; retry button still triggers manual re-fetch |
 | No hardcoded values | PASS — no hex colors, no hardcoded strings, no hardcoded URLs |
 | Conventions followed | PASS — useTheme() tokens only, useTranslation() for all strings, supabase singleton, RLS-first |
 | No new dependencies | PASS — no new packages added |
-| Code is readable | PASS |
+| Code is readable | PASS — refreshKey intent documented in both AscentList prop JSDoc and RouteDetailScreen inline comment |
 | Not an AI/LLM module | N/A |
 | Spring Boot items | N/A — React Native project |
 

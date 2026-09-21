@@ -153,4 +153,31 @@ describe('AscentList', () => {
       expect(screen.getByText('OtherClimber')).toBeTruthy();
     });
   });
+
+  it('re-fetches ascents when refreshKey increments (AC-013)', async () => {
+    // Initial render: one ascent
+    mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT]);
+    // After refreshKey changes: two ascents
+    mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT, MOCK_OTHER_ASCENT]);
+
+    const { rerender } = render(
+      <AscentList {...DEFAULT_PROPS} refreshKey={0} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Leon')).toBeTruthy();
+      expect(mockLoadAscents).toHaveBeenCalledTimes(1);
+    });
+
+    // Simulate parent incrementing refreshKey after a successful log
+    rerender(
+      <AscentList {...DEFAULT_PROPS} refreshKey={1} />,
+    );
+
+    await waitFor(() => {
+      expect(mockLoadAscents).toHaveBeenCalledTimes(2);
+      expect(screen.getByText('OtherClimber')).toBeTruthy();
+    });
+  });
 });

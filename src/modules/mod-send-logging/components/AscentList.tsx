@@ -28,6 +28,12 @@ interface AscentListProps {
   session: Session;
   /** Called when the user taps the "Log a Send" button — opens LogSendScreen. */
   onLogSend: () => void;
+  /**
+   * Opaque counter incremented by the parent after each successful log
+   * (AC-013). Changing this value causes the useEffect to re-run, which
+   * re-fetches the ascent list without requiring re-navigation.
+   */
+  refreshKey?: number;
 }
 
 /** Style badge label to token color mapping — uses theme tokens only. */
@@ -51,6 +57,7 @@ export default function AscentList({
   routeId,
   session,
   onLogSend,
+  refreshKey = 0,
 }: AscentListProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -73,9 +80,12 @@ export default function AscentList({
     }
   }, [routeId, t]);
 
+  // refreshKey is intentionally included here (not in useCallback) so that
+  // the parent can trigger a re-fetch after a successful send log (AC-013)
+  // by incrementing the key, without widening the fetchAscents identity.
   useEffect(() => {
     void fetchAscents();
-  }, [fetchAscents]);
+  }, [fetchAscents, refreshKey]);
 
   return (
     <View style={styles.root}>

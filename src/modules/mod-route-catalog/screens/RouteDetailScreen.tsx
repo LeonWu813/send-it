@@ -55,6 +55,12 @@ export default function RouteDetailScreen({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isRetiring, setIsRetiring] = useState(false);
   const [isLogSendVisible, setIsLogSendVisible] = useState(false);
+  /**
+   * Incrementing key passed to AscentList. When this value changes,
+   * AscentList's useEffect re-fires and re-fetches the ascent list,
+   * satisfying AC-013 (list refreshes immediately after a successful log).
+   */
+  const [ascentRefreshKey, setAscentRefreshKey] = useState(0);
 
   const fetchRoute = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -98,7 +104,9 @@ export default function RouteDetailScreen({
 
   function handleLogSendSuccess(): void {
     setIsLogSendVisible(false);
-    // Ascent list will re-fetch automatically via its own useEffect when remounted.
+    // AC-013: increment the refresh key so AscentList's useEffect re-fires
+    // and fetches the updated list without requiring re-navigation.
+    setAscentRefreshKey((prev) => prev + 1);
   }
 
   function handleLogSendCancel(): void {
@@ -231,10 +239,12 @@ export default function RouteDetailScreen({
       ) : null}
 
       {/* ── Ascents (MOD-004) — wired via AscentList ──────────────────────── */}
+      {/* refreshKey increments on each successful log to satisfy AC-013. */}
       <AscentList
         routeId={route.id}
         session={session}
         onLogSend={handleLogSendPress}
+        refreshKey={ascentRefreshKey}
       />
 
       {/* Log Send modal — opens on tap 1, route pre-selected (AC-010) */}
