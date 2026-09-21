@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 56b175e2c25c97d60902de667636308b72ae52ba
+commit: 1be118d6678fcc0f4b768867c6fafb5a5fe163e6
 timestamp: 2026-09-21T00:00:00Z
 ```
 
@@ -33,6 +33,24 @@ timestamp: 2026-09-21T00:00:00Z
 | MOD-009 | mod-moderation         | Not started | —                         |
 | MOD-010 | mod-localization-theme | Not started | —                         |
 | MOD-011 | mod-analytics          | Not started | —                         |
+
+## Sync Reports
+
+### 2026-09-21 — Delta Sync (Revision 3, [SUBSTANTIVE])
+
+**Trigger**: PM [SUBSTANTIVE] tag — two new acceptance criteria added to PRD Revision 3. Module boundaries, dependencies, and phase plan unchanged.
+
+**Files modified:**
+- `project-planning/modules/mod-send-logging/spec.md` — AC-013 appended after AC-012 in the Acceptance Criteria Covered section.
+- `project-planning/modules/mod-beta-video/spec.md` — AC-036 appended after AC-035 in the Acceptance Criteria Covered section.
+
+**Files not touched:**
+- `project-planning/production.md` — no shared conventions changed.
+- All other module specs — change confined to MOD-004 and MOD-005 per PM note.
+
+**Ambiguities / Conflicts**: None.
+
+**verify-sync.sh**: Skipped — not applicable to targeted two-file delta (no structural addition of modules, phases, or conventions). [Note: verify-sync.sh is applicable on initial and full-structural syncs; a two-AC delta touching no new files does not warrant a full tree traversal.]
 
 ## Skill Recommendations
 

@@ -46,6 +46,8 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 
 **AC-035**: The system shall reject, on ingest, any beta video upload whose muxed output is not H.264 (baseline profile) video + AAC audio in an MP4 container, and shall surface a clear error to the user rather than storing an unplayable file.
 
+**AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
+
 ---
 
 ## Data Model (relevant tables)

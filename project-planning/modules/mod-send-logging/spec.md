@@ -39,6 +39,8 @@ The core climber loop â€” "log a send without interrupting my climbing rhythm" â
 
 **AC-012**: The system shall, when the network request to save a send fails, display a clear error message to the user (Phase 1 does not queue sends offline).
 
+**AC-013**: After a send is successfully logged, the ascent list on the route detail screen refreshes immediately to show the new entry without requiring re-navigation.
+
 ---
 
 ## Data Model (relevant tables)
