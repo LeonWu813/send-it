@@ -37,7 +37,6 @@ const MOCK_ACTIVE_ROUTE: Route = {
   grade: 'V5',
   color_tag: 'purple',
   photo_url: 'https://example.com/photo.jpg',
-  match_key: 'gym-001-V5-purple',
   status: 'active',
   submitted_by_user_id: 'user-001',
   created_at: '2026-09-20T10:00:00Z',

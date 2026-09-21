@@ -73,7 +73,6 @@ const MOCK_ROUTE_SUMMARY: RouteSummary = {
 
 const MOCK_ROUTE: Route = {
   ...MOCK_ROUTE_SUMMARY,
-  match_key: 'gym-001-V4-blue',
   submitted_by_user_id: 'user-001',
   retired_at: null,
   retired_by_user_id: null,

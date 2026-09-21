@@ -32,7 +32,6 @@ export interface Route {
   grade: RouteGrade;
   color_tag: RouteColor;
   photo_url: string;
-  match_key: string;
   status: RouteStatus;
   submitted_by_user_id: string;
   created_at: string;

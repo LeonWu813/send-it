@@ -72,6 +72,25 @@
 - PASS: `npm test -- --forceExit` — 94 tests, 12 suites, 0 failures (unchanged)
 - PASS: `npx tsc --noEmit` — 0 errors (unchanged)
 
+### Bugfix (2026-09-21)
+
+Root cause: Postgres does not consider `enum::text` casts immutable, so the `GENERATED ALWAYS AS (gym_id::text || grade::text || color_tag::text) STORED` column failed with `ERROR: generation expression is not immutable (SQLSTATE 42P17)` when the migration was applied against a real Postgres instance.
+
+Fix: removed `match_key` entirely — it is redundant because the partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` already enforces deduplication at the DB level. No functional capability was lost.
+
+Files changed:
+- `supabase/migrations/20260920000003_mod_003_route_catalog.sql` — removed `match_key` GENERATED ALWAYS AS column definition; updated header comment to reflect removal
+- `src/modules/mod-route-catalog/types.ts` — removed `match_key: string` from `Route` interface
+- `src/modules/mod-route-catalog/route-service.ts` — removed `match_key` from `ROUTE_DETAIL_SELECT` projection string
+- `src/modules/mod-route-catalog/__tests__/route-service.test.ts` — removed `match_key` field from `MOCK_ROUTE` object
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — removed `match_key` field from `MOCK_ACTIVE_ROUTE` object
+
+Self-check (bugfix):
+- PASS: `npm test -- --forceExit` — 119 tests, 15 suites, 0 failures
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: All match_key references removed (verified with grep)
+- PASS: No functional behavior changed — deduplication still enforced by the partial unique index
+
 ## QA Results
 
 **QA agent**: qa-mod-route-catalog

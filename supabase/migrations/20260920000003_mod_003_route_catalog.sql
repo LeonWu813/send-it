@@ -5,8 +5,9 @@
 --   • `route_grade`   — V-scale grade enum
 --   • `route_color`   — fixed hold/tape color enum
 --   • `route_status`  — active / retired enum
---   • `routes`        — user-submitted routes with match_key generated column
---                       and a partial unique index on active routes
+--   • `routes`        — user-submitted routes with a partial unique index on
+--                       active routes; deduplication is enforced solely by the
+--                       index UNIQUE (gym_id, grade, color_tag) WHERE status='active'
 --
 -- RLS is enabled from creation per project convention.
 --   SELECT: all authenticated users
@@ -42,12 +43,8 @@ CREATE TABLE IF NOT EXISTS public.routes (
   grade                 route_grade   NOT NULL,
   color_tag             route_color   NOT NULL,
   photo_url             TEXT          NOT NULL,                 -- required; uploaded to route-photos storage bucket
-  -- match_key: GENERATED ALWAYS AS concatenation of gym_id || grade || color_tag
-  -- The partial unique index below (not a UNIQUE column) enforces that only one
-  -- ACTIVE route may exist per gym+grade+color combination at any given time.
-  match_key             TEXT GENERATED ALWAYS AS (
-                          gym_id::text || grade::text || color_tag::text
-                        ) STORED,
+  -- Deduplication: the partial unique index below enforces that only one ACTIVE
+  -- route may exist per (gym_id, grade, color_tag) combination at any given time.
   status                route_status  NOT NULL DEFAULT 'active',
   submitted_by_user_id  UUID          NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at            TIMESTAMPTZ   NOT NULL DEFAULT NOW(),

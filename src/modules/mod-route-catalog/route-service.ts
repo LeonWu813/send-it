@@ -26,7 +26,7 @@ const ROUTE_SUMMARY_SELECT =
 
 /** Fields fetched for the route detail page. */
 const ROUTE_DETAIL_SELECT =
-  'id, gym_id, section_label, grade, color_tag, photo_url, match_key, status, submitted_by_user_id, created_at, retired_at, retired_by_user_id';
+  'id, gym_id, section_label, grade, color_tag, photo_url, status, submitted_by_user_id, created_at, retired_at, retired_by_user_id';
 
 /** Fields fetched for the match-before-create query. */
 const ROUTE_MATCH_SELECT =
