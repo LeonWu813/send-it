@@ -30,6 +30,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
 import { logAscent } from '../send-service';
@@ -58,7 +59,8 @@ export default function LogSendScreen({
 }: LogSendScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, insets.top);
 
   // ── Form state ────────────────────────────────────────────────────────────
 
@@ -281,14 +283,15 @@ export default function LogSendScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      padding: theme.spacing.lg,
+      paddingTop: topInset + theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.xxl,
     },
     headerRow: {

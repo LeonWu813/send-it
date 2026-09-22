@@ -19,6 +19,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
 import { listRoutes } from '../../mod-route-catalog/route-service';
@@ -40,7 +41,8 @@ export default function RouteSearchScreen({
 }: RouteSearchScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, insets.top);
 
   const [gymIdInput, setGymIdInput] = useState<string>('');
   const [results, setResults] = useState<RouteSummary[]>([]);
@@ -161,7 +163,7 @@ export default function RouteSearchScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -171,7 +173,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      padding: theme.spacing.lg,
+      paddingTop: topInset + theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.lg,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.divider,
     },
