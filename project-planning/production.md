@@ -133,6 +133,30 @@ All user-facing strings are pulled through the i18n hook — no inline string li
 
 Every screen uses tokens from the theme provider; no hardcoded hex colors in components. Light and Dark mode follow OS appearance by default; Settings exposes a three-state override (System / Light / Dark) that takes effect immediately without an app restart.
 
+### Screen Layout & Safe Area Insets
+
+Every screen must respect iOS safe area insets so top-bar content clears the Dynamic Island / notch. A fixed `paddingTop` token is not sufficient — the Dynamic Island clearance (~59px) exceeds `theme.spacing.xl` (32px), leaving content hidden underneath.
+
+Rules:
+
+1. **Root provider (one-time)**: `App.tsx` wraps the app root in `SafeAreaProvider` from `react-native-safe-area-context` (already available as a transitive dependency of `react-native-screens`). `SafeAreaProvider` wraps `ThemeProvider`.
+2. **Per-screen insets**: every screen calls `useSafeAreaInsets()` and passes `insets.top` into `makeStyles`:
+   ```typescript
+   const { theme } = useTheme();
+   const insets = useSafeAreaInsets();
+   const styles = makeStyles(theme, insets.top);
+   ```
+3. **`makeStyles` signature**: `makeStyles` must accept `topInset: number` as its second parameter:
+   ```typescript
+   function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) { ... }
+   ```
+4. **`paddingTop` derivation**: the root (and any `ScrollView` `contentContainerStyle`) uses `paddingTop: topInset + theme.spacing.md` — the device safe-area top plus a breathing-room token. When a `ScrollView` `contentContainerStyle` currently uses a `padding` shorthand, expand it to explicit `paddingTop: topInset + theme.spacing.md`, `paddingHorizontal`, and `paddingBottom`.
+5. **Never** use a fixed spacing token alone (e.g. `paddingTop: theme.spacing.xl`) as the `paddingTop` of a screen root or scroll content container.
+
+Notes:
+- Modal sheets (`presentationStyle="pageSheet"`) are positioned below the Dynamic Island by iOS automatically, so `insets.top` is `0` inside them. The pattern is therefore safe to apply uniformly to every screen, including modal sheets.
+- iOS-only project — no Android status-bar handling is required.
+
 ### TypeScript Strict Mode
 
 Strict mode is on for all TypeScript code, including Edge Functions. No `any` without a `// TODO(leon): why` comment.

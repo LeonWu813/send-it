@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-auth-profile
-mode: bugfix
-module: mod-auth-profile
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: 6580821c97ef1fa0953628ca87da668251ad2065
-timestamp: 2026-09-21T12:00:00Z
+commit: 1938fc737bc71a4b2d7970c43305c4366778e091
+timestamp: 2026-09-21T15:50:00Z
 ```
 
 ## PM Updates
@@ -17,6 +17,24 @@ timestamp: 2026-09-21T12:00:00Z
   - **AC-013 (MOD-004 Send Logging)**: After a send is successfully logged, the ascent list on the route detail screen must refresh immediately to show the new entry without requiring re-navigation. Addresses the known stale-list-after-modal-submission pattern (see Skill Recommendations).
   - **AC-036 (MOD-005 Beta Video)**: While a beta video is uploading, a progress overlay showing upload progress (0–100%) must be displayed. The overlay blocks further interaction until upload completes or fails, preventing double-submission.
   - Module boundaries, dependencies, and the phase plan are unchanged. No new modules added. Impact is confined to MOD-004 and MOD-005 specs; Doc-Sync must sync both.
+
+## Tech Lead Reviews
+
+### Review — 2026-09-21 — change (cross-cutting safe-area defect)
+
+**Concerns** (must address before proceeding):
+- Safe area insets are unhandled app-wide: `App.tsx` has no `SafeAreaProvider` and no screen uses `useSafeAreaInsets()`. Every screen hardcodes `paddingTop: theme.spacing.xl` (32px), which is less than the Dynamic Island clearance (~59px) on iPhone 17 Pro (and any notch/Dynamic Island device), hiding top-bar content. This affects all built screens (MOD-001/002/003/004) and every screen not yet built.
+
+**Recommendations** (suggested improvements):
+- Adopt the safe-area convention now added to `production.md` ("Screen Layout & Safe Area Insets"): wrap the root in `SafeAreaProvider` once in `App.tsx`, and have every screen pass `insets.top` into a `makeStyles(theme, topInset)` signature, deriving `paddingTop: topInset + theme.spacing.md`. Applying it uniformly is safe — modal sheets return `insets.top === 0`.
+- Retrofit already-passed modules (MOD-001/002/003) as bugfixes since the defect is present in their screens; new modules should follow the convention from first implementation.
+
+**Approved**:
+- `react-native-safe-area-context` is already available transitively via `react-native-screens`; no new dependency is required.
+- The uniform pattern is compatible with the existing theming convention (still token-driven, no hardcoded values beyond the OS-provided inset).
+
+**Proposed Shared Conventions** (for Doc-Sync to carry into production.md):
+- Screen Layout & Safe Area Insets convention has already been written directly into `production.md` Shared Conventions as part of this review.
 
 ## Module Map
 
