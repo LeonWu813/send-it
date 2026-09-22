@@ -146,3 +146,39 @@ GymDetailScreen uses the error key `gymDirectory.errors.loadFailed` which resolv
 ### Overall Verdict
 
 **QA PASS** — All acceptance criteria (AC-004, AC-070) verified. All 20 requirements checked. 53/53 automated tests pass. TypeScript compilation clean. No spec violations found.
+
+---
+
+## QA Results — Regression (Safe Area Inset Bugfix)
+
+**Workflow**: regression (static code review)
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-09-21
+**Scope**: Safe area inset bugfix — three screens updated to use `useSafeAreaInsets()`
+
+### Verification Checklist
+
+All three screens verified against the following items:
+
+| Check | GymListScreen | GymDetailScreen | RequestGymScreen |
+|---|---|---|---|
+| `useSafeAreaInsets` imported from `react-native-safe-area-context` | PASS (L25) | PASS (L24) | PASS (L25) |
+| `useSafeAreaInsets()` called inside component | PASS (L42) | PASS (L41) | PASS (L43) |
+| `makeStyles` called with `(theme, insets.top)` | PASS (L43) | PASS (L42) | PASS (L44) |
+| `makeStyles` signature accepts `topInset: number` as second param | PASS (L267) | PASS (L194) | PASS (L203) |
+| Primary container `paddingTop` is `topInset + theme.spacing.md` | PASS (L273, root) | PASS (L201, contentContainer) | PASS (L210, contentContainer) |
+| No `padding` shorthand on contentContainer/centeredContainer | PASS | PASS | PASS |
+| No fixed/bare `paddingTop` values remaining | PASS | PASS | PASS |
+| `centeredContainer` has dynamic `paddingTop` | PASS (L280) | PASS (L210) | PASS (L219) |
+| Original logic, data fetching, navigation, UI structure unchanged | PASS | PASS | PASS |
+| No new TypeScript errors (visual check) | PASS | PASS | PASS |
+
+### Notes
+
+- GymDetailScreen and RequestGymScreen are ScrollView-based screens. Correctly, `paddingTop` lives on `contentContainer` (not `root`), which is the standard React Native ScrollView pattern. `centeredContainer` (used for loading/error/success states) also carries `paddingTop: topInset + theme.spacing.md` since it is a full-screen `View`, not a ScrollView.
+- GymListScreen is a plain View-based screen. `paddingTop` correctly lives on `root`.
+- No regressions from the original QA pass detected.
+
+### Overall Verdict
+
+**QA PASS (REGRESSION)** — All three screens correctly implement the safe area inset fix. No regressions in logic, data fetching, navigation, or UI structure. Static code review complete.
