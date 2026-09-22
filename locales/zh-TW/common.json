@@ -117,6 +117,10 @@
         "submitFailed": "送出申請失敗，請再試一次。"
       }
     },
+    "cityFilter": {
+      "taipei": "台北市",
+      "newTaipei": "新北市"
+    },
     "errors": {
       "loadFailed": "載入岩館失敗，請再試一次。",
       "notFound": "找不到該岩館。"

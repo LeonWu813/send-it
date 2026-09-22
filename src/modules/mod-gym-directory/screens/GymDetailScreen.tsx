@@ -23,13 +23,21 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import i18n from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme';
 import { loadGym } from '../gym-service';
-import type { Gym, GymType } from '../types';
+import type { Gym } from '../types';
 
 interface GymDetailScreenProps {
   gymId: string;
   onBack: () => void;
+}
+
+function localizedCity(gym: { city: string; city_zh: string }): string {
+  return i18n.language.startsWith('zh') ? gym.city_zh : gym.city;
+}
+function localizedDistrict(gym: { district: string; district_zh: string }): string {
+  return i18n.language.startsWith('zh') ? gym.district_zh : gym.district;
 }
 
 export default function GymDetailScreen({
@@ -65,17 +73,6 @@ export default function GymDetailScreen({
   useEffect(() => {
     void fetchGym();
   }, [fetchGym]);
-
-  function gymTypeLabel(gymType: GymType): string {
-    switch (gymType) {
-      case 'bouldering':
-        return t('gymDirectory.gymTypeBadge.bouldering');
-      case 'top_rope':
-        return t('gymDirectory.gymTypeBadge.topRope');
-      case 'both':
-        return t('gymDirectory.gymTypeBadge.both');
-    }
-  }
 
   const isMixed = gym?.gym_type === 'both';
 
@@ -144,16 +141,6 @@ export default function GymDetailScreen({
         </View>
       )}
 
-      {/* Gym type badge */}
-      <View
-        style={[
-          styles.badge,
-          isMixed ? styles.badgeMixed : styles.badgeBouldering,
-        ]}
-      >
-        <Text style={styles.badgeText}>{gymTypeLabel(gym.gym_type)}</Text>
-      </View>
-
       {/* Name + branch */}
       <Text style={styles.gymName}>{gym.name}</Text>
       <Text style={styles.gymNameZh}>{gym.name_zh}</Text>
@@ -166,7 +153,7 @@ export default function GymDetailScreen({
         {t('gymDirectory.detail.location')}
       </Text>
       <Text style={styles.infoText}>
-        {gym.city} · {gym.district}
+        {localizedCity(gym)} · {localizedDistrict(gym)}
       </Text>
       <Text style={styles.infoText}>{gym.address_text}</Text>
       <Text style={styles.coordinates}>
@@ -239,24 +226,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     photoPlaceholderText: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.textDisabled,
-    },
-    badge: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 3,
-      borderRadius: theme.borderRadius.sm,
-      marginBottom: theme.spacing.sm,
-    },
-    badgeBouldering: {
-      backgroundColor: theme.colors.primary,
-    },
-    badgeMixed: {
-      backgroundColor: theme.colors.warning,
-    },
-    badgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
     },
     gymName: {
       fontSize: theme.fontSize.xxl,

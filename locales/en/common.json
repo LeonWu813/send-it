@@ -117,6 +117,10 @@
         "submitFailed": "Failed to submit request. Please try again."
       }
     },
+    "cityFilter": {
+      "taipei": "Taipei",
+      "newTaipei": "New Taipei"
+    },
     "errors": {
       "loadFailed": "Failed to load gyms. Please try again.",
       "notFound": "Gym not found."

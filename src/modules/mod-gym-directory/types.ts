@@ -18,7 +18,9 @@ export interface Gym {
   name_zh: string;
   branch_label: string | null;
   city: string;
+  city_zh: string;
   district: string;
+  district_zh: string;
   address_text: string;
   lat: number;
   lng: number;
@@ -40,7 +42,9 @@ export interface GymSummary {
   name_zh: string;
   branch_label: string | null;
   city: string;
+  city_zh: string;
   district: string;
+  district_zh: string;
   gym_type: GymType;
   photo_url: string | null;
 }
@@ -57,6 +61,5 @@ export interface GymRequestInput {
 /** Filter state for the gym list screen. */
 export interface GymListFilters {
   searchText: string;
-  district: string | null;
-  gymType: GymType | null;
+  city: string | null;
 }

@@ -2,12 +2,13 @@
  * GymListScreen.
  *
  * Displays the admin-curated gym directory as a searchable, filterable list.
- * Each card shows the gym name, district, and gym_type badge.
+ * Each card shows the gym name and city/district.
  *
  * AC-004: renders the Taipei/New Taipei branch-level gym directory with every
- * gym showing name, city/district, gym type (and photo when present).
+ * gym showing name, city/district, and (if present) photo when a user opens
+ * the Gyms tab.
  *
- * Filter support: text search (name/district) + district filter + gym_type filter.
+ * Filter support: text search (name/city/district in both languages) + city filter chips.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -24,13 +25,21 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import i18n from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme';
 import { listGyms } from '../gym-service';
-import type { GymSummary, GymType } from '../types';
+import type { GymSummary } from '../types';
 
 interface GymListScreenProps {
   onSelectGym: (gymId: string) => void;
   onRequestGym: () => void;
+}
+
+function localizedCity(gym: { city: string; city_zh: string }): string {
+  return i18n.language.startsWith('zh') ? gym.city_zh : gym.city;
+}
+function localizedDistrict(gym: { district: string; district_zh: string }): string {
+  return i18n.language.startsWith('zh') ? gym.district_zh : gym.district;
 }
 
 export default function GymListScreen({
@@ -46,8 +55,7 @@ export default function GymListScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchText, setSearchText] = useState('');
-  const [districtFilter, setDistrictFilter] = useState<string | null>(null);
-  const [gymTypeFilter, setGymTypeFilter] = useState<GymType | null>(null);
+  const [cityFilter, setCityFilter] = useState<string | null>(null);
 
   const fetchGyms = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -66,16 +74,7 @@ export default function GymListScreen({
     void fetchGyms();
   }, [fetchGyms]);
 
-  // Derive unique districts for filter chips
-  const availableDistricts = useMemo(() => {
-    const seen = new Set<string>();
-    for (const gym of gyms) {
-      seen.add(gym.district);
-    }
-    return Array.from(seen).sort();
-  }, [gyms]);
-
-  // Apply search text + district + gym_type filters
+  // Apply search text + city filter
   const filteredGyms = useMemo(() => {
     const query = searchText.trim().toLowerCase();
     return gyms.filter((gym) => {
@@ -83,32 +82,20 @@ export default function GymListScreen({
         !query ||
         gym.name.toLowerCase().includes(query) ||
         gym.name_zh.toLowerCase().includes(query) ||
+        gym.city.toLowerCase().includes(query) ||
+        gym.city_zh.toLowerCase().includes(query) ||
         gym.district.toLowerCase().includes(query) ||
+        gym.district_zh.toLowerCase().includes(query) ||
         (gym.branch_label?.toLowerCase().includes(query) ?? false);
 
-      const matchesDistrict =
-        districtFilter === null || gym.district === districtFilter;
+      const matchesCity =
+        cityFilter === null || gym.city === cityFilter;
 
-      const matchesType =
-        gymTypeFilter === null || gym.gym_type === gymTypeFilter;
-
-      return matchesSearch && matchesDistrict && matchesType;
+      return matchesSearch && matchesCity;
     });
-  }, [gyms, searchText, districtFilter, gymTypeFilter]);
-
-  function gymTypeBadgeLabel(gymType: GymType): string {
-    switch (gymType) {
-      case 'bouldering':
-        return t('gymDirectory.gymTypeBadge.bouldering');
-      case 'top_rope':
-        return t('gymDirectory.gymTypeBadge.topRope');
-      case 'both':
-        return t('gymDirectory.gymTypeBadge.both');
-    }
-  }
+  }, [gyms, searchText, cityFilter]);
 
   function renderGymCard({ item }: { item: GymSummary }): React.JSX.Element {
-    const isMixed = item.gym_type === 'both';
     return (
       <Pressable
         style={({ pressed }) => [
@@ -117,7 +104,7 @@ export default function GymListScreen({
         ]}
         onPress={() => onSelectGym(item.id)}
         accessibilityRole="button"
-        accessibilityLabel={`${item.name}, ${item.district}`}
+        accessibilityLabel={`${item.name}, ${localizedDistrict(item)}`}
       >
         <View style={styles.cardHeader}>
           <View style={styles.cardTitleBlock}>
@@ -128,56 +115,9 @@ export default function GymListScreen({
               <Text style={styles.branchLabel}>{item.branch_label}</Text>
             ) : null}
           </View>
-          <View
-            style={[
-              styles.badge,
-              isMixed ? styles.badgeMixed : styles.badgeBouldering,
-            ]}
-          >
-            <Text style={styles.badgeText}>{gymTypeBadgeLabel(item.gym_type)}</Text>
-          </View>
         </View>
         <Text style={styles.district}>
-          {item.city} · {item.district}
-        </Text>
-      </Pressable>
-    );
-  }
-
-  function renderDistrictChip(district: string): React.JSX.Element {
-    const isActive = districtFilter === district;
-    return (
-      <Pressable
-        key={district}
-        style={[styles.chip, isActive && styles.chipActive]}
-        onPress={() => setDistrictFilter(isActive ? null : district)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: isActive }}
-        accessibilityLabel={district}
-      >
-        <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-          {district}
-        </Text>
-      </Pressable>
-    );
-  }
-
-  function renderGymTypeChip(
-    gymType: GymType,
-    label: string,
-  ): React.JSX.Element {
-    const isActive = gymTypeFilter === gymType;
-    return (
-      <Pressable
-        key={gymType}
-        style={[styles.chip, isActive && styles.chipActive]}
-        onPress={() => setGymTypeFilter(isActive ? null : gymType)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: isActive }}
-        accessibilityLabel={label}
-      >
-        <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-          {label}
+          {localizedCity(item)} · {localizedDistrict(item)}
         </Text>
       </Pressable>
     );
@@ -224,16 +164,30 @@ export default function GymListScreen({
         accessibilityLabel={t('gymDirectory.searchPlaceholder')}
       />
 
-      {/* Filter chips row */}
+      {/* City filter chips */}
       <View style={styles.filterRow}>
-        {/* Gym type filters */}
-        {renderGymTypeChip(
-          'bouldering',
-          t('gymDirectory.gymTypeBadge.bouldering'),
-        )}
-        {renderGymTypeChip('both', t('gymDirectory.gymTypeBadge.mixed'))}
-        {/* District filters */}
-        {availableDistricts.map(renderDistrictChip)}
+        <Pressable
+          style={[styles.chip, cityFilter === 'Taipei' && styles.chipActive]}
+          onPress={() => setCityFilter(cityFilter === 'Taipei' ? null : 'Taipei')}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: cityFilter === 'Taipei' }}
+          accessibilityLabel={t('gymDirectory.cityFilter.taipei')}
+        >
+          <Text style={[styles.chipText, cityFilter === 'Taipei' && styles.chipTextActive]}>
+            {t('gymDirectory.cityFilter.taipei')}
+          </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.chip, cityFilter === 'New Taipei' && styles.chipActive]}
+          onPress={() => setCityFilter(cityFilter === 'New Taipei' ? null : 'New Taipei')}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: cityFilter === 'New Taipei' }}
+          accessibilityLabel={t('gymDirectory.cityFilter.newTaipei')}
+        >
+          <Text style={[styles.chipText, cityFilter === 'New Taipei' && styles.chipTextActive]}>
+            {t('gymDirectory.cityFilter.newTaipei')}
+          </Text>
+        </Pressable>
       </View>
 
       {/* Gym list */}
@@ -361,23 +315,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontSize: theme.fontSize.sm,
       color: theme.colors.textSecondary,
       marginTop: theme.spacing.xs,
-    },
-    badge: {
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 3,
-      borderRadius: theme.borderRadius.sm,
-      flexShrink: 0,
-    },
-    badgeBouldering: {
-      backgroundColor: theme.colors.primary,
-    },
-    badgeMixed: {
-      backgroundColor: theme.colors.warning,
-    },
-    badgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
     },
     emptyText: {
       textAlign: 'center',
