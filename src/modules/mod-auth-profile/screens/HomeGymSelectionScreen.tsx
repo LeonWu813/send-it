@@ -24,6 +24,8 @@ import {
 } from 'react-native';
 
 import { supabase } from '../../../lib/supabase';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useTheme } from '../../../lib/theme';
 import { setHomeGym } from '../auth-service';
 import type { GymListItem } from '../types';
@@ -41,7 +43,8 @@ export default function HomeGymSelectionScreen({
 }: HomeGymSelectionScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, insets.top);
 
   const [gyms, setGyms] = useState<GymListItem[]>([]);
   const [searchText, setSearchText] = useState('');
@@ -208,13 +211,13 @@ export default function HomeGymSelectionScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.xl,
+      paddingTop: topInset + theme.spacing.md,
     },
     title: {
       fontSize: theme.fontSize.xl,

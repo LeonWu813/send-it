@@ -30,6 +30,8 @@ import {
   View,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useTheme } from '../../../lib/theme';
 import {
   signInWithApple,
@@ -46,7 +48,8 @@ export default function SignInScreen({
 }: SignInScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, insets.top);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -242,7 +245,7 @@ export default function SignInScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -251,7 +254,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     scrollContent: {
       flexGrow: 1,
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.xxl,
+      paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.md,
     },

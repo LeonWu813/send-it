@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Initialize i18n — must be imported before any component that uses useTranslation
 import './src/lib/i18n';
@@ -29,10 +30,12 @@ function AppShell(): React.JSX.Element | null {
 
 export default function App(): React.JSX.Element {
   return (
-    <ThemeProvider>
-      <AuthNavigator>
-        <AppShell />
-      </AuthNavigator>
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AuthNavigator>
+          <AppShell />
+        </AuthNavigator>
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }

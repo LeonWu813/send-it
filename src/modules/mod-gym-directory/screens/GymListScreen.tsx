@@ -22,6 +22,8 @@ import {
   View,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useTheme } from '../../../lib/theme';
 import { listGyms } from '../gym-service';
 import type { GymSummary, GymType } from '../types';
@@ -37,7 +39,8 @@ export default function GymListScreen({
 }: GymListScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, insets.top);
 
   const [gyms, setGyms] = useState<GymSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -261,20 +264,22 @@ export default function GymListScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.xl,
+      paddingTop: topInset + theme.spacing.md,
     },
     centeredContainer: {
       flex: 1,
       backgroundColor: theme.colors.background,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: theme.spacing.lg,
+      paddingTop: topInset + theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.lg,
     },
     screenTitle: {
       fontSize: theme.fontSize.xxl,

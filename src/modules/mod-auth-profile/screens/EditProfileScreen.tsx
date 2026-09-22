@@ -24,6 +24,8 @@ import {
   View,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useTheme } from '../../../lib/theme';
 import { uploadAvatar, upsertProfile } from '../auth-service';
 import type { PrivacySetting, UserProfile } from '../types';
@@ -43,7 +45,8 @@ export default function EditProfileScreen({
 }: EditProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, insets.top);
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -271,14 +274,16 @@ export default function EditProfileScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     scrollContent: {
-      padding: theme.spacing.lg,
+      paddingTop: topInset + theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.xl,
       gap: theme.spacing.sm,
     },
     avatarContainer: {
