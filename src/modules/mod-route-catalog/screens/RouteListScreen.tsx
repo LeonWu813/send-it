@@ -20,6 +20,8 @@ import {
   View,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import { listRoutes } from '../route-service';
@@ -44,7 +46,8 @@ export default function RouteListScreen({
 }: RouteListScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, insets.top);
 
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -266,7 +269,7 @@ export default function RouteListScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -277,14 +280,16 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       backgroundColor: theme.colors.background,
       alignItems: 'center',
       justifyContent: 'center',
-      padding: theme.spacing.lg,
+      paddingTop: topInset + theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.lg,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.xl,
+      paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.md,
       flexWrap: 'wrap',
       gap: theme.spacing.xs,
