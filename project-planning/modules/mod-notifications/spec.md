@@ -4,6 +4,7 @@
 **Module Name**: Notifications
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-006
+**Last Synced from PRD Revision**: 5
 
 ---
 
@@ -41,6 +42,8 @@ Beta video uploaders need timely feedback when someone likes their video. The no
 **AC-056**: The system shall deliver the beta-video-like push notification within 30 seconds of the like event for ≥95% of likes measured over a 24-hour rolling window.
 
 **AC-057**: The system shall expose a Settings screen toggle for beta-video-like push notifications; when the toggle is off, no push is enqueued for that user for that event type, but the in-app `Notification` row is still created.
+
+**AC-058** (new — code gap, future module): The system shall navigate a user from a beta-video-like entry in the in-app notification inbox to the liked beta video (on its route detail screen) when the user taps the entry, resolving the notification's `target_id` to the target beta video.
 
 > **Implementation note (MOD-007 push idempotency)**: The notification/push fan-out Edge Function must be invoked by a Postgres trigger on `Reaction` INSERT (via `pg_net`/webhook), never triggered from the client. The function must be idempotent: a unique constraint on `Notification(recipient_user_id, actor_user_id, type, target_id)` guarantees a second trigger fire (double-tap / client retry) cannot create a duplicate notification row or a duplicate push. This is a requirement for the MOD-007 spec.
 
@@ -117,6 +120,7 @@ All tables guarded by Supabase Row-Level Security policies. `DeviceToken` rows a
 - **APNs deferred**: APNs end-to-end testing (physical device push delivery) is blocked on Apple Developer account enrollment and `.p8` auth key upload via `eas credentials`. These are deferred with no fixed timeline. The rest of MOD-007 (device token storage, preference toggle, in-app inbox, Edge Function logic) can be implemented and tested without a physical device push.
 - **`NotificationPreference` schema is future-proof**: The table is designed to grow — Phase 2 will add columns for expanded notification types (new follower, new routes at followed gym, etc.). Do not add Phase 2 columns in Phase 1.
 - **30-second SLA (AC-056)**: This is a measurable target, not a hard guarantee. Actual delivery depends on Expo Push + APNs latency and device state. Post-launch measurement is required; if the tail is worse than expected, revisit push architecture in Phase 2.
+- **AC-058 navigation contract (flag for build)**: The tap-through from a notification inbox entry to the beta video on its route detail screen requires resolving `Notification.target_id` (the `BetaVideo.id`) to the corresponding `route_id`, then navigating to MOD-003's `RouteDetailScreen` with the video in context. The navigation contract (deep-link by `route_id` derived from the beta video, or scroll-to-video) touches MOD-003 and MOD-005 and must be pinned before MOD-007 build begins.
 
 ---
 

@@ -4,6 +4,7 @@
 **Module Name**: Gym Directory
 **Phase**: 1
 **Dependencies**: MOD-001
+**Last Synced from PRD Revision**: 5
 
 ---
 
@@ -28,7 +29,7 @@ Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app w
 ## User Stories Covered
 
 - **US-001**: Sign up and set home gym (home gym selection reads from this directory)
-- **US-006**: Browse currently active routes at a gym (gym detail page is the entry point)
+- **US-006**: Browse currently active routes at a gym (gym directory list row → gym detail screen → route catalog entry point; partially — the gym-detail-to-routes navigation belongs to AC-005)
 - **US-013**: Request a missing gym
 
 ---
@@ -36,6 +37,10 @@ Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app w
 ## Acceptance Criteria Covered
 
 **AC-004**: The system shall render the Taipei/New Taipei branch-level gym directory with every gym showing name, city/district, address, map pin, gym type, and (if present) photo when a user opens the Gyms tab.
+
+**AC-006** (new — doc gap, code already works): The system shall navigate a user from a gym row in the gym directory list to that gym's detail screen when the user taps the row, passing the selected gym's identifier.
+
+**AC-005** (new — code gap): The system shall present a "View Routes" entry point at the bottom of the gym detail screen that navigates the user to that gym's route catalog, passing the gym context (gym ID and gym name). The entry point must be visible without any additional action.
 
 **AC-070**: The system shall accept a "request a gym" submission containing gym name, city, and optional Google Maps link, persist it to a queue readable by admins in Supabase Studio, and show the user a confirmation state when the submission succeeds.
 
@@ -88,6 +93,7 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - `Gym` table is readable by all authenticated users (RLS); write access is admin-only via Supabase Studio.
 - `GymRequest` insert is allowed by authenticated users (RLS); the request queue is visible to admins in Supabase Studio. Admin review and status update (`pending → added | rejected`) happens in Studio, not in-app.
 - All gym CRUD happens via Supabase Studio in Phase 1 — no in-app admin UI.
+- **AC-005 is the seam connecting MOD-002 to MOD-003.** `GymNavigator.tsx` must add a `routes` view state that renders `RouteNavigator` (from mod-route-catalog) with props `gymId`, `gymName`, `session`, `onBackToGym`. `GymDetailScreen.tsx` must add a "View Routes" button at the bottom that calls `onViewRoutes(gymId, gymName)`. `RouteNavigator` itself needs no changes.
 
 ---
 

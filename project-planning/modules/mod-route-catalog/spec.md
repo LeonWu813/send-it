@@ -4,7 +4,7 @@
 **Module Name**: Route Catalog
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002
-**Last Synced from PRD Revision**: 4
+**Last Synced from PRD Revision**: 5
 
 ---
 
@@ -66,6 +66,10 @@ The user story for the route list (US-006) specifies grade and hold-color filter
 **AC-040** (revised): The system shall, on a gym detail page, filter the route list by grade and by hold color using chip selectors. There shall be no free-text search input and no status filter for normal users.
 
 **AC-041** (revised): The system shall show normal users `active` routes only in the gym route list, with no status tag and no status filter surfaced to them.
+
+**AC-042** (new — doc gap, code already works inside RouteNavigator): The system shall navigate a user from a route entry in the gym route list to that route's detail screen when the user taps the entry, passing the selected route's identifier. The route detail screen is the entry point for logging a send (AC-010), uploading beta (AC-037), and watching beta (AC-033).
+
+> **Note on AC-042**: AC-042 is already implemented within `RouteNavigator`'s internal state machine. It becomes reachable only once AC-005 (MOD-002) wires `RouteNavigator` into the app.
 
 ---
 

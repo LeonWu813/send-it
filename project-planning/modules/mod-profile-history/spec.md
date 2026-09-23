@@ -4,6 +4,7 @@
 **Module Name**: Profile History & Stats
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-004
+**Last Synced from PRD Revision**: 5
 
 ---
 
@@ -29,6 +30,7 @@ Climbers tracking progress want to see their full send history and basic stats w
 ## User Stories Covered
 
 - **US-011**: View my profile history and stats
+- **US-012**: Set profile privacy (privacy gating applies to other-user profile navigation — AC-064 enforces the followers-only hidden state when a non-follower navigates to a `followers_only` profile)
 
 ---
 
@@ -39,6 +41,10 @@ Climbers tracking progress want to see their full send history and basic stats w
 **AC-061**: The system shall render basic stats: total sends, sends by grade (bar chart), current streak (consecutive days with ≥1 send), and highest grade climbed.
 
 **AC-062**: The system shall recalculate stats immediately after a new send log is saved and re-render the stats view without requiring a manual refresh.
+
+**AC-064** (new — code gap, future module): The system shall navigate a user from another user's entry in the activity feed (or any surfaced user reference, e.g. a beta video author or follower) to that user's profile and send history, subject to the target's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state rather than the send history.
+
+> **Boundary note on AC-064**: The source affordance (tappable user reference in the activity feed or elsewhere) is owned by MOD-006 (Social Graph & Feed); the destination screen (profile + send history) is owned by MOD-008. MOD-008's engineer owns the destination screen and the privacy gate. The privacy enforcement (AC-063 `followers_only` → hidden/403) must run server-side (RLS/RPC), consistent with the MOD-006 feed-RPC convention in the PRD — not client-side hiding only.
 
 ---
 

@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 436f09ac3341cfac3dc14b45bd21d4fc91f4e3be
+commit: 6937b4af6d430cd7465093292a9544eebd55a67b
 timestamp: 2026-09-22T00:00:00Z
 ```
 
@@ -344,6 +344,32 @@ To keep Phase 1.5 in-app admin a zero-rework, additive change:
 **verify-sync.sh result:** 4/6 checks passed. Two pre-existing failures unrelated to this delta:
   - Check 4 FAIL: all module specs use `## User Stories Covered` but the script expects `## Related User Stories` — pre-existing mismatch across all specs, not introduced by this sync.
   - Check 6 FAIL: no Phase Plan section in status.md — pre-existing; Phase Plan was not written during initial sync and was not in scope for this delta.
+
+### Sync Report — Delta Sync — 2026-09-22
+
+**Sync type:** delta
+**PRD Revision:** 5
+**PM Update reference:** 2026-09-22 [SUBSTANTIVE] — Cross-module navigation ACs + navigation-gap audit (PRD Revision 5)
+**Files modified:**
+- `project-planning/modules/mod-gym-directory/spec.md` — Added AC-006 (doc gap, code already works) and AC-005 (code gap) to Acceptance Criteria; expanded US-006 note in User Stories Covered to reflect gym-detail-to-routes navigation; added AC-005 implementation note to Key Implementation Notes; updated Last Synced from PRD Revision to 5.
+- `project-planning/modules/mod-route-catalog/spec.md` — Added AC-042 (doc gap, code already works inside RouteNavigator) to Acceptance Criteria with reachability caveat note; updated Last Synced from PRD Revision to 5.
+- `project-planning/modules/mod-beta-video/spec.md` — Added AC-037 (code gap, future module) to Acceptance Criteria with boundary note on host-screen/owning-module split; updated Last Synced from PRD Revision to 5.
+- `project-planning/modules/mod-notifications/spec.md` — Added AC-058 (code gap, future module) to Acceptance Criteria; added navigation contract flag to Key Implementation Notes; updated Last Synced from PRD Revision to 5.
+- `project-planning/modules/mod-profile-history/spec.md` — Added AC-064 (code gap, future module) to Acceptance Criteria with boundary note; added US-012 to User Stories Covered (privacy gating applies at AC-064 destination); updated Last Synced from PRD Revision to 5.
+**Files created:**
+- none
+**Files not touched:**
+- `project-planning/production.md` — no new shared conventions; no module boundary or phase plan changes.
+- All other module specs — change confined to the five modules identified in PM Updates.
+**Module removals noted:**
+- none
+**AMBIGUITY markers added:**
+- none
+**AMBIGUITY markers resolved:**
+- none
+**CONFLICT markers added:**
+- none
+**verify-sync.sh result:** Skipped per delta-sync scope — this sync touches only AC additions within existing modules; no new module directories, no phase plan changes, no production.md changes. Pre-existing Check 4 FAIL (heading name mismatch) and Check 6 FAIL (no Phase Plan section) noted from prior sync remain unchanged and are not introduced by this delta.
 
 ## Skill Recommendations
 
