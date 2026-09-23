@@ -35,7 +35,7 @@ STABLE
 SECURITY INVOKER
 SET search_path = public
 AS $$
-  SELECT COALESCE((auth.jwt() ->> 'role') = 'admin', false)
+  SELECT COALESCE((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false)
 $$;
 
 -- ── 3. Replace all existing RLS policies on routes ───────────────────────────
@@ -102,6 +102,11 @@ BEGIN
   -- Caller must be authenticated
   IF v_user_id IS NULL THEN
     RAISE EXCEPTION 'Not authenticated';
+  END IF;
+
+  -- Guard: photo is required
+  IF p_photo_url IS NULL OR trim(p_photo_url) = '' THEN
+    RAISE EXCEPTION 'Photo is required to submit a route';
   END IF;
 
   -- Guard: one pending per (gym, grade, color) per submitter
