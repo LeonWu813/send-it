@@ -141,6 +141,10 @@
       "pink": "粉紅色",
       "white": "白色",
       "black": "黑色"
+    },
+    "submit": {
+      "addRoute": "新增路線",
+      "changePhoto": "更換照片"
     }
   },
   "routes": {
@@ -173,16 +177,6 @@
       "colorLabel": "岩點顏色",
       "sectionLabel": "區域（選填）",
       "sectionPlaceholder": "例如：洞穴、板岩、斜板…",
-      "checkMatches": "確認是否有重複路線",
-      "submitRoute": "送出路線",
-      "submitting": "送出中…",
-      "matchCheck": {
-        "title": "找到現有路線",
-        "body": "這個岩館已有相同難度與顏色的開放路線。請確認是否是同一條路線？",
-        "thisIsIt": "就是這條路線 →",
-        "differentRoute": "都不是，這是新路線",
-        "addNew": "新增為全新路線"
-      },
       "photo": {
         "title": "新增照片",
         "body": "需要照片才能讓其他攀岩者辨識路線。請拍攝起手點或整條路線的清晰照片。",
@@ -191,14 +185,9 @@
         "takePhoto": "拍照",
         "choosePhoto": "從相簿選擇"
       },
-      "matchIdentified": {
-        "title": "找到路線",
-        "body": "太好了，就是這條路線。請從路線詳情頁記錄完攀。"
-      },
       "errors": {
         "gradeRequired": "請選擇難度。",
         "colorRequired": "請選擇岩點顏色。",
-        "matchCheckFailed": "確認重複路線失敗，請再試一次。",
         "photoRequired": "必須附上照片。請拍攝或選擇路線照片。",
         "photoPermissionDenied": "需要相簿存取權限才能選擇照片。",
         "cameraPermissionDenied": "需要相機存取權限才能拍照。",

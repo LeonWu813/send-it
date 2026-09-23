@@ -47,7 +47,11 @@ interface RouteListScreenProps {
   gymId: string;
   gymName: string;
   onSelectRoute: (routeId: string) => void;
-  onSubmitRoute: () => void;
+  /**
+   * AC-043: passes the current grade + color filter values so the submit screen
+   * can pre-fill the corresponding chips.
+   */
+  onSubmitRoute: (grade?: RouteGrade, colorTag?: RouteColor) => void;
   /** Navigate back to the gym detail page. */
   onBack?: () => void;
 }
@@ -198,7 +202,9 @@ export default function RouteListScreen({
   const addRouteCta = (
     <Pressable
       style={styles.addRouteCta}
-      onPress={onSubmitRoute}
+      onPress={() =>
+        onSubmitRoute(gradeFilter ?? undefined, colorFilter ?? undefined)
+      }
       accessibilityRole="button"
       accessibilityLabel={t('routeCatalog.addRoute')}
     >

@@ -1,18 +1,21 @@
 /**
- * RouteSubmitScreen.
+ * RouteSubmitScreen — single-page route submit flow (AC-020 revised, AC-021 revised, AC-043).
  *
- * Implements the match-before-create flow (US-003):
+ * Single page containing:
+ *   - Grade chips (all ROUTE_GRADES, horizontally scrollable)
+ *   - Hold-color chips (all ROUTE_COLORS, with color dots)
+ *   - Inline photo picker (Take Photo / Choose from Library); after selection
+ *     shows a preview image and a "Change Photo" option instead of the buttons
+ *   - Optional section-label text input
+ *   - "Add Route" button that validates and submits via submitRoute() RPC
  *
- * Step 1 — Form: user selects grade + color + (optional) section label.
- * Step 2 — Match check: query active routes at gym with same grade + color.
- *           If matches found, present them and ask user to confirm it's a new route.
- * Step 3 — Photo: if no match or user confirms it's different, require a photo upload.
- * Step 4 — Submit: create the new route row.
+ * No match-check step. No multi-step flow.
  *
- * AC-020: match-before-create — present any existing active matches.
- * AC-021: block submission without a photo; show validation message.
+ * AC-020 (revised): single-page submit, no client-side match-check step.
+ * AC-021 (revised): block submission without photo; show inline validation error.
  * AC-022: color selector restricted to fixed enum.
  * AC-023: grade selector restricted to V-scale only.
+ * AC-043: pre-fill grade + color from RouteListScreen filter state via optional props.
  */
 
 import 'expo-blob';
@@ -39,14 +42,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import {
-  findMatchingActiveRoutes,
   submitRoute,
   uploadRoutePhoto,
 } from '../route-service';
-import type { RouteColor, RouteGrade, RouteSummary } from '../types';
+import type { RouteColor, RouteGrade } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
-
-type SubmitStep = 'form' | 'match-check' | 'photo' | 'submitting' | 'success';
 
 interface RouteSubmitScreenProps {
   gymId: string;
@@ -58,6 +58,12 @@ interface RouteSubmitScreenProps {
    * Navigates to the route detail screen.
    */
   onSuccess: (routeId: string) => void;
+  /**
+   * AC-043: optional pre-fill from RouteListScreen filter state.
+   * If set, the corresponding chip is pre-selected on mount (user may change it).
+   */
+  initialGrade?: RouteGrade;
+  initialColorTag?: RouteColor;
 }
 
 export default function RouteSubmitScreen({
@@ -66,83 +72,55 @@ export default function RouteSubmitScreen({
   session,
   onBack,
   onSuccess,
+  initialGrade,
+  initialColorTag,
 }: RouteSubmitScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = makeStyles(theme, insets.top);
 
-  // Form state
-  const [selectedGrade, setSelectedGrade] = useState<RouteGrade | null>(null);
-  const [selectedColor, setSelectedColor] = useState<RouteColor | null>(null);
+  // Form state — pre-filled from filter state if provided (AC-043)
+  const [selectedGrade, setSelectedGrade] = useState<RouteGrade | null>(
+    initialGrade ?? null,
+  );
+  const [selectedColor, setSelectedColor] = useState<RouteColor | null>(
+    initialColorTag ?? null,
+  );
   const [sectionLabel, setSectionLabel] = useState('');
-
-  // Match check state
-  const [matchedRoutes, setMatchedRoutes] = useState<RouteSummary[]>([]);
-  const [isCheckingMatch, setIsCheckingMatch] = useState(false);
 
   // Photo state
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [photoMime, setPhotoMime] = useState<string>('image/jpeg');
+
+  // Validation / submission state
+  const [gradeError, setGradeError] = useState<string | null>(null);
+  const [colorError, setColorError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Submission state
-  const [step, setStep] = useState<SubmitStep>('form');
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  // ── Photo picker ───────────────────────────────────────────────────────────
 
-  // ── Step 1: Form validation + match check trigger ──────────────────────────
+  async function handleTakePhoto(): Promise<void> {
+    setPhotoError(null);
 
-  async function handleFormSubmit(): Promise<void> {
-    setFormError(null);
-
-    if (!selectedGrade) {
-      setFormError(t('routes.submit.errors.gradeRequired'));
-      return;
-    }
-    if (!selectedColor) {
-      setFormError(t('routes.submit.errors.colorRequired'));
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permissionResult.granted) {
+      setPhotoError(t('routes.submit.errors.cameraPermissionDenied'));
       return;
     }
 
-    setIsCheckingMatch(true);
-    try {
-      const matches = await findMatchingActiveRoutes(
-        gymId,
-        selectedGrade,
-        selectedColor,
-      );
-      setMatchedRoutes(matches);
+    const result = await ImagePicker.launchCameraAsync({
+      quality: 0.85,
+      allowsEditing: false,
+    });
 
-      if (matches.length > 0) {
-        setStep('match-check');
-      } else {
-        setStep('photo');
-      }
-    } catch {
-      setFormError(t('routes.submit.errors.matchCheckFailed'));
-    } finally {
-      setIsCheckingMatch(false);
+    if (!result.canceled && result.assets.length > 0) {
+      const asset = result.assets[0];
+      setPhotoUri(asset.uri);
+      setPhotoMime(asset.mimeType ?? 'image/jpeg');
     }
   }
-
-  // ── Step 2: Match check — user confirms it's a different route ─────────────
-
-  function handleConfirmDifferentRoute(): void {
-    setStep('photo');
-  }
-
-  function handleMatchSelected(routeId: string): void {
-    // User identified the existing route — nothing to create; go back
-    Alert.alert(
-      t('routes.submit.matchIdentified.title'),
-      t('routes.submit.matchIdentified.body'),
-      [{ text: t('common.ok'), onPress: () => onBack() }],
-    );
-    void routeId; // routeId is available for future use (e.g. navigate to it)
-  }
-
-  // ── Step 3: Photo selection ────────────────────────────────────────────────
 
   async function handlePickPhoto(): Promise<void> {
     setPhotoError(null);
@@ -167,62 +145,61 @@ export default function RouteSubmitScreen({
     }
   }
 
-  async function handleCameraPhoto(): Promise<void> {
-    setPhotoError(null);
+  // ── Submission ─────────────────────────────────────────────────────────────
 
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permissionResult.granted) {
-      setPhotoError(t('routes.submit.errors.cameraPermissionDenied'));
-      return;
+  async function handleAddRoute(): Promise<void> {
+    // Inline validation — show all missing-field errors at once
+    let hasError = false;
+
+    if (!selectedGrade) {
+      setGradeError(t('routes.submit.errors.gradeRequired'));
+      hasError = true;
+    } else {
+      setGradeError(null);
     }
 
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.85,
-      allowsEditing: false,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const asset = result.assets[0];
-      setPhotoUri(asset.uri);
-      setPhotoMime(asset.mimeType ?? 'image/jpeg');
+    if (!selectedColor) {
+      setColorError(t('routes.submit.errors.colorRequired'));
+      hasError = true;
+    } else {
+      setColorError(null);
     }
-  }
 
-  // ── Step 4: Final submission ───────────────────────────────────────────────
-
-  async function handleFinalSubmit(): Promise<void> {
-    // AC-021: photo is required — block submission without one
+    // AC-021: photo is required
     if (!photoUri) {
       setPhotoError(t('routes.submit.errors.photoRequired'));
-      return;
-    }
-    if (!selectedGrade || !selectedColor) {
-      // Should not reach here; guarded by step 1, but be defensive
-      return;
+      hasError = true;
+    } else {
+      setPhotoError(null);
     }
 
-    setPhotoError(null);
-    setStep('submitting');
-    setIsUploading(true);
+    if (hasError) return;
+
+    // TypeScript narrowing — all three are now non-null
+    const grade = selectedGrade!;
+    const colorTag = selectedColor!;
+    const uri = photoUri!;
+
+    setIsSubmitting(true);
 
     try {
       const uploadedPhotoUrl = await uploadRoutePhoto(
         session.user.id,
-        photoUri,
+        uri,
         photoMime,
       );
 
       const newRoute = await submitRoute({
         gym_id: gymId,
-        grade: selectedGrade,
-        color_tag: selectedColor,
+        grade,
+        color_tag: colorTag,
         photo_url: uploadedPhotoUrl,
         section_label: sectionLabel.trim() || null,
       });
 
       if (newRoute.status === 'pending') {
         // Auto-approve is OFF: show the pending approval message then go back
-        // to the route list (route is not active yet so we can't navigate to detail).
+        // to the route list (route is not active yet, so we can't navigate to detail).
         Alert.alert(
           t('routes.submit.title'),
           t('routeCatalog.pendingApproval'),
@@ -238,35 +215,58 @@ export default function RouteSubmitScreen({
           ? err.message
           : t('routes.submit.errors.submitFailed');
       Alert.alert(t('common.error'), message);
-      // Return user to photo step so they can retry
-      setStep('photo');
     } finally {
-      setIsUploading(false);
+      setIsSubmitting(false);
     }
   }
 
-  // ── Render helpers ─────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────────
 
-  function renderGradeSelector(): React.JSX.Element {
-    return (
+  return (
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* Back navigation */}
+      <Pressable
+        onPress={onBack}
+        style={styles.backLink}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.back')}
+      >
+        <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+      </Pressable>
+
+      <Text style={styles.screenTitle}>{t('routes.submit.title')}</Text>
+      <Text style={styles.gymNameSubtitle}>{gymName}</Text>
+
+      {/* Grade chips — AC-023: V-scale only */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>{t('routes.submit.gradeLabel')}</Text>
-        <View style={styles.selectorGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
           {ROUTE_GRADES.map((grade) => {
             const isSelected = selectedGrade === grade;
             return (
               <Pressable
                 key={grade}
-                style={[styles.selectorChip, isSelected && styles.selectorChipActive]}
-                onPress={() => setSelectedGrade(grade)}
+                style={[styles.gradeChip, isSelected && styles.gradeChipActive]}
+                onPress={() => {
+                  setSelectedGrade(grade);
+                  setGradeError(null);
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
                 accessibilityLabel={grade}
               >
                 <Text
                   style={[
-                    styles.selectorChipText,
-                    isSelected && styles.selectorChipTextActive,
+                    styles.gradeChipText,
+                    isSelected && styles.gradeChipTextActive,
                   ]}
                 >
                   {grade}
@@ -274,16 +274,20 @@ export default function RouteSubmitScreen({
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
+        {gradeError ? (
+          <Text style={styles.errorText}>{gradeError}</Text>
+        ) : null}
       </View>
-    );
-  }
 
-  function renderColorSelector(): React.JSX.Element {
-    return (
+      {/* Hold-color chips — AC-022: fixed enum, with color dots */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</Text>
-        <View style={styles.selectorGrid}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipRow}
+        >
           {ROUTE_COLORS.map((color) => {
             const isSelected = selectedColor === color;
             return (
@@ -293,7 +297,10 @@ export default function RouteSubmitScreen({
                   styles.colorChip,
                   isSelected && styles.colorChipSelected,
                 ]}
-                onPress={() => setSelectedColor(color)}
+                onPress={() => {
+                  setSelectedColor(color);
+                  setColorError(null);
+                }}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: isSelected }}
                 accessibilityLabel={color}
@@ -307,245 +314,106 @@ export default function RouteSubmitScreen({
               </Pressable>
             );
           })}
-        </View>
-      </View>
-    );
-  }
-
-  // ── Step rendering ─────────────────────────────────────────────────────────
-
-  if (step === 'form') {
-    return (
-      <ScrollView
-        style={styles.root}
-        contentContainerStyle={styles.contentContainer}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Pressable
-          onPress={onBack}
-          style={styles.backLink}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-
-        <Text style={styles.screenTitle}>{t('routes.submit.title')}</Text>
-        <Text style={styles.gymNameSubtitle}>{gymName}</Text>
-
-        {renderGradeSelector()}
-        {renderColorSelector()}
-
-        {/* Section label (optional) */}
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>
-            {t('routes.submit.sectionLabel')}
-          </Text>
-          <TextInput
-            style={styles.textInput}
-            value={sectionLabel}
-            onChangeText={setSectionLabel}
-            placeholder={t('routes.submit.sectionPlaceholder')}
-            placeholderTextColor={theme.colors.textDisabled}
-            maxLength={80}
-            autoCorrect={false}
-            accessibilityLabel={t('routes.submit.sectionLabel')}
-          />
-        </View>
-
-        {formError ? (
-          <Text style={styles.errorText}>{formError}</Text>
+        </ScrollView>
+        {colorError ? (
+          <Text style={styles.errorText}>{colorError}</Text>
         ) : null}
+      </View>
 
-        <Pressable
-          style={[
-            styles.primaryButton,
-            isCheckingMatch && styles.primaryButtonDisabled,
-          ]}
-          onPress={() => void handleFormSubmit()}
-          disabled={isCheckingMatch}
-          accessibilityRole="button"
-          accessibilityLabel={t('routes.submit.checkMatches')}
-          accessibilityState={{ disabled: isCheckingMatch }}
-        >
-          {isCheckingMatch ? (
-            <ActivityIndicator size="small" color={theme.colors.textInverse} />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {t('routes.submit.checkMatches')}
-            </Text>
-          )}
-        </Pressable>
-      </ScrollView>
-    );
-  }
+      {/* Inline photo picker — AC-021 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>{t('routes.submit.photo.title')}</Text>
 
-  if (step === 'match-check') {
-    return (
-      <ScrollView
-        style={styles.root}
-        contentContainerStyle={styles.contentContainer}
-      >
-        <Pressable
-          onPress={() => setStep('form')}
-          style={styles.backLink}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-
-        <Text style={styles.screenTitle}>{t('routes.submit.matchCheck.title')}</Text>
-        <Text style={styles.bodyText}>{t('routes.submit.matchCheck.body')}</Text>
-
-        {matchedRoutes.map((matched) => (
-          <Pressable
-            key={matched.id}
-            style={styles.matchCard}
-            onPress={() => handleMatchSelected(matched.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`${matched.grade} ${matched.color_tag} route`}
-          >
-            <Image
-              source={{ uri: matched.photo_url }}
-              style={styles.matchPhoto}
-              resizeMode="cover"
-            />
-            <View style={styles.matchInfo}>
-              <Text style={styles.matchGrade}>{matched.grade}</Text>
-              <RouteColorBadge color={matched.color_tag} size="sm" />
-              {matched.section_label ? (
-                <Text style={styles.matchSection}>{matched.section_label}</Text>
-              ) : null}
-              <Text style={styles.matchDate}>
-                {new Date(matched.created_at).toLocaleDateString()}
-              </Text>
-            </View>
-            <Text style={styles.matchCta}>
-              {t('routes.submit.matchCheck.thisIsIt')}
-            </Text>
-          </Pressable>
-        ))}
-
-        <Text style={styles.matchDifferentLabel}>
-          {t('routes.submit.matchCheck.differentRoute')}
-        </Text>
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={handleConfirmDifferentRoute}
-          accessibilityRole="button"
-          accessibilityLabel={t('routes.submit.matchCheck.addNew')}
-        >
-          <Text style={styles.secondaryButtonText}>
-            {t('routes.submit.matchCheck.addNew')}
-          </Text>
-        </Pressable>
-      </ScrollView>
-    );
-  }
-
-  if (step === 'photo') {
-    return (
-      <ScrollView
-        style={styles.root}
-        contentContainerStyle={styles.contentContainer}
-      >
-        <Pressable
-          onPress={() => setStep(matchedRoutes.length > 0 ? 'match-check' : 'form')}
-          style={styles.backLink}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-
-        <Text style={styles.screenTitle}>{t('routes.submit.photo.title')}</Text>
-        <Text style={styles.bodyText}>{t('routes.submit.photo.body')}</Text>
-
-        {/* Summary of what's being submitted */}
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryGrade}>{selectedGrade}</Text>
-          {selectedColor && <RouteColorBadge color={selectedColor} size="md" />}
-          {sectionLabel.trim() ? (
-            <Text style={styles.summarySection}>{sectionLabel.trim()}</Text>
-          ) : null}
-        </View>
-
-        {/* Photo preview */}
         {photoUri ? (
-          <Image
-            source={{ uri: photoUri }}
-            style={styles.photoPreview}
-            resizeMode="cover"
-            accessibilityLabel={t('routes.submit.photo.preview')}
-          />
+          /* Preview + Change Photo */
+          <View>
+            <Image
+              source={{ uri: photoUri }}
+              style={styles.photoPreview}
+              resizeMode="cover"
+              accessibilityLabel={t('routes.submit.photo.preview')}
+            />
+            <Pressable
+              style={styles.changePhotoButton}
+              onPress={() => void handlePickPhoto()}
+              accessibilityRole="button"
+              accessibilityLabel={t('routeCatalog.submit.changePhoto')}
+            >
+              <Text style={styles.changePhotoText}>
+                {t('routeCatalog.submit.changePhoto')}
+              </Text>
+            </Pressable>
+          </View>
         ) : (
-          <View style={styles.photoPlaceholder}>
-            <Text style={styles.photoPlaceholderText}>
-              {t('routes.submit.photo.placeholder')}
-            </Text>
+          /* Take Photo / Choose from Library buttons */
+          <View style={styles.photoButtonRow}>
+            <Pressable
+              style={[styles.secondaryButton, styles.photoButtonFlex]}
+              onPress={() => void handleTakePhoto()}
+              accessibilityRole="button"
+              accessibilityLabel={t('routes.submit.photo.takePhoto')}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {t('routes.submit.photo.takePhoto')}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.secondaryButton, styles.photoButtonFlex]}
+              onPress={() => void handlePickPhoto()}
+              accessibilityRole="button"
+              accessibilityLabel={t('routes.submit.photo.choosePhoto')}
+            >
+              <Text style={styles.secondaryButtonText}>
+                {t('routes.submit.photo.choosePhoto')}
+              </Text>
+            </Pressable>
           </View>
         )}
 
-        {/* Photo buttons */}
-        <View style={styles.photoButtonRow}>
-          <Pressable
-            style={[styles.secondaryButton, styles.photoButtonFlex]}
-            onPress={() => void handleCameraPhoto()}
-            accessibilityRole="button"
-            accessibilityLabel={t('routes.submit.photo.takePhoto')}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {t('routes.submit.photo.takePhoto')}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.secondaryButton, styles.photoButtonFlex]}
-            onPress={() => void handlePickPhoto()}
-            accessibilityRole="button"
-            accessibilityLabel={t('routes.submit.photo.choosePhoto')}
-          >
-            <Text style={styles.secondaryButtonText}>
-              {t('routes.submit.photo.choosePhoto')}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* AC-021: photo required error */}
+        {/* AC-021: inline photo-required error */}
         {photoError ? (
           <Text style={styles.errorText}>{photoError}</Text>
         ) : null}
+      </View>
 
-        <Pressable
-          style={[
-            styles.primaryButton,
-            isUploading && styles.primaryButtonDisabled,
-          ]}
-          onPress={() => void handleFinalSubmit()}
-          disabled={isUploading}
-          accessibilityRole="button"
-          accessibilityLabel={t('routes.submit.submitRoute')}
-          accessibilityState={{ disabled: isUploading }}
-        >
-          {isUploading ? (
-            <ActivityIndicator size="small" color={theme.colors.textInverse} />
-          ) : (
-            <Text style={styles.primaryButtonText}>
-              {t('routes.submit.submitRoute')}
-            </Text>
-          )}
-        </Pressable>
-      </ScrollView>
-    );
-  }
+      {/* Optional section label */}
+      <View style={styles.section}>
+        <Text style={styles.sectionLabel}>
+          {t('routes.submit.sectionLabel')}
+        </Text>
+        <TextInput
+          style={styles.textInput}
+          value={sectionLabel}
+          onChangeText={setSectionLabel}
+          placeholder={t('routes.submit.sectionPlaceholder')}
+          placeholderTextColor={theme.colors.textDisabled}
+          maxLength={80}
+          autoCorrect={false}
+          accessibilityLabel={t('routes.submit.sectionLabel')}
+        />
+      </View>
 
-  // 'submitting' and 'success' states handled via callbacks/alerts;
-  // show a loading screen while awaiting the server response
-  return (
-    <View style={styles.centeredContainer}>
-      <ActivityIndicator color={theme.colors.primary} size="large" />
-      <Text style={styles.loadingText}>{t('routes.submit.submitting')}</Text>
-    </View>
+      {/* Add Route button */}
+      <Pressable
+        style={[
+          styles.primaryButton,
+          isSubmitting && styles.primaryButtonDisabled,
+        ]}
+        onPress={() => void handleAddRoute()}
+        disabled={isSubmitting}
+        accessibilityRole="button"
+        accessibilityLabel={t('routeCatalog.submit.addRoute')}
+        accessibilityState={{ disabled: isSubmitting }}
+      >
+        {isSubmitting ? (
+          <ActivityIndicator size="small" color={theme.colors.textInverse} />
+        ) : (
+          <Text style={styles.primaryButtonText}>
+            {t('routeCatalog.submit.addRoute')}
+          </Text>
+        )}
+      </Pressable>
+    </ScrollView>
   );
 }
 
@@ -561,15 +429,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.xxl,
     },
-    centeredContainer: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.lg,
-    },
     backLink: {
       marginBottom: theme.spacing.md,
     },
@@ -584,12 +443,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textSecondary,
       marginBottom: theme.spacing.lg,
     },
-    bodyText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      lineHeight: 22,
-      marginBottom: theme.spacing.lg,
-    },
     section: {
       marginBottom: theme.spacing.lg,
     },
@@ -601,12 +454,11 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       letterSpacing: 0.5,
       marginBottom: theme.spacing.sm,
     },
-    selectorGrid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
+    chipRow: {
       gap: theme.spacing.xs,
+      paddingRight: theme.spacing.sm,
     },
-    selectorChip: {
+    gradeChip: {
       paddingHorizontal: theme.spacing.sm + 4,
       paddingVertical: theme.spacing.xs + 2,
       borderRadius: theme.borderRadius.full,
@@ -614,16 +466,16 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.surface,
     },
-    selectorChipActive: {
+    gradeChipActive: {
       borderColor: theme.colors.primary,
       backgroundColor: theme.colors.primary,
     },
-    selectorChipText: {
+    gradeChipText: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.textSecondary,
       fontWeight: theme.fontWeight.medium,
     },
-    selectorChipTextActive: {
+    gradeChipTextActive: {
       color: theme.colors.textInverse,
       fontWeight: theme.fontWeight.semibold,
     },
@@ -652,6 +504,41 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textInverse,
       fontWeight: theme.fontWeight.bold,
     },
+    photoPreview: {
+      width: '100%',
+      height: 260,
+      borderRadius: theme.borderRadius.lg,
+      backgroundColor: theme.colors.surface,
+      marginBottom: theme.spacing.sm,
+    },
+    changePhotoButton: {
+      alignItems: 'center',
+      paddingVertical: theme.spacing.sm,
+    },
+    changePhotoText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.primary,
+      fontWeight: theme.fontWeight.medium,
+    },
+    photoButtonRow: {
+      flexDirection: 'row',
+      gap: theme.spacing.sm,
+    },
+    photoButtonFlex: {
+      flex: 1,
+    },
+    secondaryButton: {
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+      paddingVertical: theme.spacing.sm + 4,
+      alignItems: 'center',
+    },
+    secondaryButtonText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.primary,
+      fontWeight: theme.fontWeight.medium,
+    },
     textInput: {
       backgroundColor: theme.colors.surface,
       borderWidth: 1,
@@ -677,124 +564,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontWeight: theme.fontWeight.semibold,
       color: theme.colors.textInverse,
     },
-    secondaryButton: {
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      paddingVertical: theme.spacing.sm + 4,
-      alignItems: 'center',
-      marginTop: theme.spacing.sm,
-    },
-    secondaryButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
     errorText: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.error,
-      marginTop: theme.spacing.sm,
-      marginBottom: theme.spacing.xs,
-    },
-    // Match check step
-    matchCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      overflow: 'hidden',
-      marginBottom: theme.spacing.md,
-    },
-    matchPhoto: {
-      width: '100%',
-      height: 180,
-      backgroundColor: theme.colors.surface,
-    },
-    matchInfo: {
-      padding: theme.spacing.md,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.sm,
-      flexWrap: 'wrap',
-    },
-    matchGrade: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-    },
-    matchSection: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    matchDate: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textDisabled,
-    },
-    matchCta: {
-      paddingHorizontal: theme.spacing.md,
-      paddingBottom: theme.spacing.md,
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    matchDifferentLabel: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      marginTop: theme.spacing.lg,
-      marginBottom: theme.spacing.xs,
-    },
-    // Photo step
-    summaryRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.sm,
-      marginBottom: theme.spacing.md,
-      paddingHorizontal: theme.spacing.xs,
-    },
-    summaryGrade: {
-      fontSize: theme.fontSize.xxl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-    },
-    summarySection: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    photoPreview: {
-      width: '100%',
-      height: 260,
-      borderRadius: theme.borderRadius.lg,
-      backgroundColor: theme.colors.surface,
-      marginBottom: theme.spacing.md,
-    },
-    photoPlaceholder: {
-      width: '100%',
-      height: 200,
-      borderRadius: theme.borderRadius.lg,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: theme.spacing.md,
-    },
-    photoPlaceholderText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textDisabled,
-    },
-    photoButtonRow: {
-      flexDirection: 'row',
-      gap: theme.spacing.sm,
-      marginBottom: theme.spacing.sm,
-    },
-    photoButtonFlex: {
-      flex: 1,
-    },
-    loadingText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      marginTop: theme.spacing.md,
+      marginTop: theme.spacing.xs,
     },
   });
 }

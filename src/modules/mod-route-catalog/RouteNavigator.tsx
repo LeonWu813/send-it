@@ -2,10 +2,10 @@
  * RouteNavigator.
  *
  * Root navigator for the route catalog module (MOD-003).
- * Manages local navigation state across four views:
+ * Manages local navigation state across three views:
  *   - list   → RouteListScreen (filterable route list for a gym)
  *   - detail → RouteDetailScreen (single route)
- *   - submit → RouteSubmitScreen (match-before-create flow)
+ *   - submit → RouteSubmitScreen (single-page submit flow, AC-020/021/043)
  *
  * This navigator is rendered from within the gym detail context (e.g. a tab
  * or section within GymDetailScreen in MOD-002). It receives gymId + gymName
@@ -24,11 +24,12 @@ import { useTheme } from '../../lib/theme';
 import RouteDetailScreen from './screens/RouteDetailScreen';
 import RouteListScreen from './screens/RouteListScreen';
 import RouteSubmitScreen from './screens/RouteSubmitScreen';
+import type { RouteColor, RouteGrade } from './types';
 
 type RouteView =
   | { name: 'list' }
   | { name: 'detail'; routeId: string }
-  | { name: 'submit' };
+  | { name: 'submit'; initialGrade?: RouteGrade; initialColorTag?: RouteColor };
 
 interface RouteNavigatorProps {
   gymId: string;
@@ -52,8 +53,12 @@ export default function RouteNavigator({
     setView({ name: 'detail', routeId });
   }
 
-  function navigateToSubmit(): void {
-    setView({ name: 'submit' });
+  /**
+   * AC-043: receives the active filter values from RouteListScreen and threads
+   * them through to RouteSubmitScreen as pre-fill props.
+   */
+  function navigateToSubmit(grade?: RouteGrade, colorTag?: RouteColor): void {
+    setView({ name: 'submit', initialGrade: grade, initialColorTag: colorTag });
   }
 
   function navigateToList(): void {
@@ -91,6 +96,8 @@ export default function RouteNavigator({
           session={session}
           onBack={navigateToList}
           onSuccess={handleSubmitSuccess}
+          initialGrade={view.initialGrade}
+          initialColorTag={view.initialColorTag}
         />
       )}
     </View>

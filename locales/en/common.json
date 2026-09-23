@@ -141,6 +141,10 @@
       "pink": "Pink",
       "white": "White",
       "black": "Black"
+    },
+    "submit": {
+      "addRoute": "Add Route",
+      "changePhoto": "Change Photo"
     }
   },
   "routes": {
@@ -173,16 +177,6 @@
       "colorLabel": "HOLD COLOR",
       "sectionLabel": "SECTION (optional)",
       "sectionPlaceholder": "e.g. Cave, Slab, Overhang…",
-      "checkMatches": "Check for Existing Routes",
-      "submitRoute": "Submit Route",
-      "submitting": "Submitting…",
-      "matchCheck": {
-        "title": "Existing Routes Found",
-        "body": "We found existing active routes with this grade and color at this gym. Is one of these the same route?",
-        "thisIsIt": "Yes, this is the route →",
-        "differentRoute": "None of these — it's a new route",
-        "addNew": "Add as New Route"
-      },
       "photo": {
         "title": "Add a Photo",
         "body": "A photo is required so other climbers can identify the route. Take a clear photo of the start holds or the full route.",
@@ -191,14 +185,9 @@
         "takePhoto": "Take Photo",
         "choosePhoto": "Choose from Library"
       },
-      "matchIdentified": {
-        "title": "Route Found",
-        "body": "Great — that's the route. Log a send from the route detail page."
-      },
       "errors": {
         "gradeRequired": "Please select a grade.",
         "colorRequired": "Please select a hold color.",
-        "matchCheckFailed": "Failed to check for existing routes. Please try again.",
         "photoRequired": "A photo is required. Please take or choose a photo of the route.",
         "photoPermissionDenied": "Photo library access is required to choose a photo.",
         "cameraPermissionDenied": "Camera access is required to take a photo.",
