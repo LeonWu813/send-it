@@ -72,7 +72,7 @@ export default function EditProfileScreen({
 
   async function handlePickAvatar(): Promise<void> {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
