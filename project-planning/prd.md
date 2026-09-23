@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [INIT] — engineering may begin
+**Status**: [SUBSTANTIVE] — Revision 4
 **Date**: 2026-09-21
-**Revision**: 3
+**Revision**: 4
 
 ---
 
@@ -46,6 +46,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 - Cities other than Taipei and New Taipei are out of scope for Phase 1 (Taoyuan, Hsinchu, Taichung, Kaohsiung, Yilan, Tainan are backlog for a later phase).
 - Top-rope-only gyms are excluded from the Phase 1 seed directory (Camp4 達文西攀岩館 and Wusa 攀岩館 are excluded on this basis).
 - In-app admin tooling is out of scope for Phase 1 — Supabase Studio is the sole admin surface.
+- In-app admin UI for route status management (approve / reject / retire) is out of scope for Phase 1 (planned for Phase 1.5); Supabase Studio is the admin surface for Phase 1.
 - Languages other than English and Traditional Chinese (zh-TW) are out of scope for Phase 1.
 - Payments, subscriptions, and any monetization are out of scope for Phase 1 and Phase 2.
 
@@ -76,8 +77,10 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 ### US-003: Submit a new route with match-before-create
 
 **As a** climber whose gym just reset a wall,
-**I want** to add a new route (grade + hold color + photo) and be shown existing matches before I create a duplicate,
+**I want** to browse the gym's route list using grade and hold-color filter chips, and — via an always-visible "Can't find it? Add a new route" call-to-action — add a new route (grade + hold color + photo) and be shown existing active matches before I create a duplicate,
 **so that** the gym's route list stays clean and other climbers can find the same route I'm logging.
+
+The route list uses grade and hold-color filter chips only (no free-text search). The "Can't find it? Add a new route" CTA is always shown at the bottom of the route list — not only when the list is empty — because even when matching routes exist the climber may not find their specific route. Match-before-create still happens: on submission the app queries existing **active** routes at the gym with the same grade + color and presents any matches before allowing creation.
 
 **Acceptance Criteria**: AC-020, AC-021, AC-022, AC-023
 
@@ -183,16 +186,6 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 
 ---
 
-### US-014: Flag a route as retired
-
-**As a** climber who noticed a route was taken down at a reset,
-**I want** to flag the route as retired,
-**so that** the gym's active route list stays accurate.
-
-**Acceptance Criteria**: AC-024
-
----
-
 ### US-015: Report inappropriate content
 
 **As a** user who saw an inappropriate beta video or user profile,
@@ -254,11 +247,11 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
 
 - The **client** owns rendering, local UI state, client-side video compression, client-generated thumbnails, and localization. It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
-- **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gym and route tables are readable by all authenticated users, writable only by admins (gyms) or the submitting user + admins (routes).
+- **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gyms are readable by all authenticated users and writable only by admins; routes are readable by all authenticated users for `active` rows, with `pending` rows visible only to their submitter, and are writable by the submitting user on insert (initial status `active` when auto-approve is ON, else `pending`), while status transitions to `retired` or `rejected` and approval of `pending` routes are admin-only via Supabase Studio.
 - **Supabase Storage** hosts avatars, gym photos, route photos, and (Phase 1 only) beta videos + client-generated thumbnails. When the migration trigger fires, video uploads cut over to **Cloudflare Stream** while metadata continues to live in Postgres.
 - **Supabase Edge Functions** handle event-driven workflows that must not run on the client: on `Reaction` insert with `target_type = beta_video`, an Edge Function inserts a `Notification` row and enqueues an APNs push (respecting `NotificationPreference`) via Expo Push to all `DeviceToken` rows for the recipient.
 - **PostHog** SDK ships client-side events (signup, first send, video upload, retention markers). No PII beyond user_id is sent.
-- **Admin operations** (adding gyms, reviewing gym requests, reviewing reports, banning users, merging near-duplicate routes) are performed exclusively through Supabase Studio in Phase 1.
+- **Admin operations** (adding gyms, reviewing gym requests, reviewing reports, banning users, merging near-duplicate routes, approving/rejecting pending routes, and retiring routes) are performed exclusively through Supabase Studio in Phase 1. In-app admin UI for route status management is planned for Phase 1.5.
 
 The data flow for the two most important loops:
 
@@ -291,9 +284,9 @@ The data flow for the two most important loops:
 
 ### MOD-003: Route Catalog
 
-**Purpose**: Own the route submission match-before-create flow, the standardized `gym + grade + hold color` match key, route detail pages, active/retired status flagging, and the fixed hold/tape color enum.
+**Purpose**: Own the route submission match-before-create flow, the standardized `gym + grade + hold color` match key, route detail pages, the route status lifecycle (`active` / `pending` / `retired` / `rejected`), submitter-only pending visibility and withdrawal, and the fixed hold/tape color enum. Admin approval/rejection/retirement is performed via Supabase Studio in Phase 1.
 
-**User Stories**: US-003, US-006, US-014
+**User Stories**: US-003, US-006
 
 **Dependencies**: MOD-001, MOD-002
 
@@ -435,7 +428,7 @@ The data flow for the two most important loops:
 
 ### MOD-003 (Route Catalog) Acceptance Criteria
 
-**AC-020**: The system shall, on new-route submission for a given gym + grade + hold color, query existing **active** routes at that gym with the same grade + color and present any matches to the user before allowing creation.
+**AC-020** (revised): The system shall, on new-route submission for a given gym + grade + hold color, query existing routes at that gym with the same grade + color **scoped to `status = 'active'` only** and present any matches to the user before allowing creation. Routes with status `pending`, `retired`, or `rejected` are excluded from the match pool.
 
 **AC-021**: The system shall block new-route creation when no photo is attached and shall show a validation message indicating the photo is required.
 
@@ -443,11 +436,21 @@ The data flow for the two most important loops:
 
 **AC-023**: The system shall enforce V-scale as the only grade system available for route creation across all Phase 1 gyms.
 
-**AC-024**: The system shall allow any authenticated user to flag an existing active route as retired, set `status = retired` and `retired_at = now()`, and immediately exclude the route from the active-routes match pool.
+**AC-024b** (new): The system shall support an admin-only `retired` status, set exclusively by an admin via Supabase Studio (normal users can no longer retire routes). Setting a route to `retired` shall immediately exclude it from the active route list and from the match pool. The existing `retired_at` / `retired_by_user_id` columns record when and by whom the route was retired.
 
-**AC-040**: The system shall, on a gym detail page, filter the route list by grade and by active/retired status based on user-selected filter controls.
+**AC-025** (new): The system shall set a newly submitted route's initial status to `active` when the auto-approve setting is ON, and to `pending` when auto-approve is OFF. Auto-approve defaults ON at Phase 1 launch. When auto-approve is OFF, after submission the system shall show the message "Your route will appear once approved by the admin" (zh-TW translation [I18N-PENDING]).
 
-**AC-041**: The system shall default the gym route list to `active` status when no filter is explicitly set.
+**AC-026** (new): The system shall make a `pending` route visible only to its submitter (read-only); a `pending` route shall not appear in the route list shown to any other user.
+
+**AC-027** (new): The system shall allow an admin, via Supabase Studio only in Phase 1, to approve a `pending` route (transition to `active`) or reject it (transition to `rejected`).
+
+**AC-028** (new): The system shall never show `rejected` or `retired` routes to normal users.
+
+**AC-029** (new): The system shall allow a submitter to withdraw their own `pending` route, which deletes the row (the row is removed, not status-changed). The system shall prevent a user from having two `pending` submissions for the same (gym_id, grade, color_tag) simultaneously; a user cannot submit a new route with the same gym + grade + color while they already have a `pending` submission for that combination.
+
+**AC-040** (revised): The system shall, on a gym detail page, filter the route list by grade and by hold color using chip selectors. There shall be no free-text search input and no status filter for normal users.
+
+**AC-041** (revised): The system shall show normal users `active` routes only in the gym route list, with no status tag and no status filter surfaced to them.
 
 ---
 
@@ -577,9 +580,24 @@ Route
    match_key (Postgres GENERATED ALWAYS AS (gym_id + grade + color_tag) STORED;
    uniqueness enforced by a PARTIAL unique index
    UNIQUE (gym_id, grade, color_tag) WHERE status = 'active',
-   so retired routes may reuse the same key after a wall reset),
-   status (active | retired), submitted_by_user_id (FK User),
+   so retired/rejected routes may reuse the same key after a wall reset),
+   status (route_status enum: active | pending | retired | rejected),
+   submitted_by_user_id (FK User),
    created_at, retired_at (nullable), retired_by_user_id (nullable, FK User)
+   -- route_status values:
+   --   active   = live and climbable; visible to all users.
+   --              Set by the system (auto-approve ON) or by an admin.
+   --   pending  = awaiting admin approval; created by the system when
+   --              auto-approve is OFF on submission. Visible only to the
+   --              submitter (read-only). A submitter may withdraw a pending
+   --              route, which DELETES the row. A user cannot hold two pending
+   --              submissions for the same (gym_id, grade, color_tag).
+   --   retired  = route no longer on the wall (wall reset / removed).
+   --              Admin-only, set via Supabase Studio. Never shown to normal users.
+   --   rejected = admin-moderated off (bad data / inappropriate). Admin-only,
+   --              set via Supabase Studio. Never shown to normal users.
+   -- Auto-approve defaults ON at Phase 1 launch. Only 'active' routes participate
+   -- in the match-before-create pool and the normal-user route list.
 
 Ascent (a "log")
  - id, user_id (FK User), route_id (FK Route),

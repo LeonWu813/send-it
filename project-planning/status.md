@@ -3,15 +3,27 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: 59bd1c609df9d11e8ccb35d7de97f39448b0aee6
-timestamp: 2026-09-22T00:00:00Z
+commit: ca5ce2a4097933ed484dbf5eaadf71f0234f3898
+timestamp: 2026-09-23T01:27:54Z
 ```
 
 ## PM Updates
+
+- **2026-09-23 [SUBSTANTIVE]** — Route submission approval gate + status lifecycle (PRD Revision 4). Leon's decisions all locked; PRD updated:
+  - **Status line**: `[SUBSTANTIVE] — Revision 4`; `**Revision**` bumped 3 → 4.
+  - **US-003** rewritten: grade + hold-color filter chips only (no text search); always-visible "Can't find it? Add a new route" CTA; match-before-create against `active` routes still happens.
+  - **US-014 removed**: user-actionable route retirement is gone; retirement is now admin-only via Supabase Studio.
+  - **MOD-003 breakdown** updated: purpose now covers the 4-value status lifecycle, submitter-only pending visibility/withdrawal; US list drops US-014.
+  - **Acceptance Criteria (MOD-003)**: AC-020 revised (match pool scoped to `active` only); AC-024 removed (user retire gone); AC-024b new (admin-only `retired` via Studio); AC-025 new (initial status active if auto-approve ON else pending; approval message flagged [I18N-PENDING] for zh-TW); AC-026 new (pending visible only to submitter, read-only); AC-027 new (admin approve→active / reject→rejected via Studio only); AC-028 new (rejected/retired never shown to normal users); AC-029 new (submitter withdraw = row deleted; no two pending for same gym+grade+color); AC-040 revised (grade + hold-color chip filters, no text search, no status filter for normal users); AC-041 revised (normal users see active only, no status tag/filter).
+  - **Non-goals**: added — in-app admin UI for route status management is Phase 1.5; Supabase Studio is the Phase 1 admin surface.
+  - **§9 Data Model**: `Route.status` enum updated to the 4-value `route_status` set (active | pending | retired | rejected) with per-value semantics; auto-approve defaults ON at Phase 1 launch.
+  - **§5 Architecture**: RLS/admin-operations framing aligned to the gate (pending visible to submitter only; status transitions to retired/rejected and pending approval are admin-only via Studio).
+  - **Decisions locked**: D-RETIRE (merge retired+archive → keep `retired`, admin-only), D-SUBMIT, D-ADMIN-SURFACE (Studio-only Phase 1; schema must support in-app admin in Phase 1.5 — Tech Lead constraint), D1 (pending visibility + withdrawal-by-delete + one-pending-per-combo), D-AUTO-DEFAULT (auto-approve ON at launch), D-I18N ([I18N-PENDING] for the approval message).
+  - **Impact**: module boundaries and phase plan unchanged; MOD-003 spec, data model, RLS policies, and enum are affected. Requires Tech Lead architecture review (schema/RLS/enum/settings-table + Phase 1.5 in-app-admin forward-compat constraint), then Doc-Sync to update the MOD-003 spec. PRD updated to Revision 4 [SUBSTANTIVE], ready for Tech Lead architecture review and then Doc-Sync.
 
 - **2026-09-21 [SUBSTANTIVE]** — Two spec clarifications added to the PRD (Revision 3):
   - **AC-013 (MOD-004 Send Logging)**: After a send is successfully logged, the ascent list on the route detail screen must refresh immediately to show the new entry without requiring re-navigation. Addresses the known stale-list-after-modal-submission pattern (see Skill Recommendations).
