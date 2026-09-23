@@ -126,7 +126,7 @@ BEGIN
   FROM public.app_settings
   WHERE key = 'route_auto_approve';
 
-  v_status := CASE WHEN v_auto_approve = 'true' THEN 'active'::route_status ELSE 'pending'::route_status END;
+  v_status := CASE WHEN COALESCE(v_auto_approve, 'true') = 'true' THEN 'active'::route_status ELSE 'pending'::route_status END;
 
   -- Insert and return
   INSERT INTO public.routes (gym_id, grade, color_tag, photo_url, section_label, submitted_by_user_id, status)
@@ -138,6 +138,8 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.submit_route(UUID, route_grade, route_color, TEXT, TEXT) TO authenticated;
+REVOKE EXECUTE ON FUNCTION public.submit_route(UUID, route_grade, route_color, TEXT, TEXT) FROM anon;
+REVOKE EXECUTE ON FUNCTION public.submit_route(UUID, route_grade, route_color, TEXT, TEXT) FROM public;
 
 -- ── 5. Partial unique index: one pending per (gym, grade, color) per submitter ─
 -- Belt-and-suspenders with the RPC pre-check above.
