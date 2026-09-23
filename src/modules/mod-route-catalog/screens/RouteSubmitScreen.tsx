@@ -15,6 +15,8 @@
  * AC-023: grade selector restricted to V-scale only.
  */
 
+import 'expo-blob';
+
 import type { Session } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
