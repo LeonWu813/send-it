@@ -9,6 +9,7 @@
  * map pin, gym type, and (if present) photo when a user opens the gym.
  */
 
+import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -95,7 +96,7 @@ export default function GymDetailScreen({
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
         >
-          <Text style={styles.backLinkText}>{t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </Pressable>
         <Text style={styles.errorText}>
           {errorMessage ?? t('common.error')}
@@ -124,7 +125,7 @@ export default function GymDetailScreen({
         accessibilityRole="button"
         accessibilityLabel={t('common.back')}
       >
-        <Text style={styles.backLinkText}>{t('common.back')}</Text>
+        <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
       </Pressable>
 
       {/* Gym photo (when present) */}
@@ -214,10 +215,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     backLink: {
       marginBottom: theme.spacing.md,
-    },
-    backLinkText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
     },
     photo: {
       width: '100%',

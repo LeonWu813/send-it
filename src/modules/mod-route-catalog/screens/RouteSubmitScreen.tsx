@@ -17,6 +17,7 @@
 
 import type { Session } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -152,7 +153,7 @@ export default function RouteSubmitScreen({
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.85,
       allowsEditing: false,
     });
@@ -324,7 +325,7 @@ export default function RouteSubmitScreen({
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
         >
-          <Text style={styles.backLinkText}>{t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </Pressable>
 
         <Text style={styles.screenTitle}>{t('routes.submit.title')}</Text>
@@ -389,7 +390,7 @@ export default function RouteSubmitScreen({
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
         >
-          <Text style={styles.backLinkText}>{t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </Pressable>
 
         <Text style={styles.screenTitle}>{t('routes.submit.matchCheck.title')}</Text>
@@ -453,7 +454,7 @@ export default function RouteSubmitScreen({
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
         >
-          <Text style={styles.backLinkText}>{t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </Pressable>
 
         <Text style={styles.screenTitle}>{t('routes.submit.photo.title')}</Text>
@@ -569,10 +570,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     backLink: {
       marginBottom: theme.spacing.md,
-    },
-    backLinkText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
     },
     screenTitle: {
       fontSize: theme.fontSize.xxl,

@@ -153,7 +153,7 @@ describe('GymDetailScreen', () => {
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
     );
 
-    fireEvent.press(screen.getByText('Back'));
+    fireEvent.press(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
   });
 

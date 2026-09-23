@@ -9,6 +9,7 @@
  * US-006: browse currently active routes at a gym.
  */
 
+import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -251,7 +252,7 @@ export default function RouteListScreen({
             accessibilityRole="button"
             accessibilityLabel={t('common.back')}
           >
-            <Text style={styles.backLinkText}>{t('common.back')}</Text>
+            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
           </Pressable>
         ) : null}
         <Text style={styles.screenTitle}>{gymName}</Text>
@@ -299,10 +300,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     backLink: {
       marginRight: theme.spacing.xs,
-    },
-    backLinkText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
     },
     screenTitle: {
       flex: 1,

@@ -10,6 +10,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -112,7 +113,7 @@ export default function RequestGymScreen({
         accessibilityRole="button"
         accessibilityLabel={t('common.back')}
       >
-        <Text style={styles.backLinkText}>{t('common.back')}</Text>
+        <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
       </Pressable>
 
       <Text style={styles.screenTitle}>{t('gymDirectory.requestGym.title')}</Text>
@@ -222,10 +223,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     backLink: {
       marginBottom: theme.spacing.md,
-    },
-    backLinkText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
     },
     screenTitle: {
       fontSize: theme.fontSize.xxl,

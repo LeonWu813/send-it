@@ -184,7 +184,7 @@ describe('RequestGymScreen', () => {
       renderOptions(),
     );
 
-    fireEvent.press(screen.getByText('Back'));
+    fireEvent.press(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
   });
 });

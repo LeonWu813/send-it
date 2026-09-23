@@ -12,6 +12,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -116,7 +117,7 @@ export default function RouteDetailScreen({
           accessibilityRole="button"
           accessibilityLabel={t('common.back')}
         >
-          <Text style={styles.backLinkText}>{t('common.back')}</Text>
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
         </Pressable>
         <Text style={styles.errorText}>
           {errorMessage ?? t('common.error')}
@@ -147,7 +148,7 @@ export default function RouteDetailScreen({
         accessibilityRole="button"
         accessibilityLabel={t('common.back')}
       >
-        <Text style={styles.backLinkText}>{t('common.back')}</Text>
+        <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
       </Pressable>
 
       {/* Route photo */}
@@ -273,10 +274,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     backLink: {
       marginBottom: theme.spacing.md,
-    },
-    backLinkText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
     },
     photo: {
       width: '100%',
