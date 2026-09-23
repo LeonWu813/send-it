@@ -1,8 +1,8 @@
 # Retrospective: Proposed Changes
 
-**Date:** 2026-09-21
-**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion
-**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership
+**Date:** 2026-09-21 (updated 2026-09-22)
+**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion; MOD-003 cross-module integration gap
+**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership; human QA preparation for MOD-003 revealed `RouteNavigator` was never wired into `GymDetailScreen` (MOD-002)
 
 ---
 
@@ -12,7 +12,19 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 1. Add Safe Area Insets Judgment Item to Engineer Checklist
+### 1. Cross-Module Integration Ownership — Navigator Wiring Must Be Explicitly Assigned in Specs
+
+**Target files:**
+- New project-level skill `~/.claude/skills/spec-conventions/SKILL.md` (Part 1 — spec template convention)
+- `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section (Part 2 — engineer gate)
+
+**Rationale:** During human QA preparation for MOD-003 (Route Catalog), `RouteNavigator` was found to be completely unwired from `GymDetailScreen` (MOD-002). The component's own file comment documented the intended embedding ("This navigator is rendered from within the gym detail context … within GymDetailScreen in MOD-002"), and MOD-003's spec listed `Dependencies: MOD-002` — but neither module's spec named the concrete integration task, the file to modify, or the engineer responsible. Both engineers stayed within their module boundaries, and the gap fell through. No checklist item or QA criterion could have caught this without an explicit integration deliverable in the spec. This is the highest-impact proposal because the same failure mode will recur on every future module that embeds a navigator or entry-point component in another module's screen (e.g., MOD-005 beta video, MOD-006 social feed).
+
+**Draft:** `project-planning/retrospective/drafts/cross-module-integration-ownership.proposal.md`
+
+---
+
+### 2. Add Safe Area Insets Judgment Item to Engineer Checklist
 
 **Target file:** `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section
 
@@ -22,7 +34,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 2. Add Safe Area Insets to QA Common Failure Patterns
+### 3. Add Safe Area Insets to QA Common Failure Patterns
 
 **Target file:** `~/.claude/skills/qa-checklist/references/common-failure-patterns.md` — append as next numbered pattern
 
@@ -32,7 +44,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 3. Document production.md Ownership and Mid-Project Escalation Path
+### 4. Document production.md Ownership and Mid-Project Escalation Path
 
 **Target file:** New project-level skill — suggested `~/.claude/skills/agent-workflow/SKILL.md` (create via create-agent-skills skill)
 
@@ -48,4 +60,4 @@ For each approved proposal, tell Claude Code:
 
 > "Use the create-agent-skills skill to create a project-level skill based on `project-planning/retrospective/drafts/<proposal-file>.md`"
 
-For proposals targeting existing skill files (proposals 1 and 2 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
+For proposals targeting existing skill files (proposals 2 and 3 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
