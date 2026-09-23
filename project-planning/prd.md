@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 5
-**Date**: 2026-09-21
-**Revision**: 5
+**Status**: [SUBSTANTIVE] — Revision 6
+**Date**: 2026-09-23
+**Revision**: 6
 
 ---
 
@@ -13,7 +13,7 @@
 
 Indoor bouldering has grown fast in Taiwan — Taipei and New Taipei have the highest concentration of gyms, with more scattered across Taoyuan, Hsinchu, Taichung, Kaohsiung, Yilan, and Tainan — but climbers currently have no dedicated app that combines send logging, beta video sharing, live gym route lists, and local social features. Today this happens informally through PTT posts, Instagram/Threads stories, or word of mouth, or through global apps (Kaya, Vertical-Life, 27 Crags) that are outdoor-crag-centric, not localized for Taiwan gyms, and don't reflect local color-based tape conventions. One small local app (記石) exists but is log-only — no beta video, no cross-gym route database, no social layer.
 
-Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a match-before-create route submission flow that keeps user-submitted data clean without waiting on official gym partnerships.
+Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a filter-first route submission flow with server-enforced duplicate protection that keeps user-submitted data clean without waiting on official gym partnerships.
 
 ---
 
@@ -74,15 +74,15 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 
 ---
 
-### US-003: Submit a new route with match-before-create
+### US-003: Submit a new route
 
 **As a** climber whose gym just reset a wall,
-**I want** to browse the gym's route list using grade and hold-color filter chips, and — via an always-visible "Can't find it? Add a new route" call-to-action — add a new route (grade + hold color + photo) and be shown existing active matches before I create a duplicate,
+**I want** to browse the gym's route list using grade and hold-color filter chips, and — via an always-visible "Can't find it? Add a new route" call-to-action — add a new route (grade + hold color + photo + optional section label) on a single submit screen with the grade and color pre-filled from the filters I already applied,
 **so that** the gym's route list stays clean and other climbers can find the same route I'm logging.
 
-The route list uses grade and hold-color filter chips only (no free-text search). The "Can't find it? Add a new route" CTA is always shown at the bottom of the route list — not only when the list is empty — because even when matching routes exist the climber may not find their specific route. Match-before-create still happens: on submission the app queries existing **active** routes at the gym with the same grade + color and presents any matches before allowing creation.
+The route list uses grade and hold-color filter chips only (no free-text search). The "Can't find it? Add a new route" CTA is always shown at the bottom of the route list — not only when the list is empty — because even when matching routes exist the climber may not find their specific route. The filtered route list is itself the "does this route already exist?" check: the climber filters by grade + color, sees no match, and taps the CTA. There is no separate client-side match-check step. Tapping the CTA opens a single-page submit screen (grade and color chips pre-filled from the active filters) with an "Add Route" button that submits directly. Server-side duplicate protection keeps data clean: the `submit_route` RPC pre-check and the partial unique index on active routes enforce uniqueness at the database level.
 
-**Acceptance Criteria**: AC-020, AC-021, AC-022, AC-023
+**Acceptance Criteria**: AC-020, AC-021, AC-022, AC-023, AC-043
 
 ---
 
@@ -432,9 +432,9 @@ The data flow for the two most important loops:
 
 ### MOD-003 (Route Catalog) Acceptance Criteria
 
-**AC-020** (revised): The system shall, on new-route submission for a given gym + grade + hold color, query existing routes at that gym with the same grade + color **scoped to `status = 'active'` only** and present any matches to the user before allowing creation. Routes with status `pending`, `retired`, or `rejected` are excluded from the match pool.
+**AC-020** (revised): The system shall provide a single-page route submit screen containing grade chips, hold-color chips, an inline photo picker (image preview shown on the same page after selection), an optional section-label text field, and an "Add Route" button at the bottom that submits the route directly via the `submit_route` RPC. There shall be no client-side match-check step and no multi-step submission flow — the RouteListScreen grade + color filter serves as the "does this route already exist?" check before the user opens the submit screen. Server-side duplicate protection is unchanged: the `submit_route` RPC pre-check and the partial unique index on active routes (`UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`) enforce uniqueness at the database level, and the per-submitter partial unique index on pending routes prevents a user from holding two pending submissions for the same (gym_id, grade, color_tag) (AC-029).
 
-**AC-021**: The system shall block new-route creation when no photo is attached and shall show a validation message indicating the photo is required.
+**AC-021** (revised): The system shall block route submission when no photo is attached via the inline photo picker and shall show a validation message indicating the photo is required. The photo requirement is enforced both client-side (the "Add Route" button cannot submit without a photo) and server-side (the `submit_route` RPC rejects a submission with no photo).
 
 **AC-022**: The system shall restrict the hold/tape color selector to the fixed enum {red, orange, yellow, green, blue, purple, pink, white, black}.
 
@@ -457,6 +457,8 @@ The data flow for the two most important loops:
 **AC-041** (revised): The system shall show normal users `active` routes only in the gym route list, with no status tag and no status filter surfaced to them.
 
 **AC-042** (new): The system shall navigate a user from a route entry in the gym route list to that route's detail screen when the user taps the entry, passing the selected route's identifier. The route detail screen is the entry point for logging a send (AC-010), uploading beta (AC-037), and watching beta (AC-033).
+
+**AC-043** (new): The system shall pre-fill the route submit screen's grade and color chips from the RouteListScreen filter state when the user opens the submit screen. RouteListScreen passes its current grade filter and color filter values as optional parameters to the submit screen; if a grade filter was active when the user tapped "Add Route", the corresponding grade chip shall be pre-selected, and if a color filter was active, the corresponding color chip shall be pre-selected. When a filter is unset, the corresponding chip shall open unselected. Pre-filled chips remain editable by the user before submission.
 
 ---
 
@@ -685,7 +687,7 @@ Block  (App Store Guideline 1.2 requirement)
 - **Localization**: English and Traditional Chinese (zh-TW) in Phase 1. Default language: device locale, with zh-TW fallback for any non-English locale. Settings screen exposes a language toggle. Message catalogs must be complete (no missing keys) at ship.
 - **Theming**: Light and Dark mode in Phase 1. Follows OS appearance by default; Settings exposes a three-state override (System / Light / Dark).
 - **Admin tooling**: Supabase Studio only for Phase 1. All gym CRUD, gym-request review, report review, user block/ban, and near-duplicate route merges are performed by the admin (Leon) via Supabase Studio. No in-app admin UI.
-- **Data quality (routes)**: Gyms are admin-curated so they can't drift. Routes are user-submitted; the match-before-create flow (§8 AC-020) is the primary duplicate defense. Admin can spot-check and merge near-duplicates in Supabase Studio.
+- **Data quality (routes)**: Gyms are admin-curated so they can't drift. Routes are user-submitted; server-side duplicate protection is the primary defense — the `submit_route` RPC pre-check plus the partial unique index on active routes (`WHERE status = 'active'`) reject duplicate active routes at the database level (§8 AC-020). The RouteListScreen grade + color filter lets climbers find an existing route before adding a new one. Admin can spot-check and merge near-duplicates in Supabase Studio.
 - **Analytics**: PostHog free tier. Ship the core funnel events listed in AC-100. No PII beyond `user_id` sent to PostHog.
 - **Performance targets**: App cold start ≤3 seconds on iPhone 12 or newer. Feed initial render ≤2 seconds on a normal 4G/LTE connection with a warm cache.
 - **Security**: All Storage buckets have RLS policies aligned with the corresponding table policies (e.g., a user cannot fetch a private ascent's associated media). All Edge Functions validate the JWT and re-check authorization against Postgres. Edge Functions read the service-role key from the secret named `SERVICE_ROLE_KEY` (Supabase reserves the `SUPABASE_` prefix); the service-role key is never inlined into the client bundle.

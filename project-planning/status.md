@@ -3,15 +3,26 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: trivial
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: d02d30b351bd37b942b57989b9d41e7dd706d95d
+commit: e93bf946d0d255f7bcde1bed81d30b5cc501c3ed
 timestamp: 2026-09-23T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-23 [SUBSTANTIVE]** — Route submission UX simplified: single-page submit, client-side match-check removed (PRD Revision 6). Leon (via coordinator) approved the change; AC-022 and AC-023 confirmed unchanged; RouteListScreen CTA label "Can't find it? Add a new route." stays as-is (only the submit-screen button becomes "Add Route"). Rationale: the RouteListScreen grade + color filter already serves as the "does this route exist?" check, so the separate client-side match-check step is redundant. Server-side duplicate protection is unchanged (the `submit_route` RPC pre-check + the partial unique index on active routes; the per-submitter pending unique index still guards AC-029). PRD updated:
+  - **Status line**: `[SUBSTANTIVE] — Revision 6`; `**Revision**` bumped 5 → 6.
+  - **AC-020 (revised, MOD-003)** — rewritten from the client-side match-check UI ("query existing routes ... present any matches before allowing creation") to a single-page submit screen: grade chips, hold-color chips, inline photo picker (preview on the same page), optional section-label field, and an "Add Route" button that submits directly via the `submit_route` RPC. No client-side match-check step, no multi-step flow. Server-side uniqueness (RPC pre-check + `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` partial index + per-submitter pending index) is called out as unchanged.
+  - **AC-021 (revised, MOD-003)** — reworded to reference the inline photo picker on the single page; photo-required validation now stated as enforced both client-side and server-side (in the `submit_route` RPC).
+  - **AC-043 (new, MOD-003)** — pre-fill the submit screen's grade + color chips from the RouteListScreen filter state; RouteListScreen passes its current grade/color filter values as optional params; unset filter → chip opens unselected; pre-filled chips remain editable.
+  - **US-003** — retitled "Submit a new route" (dropped "with match-before-create"); story body + narrative rewritten to the filter-first, single-page, direct-submit flow (no separate match-check step); AC list updated to AC-020, AC-021, AC-022, AC-023, AC-043.
+  - **§1 Overview** — wedge sentence changed from "match-before-create route submission flow" to "filter-first route submission flow with server-enforced duplicate protection."
+  - **§10 NFR (Data quality — routes)** — primary duplicate defense reframed from "match-before-create flow (§8 AC-020)" to the server-side guard (`submit_route` RPC pre-check + partial unique index on active routes); RouteListScreen filter noted as the find-before-add mechanism.
+  - **AC changes summary**: AC-020 changed (rewritten), AC-021 changed (reworded), AC-043 added. No AC removed as a standalone numbered item — the client-side match-check flow lived inside AC-020 and the US-003 narrative, both rewritten; no separate "existing routes found" / "Yes this is it" / "Add as new" numbered AC existed. AC-022, AC-023 unchanged; AC-024b–AC-029, AC-040–AC-042 unchanged.
+  - **Impact**: module boundaries, dependencies, and phase plan unchanged; no new modules. Server-side duplicate machinery (RPC, indexes, RLS) is untouched — this is a client-side UX change only. Affected spec for Doc-Sync delta: **MOD-003 (mod-route-catalog)** only. Tagged [SUBSTANTIVE] because it removes/rewrites ACs and changes the submit-flow UX. No source code changed. Doc-Sync NOT invoked (per coordinator direction) — will be triggered separately.
 
 - **2026-09-22 [SUBSTANTIVE]** — Cross-module navigation ACs + navigation-gap audit (PRD Revision 5). Leon approved the change and all three decisions (add as formal PRD change; AC lives under MOD-002 Gym Directory; "View Routes" entry point at the **bottom** of the gym detail screen). PRD updated:
   - **Status line**: `[SUBSTANTIVE] — Revision 5`; `**Revision**` bumped 4 → 5.
