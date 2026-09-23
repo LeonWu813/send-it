@@ -265,3 +265,62 @@ Error text (representative): `error TS2741: Property 'onViewRoutes' is missing i
 **BUG-1**: `GymDetailScreen.test.tsx` missing required `onViewRoutes` prop in all 6 `render` calls — causes TypeScript compilation failure (`npx tsc --noEmit` exits code 2, 6 errors). Fix: add `onViewRoutes={jest.fn()}` to all 6 render calls; add a test for the "View Routes" button press behavior.
 
 **BUG-2**: `GymNavigator.tsx` line 87 passes `onBackToGym={navigateToList}` to `RouteNavigator` — back navigation from route catalog returns user to the gym list instead of the gym detail that launched the routes view. Fix: pass `onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}` when rendering `RouteNavigator`.
+
+---
+
+## QA Results — Regression (BUG-1 and BUG-2 fix verification)
+
+**Workflow**: regression (bug fix verification)
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-09-22
+**Scope**: BUG-1 and BUG-2 from prior QA pass (AC-005 View Routes — TypeScript failure and back-navigation target)
+
+### BUG-1 Verification — GymDetailScreen.test.tsx onViewRoutes prop
+
+**Fix verified by**: static code inspection of `src/modules/mod-gym-directory/__tests__/GymDetailScreen.test.tsx` and `npx tsc --noEmit`.
+
+All 6 `render(...)` calls now include `onViewRoutes={jest.fn()}`:
+- Line 78: `render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions())`
+- Line 93: `render(<GymDetailScreen gymId="gym-009" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions())`
+- Line 115: `render(<GymDetailScreen gymId="gym-004" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions())`
+- Line 127: `render(<GymDetailScreen gymId="nonexistent" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions())`
+- Line 137: `render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions())`
+- Line 150: `render(<GymDetailScreen gymId="gym-001" onBack={onBack} onViewRoutes={jest.fn()} />, renderOptions())`
+
+A 7th test (lines 160–175) verifies pressing "View Routes" calls `onViewRoutes` with `'gym-001'` and `'MegaSTONE Climbing Gym'`.
+
+`npx tsc --noEmit` result: **EXIT 0 — 0 errors**.
+
+**Result: PASS**
+
+### BUG-2 Verification — GymNavigator.tsx onBackToGym callback
+
+**Fix verified by**: static code inspection of `src/modules/mod-gym-directory/GymNavigator.tsx`.
+
+The `routes` render block (lines 82–89) now passes:
+
+```
+onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}
+```
+
+This is an inline callback — not `navigateToList`. Pressing "Back" from the route catalog returns the user to the gym detail screen for the same `gymId`, not to the gym list. This matches the expected navigation flow (list → detail → routes → back to detail).
+
+**Result: PASS**
+
+### Automated Test Suite
+
+Command: `npm test -- --watchAll=false`
+Result: 124/124 tests passed, 15 suites, exit code 0
+
+Note: test count increased from 123 to 124 — the new "calls onViewRoutes with gymId and gymName when View Routes is pressed" test is included and passing.
+
+### TypeScript Compilation
+
+Command: `npx tsc --noEmit`
+Result: **PASS — exit code 0, 0 errors**
+
+### Overall Verdict
+
+**QA PASS** — Both bugs are fixed. TypeScript compilation is clean. All 124 automated tests pass. No regressions detected.
+
+MOD-002 overall QA verdict: **QA PASS**

@@ -6,8 +6,8 @@
 agent: qa-mod-gym-directory
 mode: regression
 module: mod-gym-directory
-result: bugs-found
-commit: f4c187443f6b88b18dbdd7024af8ea9f1ccea0fb
+result: success
+commit: 0f5189e80091e2fb179d82f218d78740fc5a057d
 timestamp: 2026-09-22T00:00:00Z
 ```
 
