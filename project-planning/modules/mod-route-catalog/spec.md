@@ -4,18 +4,23 @@
 **Module Name**: Route Catalog
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002
+**Last Synced from PRD Revision**: 4
 
 ---
 
 ## Purpose
 
-Own the route submission match-before-create flow, the standardized `gym + grade + hold color` match key, route detail pages, active/retired status flagging, and the fixed hold/tape color enum.
+Own the route submission (match-before-create) flow, the 4-value status lifecycle (`active | pending | retired | rejected`), submitter-only pending visibility and withdrawal, admin-only approve/reject/retire via Supabase Studio (Phase 1), and the forward-compatible admin identity design for Phase 1.5 in-app admin.
 
 ---
 
 ## Context
 
-Routes are user-submitted but admin-curated in terms of structure. The core data-quality lever is a match-before-create flow: when a climber submits a new route (grade + hold color + photo) for a given gym, the app first queries for existing active routes at that gym with the same grade and color, presents any matches, and only then allows creation. This prevents the "every user invents their own tag" problem that kills UGC route apps. The fixed 9-color hold/tape enum and forced V-scale grade system reflect how climbers in Taiwan actually talk about routes. The `Route.match_key` is implemented as a Postgres `GENERATED ALWAYS AS ... STORED` column; uniqueness of active routes is enforced at the DB level by a partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` — this correctly allows retired routes to reuse the same key after a wall reset. Route retirement (US-014) is user-actioned: any authenticated user can flag an active route as retired, which immediately removes it from the active-routes match pool and the default gym route list view.
+Routes are user-submitted but admin-curated in terms of structure. The core data-quality lever is a match-before-create flow: when a climber submits a new route (grade + hold color + photo) for a given gym, the app first queries for existing **active** routes at that gym with the same grade and color, presents any matches, and only then allows creation. This prevents the "every user invents their own tag" problem that kills UGC route apps. The fixed 9-color hold/tape enum and forced V-scale grade system reflect how climbers in Taiwan actually talk about routes. The `Route.match_key` is implemented as a Postgres `GENERATED ALWAYS AS ... STORED` column; uniqueness of active routes is enforced at the DB level by a partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` — this correctly allows retired or rejected routes to reuse the same key after a wall reset.
+
+Route status follows a 4-value lifecycle: `active | pending | retired | rejected`. An auto-approve setting (stored in `app_settings`, defaults ON at Phase 1 launch) determines the initial status on submission: when auto-approve is ON, a submitted route is immediately `active`; when auto-approve is OFF, the route is created as `pending`. A `pending` route is visible only to the submitter (read-only) and does not appear in any other user's gym route list or match pool. `retired` and `rejected` routes are invisible to all normal users. Admin approval, rejection, and retirement are performed exclusively via Supabase Studio in Phase 1. The `submit_route` SECURITY DEFINER RPC handles all submission logic server-side (no direct INSERT by client).
+
+The user story for the route list (US-006) specifies grade and hold-color filter chips only — no free-text search, no status filter for normal users. Normal users see `active` routes only, with no status tag surfaced to them.
 
 **Non-goals for this module:**
 - Official gym partnerships and route-setter accounts publishing official route lists (Phase 3).
@@ -24,6 +29,8 @@ Routes are user-submitted but admin-curated in terms of structure. The core data
 - In-app admin tooling for near-duplicate route merges (Supabase Studio only).
 - Comments on routes (out of scope for Phase 1).
 - Retire/reset voting workflow (Phase 2).
+- In-app admin UI for route status management (approve / reject / retire) is out of scope for Phase 1 (planned for Phase 1.5); Supabase Studio is the admin surface for Phase 1.
+- Global (cross-user) one-pending-per-combo prevention is out of scope — only per-submitter enforcement is required.
 
 ---
 
@@ -31,13 +38,12 @@ Routes are user-submitted but admin-curated in terms of structure. The core data
 
 - **US-003**: Submit a new route with match-before-create
 - **US-006**: Browse currently active routes at a gym
-- **US-014**: Flag a route as retired
 
 ---
 
 ## Acceptance Criteria Covered
 
-**AC-020**: The system shall, on new-route submission for a given gym + grade + hold color, query existing **active** routes at that gym with the same grade + color and present any matches to the user before allowing creation.
+**AC-020** (revised): The system shall, on new-route submission for a given gym + grade + hold color, query existing routes at that gym with the same grade + color **scoped to `status = 'active'` only** and present any matches to the user before allowing creation. Routes with status `pending`, `retired`, or `rejected` are excluded from the match pool.
 
 **AC-021**: The system shall block new-route creation when no photo is attached and shall show a validation message indicating the photo is required.
 
@@ -45,11 +51,21 @@ Routes are user-submitted but admin-curated in terms of structure. The core data
 
 **AC-023**: The system shall enforce V-scale as the only grade system available for route creation across all Phase 1 gyms.
 
-**AC-024**: The system shall allow any authenticated user to flag an existing active route as retired, set `status = retired` and `retired_at = now()`, and immediately exclude the route from the active-routes match pool.
+**AC-024b** (new): The system shall support an admin-only `retired` status, set exclusively by an admin via Supabase Studio (normal users can no longer retire routes). Setting a route to `retired` shall immediately exclude it from the active route list and from the match pool. The existing `retired_at` / `retired_by_user_id` columns record when and by whom the route was retired.
 
-**AC-040**: The system shall, on a gym detail page, filter the route list by grade and by active/retired status based on user-selected filter controls.
+**AC-025** (new): The system shall set a newly submitted route's initial status to `active` when the auto-approve setting is ON, and to `pending` when auto-approve is OFF. Auto-approve defaults ON at Phase 1 launch. When auto-approve is OFF, after submission the system shall show the message "Your route will appear once approved by the admin" (zh-TW translation [I18N-PENDING]).
 
-**AC-041**: The system shall default the gym route list to `active` status when no filter is explicitly set.
+**AC-026** (new): The system shall make a `pending` route visible only to its submitter (read-only); a `pending` route shall not appear in the route list shown to any other user.
+
+**AC-027** (new): The system shall allow an admin, via Supabase Studio only in Phase 1, to approve a `pending` route (transition to `active`) or reject it (transition to `rejected`).
+
+**AC-028** (new): The system shall never show `rejected` or `retired` routes to normal users.
+
+**AC-029** (new): The system shall allow a submitter to withdraw their own `pending` route, which deletes the row (the row is removed, not status-changed). The system shall prevent a user from having two `pending` submissions for the same (gym_id, grade, color_tag) simultaneously; a user cannot submit a new route with the same gym + grade + color while they already have a `pending` submission for that combination. This constraint is per-submitter: two different users may each hold a pending submission for the same (gym, grade, color) combination.
+
+**AC-040** (revised): The system shall, on a gym detail page, filter the route list by grade and by hold color using chip selectors. There shall be no free-text search input and no status filter for normal users.
+
+**AC-041** (revised): The system shall show normal users `active` routes only in the gym route list, with no status tag and no status filter surfaced to them.
 
 ---
 
@@ -60,54 +76,135 @@ Route
  - id, gym_id (FK Gym), section_label (nullable), grade (V-scale enum),
    color_tag (enum: red|orange|yellow|green|blue|purple|pink|white|black — required),
    photo_url (required),
-   match_key (Postgres GENERATED ALWAYS AS (gym_id || grade || color_tag) STORED;
+   match_key (Postgres GENERATED ALWAYS AS (gym_id + grade + color_tag) STORED;
    uniqueness enforced by a PARTIAL unique index
    UNIQUE (gym_id, grade, color_tag) WHERE status = 'active',
-   so retired routes may reuse the same key after a wall reset),
-   status (active | retired), submitted_by_user_id (FK User),
+   so retired/rejected routes may reuse the same key after a wall reset),
+   status (route_status enum: active | pending | retired | rejected),
+   submitted_by_user_id (FK User),
    created_at, retired_at (nullable), retired_by_user_id (nullable, FK User)
+   -- route_status values:
+   --   active   = live and climbable; visible to all users.
+   --              Set by the system (auto-approve ON) or by an admin.
+   --   pending  = awaiting admin approval; created by the system when
+   --              auto-approve is OFF on submission. Visible only to the
+   --              submitter (read-only). A submitter may withdraw a pending
+   --              route, which DELETES the row. A user cannot hold two pending
+   --              submissions for the same (gym_id, grade, color_tag).
+   --   retired  = route no longer on the wall (wall reset / removed).
+   --              Admin-only, set via Supabase Studio. Never shown to normal users.
+   --   rejected = admin-moderated off (bad data / inappropriate). Admin-only,
+   --              set via Supabase Studio. Never shown to normal users.
+   -- Auto-approve defaults ON at Phase 1 launch. Only 'active' routes participate
+   -- in the match-before-create pool and the normal-user route list.
+
+app_settings
+ - key TEXT PRIMARY KEY, value TEXT
+   -- Admin-only via Supabase Studio or RPC. No client SELECT/INSERT/UPDATE/DELETE
+   -- grants or policies — fully client-invisible.
+   -- Seeds: route_auto_approve = 'true' (auto-approve ON at Phase 1 launch).
+   -- Read only inside SECURITY DEFINER functions.
 ```
 
-All tables guarded by Supabase Row-Level Security policies. Route rows are readable by all authenticated users; writable by the submitting user + admins (for submission). Any authenticated user may update status to `retired` (AC-024). Admin-only operations (near-duplicate merges) happen in Supabase Studio.
+All tables guarded by Supabase Row-Level Security policies.
+
+**RLS on `routes`** — three policies required:
+- SELECT (`routes_select_visible`): `status = 'active'` OR `(status = 'pending' AND submitted_by_user_id = auth.uid())` OR `is_admin()`. `retired` and `rejected` rows are invisible to every normal user (including the original submitter). service_role (Studio) bypasses RLS and sees all rows.
+- INSERT: no policy (INSERT grant revoked; insert only via `submit_route` RPC).
+- UPDATE (`routes_admin_update`): `is_admin()` only (Phase 1.5 gate; false for all Phase 1 real clients; admin transitions in Phase 1 happen via Studio service_role).
+- DELETE (`routes_withdraw_own_pending`): `submitted_by_user_id = auth.uid() AND status = 'pending'` (withdrawal). Requires `GRANT DELETE ON public.routes TO authenticated`.
 
 ---
 
 ## Input / Output Contract
 
-**Inputs (route submission):**
-- `gym_id` (FK from MOD-002), `grade` (V-scale enum), `color_tag` (fixed enum), `photo_url` (required), `section_label` (optional)
-- Authenticated user session (MOD-001)
+**Inputs (route submission — via `submit_route` RPC):**
+- `p_gym_id` (FK from MOD-002), `p_grade` (V-scale enum), `p_color_tag` (fixed enum), `p_photo_url` (required), `p_section_label` (optional)
+- Authenticated user session (MOD-001); submitter identity derived server-side from `auth.uid()` — not accepted as a client parameter
 
 **Outputs (route submission):**
-- Match query result: list of existing active routes at `gym_id` with matching `grade` + `color_tag`, shown to user before creation proceeds
-- `Route` row inserted with `status = active` if user proceeds past match check
-- Partial unique index prevents duplicate active routes at the DB level
+- Match query result: list of existing `active` routes at `gym_id` with matching `grade` + `color_tag`, shown to user before creation proceeds
+- `Route` row inserted with `status = active` (auto-approve ON) or `status = pending` (auto-approve OFF)
+- Returned route row; client uses returned `status` to select confirmation copy
 
 **Inputs (route list / gym detail):**
-- `gym_id`, optional filter: `grade`, `status` (default `active`)
+- `gym_id`, optional filter: `grade`, `color_tag` (chip selectors; no text search, no status filter for normal users)
 
 **Outputs (route list):**
-- Filtered list of `Route` rows matching the filter criteria
+- Filtered list of `active` `Route` rows matching the filter criteria (normal users); submitter additionally sees their own `pending` rows
 
-**Inputs (route retirement):**
+**Inputs (route withdrawal):**
 - `route_id`, authenticated user session
+- Client calls `supabase.from('routes').delete().eq('id', routeId)` directly; enforced by RLS DELETE policy
 
-**Outputs (route retirement):**
-- `Route.status` set to `retired`, `retired_at = now()`, `retired_by_user_id` set
-- Route immediately excluded from active-routes match pool
+**Outputs (route withdrawal):**
+- `Route` row deleted (not status-changed); slot freed in the pending partial unique index, allowing resubmission
 
 ---
 
 ## Key Implementation Notes
 
-- **match_key implementation**: `Route.match_key` is a Postgres `GENERATED ALWAYS AS (gym_id || grade || color_tag) STORED` column. Uniqueness is enforced by a **partial unique index**: `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`. This constraint lives at the database level — not only in application code — so concurrent submissions cannot create duplicates. The partial predicate allows historical retired routes to reuse the same key after a wall reset.
+- **match_key implementation**: `Route.match_key` is a Postgres `GENERATED ALWAYS AS (gym_id || grade || color_tag) STORED` column. Uniqueness is enforced by a **partial unique index**: `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`. This constraint lives at the database level — not only in application code — so concurrent submissions cannot create duplicates. The partial predicate allows historical retired and rejected routes to reuse the same key after a wall reset.
 - **Fixed color enum**: The hold/tape color selector must be restricted to exactly: `{red, orange, yellow, green, blue, purple, pink, white, black}`. No free-text color input.
 - **V-scale forced**: Grade creation must only offer V-scale options (e.g., VB, V0–V17). No other grade system in Phase 1.
 - **Photo required**: `photo_url` must be attached before route creation can proceed (AC-021). The photo is uploaded to Supabase Storage; the resulting URL is stored in `Route.photo_url`.
 - **section_label**: This field is already in the schema as a nullable column. Surface it as an optional field in the route submission form from day one, even though it is nullable. This allows it to be promoted to required as a tiebreaker in Phase 2 (if color-collision data warrants it) without a schema change.
-- **Retirement**: Any authenticated user (not just the submitter) can flag a route as retired (AC-024). Upon retirement, `retired_at = now()` and `retired_by_user_id` are set, and the route is immediately excluded from the match pool (partial unique index drops it from uniqueness scope).
 - **Admin merges**: Near-duplicate route merges are performed by the admin via Supabase Studio. No in-app admin UI.
-- **Default filter**: The gym route list defaults to `status = active` (AC-041). Users can apply grade and status filters (AC-040).
+- **Default filter**: The gym route list shows `active` routes only for normal users (AC-041). Users can apply grade and hold-color chip filters (AC-040). No status filter is surfaced to normal users.
+- **Approval-time active-uniqueness collision**: Because pending rows bypass the partial unique index (`WHERE status = 'active'`), two pending submissions for the same (gym_id, grade, color_tag) can coexist (from different users; per-submitter uniqueness is separately enforced). Approving the second one (`UPDATE status = 'active'`) will hit `routes_active_unique_idx` and raise a unique-violation in Studio. This is expected Phase 1 behavior, not a bug. The admin (Leon) can reject the duplicate in Studio.
+
+### Enum Migration
+
+Must be split into two migration files — one to ADD the new enum values, a second (separate transaction/timestamp) to use them. PG15 cannot add and use an enum value in the same transaction.
+
+- **Migration A** — enum values only: `ALTER TYPE route_status ADD VALUE IF NOT EXISTS 'pending'; ALTER TYPE route_status ADD VALUE IF NOT EXISTS 'rejected';` Use `IF NOT EXISTS` for idempotency on `supabase db reset`.
+- **Migration B** (separate file, later timestamp) — everything that uses the new values: `app_settings` table + seed, the `submit_route` RPC, the revised RLS policies, the new pending partial index, and the withdrawal DELETE policy.
+- **Canary**: if Migration A and B are accidentally merged into one file, the symptom is `ERROR: unsafe use of new value "pending" of enum type route_status`. That error means the split was not done correctly.
+
+### Admin Identity
+
+Ship a `public.is_admin()` STABLE helper function that reads `COALESCE((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin'`. Returns false for all Phase 1 clients (no user carries this claim). Phase 1.5 grants the JWT claim via `app_metadata` (set only by service_role); zero policy migration needed. All admin-gated RLS policies reference `public.is_admin()` — never inline the JWT check directly.
+
+### `submit_route` RPC
+
+SECURITY DEFINER function. MUST derive caller identity from `auth.uid()` — do NOT accept `user_id` as a parameter (impersonation risk). Accepts: `p_gym_id`, `p_grade`, `p_color_tag`, `p_photo_url`, `p_section_label` (optional). Logic (in order):
+1. Derive `v_uid := auth.uid()`; raise exception if NULL.
+2. Validate `p_photo_url` is not NULL/empty; raise exception if missing.
+3. Read `app_settings` toggle: `SELECT (value = 'true') INTO v_auto FROM public.app_settings WHERE key = 'route_auto_approve'`; default to `true` if no row.
+4. Guard one-pending-per-combo per submitter; raise clean error before the index constraint fires.
+5. Compute `v_status`: `'active'` if `v_auto`, else `'pending'`.
+6. INSERT and RETURN the row.
+
+`GRANT EXECUTE` to `authenticated` only; `REVOKE EXECUTE` from `anon` and `public`.
+
+**Client call**: `supabase.rpc('submit_route', { p_gym_id, p_grade, p_color_tag, p_photo_url, p_section_label })`. Returns the inserted `routes` row. The client uses the returned `status` to choose confirmation copy: `active` → "route added"; `pending` → the [I18N-PENDING] "submitted for review" message (AC-025).
+
+### `app_settings` Table
+
+No client SELECT/INSERT/UPDATE/DELETE grants or policies — fully client-invisible. RLS enabled with no policies (authenticated and anon get zero rows). service_role (Studio) reads and writes freely. Read only inside the SECURITY DEFINER `submit_route` RPC. Seeded with `route_auto_approve = 'true'`.
+
+### Withdrawal
+
+Client calls `supabase.from('routes').delete().eq('id', routeId)`. Enforced by RLS DELETE policy (`submitted_by_user_id = auth.uid() AND status = 'pending'`). No RPC needed. Requires `GRANT DELETE ON public.routes TO authenticated`.
+
+### One-Pending-Per-Combo Constraint
+
+Enforced per submitter via a partial unique index: `CREATE UNIQUE INDEX routes_pending_unique_idx ON public.routes (gym_id, grade, color_tag, submitted_by_user_id) WHERE status = 'pending'`. Two different users may each have a pending submission for the same (gym, grade, color); only one pending row per (gym, grade, color, user) is prevented. Both the index (race-proof guarantee) and an explicit RPC pre-check (clean error UX) are required.
+
+### Grant Changes (Migration B)
+
+- `REVOKE INSERT ON public.routes FROM authenticated` (insert only via RPC)
+- `REVOKE UPDATE ON public.routes FROM authenticated` (defer UPDATE re-grant to Phase 1.5)
+- `GRANT DELETE ON public.routes TO authenticated` (withdrawal; not currently granted)
+- SELECT grant stays
+
+### Forward-Compatibility Constraints
+
+- Do not hardcode `service_role` checks in triggers; keep `is_admin()` as the single admin gate.
+- Enforce everything through `submit_route` RPC, not client-side logic.
+- Never accept client-supplied `status` or `user_id` in RPCs.
+- Do not store the auto-approve toggle anywhere but `app_settings`.
+- Do not add rejection/retirement metadata as a separate table in Phase 1; nullable columns (`reviewed_by_user_id`, `reviewed_at`, `review_note`) can be added to `routes` additively in Phase 1.5 if needed.
 
 ---
 
@@ -118,5 +215,6 @@ All tables guarded by Supabase Row-Level Security policies. Route rows are reada
 - Grade systems other than V-scale (Phase 1 only).
 - Comments on routes (Phase 1 — out of scope entirely).
 - Retire/reset voting workflow (Phase 2).
-- In-app admin tooling for route management (Supabase Studio only).
+- In-app admin UI for route status management (approve / reject / retire) — Phase 1.5; Supabase Studio is the Phase 1 admin surface.
+- Global (cross-user) one-pending-per-combo prevention — only per-submitter enforcement is in scope.
 - Cities outside Taipei and New Taipei for Phase 1 seeding.

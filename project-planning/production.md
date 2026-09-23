@@ -2,7 +2,7 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 2 (2026-09-20)
+**Last synced from PRD**: rev 4 (2026-09-21)
 
 ---
 
@@ -35,11 +35,11 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
 
 - The **client** owns rendering, local UI state, client-side video compression, client-generated thumbnails, and localization. It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
-- **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gym and route tables are readable by all authenticated users, writable only by admins (gyms) or the submitting user + admins (routes).
+- **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gyms are readable by all authenticated users and writable only by admins; routes are readable by all authenticated users for `active` rows, with `pending` rows visible only to their submitter, and are writable by the submitting user on insert (initial status `active` when auto-approve is ON, else `pending`), while status transitions to `retired` or `rejected` and approval of `pending` routes are admin-only via Supabase Studio.
 - **Supabase Storage** hosts avatars, gym photos, route photos, and (Phase 1 only) beta videos + client-generated thumbnails. When the migration trigger fires, video uploads cut over to Cloudflare Stream while metadata continues to live in Postgres.
 - **Supabase Edge Functions** handle event-driven workflows that must not run on the client: on `Reaction` insert with `target_type = beta_video`, an Edge Function inserts a `Notification` row and enqueues an APNs push (respecting `NotificationPreference`) via Expo Push to all `DeviceToken` rows for the recipient.
 - **PostHog** SDK ships client-side events (signup, first send, video upload, retention markers). No PII beyond user_id is sent.
-- **Admin operations** (adding gyms, reviewing gym requests, reviewing reports, banning users, merging near-duplicate routes) are performed exclusively through Supabase Studio in Phase 1.
+- **Admin operations** (adding gyms, reviewing gym requests, reviewing reports, banning users, merging near-duplicate routes, approving/rejecting pending routes, and retiring routes) are performed exclusively through Supabase Studio in Phase 1. In-app admin UI for route status management is planned for Phase 1.5.
 
 **Key data flows:**
 
@@ -54,7 +54,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 |---------|------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------|
 | MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD, privacy, home gym selection.      |
 | MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form.                       |
-| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, match key, route detail pages, status flagging, color enum.    |
+| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, 4-value status lifecycle, submitter-only pending visibility, admin approve/reject/retire via Studio. |
 | MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override.                     |
 | MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection, client-side compression, thumbnail, storage upload, inline playback.             |
 | MOD-006 | mod-social-feed        | Social Graph & Feed          | Follow/unfollow, chronological activity feed via SECURITY INVOKER RPC, beta-video like reactions.        |
@@ -156,6 +156,22 @@ Rules:
 Notes:
 - Modal sheets (`presentationStyle="pageSheet"`) are positioned below the Dynamic Island by iOS automatically, so `insets.top` is `0` inside them. The pattern is therefore safe to apply uniformly to every screen, including modal sheets.
 - iOS-only project — no Android status-bar handling is required.
+
+### Enum Migration Ordering
+
+When adding values to a Postgres enum, always use two separate migration files (separate timestamps). File 1: `ALTER TYPE ... ADD VALUE IF NOT EXISTS`. File 2 (new timestamp): everything that uses the new values. Never add and use an enum value in the same transaction on PG15/Supabase. The canary error for a violation is `ERROR: unsafe use of new value "<value>" of enum type`.
+
+### Admin Identity
+
+All admin-gated RLS policies use `public.is_admin()` (a STABLE helper that checks `COALESCE((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin'`). Do not inline the JWT check in policies directly. The helper is shipped even when no admin exists (returns false for all Phase 1 clients); Phase 1.5 grants the `app_metadata.role = 'admin'` claim to the admin user (set only by service_role) with zero policy migration needed.
+
+### SECURITY DEFINER RPCs
+
+Use `SECURITY DEFINER` functions for any server-side enforcement that the client must not bypass (auto-approve toggle, status gating). Always set `SET search_path = public` to prevent search-path injection. Never accept `user_id` as a parameter — always derive from `auth.uid()`. Grant EXECUTE to `authenticated` only; revoke from `anon` and `public`.
+
+### app_settings Table Pattern
+
+For admin-controlled feature toggles read server-side, use a single `public.app_settings (key TEXT PRIMARY KEY, value TEXT)` table with NO client-facing grants or RLS policies. RLS is enabled with no policies so authenticated and anon users receive zero rows. Read only inside DEFINER functions. Do not expose the table to authenticated users. Admin manages values via Supabase Studio (service_role bypasses RLS).
 
 ### TypeScript Strict Mode
 

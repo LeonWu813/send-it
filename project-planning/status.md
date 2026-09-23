@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 1366d4500192449f36d26afa937ecf89c92b3f21
-timestamp: 2026-09-23T00:00:00Z
+commit: 8c68f1ce7056fc414c46ffe651e42e618c640b9f
+timestamp: 2026-09-22T00:00:00Z
 ```
 
 ## PM Updates
@@ -294,6 +294,29 @@ To keep Phase 1.5 in-app admin a zero-rework, additive change:
 **Ambiguities / Conflicts**: None.
 
 **verify-sync.sh**: Skipped — not applicable to targeted two-file delta (no structural addition of modules, phases, or conventions). [Note: verify-sync.sh is applicable on initial and full-structural syncs; a two-AC delta touching no new files does not warrant a full tree traversal.]
+
+
+### Sync Report — Delta Sync — 2026-09-22
+
+**Sync type:** delta
+**PRD Revision:** 4
+**PM Update reference:** 2026-09-23 [SUBSTANTIVE] — Route submission approval gate + status lifecycle (PRD Revision 4)
+**Files modified:**
+- `project-planning/modules/mod-route-catalog/spec.md` — Purpose updated to 4-value lifecycle framing; Context updated (auto-approve, pending/retired/rejected visibility, submit_route RPC, admin-only retirement, per-submitter pending constraint); Non-goals expanded (in-app admin UI Phase 1.5, global one-pending out of scope); User Stories updated (US-014 removed, US-003 and US-006 retained); Acceptance Criteria section replaced entirely with AC-020 (revised), AC-021–AC-023 (unchanged), AC-024b (new), AC-025–AC-029 (new), AC-040 (revised), AC-041 (revised); Data Model updated to 4-value route_status enum with per-value semantics, app_settings table added, RLS policy set documented; Input/Output Contract updated (RPC-based submission, withdrawal, normal-user list); Key Implementation Notes section added covering enum migration split, admin identity (is_admin() helper), RLS policy set, submit_route RPC, app_settings, withdrawal, one-pending-per-combo index, grant changes, and forward-compatibility constraints.
+- `project-planning/production.md` — Last synced revision updated (rev 2 → rev 4); Architecture Overview updated to reflect 4-value route status and admin-only transitions; Module Index MOD-003 description updated to reflect 4-value lifecycle; Four new Shared Conventions added: Enum Migration Ordering, Admin Identity, SECURITY DEFINER RPCs, app_settings Table Pattern.
+**Files created:**
+- none
+**Module removals noted:**
+- none
+**AMBIGUITY markers added:**
+- none
+**AMBIGUITY markers resolved:**
+- none
+**CONFLICT markers added:**
+- none
+**verify-sync.sh result:** 4/6 checks passed. Two pre-existing failures unrelated to this delta:
+  - Check 4 FAIL: all module specs use `## User Stories Covered` but the script expects `## Related User Stories` — pre-existing mismatch across all specs, not introduced by this sync.
+  - Check 6 FAIL: no Phase Plan section in status.md — pre-existing; Phase Plan was not written during initial sync and was not in scope for this delta.
 
 ## Skill Recommendations
 
