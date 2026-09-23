@@ -182,3 +182,86 @@ All three screens verified against the following items:
 ### Overall Verdict
 
 **QA PASS (REGRESSION)** — All three screens correctly implement the safe area inset fix. No regressions in logic, data fetching, navigation, or UI structure. Static code review complete.
+
+---
+
+## QA Results — Regression (Bilingual columns + City filter + AC-005 View Routes)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-09-22
+**Scope**: Three new changes since last QA pass:
+1. Bilingual `city_zh` / `district_zh` columns (DB migration + types + service + UI)
+2. City filter chips (Taipei / New Taipei) replacing district + gym-type filters
+3. Gym type badge removed from list and detail screens
+4. AC-005: "View Routes" button at bottom of GymDetailScreen + `routes` view state in GymNavigator
+
+### Automated Test Suite
+
+Command: `npm test -- --watchAll=false`
+Result: 123/123 tests passed, 15 suites, exit code 0
+
+Note: Jest does not run the TypeScript compiler — it transpiles via Babel. Type errors in test files do not cause Jest failures. See TypeScript section below.
+
+### TypeScript Compilation
+
+Command: `npx tsc --noEmit`
+Result: **FAIL — exit code 2, 6 errors**
+
+All 6 errors are in `src/modules/mod-gym-directory/__tests__/GymDetailScreen.test.tsx`. Every `render(<GymDetailScreen ...)` call is missing the newly required `onViewRoutes` prop. When AC-005 was implemented, `GymDetailScreenProps` gained a required `onViewRoutes: (gymId: string, gymName: string) => void` prop, but the test file was not updated to pass it.
+
+Affected lines: 78, 93, 115, 127, 137, 150.
+Error text (representative): `error TS2741: Property 'onViewRoutes' is missing in type '{ gymId: string; onBack: Mock<any, any, any>; }' but required in type 'GymDetailScreenProps'.`
+
+**Classification: implementation bug** — the test file must be updated to pass `onViewRoutes={jest.fn()}` to all six `render` calls, and a new test should cover the `onViewRoutes` callback behavior.
+
+### Acceptance Criteria
+
+**PASS AC-006**: Tapping a gym row in GymListScreen calls `onSelectGym(item.id)` → GymNavigator sets `view = { name: 'detail', gymId }` → GymDetailScreen renders with that gymId. Unchanged from prior QA pass; no regression detected.
+
+**PASS AC-004 (updated scope — bilingual city/district)**: GymListScreen and GymDetailScreen render city and district using `localizedCity()` / `localizedDistrict()` helpers that check `i18n.language.startsWith('zh')` and select `city_zh` / `district_zh` when true. Both helpers present in both screen files. Types (`Gym`, `GymSummary`) include `city_zh` and `district_zh` fields. Service layer (`GYM_SUMMARY_SELECT`, `GYM_DETAIL_SELECT`) fetches both columns. Migration `20260922000001_mod_002_city_district_zh.sql` adds the columns and populates all 13 seeded rows. Verified by reading all four files.
+
+**PASS AC-004 (updated scope — city filter chips)**: GymListScreen renders two `Pressable` chip components labeled via `t('gymDirectory.cityFilter.taipei')` and `t('gymDirectory.cityFilter.newTaipei')`. Pressing a chip sets `cityFilter` to `'Taipei'` or `'New Taipei'`; pressing the active chip toggles it back to `null`. The `filteredGyms` memo compares `gym.city === cityFilter` (English value stored in DB) — this is correct and consistent with the DB seed values. City filter chip i18n keys are present in both `locales/en/common.json` (`"taipei": "Taipei"`, `"newTaipei": "New Taipei"`) and `locales/zh-TW/common.json` (`"taipei": "台北市"`, `"newTaipei": "新北市"`). Verified by reading GymListScreen.tsx and both locale files.
+
+**PASS AC-004 (updated scope — gym type badge absent)**: No reference to `gymTypeBadge`, gym type badge rendering, or badge-style UI element exists in GymListScreen.tsx or GymDetailScreen.tsx. The `gym_type` field is read only for the `isMixed` check (`gym?.gym_type === 'both'`) that gates `bouldering_only_note` display — this is correct behavior, not a badge. Verified by grep across both screen files.
+
+**FAIL AC-005**: "View Routes" button implementation is partially correct but has two bugs:
+
+  **BUG-1 (TypeScript compilation failure — implementation bug)**: `GymDetailScreen.test.tsx` does not pass the required `onViewRoutes` prop to any of its 6 `render` calls. `npx tsc --noEmit` exits with code 2 and 6 errors. The test file was not updated when `onViewRoutes` was added as a required prop. Fix: add `onViewRoutes={jest.fn()}` to all 6 render calls in `GymDetailScreen.test.tsx`, and add a test that verifies pressing "View Routes" calls `onViewRoutes` with the correct `gymId` and `gymName`.
+
+  **BUG-2 (Back navigation target — implementation bug)**: `GymNavigator.tsx` line 87 passes `onBackToGym={navigateToList}` to `RouteNavigator`. This means pressing "Back" from the route catalog returns the user to the gym **list**, not the gym **detail**. The expected behavior (stated in the human QA brief and consistent with the navigation flow in the spec: list → detail → routes) is that back from routes returns to the gym **detail** that launched the route view. The correct implementation is to pass `onBackToGym={() => navigateToDetail(view.gymId)}` (when `view.name === 'routes'`) so the user returns to the same gym detail, not the full list. Fix: in GymNavigator, when rendering `RouteNavigator`, pass `onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}` instead of `navigateToList`.
+
+  Items verified as passing for AC-005:
+  - "View Routes" button present in GymDetailScreen at the bottom of the ScrollView (after bouldering_only_note), always visible without additional action. Verified: GymDetailScreen.tsx lines 180–189.
+  - `viewRoutesButton` style uses `backgroundColor: theme.colors.primary` and `alignItems: 'center'` — visually prominent, not a link. Verified: lines 311–318.
+  - `onViewRoutes` prop exists in `GymDetailScreenProps` and is called with `(gym.id, gym.name)` on press. Verified: lines 34, 182.
+  - `GymNavigator` has a `routes` view state that renders `RouteNavigator` with `gymId`, `gymName`, `session`. Verified: lines 34, 82–88.
+  - `gymDirectory.detail.viewRoutes` i18n key is present in both locale files ("View Routes" / "查看路線"). Verified by reading both locale files.
+
+**PASS AC-070**: No changes to RequestGymScreen or submitGymRequest(); no regression detected.
+
+### Requirement-Level Verification (new changes only)
+
+**PASS REQ-21 (city_zh / district_zh columns in types)**: `Gym` and `GymSummary` interfaces both include `city_zh: string` and `district_zh: string`. Verified: types.ts lines 22–23 (Gym), 44–45 (GymSummary).
+
+**PASS REQ-22 (city_zh / district_zh in service SELECT)**: `GYM_SUMMARY_SELECT` includes `city_zh, district_zh`. `GYM_DETAIL_SELECT` includes `city_zh, district_zh`. Verified: gym-service.ts lines 15–20.
+
+**PASS REQ-23 (bilingual display helpers in both screens)**: `localizedCity()` and `localizedDistrict()` functions are defined in both GymListScreen.tsx (lines 38–43) and GymDetailScreen.tsx (lines 37–42). Both check `i18n.language.startsWith('zh')` and return the appropriate column. Verified by reading both files.
+
+**PASS REQ-24 (search includes bilingual city/district)**: `filteredGyms` memo in GymListScreen matches against `gym.city_zh` and `gym.district_zh` in addition to the English fields. Verified: lines 85–88.
+
+**PASS REQ-25 (migration populates all 13 rows)**: `20260922000001_mod_002_city_district_zh.sql` contains exactly 13 UPDATE statements, one per seeded gym, with correct Chinese city and district names. All 13 gym English names match the base migration seed. Verified by reading the migration file.
+
+**PASS REQ-26 (no gym type badge in list or detail)**: Grep of GymListScreen.tsx and GymDetailScreen.tsx for `gymTypeBadge`, badge-related styles, and gym_type rendering (excluding the `isMixed` guard) finds no badge UI elements. The `gymTypeBadge` i18n keys remain in the locale files but are not referenced from any screen — this is acceptable (unused keys are not a spec violation; they may be removed in a cleanup pass).
+
+**FAIL REQ-27 (TypeScript compilation clean)**: `npx tsc --noEmit` exits with 6 errors in `GymDetailScreen.test.tsx`. See BUG-1 under AC-005.
+
+**FAIL REQ-28 (onBackToGym returns to gym detail)**: `GymNavigator` passes `onBackToGym={navigateToList}` to `RouteNavigator`, which navigates to the gym list on back. Expected: navigates to gym detail. See BUG-2 under AC-005.
+
+### Overall Verdict
+
+**QA FAIL** — Two implementation bugs found.
+
+**BUG-1**: `GymDetailScreen.test.tsx` missing required `onViewRoutes` prop in all 6 `render` calls — causes TypeScript compilation failure (`npx tsc --noEmit` exits code 2, 6 errors). Fix: add `onViewRoutes={jest.fn()}` to all 6 render calls; add a test for the "View Routes" button press behavior.
+
+**BUG-2**: `GymNavigator.tsx` line 87 passes `onBackToGym={navigateToList}` to `RouteNavigator` — back navigation from route catalog returns user to the gym list instead of the gym detail that launched the routes view. Fix: pass `onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}` when rendering `RouteNavigator`.
