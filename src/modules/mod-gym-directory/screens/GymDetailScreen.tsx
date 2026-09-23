@@ -31,6 +31,7 @@ import type { Gym } from '../types';
 interface GymDetailScreenProps {
   gymId: string;
   onBack: () => void;
+  onViewRoutes: (gymId: string, gymName: string) => void;
 }
 
 function localizedCity(gym: { city: string; city_zh: string }): string {
@@ -43,6 +44,7 @@ function localizedDistrict(gym: { district: string; district_zh: string }): stri
 export default function GymDetailScreen({
   gymId,
   onBack,
+  onViewRoutes,
 }: GymDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -173,6 +175,18 @@ export default function GymDetailScreen({
           <Text style={styles.noteText}>{gym.bouldering_only_note}</Text>
         </View>
       ) : null}
+
+      {/* View Routes CTA */}
+      <Pressable
+        style={styles.viewRoutesButton}
+        onPress={() => onViewRoutes(gym.id, gym.name)}
+        accessibilityRole="button"
+        accessibilityLabel={t('gymDirectory.detail.viewRoutes')}
+      >
+        <Text style={styles.viewRoutesButtonText}>
+          {t('gymDirectory.detail.viewRoutes')}
+        </Text>
+      </Pressable>
     </ScrollView>
   );
 }
@@ -293,6 +307,19 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     retryButtonText: {
       fontSize: theme.fontSize.md,
       color: theme.colors.primary,
+    },
+    viewRoutesButton: {
+      marginTop: theme.spacing.xl,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.lg,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.primary,
+      alignItems: 'center',
+    },
+    viewRoutesButtonText: {
+      fontSize: theme.fontSize.md,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.background,
     },
   });
 }

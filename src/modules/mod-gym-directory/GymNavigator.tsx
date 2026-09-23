@@ -22,6 +22,7 @@ import React, { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
+import RouteNavigator from '../mod-route-catalog/RouteNavigator';
 import GymDetailScreen from './screens/GymDetailScreen';
 import GymListScreen from './screens/GymListScreen';
 import RequestGymScreen from './screens/RequestGymScreen';
@@ -29,7 +30,8 @@ import RequestGymScreen from './screens/RequestGymScreen';
 type GymView =
   | { name: 'list' }
   | { name: 'detail'; gymId: string }
-  | { name: 'request' };
+  | { name: 'request' }
+  | { name: 'routes'; gymId: string; gymName: string };
 
 interface GymNavigatorProps {
   session: Session;
@@ -55,6 +57,10 @@ export default function GymNavigator({
     setView({ name: 'list' });
   }
 
+  function navigateToRoutes(gymId: string, gymName: string): void {
+    setView({ name: 'routes', gymId, gymName });
+  }
+
   return (
     <View style={styles.root}>
       {view.name === 'list' && (
@@ -64,10 +70,22 @@ export default function GymNavigator({
         />
       )}
       {view.name === 'detail' && (
-        <GymDetailScreen gymId={view.gymId} onBack={navigateToList} />
+        <GymDetailScreen
+          gymId={view.gymId}
+          onBack={navigateToList}
+          onViewRoutes={navigateToRoutes}
+        />
       )}
       {view.name === 'request' && (
         <RequestGymScreen session={session} onBack={navigateToList} />
+      )}
+      {view.name === 'routes' && (
+        <RouteNavigator
+          gymId={view.gymId}
+          gymName={view.gymName}
+          session={session}
+          onBackToGym={navigateToList}
+        />
       )}
     </View>
   );

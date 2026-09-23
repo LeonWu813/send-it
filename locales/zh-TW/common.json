@@ -96,7 +96,8 @@
       "location": "地點",
       "coordinates": "地圖位置",
       "gradingSystem": "難度系統",
-      "noPhoto": "目前沒有照片"
+      "noPhoto": "目前沒有照片",
+      "viewRoutes": "查看路線"
     },
     "requestGym": {
       "cta": "找不到你的岩館？來申請加入 →",

@@ -96,7 +96,8 @@
       "location": "Location",
       "coordinates": "Map pin",
       "gradingSystem": "Grade System",
-      "noPhoto": "No photo available"
+      "noPhoto": "No photo available",
+      "viewRoutes": "View Routes"
     },
     "requestGym": {
       "cta": "Can't find your gym? Request it →",
