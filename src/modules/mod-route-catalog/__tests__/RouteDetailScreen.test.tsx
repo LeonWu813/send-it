@@ -3,6 +3,10 @@
  *
  * Tests behaviour — not implementation.
  * The route-service module is mocked; no real network activity.
+ *
+ * Note: retireRoute has been removed (AC-024b — retirement is now admin-only
+ * via Supabase Studio). Tests for the retire button have been replaced with
+ * tests that verify the retire button is NOT present.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -11,20 +15,18 @@ jest.mock('../../../lib/supabase', () => ({
 
 jest.mock('../route-service', () => ({
   loadRoute: jest.fn(),
-  retireRoute: jest.fn(),
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { loadRoute, retireRoute } from '../route-service';
+import { loadRoute } from '../route-service';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
 import { renderOptions } from '../test-utils';
 
 const mockLoadRoute = loadRoute as jest.MockedFunction<typeof loadRoute>;
-const mockRetireRoute = retireRoute as jest.MockedFunction<typeof retireRoute>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -80,47 +82,53 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Photo rendered as Image component with the route photo URL
-      const images = screen.queryAllByRole('img');
-      // If no role, check for Image source
-      expect(screen.getByText('V5')).toBeTruthy(); // route loaded
+      // Route loaded — grade visible
+      expect(screen.getByText('V5')).toBeTruthy();
     });
   });
 
-  it('shows the retire button for an active route (AC-024)', async () => {
+  it('does NOT show a retire button for any route (AC-024b — admin-only via Studio)', async () => {
     mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
 
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Retire button should be present for active routes
-      const retireButtons = screen.queryAllByRole('button');
-      const retireButton = retireButtons.find(
-        (el) =>
-          el.props.accessibilityLabel === 'Flag as retired' ||
-          el.props.accessibilityLabel === '標記為已退場' ||
-          el.props.accessibilityLabel?.includes('retire') ||
-          el.props.accessibilityLabel?.includes('Retire'),
-      );
-      expect(retireButton).toBeTruthy();
+      expect(screen.getByText('V5')).toBeTruthy();
     });
+
+    const retireButtons = screen.queryAllByRole('button').filter(
+      (el) =>
+        el.props.accessibilityLabel?.toLowerCase().includes('retire') ||
+        el.props.accessibilityLabel?.includes('退場'),
+    );
+    expect(retireButtons).toHaveLength(0);
   });
 
-  it('does not show the retire button for a retired route', async () => {
+  it('shows the retired status badge for a retired route', async () => {
     mockLoadRoute.mockResolvedValueOnce(MOCK_RETIRED_ROUTE);
 
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Retired badge shown instead of retire action
+      // Retired status badge text is rendered
+      const retiredLabels = screen.queryAllByText(/retired/i);
+      expect(retiredLabels.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('does NOT show a retire button for a retired route either', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_RETIRED_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
       const retiredLabels = screen.queryAllByText(/retired/i);
       expect(retiredLabels.length).toBeGreaterThan(0);
     });
 
     const retireButtons = screen.queryAllByRole('button').filter(
       (el) =>
-        el.props.accessibilityLabel?.includes('retire') ||
-        el.props.accessibilityLabel?.includes('Retire') ||
+        el.props.accessibilityLabel?.toLowerCase().includes('retire') ||
         el.props.accessibilityLabel?.includes('退場'),
     );
     expect(retireButtons).toHaveLength(0);
@@ -135,7 +143,6 @@ describe('RouteDetailScreen', () => {
       expect(screen.getByText('V5')).toBeTruthy();
     });
 
-    // Placeholder sections for MOD-004 and MOD-005
     const allText = screen.toJSON();
     expect(allText).toBeTruthy();
   });
@@ -146,7 +153,6 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Error state with back + retry
       const buttons = screen.queryAllByRole('button');
       expect(buttons.length).toBeGreaterThan(0);
     });
@@ -170,24 +176,5 @@ describe('RouteDetailScreen', () => {
       fireEvent.press(backButtons[0]);
       expect(DEFAULT_PROPS.onBack).toHaveBeenCalled();
     }
-  });
-
-  it('calls retireRoute with routeId and userId on retirement confirmation', async () => {
-    mockLoadRoute
-      .mockResolvedValueOnce(MOCK_ACTIVE_ROUTE)
-      .mockResolvedValueOnce(MOCK_RETIRED_ROUTE); // after retirement refresh
-    mockRetireRoute.mockResolvedValueOnce(undefined);
-
-    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
-
-    await waitFor(() => {
-      expect(screen.getByText('V5')).toBeTruthy();
-    });
-
-    expect(mockLoadRoute).toHaveBeenCalledWith('route-001');
-    expect(mockRetireRoute).not.toHaveBeenCalled();
-    // Retire action is triggered via Alert.alert in the component;
-    // testing the service call directly verifies the integration
-    void mockRetireRoute;
   });
 });

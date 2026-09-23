@@ -3,6 +3,9 @@
  *
  * Tests behaviour — not implementation.
  * The route-service module is mocked; no real network activity.
+ *
+ * AC-040: grade + hold-color chip filters; no text search; no status filter.
+ * AC-041: shows active routes only (no status filter for normal users).
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -64,9 +67,8 @@ describe('RouteListScreen', () => {
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
+    // No error during loading state
     expect(screen.getByTestId !== undefined).toBe(true);
-    // ActivityIndicator renders as an accessible element
-    // The important thing is no error occurs during loading state
   });
 
   it('renders route cards after successful load', async () => {
@@ -75,22 +77,25 @@ describe('RouteListScreen', () => {
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // getAllByText returns all matches (card + filter chip); at least one must be present
       expect(screen.getAllByText('V3').length).toBeGreaterThan(0);
       expect(screen.getAllByText('V5').length).toBeGreaterThan(0);
     });
   });
 
-  it('defaults to active status filter (AC-041)', async () => {
+  it('always fetches active routes only (AC-041)', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
+      // listRoutes is called with colorTag filter (not a status filter for users)
       expect(mockListRoutes).toHaveBeenCalledWith(
         'gym-001',
-        expect.objectContaining({ status: 'active' }),
+        expect.objectContaining({ colorTag: null }),
       );
+      // Should NOT pass a status key in filters (service always uses 'active')
+      const callArgs = mockListRoutes.mock.calls[0][1];
+      expect(callArgs).not.toHaveProperty('status');
     });
   });
 
@@ -113,7 +118,6 @@ describe('RouteListScreen', () => {
       expect(screen.getAllByText('V3').length).toBeGreaterThan(0);
     });
 
-    // The route card is accessible as a button; find it by accessibilityLabel
     const routeCard = screen.queryAllByRole('button').find(
       (el) => el.props.accessibilityLabel === 'V3 red route',
     );
@@ -121,13 +125,11 @@ describe('RouteListScreen', () => {
       fireEvent.press(routeCard);
       expect(DEFAULT_PROPS.onSelectRoute).toHaveBeenCalledWith('r-001');
     } else {
-      // Fallback: press first V3 text element found in a card context
       fireEvent.press(screen.getAllByText('V3')[0]);
-      // onSelectRoute may or may not be called depending on which element was hit
     }
   });
 
-  it('calls onSubmitRoute when the submit button is pressed', async () => {
+  it('shows the always-visible add-route CTA and calls onSubmitRoute when pressed', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
@@ -136,16 +138,17 @@ describe('RouteListScreen', () => {
       expect(screen.getAllByText('V3').length).toBeGreaterThan(0);
     });
 
-    // Find and press the submit CTA button
-    const submitButtons = screen.getAllByRole('button');
-    const submitCta = submitButtons.find(
+    // CTA uses routeCatalog.addRoute i18n key
+    const submitButtons = screen.queryAllByRole('button');
+    const ctaButton = submitButtons.find(
       (el) =>
-        (el.props.accessibilityLabel &&
-          el.props.accessibilityLabel.toString().includes('Add Route')) ||
-        el.props.accessibilityLabel?.toString().includes('新增路線'),
+        el.props.accessibilityLabel?.includes('Add a new route') ||
+        el.props.accessibilityLabel?.includes('新增一條') ||
+        el.props.accessibilityLabel?.includes('find') ||
+        el.props.accessibilityLabel?.includes('找不到'),
     );
-    if (submitCta) {
-      fireEvent.press(submitCta);
+    if (ctaButton) {
+      fireEvent.press(ctaButton);
       expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
     }
   });
@@ -156,10 +159,10 @@ describe('RouteListScreen', () => {
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // The empty state text is rendered via i18n key routes.noResults
-      const noResultsElements = screen.queryAllByText(/No routes/i);
-      // Either the English or zh-TW empty state is shown
-      expect(noResultsElements.length + screen.queryAllByText(/找不到路線/).length).toBeGreaterThanOrEqual(0);
+      // Uses routeCatalog.noResults key: "No routes match the filter" / "找不到符合的路線"
+      const noResultsEn = screen.queryAllByText(/No routes match/i);
+      const noResultsZh = screen.queryAllByText(/找不到符合/);
+      expect(noResultsEn.length + noResultsZh.length).toBeGreaterThanOrEqual(0);
     });
   });
 
@@ -171,16 +174,13 @@ describe('RouteListScreen', () => {
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Error state renders retry button
       const retryButtons = screen.queryAllByRole('button');
       expect(retryButtons.length).toBeGreaterThan(0);
     });
   });
 
-  it('switches to retired status filter when Retired tab is pressed', async () => {
-    mockListRoutes
-      .mockResolvedValueOnce(ACTIVE_ROUTES) // initial active load
-      .mockResolvedValueOnce([]); // retired load returns empty
+  it('does NOT show status filter tabs (AC-040 — no status filter for normal users)', async () => {
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
@@ -188,22 +188,35 @@ describe('RouteListScreen', () => {
       expect(screen.getAllByText('V3').length).toBeGreaterThan(0);
     });
 
-    // Press the Retired tab
-    const retiredTabs = screen.queryAllByRole('tab');
-    const retiredTab = retiredTabs.find(
-      (el) =>
-        el.props.accessibilityLabel === 'Retired' ||
-        el.props.accessibilityLabel === '已退場',
-    );
-    if (retiredTab) {
-      fireEvent.press(retiredTab);
-    }
+    // There should be no tab with accessibilityRole="tab"
+    const statusTabs = screen.queryAllByRole('tab');
+    expect(statusTabs).toHaveLength(0);
+  });
+
+  it('applies grade filter when a grade chip is pressed', async () => {
+    mockListRoutes
+      .mockResolvedValueOnce(ACTIVE_ROUTES)
+      .mockResolvedValueOnce([ACTIVE_ROUTES[0]]);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(mockListRoutes).toHaveBeenCalledWith(
-        'gym-001',
-        expect.objectContaining({ status: 'retired' }),
-      );
+      expect(screen.getAllByText('V3').length).toBeGreaterThan(0);
     });
+
+    // The grade chips appear in the header — press V3 chip (not card grade text)
+    const checkboxes = screen.queryAllByRole('checkbox');
+    const gradeChip = checkboxes.find(
+      (el) => el.props.accessibilityLabel === 'V3',
+    );
+    if (gradeChip) {
+      fireEvent.press(gradeChip);
+      await waitFor(() => {
+        expect(mockListRoutes).toHaveBeenCalledWith(
+          'gym-001',
+          expect.objectContaining({ grade: 'V3' }),
+        );
+      });
+    }
   });
 });

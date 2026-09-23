@@ -1,10 +1,11 @@
 /**
  * RouteListScreen.
  *
- * Shows the active routes at a gym with grade + status filter controls.
+ * Shows the active routes at a gym with grade + hold-color filter chips.
  *
- * AC-040: filterable by grade and active/retired status.
- * AC-041: defaults to status = 'active' when no filter is explicitly set.
+ * AC-040: filterable by grade and hold color chip selectors.
+ *         No free-text search. No status filter for normal users.
+ * AC-041: shows active routes only for normal users.
  * US-006: browse currently active routes at a gym.
  */
 
@@ -25,8 +26,21 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import { listRoutes } from '../route-service';
-import type { RouteGrade, RouteListFilters, RouteSummary } from '../types';
-import { ROUTE_GRADES } from '../types';
+import type { RouteColor, RouteGrade, RouteListFilters, RouteSummary } from '../types';
+import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
+
+/** Map each RouteColor enum value to a React Native named color string. */
+const COLOR_SWATCH: Record<RouteColor, string> = {
+  red: 'red',
+  orange: 'orange',
+  yellow: 'yellow',
+  green: 'green',
+  blue: 'blue',
+  purple: 'purple',
+  pink: 'pink',
+  white: 'white',
+  black: 'black',
+};
 
 interface RouteListScreenProps {
   gymId: string;
@@ -53,11 +67,14 @@ export default function RouteListScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Filter state — default status = 'active' per AC-041
-  const [filters, setFilters] = useState<RouteListFilters>({
-    grade: null,
-    status: 'active',
-  });
+  // Filter state — grade and color only (AC-040); status is always 'active'
+  const [gradeFilter, setGradeFilter] = useState<RouteGrade | null>(null);
+  const [colorFilter, setColorFilter] = useState<RouteColor | null>(null);
+
+  const filters: RouteListFilters = useMemo(
+    () => ({ grade: gradeFilter, colorTag: colorFilter }),
+    [gradeFilter, colorFilter],
+  );
 
   const fetchRoutes = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -77,17 +94,14 @@ export default function RouteListScreen({
   }, [fetchRoutes]);
 
   function toggleGradeFilter(grade: RouteGrade): void {
-    setFilters((prev) => ({
-      ...prev,
-      grade: prev.grade === grade ? null : grade,
-    }));
+    setGradeFilter((prev) => (prev === grade ? null : grade));
   }
 
-  function toggleStatusFilter(status: 'active' | 'retired'): void {
-    setFilters((prev) => ({ ...prev, status }));
+  function toggleColorFilter(color: RouteColor): void {
+    setColorFilter((prev) => (prev === color ? null : color));
   }
 
-  // Deduplicated grades present in the current route list (for filter chips)
+  // Deduplicated grades present in the loaded route list (for filter chips)
   const availableGrades = useMemo(() => {
     const seen = new Set<RouteGrade>();
     for (const r of routes) {
@@ -111,13 +125,6 @@ export default function RouteListScreen({
         <View style={styles.cardHeader}>
           <Text style={styles.gradeBadge}>{item.grade}</Text>
           <RouteColorBadge color={item.color_tag} size="sm" />
-          {item.status === 'retired' && (
-            <View style={styles.retiredBadge}>
-              <Text style={styles.retiredBadgeText}>
-                {t('routes.status.retired')}
-              </Text>
-            </View>
-          )}
         </View>
         {item.section_label ? (
           <Text style={styles.sectionLabel}>{item.section_label}</Text>
@@ -130,7 +137,7 @@ export default function RouteListScreen({
   }
 
   function renderGradeChip(grade: RouteGrade): React.JSX.Element {
-    const isActive = filters.grade === grade;
+    const isActive = gradeFilter === grade;
     return (
       <Pressable
         key={grade}
@@ -147,61 +154,66 @@ export default function RouteListScreen({
     );
   }
 
+  function renderColorChip(color: RouteColor): React.JSX.Element {
+    const isActive = colorFilter === color;
+    const colorLabel = t(`routeCatalog.colors.${color}`);
+    return (
+      <Pressable
+        key={color}
+        style={[styles.colorChip, isActive && styles.colorChipActive]}
+        onPress={() => toggleColorFilter(color)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: isActive }}
+        accessibilityLabel={colorLabel}
+      >
+        <View
+          style={[
+            styles.colorDot,
+            { backgroundColor: COLOR_SWATCH[color] },
+            color === 'white' && styles.colorDotBordered,
+          ]}
+        />
+        <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
+          {colorLabel}
+        </Text>
+      </Pressable>
+    );
+  }
+
   const listHeader = (
     <View>
-      {/* Status filter tabs */}
-      <View style={styles.statusTabRow}>
-        <Pressable
-          style={[
-            styles.statusTab,
-            filters.status === 'active' && styles.statusTabActive,
-          ]}
-          onPress={() => toggleStatusFilter('active')}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: filters.status === 'active' }}
-          accessibilityLabel={t('routes.status.active')}
-        >
-          <Text
-            style={[
-              styles.statusTabText,
-              filters.status === 'active' && styles.statusTabTextActive,
-            ]}
-          >
-            {t('routes.status.active')}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[
-            styles.statusTab,
-            filters.status === 'retired' && styles.statusTabActive,
-          ]}
-          onPress={() => toggleStatusFilter('retired')}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: filters.status === 'retired' }}
-          accessibilityLabel={t('routes.status.retired')}
-        >
-          <Text
-            style={[
-              styles.statusTabText,
-              filters.status === 'retired' && styles.statusTabTextActive,
-            ]}
-          >
-            {t('routes.status.retired')}
-          </Text>
-        </Pressable>
-      </View>
-
       {/* Grade filter chips — only shown when routes are loaded */}
       {availableGrades.length > 0 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.gradeFilterRow}
+          contentContainerStyle={styles.filterRow}
         >
           {availableGrades.map(renderGradeChip)}
         </ScrollView>
       )}
+
+      {/* Hold-color filter chips — all 9 colors always shown */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
+        {ROUTE_COLORS.map(renderColorChip)}
+      </ScrollView>
     </View>
+  );
+
+  /** Always-visible "Can't find it? Add a new route" CTA at the bottom. */
+  const addRouteCta = (
+    <Pressable
+      style={styles.addRouteCta}
+      onPress={onSubmitRoute}
+      accessibilityRole="button"
+      accessibilityLabel={t('routeCatalog.addRoute')}
+    >
+      <Text style={styles.addRouteCtaText}>{t('routeCatalog.addRoute')}</Text>
+    </Pressable>
   );
 
   if (isLoading) {
@@ -243,14 +255,6 @@ export default function RouteListScreen({
           </Pressable>
         ) : null}
         <Text style={styles.screenTitle}>{gymName}</Text>
-        <Pressable
-          style={styles.submitButton}
-          onPress={onSubmitRoute}
-          accessibilityRole="button"
-          accessibilityLabel={t('routes.submit.cta')}
-        >
-          <Text style={styles.submitButtonText}>{t('routes.submit.cta')}</Text>
-        </Pressable>
       </View>
 
       <FlatList
@@ -258,10 +262,11 @@ export default function RouteListScreen({
         keyExtractor={(item) => item.id}
         renderItem={renderRouteCard}
         ListHeaderComponent={listHeader}
+        ListFooterComponent={addRouteCta}
         contentContainerStyle={styles.listContent}
         keyboardShouldPersistTaps="handled"
         ListEmptyComponent={
-          <Text style={styles.emptyText}>{t('routes.noResults')}</Text>
+          <Text style={styles.emptyText}>{t('routeCatalog.noResults')}</Text>
         }
       />
     </View>
@@ -287,11 +292,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
       paddingHorizontal: theme.spacing.lg,
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.md,
-      flexWrap: 'wrap',
       gap: theme.spacing.xs,
     },
     backLink: {
@@ -306,45 +309,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontSize: theme.fontSize.xl,
       fontWeight: theme.fontWeight.bold,
       color: theme.colors.textPrimary,
-      marginRight: theme.spacing.sm,
     },
-    submitButton: {
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.primary,
-    },
-    submitButtonText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
-    statusTabRow: {
-      flexDirection: 'row',
-      paddingHorizontal: theme.spacing.lg,
-      marginBottom: theme.spacing.sm,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.divider,
-    },
-    statusTab: {
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      marginRight: theme.spacing.sm,
-      borderBottomWidth: 2,
-      borderBottomColor: 'transparent',
-    },
-    statusTabActive: {
-      borderBottomColor: theme.colors.primary,
-    },
-    statusTabText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-    },
-    statusTabTextActive: {
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.semibold,
-    },
-    gradeFilterRow: {
+    filterRow: {
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.sm,
       gap: theme.spacing.xs,
@@ -369,8 +335,32 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textInverse,
       fontWeight: theme.fontWeight.semibold,
     },
+    colorChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: theme.spacing.sm + 4,
+      paddingVertical: theme.spacing.xs + 2,
+      borderRadius: theme.borderRadius.full,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    colorChipActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary,
+    },
+    colorDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+    },
+    colorDotBordered: {
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+    },
     listContent: {
-      paddingBottom: theme.spacing.xxl,
+      paddingBottom: theme.spacing.md,
     },
     card: {
       backgroundColor: theme.colors.surface,
@@ -396,17 +386,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textPrimary,
       minWidth: 36,
     },
-    retiredBadge: {
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
-      borderRadius: theme.borderRadius.sm,
-      backgroundColor: theme.colors.border,
-    },
-    retiredBadgeText: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      fontWeight: theme.fontWeight.medium,
-    },
     sectionLabel: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.textSecondary,
@@ -423,6 +402,21 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textSecondary,
       marginTop: theme.spacing.xl,
       paddingHorizontal: theme.spacing.lg,
+    },
+    addRouteCta: {
+      marginHorizontal: theme.spacing.lg,
+      marginTop: theme.spacing.lg,
+      marginBottom: theme.spacing.xxl,
+      paddingVertical: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+      alignItems: 'center',
+    },
+    addRouteCtaText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.primary,
+      fontWeight: theme.fontWeight.medium,
     },
     errorText: {
       fontSize: theme.fontSize.md,

@@ -126,6 +126,22 @@
       "notFound": "Gym not found."
     }
   },
+  "routeCatalog": {
+    "noResults": "No routes match the filter",
+    "addRoute": "Can't find it? Add a new route",
+    "pendingApproval": "Your route will appear once approved by the admin",
+    "colors": {
+      "red": "Red",
+      "orange": "Orange",
+      "yellow": "Yellow",
+      "green": "Green",
+      "blue": "Blue",
+      "purple": "Purple",
+      "pink": "Pink",
+      "white": "White",
+      "black": "Black"
+    }
+  },
   "routes": {
     "noResults": "No routes found.",
     "status": {

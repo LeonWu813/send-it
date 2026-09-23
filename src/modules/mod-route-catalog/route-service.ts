@@ -3,10 +3,12 @@
  *
  * Rules:
  * - Uses the shared Supabase singleton from src/lib/supabase.ts.
- * - Routes are readable by all authenticated users.
- * - Route submission (INSERT) requires authentication; the submitting user's
- *   id must match submitted_by_user_id (enforced by RLS).
- * - Retirement (UPDATE status → 'retired') is allowed by any authenticated user.
+ * - Active routes are readable by all authenticated users.
+ * - Route submission goes through the submit_route SECURITY DEFINER RPC;
+ *   the client never inserts directly into routes.
+ * - Pending route withdrawal: client calls DELETE directly; enforced by RLS
+ *   (submitted_by_user_id = auth.uid() AND status = 'pending').
+ * - Route retirement is admin-only via Supabase Studio (Phase 1).
  * - Photo uploads go to the 'route-photos' Supabase Storage bucket.
  * - All errors are wrapped with user-facing messages before propagation.
  */
@@ -37,6 +39,8 @@ const ROUTE_MATCH_SELECT =
  *
  * This is the first step in the match-before-create flow (AC-020).
  * The caller presents any matches to the user before proceeding with creation.
+ * Query is explicitly scoped to status = 'active' so pending/retired/rejected
+ * routes are excluded from the match pool.
  *
  * @param gymId    UUID of the gym.
  * @param grade    V-scale grade to match.
@@ -114,34 +118,29 @@ export async function uploadRoutePhoto(
 }
 
 /**
- * Submit a new route row after the user has passed the match-before-create flow.
+ * Submit a new route via the submit_route SECURITY DEFINER RPC.
+ *
+ * The RPC enforces:
+ *   - Caller must be authenticated (auth.uid() derived server-side).
+ *   - One-pending-per-combo per submitter guard.
+ *   - Auto-approve toggle: returns status='active' (auto-approve ON) or
+ *     status='pending' (auto-approve OFF). The caller must check the returned
+ *     status to display the correct confirmation copy.
  *
  * The photo must already be uploaded; pass the resulting URL as `input.photo_url`.
- * The partial unique index on (gym_id, grade, color_tag) WHERE status = 'active'
- * prevents duplicate active routes at the database level.
  *
- * @param userId   The authenticated user's UUID (becomes submitted_by_user_id).
  * @param input    Validated route submission payload.
- * @returns        The newly created Route row.
+ * @returns        The newly created Route row, including its status.
  * @throws {Error} with a user-facing message on failure.
  */
-export async function submitRoute(
-  userId: string,
-  input: RouteSubmitInput,
-): Promise<Route> {
-  const { data, error } = await supabase
-    .from('routes')
-    .insert({
-      gym_id: input.gym_id,
-      grade: input.grade,
-      color_tag: input.color_tag,
-      photo_url: input.photo_url,
-      section_label: input.section_label,
-      submitted_by_user_id: userId,
-      status: 'active',
-    })
-    .select(ROUTE_DETAIL_SELECT)
-    .single();
+export async function submitRoute(input: RouteSubmitInput): Promise<Route> {
+  const { data, error } = await supabase.rpc('submit_route', {
+    p_gym_id: input.gym_id,
+    p_grade: input.grade,
+    p_color_tag: input.color_tag,
+    p_photo_url: input.photo_url,
+    p_section_label: input.section_label,
+  });
 
   if (error) {
     // Unique constraint violation = duplicate active route at this gym+grade+color
@@ -150,10 +149,36 @@ export async function submitRoute(
         'An active route with this grade and color already exists at this gym.',
       );
     }
+    // Duplicate pending submission for same combo
+    if (error.message?.includes('pending submission')) {
+      throw new Error(
+        'You already have a pending submission for this grade and color at this gym.',
+      );
+    }
     throw new Error('Failed to submit route. Please try again.');
   }
 
   return data as Route;
+}
+
+/**
+ * Withdraw (delete) a user's own pending route.
+ *
+ * The RLS DELETE policy enforces that only the submitter of their own
+ * pending route can perform this operation. No RPC needed.
+ *
+ * @param routeId  UUID of the pending route to withdraw.
+ * @throws {Error} with a user-facing message on failure.
+ */
+export async function withdrawRoute(routeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('routes')
+    .delete()
+    .eq('id', routeId);
+
+  if (error) {
+    throw new Error('Failed to withdraw route. Please try again.');
+  }
 }
 
 /**
@@ -182,13 +207,14 @@ export async function loadRoute(routeId: string): Promise<Route | null> {
 }
 
 /**
- * List routes for a gym, filtered by grade and status.
+ * List active routes for a gym, filtered by grade and/or hold color.
  *
- * Defaults to active-only (AC-041). The caller can pass filters to override.
+ * Always scoped to status = 'active' (AC-041). Normal users only see active
+ * routes in the gym route list — no status filter is exposed to them.
  *
  * @param gymId    UUID of the gym.
- * @param filters  Grade and status filter state.
- * @returns        Filtered array of RouteSummary rows.
+ * @param filters  Grade and color filter state.
+ * @returns        Filtered array of active RouteSummary rows.
  * @throws {Error} with a user-facing message on failure.
  */
 export async function listRoutes(
@@ -199,12 +225,16 @@ export async function listRoutes(
     .from('routes')
     .select(ROUTE_SUMMARY_SELECT)
     .eq('gym_id', gymId)
-    .eq('status', filters.status)
+    .eq('status', 'active')
     .order('grade', { ascending: true })
     .order('created_at', { ascending: false });
 
   if (filters.grade !== null) {
     query = query.eq('grade', filters.grade);
+  }
+
+  if (filters.colorTag !== null) {
+    query = query.eq('color_tag', filters.colorTag);
   }
 
   const { data, error } = await query;
@@ -216,31 +246,6 @@ export async function listRoutes(
   return (data as RouteSummary[]) ?? [];
 }
 
-/**
- * Retire a route — sets status = 'retired', retired_at = now(), retired_by_user_id = userId.
- *
- * Any authenticated user may retire any active route (AC-024).
- * The RLS policy enforces this server-side.
- *
- * @param routeId  UUID of the route to retire.
- * @param userId   The authenticated user's UUID (recorded as retired_by_user_id).
- * @throws {Error} with a user-facing message on failure.
- */
-export async function retireRoute(
-  routeId: string,
-  userId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('routes')
-    .update({
-      status: 'retired',
-      retired_at: new Date().toISOString(),
-      retired_by_user_id: userId,
-    })
-    .eq('id', routeId)
-    .eq('status', 'active'); // Only allow retiring active routes
-
-  if (error) {
-    throw new Error('Failed to retire route. Please try again.');
-  }
-}
+// retireRoute has been removed. Route retirement is now admin-only via
+// Supabase Studio (Phase 1). See RouteDetailScreen — the retire button
+// has been removed accordingly (AC-024b).

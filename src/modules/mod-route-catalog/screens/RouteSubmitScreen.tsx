@@ -50,6 +50,10 @@ interface RouteSubmitScreenProps {
   gymName: string;
   session: Session;
   onBack: () => void;
+  /**
+   * Called when a route is submitted with status = 'active'.
+   * Navigates to the route detail screen.
+   */
   onSuccess: (routeId: string) => void;
 }
 
@@ -205,7 +209,7 @@ export default function RouteSubmitScreen({
         photoMime,
       );
 
-      const newRoute = await submitRoute(session.user.id, {
+      const newRoute = await submitRoute({
         gym_id: gymId,
         grade: selectedGrade,
         color_tag: selectedColor,
@@ -213,7 +217,18 @@ export default function RouteSubmitScreen({
         section_label: sectionLabel.trim() || null,
       });
 
-      onSuccess(newRoute.id);
+      if (newRoute.status === 'pending') {
+        // Auto-approve is OFF: show the pending approval message then go back
+        // to the route list (route is not active yet so we can't navigate to detail).
+        Alert.alert(
+          t('routes.submit.title'),
+          t('routeCatalog.pendingApproval'),
+          [{ text: t('common.ok'), onPress: () => onBack() }],
+        );
+      } else {
+        // Auto-approve is ON (default Phase 1): navigate to the new active route.
+        onSuccess(newRoute.id);
+      }
     } catch (err) {
       const message =
         err instanceof Error

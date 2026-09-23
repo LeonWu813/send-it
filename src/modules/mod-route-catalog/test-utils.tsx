@@ -3,6 +3,10 @@
  *
  * Provides a wrapper that supplies ThemeProvider and i18n initialization
  * so that components using useTheme() and useTranslation() work in tests.
+ *
+ * react-native-safe-area-context is mocked globally via moduleNameMapper
+ * in package.json (points to the library's own jest/mock.tsx), so
+ * SafeAreaProvider does not need to be included here.
  */
 
 import React from 'react';

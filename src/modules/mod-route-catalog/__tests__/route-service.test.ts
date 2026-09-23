@@ -10,6 +10,7 @@ jest.mock('../../../lib/supabase', () => {
   return {
     supabase: {
       from: jest.fn(),
+      rpc: jest.fn(),
       storage: {
         from: jest.fn(),
       },
@@ -23,13 +24,14 @@ import {
   findMatchingActiveRoutes,
   listRoutes,
   loadRoute,
-  retireRoute,
   submitRoute,
+  withdrawRoute,
 } from '../route-service';
 import type { Route, RouteSummary } from '../types';
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
 const mockFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
+const mockRpc = supabase.rpc as jest.MockedFunction<typeof supabase.rpc>;
 const mockStorageFrom = supabase.storage.from as jest.MockedFunction<
   typeof supabase.storage.from
 >;
@@ -49,6 +51,7 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }) {
     select: jest.fn().mockReturnThis(),
     insert: jest.fn().mockReturnThis(),
     update: jest.fn().mockReturnThis(),
+    delete: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
     single: jest.fn().mockResolvedValue(result),
@@ -180,11 +183,11 @@ describe('listRoutes', () => {
     jest.clearAllMocks();
   });
 
-  it('returns active routes for a gym by default', async () => {
+  it('returns active routes for a gym (always status=active, AC-041)', async () => {
     const qb = makeQueryBuilder({ data: [MOCK_ROUTE_SUMMARY], error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    const result = await listRoutes('gym-001', { grade: null, status: 'active' });
+    const result = await listRoutes('gym-001', { grade: null, colorTag: null });
 
     expect(result).toEqual([MOCK_ROUTE_SUMMARY]);
     expect(qb.eq).toHaveBeenCalledWith('gym_id', 'gym-001');
@@ -195,7 +198,7 @@ describe('listRoutes', () => {
     const qb = makeQueryBuilder({ data: [MOCK_ROUTE_SUMMARY], error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    await listRoutes('gym-001', { grade: 'V4', status: 'active' });
+    await listRoutes('gym-001', { grade: 'V4', colorTag: null });
 
     expect(qb.eq).toHaveBeenCalledWith('grade', 'V4');
   });
@@ -204,31 +207,40 @@ describe('listRoutes', () => {
     const qb = makeQueryBuilder({ data: [], error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    await listRoutes('gym-001', { grade: null, status: 'active' });
+    await listRoutes('gym-001', { grade: null, colorTag: null });
 
-    // grade eq should not be called with a grade value
     const gradeCalls = (qb.eq as jest.Mock).mock.calls.filter(
       (call: unknown[]) => call[0] === 'grade',
     );
     expect(gradeCalls).toHaveLength(0);
   });
 
-  it('filters by retired status when requested', async () => {
-    const retiredRoute = { ...MOCK_ROUTE_SUMMARY, status: 'retired' as const };
-    const qb = makeQueryBuilder({ data: [retiredRoute], error: null });
+  it('applies colorTag filter when provided', async () => {
+    const qb = makeQueryBuilder({ data: [MOCK_ROUTE_SUMMARY], error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    const result = await listRoutes('gym-001', { grade: null, status: 'retired' });
+    await listRoutes('gym-001', { grade: null, colorTag: 'blue' });
 
-    expect(result).toEqual([retiredRoute]);
-    expect(qb.eq).toHaveBeenCalledWith('status', 'retired');
+    expect(qb.eq).toHaveBeenCalledWith('color_tag', 'blue');
+  });
+
+  it('does not apply colorTag filter when colorTag is null', async () => {
+    const qb = makeQueryBuilder({ data: [], error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await listRoutes('gym-001', { grade: null, colorTag: null });
+
+    const colorCalls = (qb.eq as jest.Mock).mock.calls.filter(
+      (call: unknown[]) => call[0] === 'color_tag',
+    );
+    expect(colorCalls).toHaveLength(0);
   });
 
   it('returns an empty array when there are no routes', async () => {
     const qb = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    const result = await listRoutes('gym-001', { grade: null, status: 'active' });
+    const result = await listRoutes('gym-001', { grade: null, colorTag: null });
 
     expect(result).toEqual([]);
   });
@@ -241,7 +253,7 @@ describe('listRoutes', () => {
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
     await expect(
-      listRoutes('gym-001', { grade: null, status: 'active' }),
+      listRoutes('gym-001', { grade: null, colorTag: null }),
     ).rejects.toThrow('Failed to load routes. Please try again.');
   });
 });
@@ -253,11 +265,10 @@ describe('submitRoute', () => {
     jest.clearAllMocks();
   });
 
-  it('inserts a route row and returns the created Route', async () => {
-    const qb = makeQueryBuilder({ data: MOCK_ROUTE, error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+  it('calls submit_route RPC and returns the created Route', async () => {
+    mockRpc.mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never);
 
-    const result = await submitRoute('user-001', {
+    const result = await submitRoute({
       gym_id: 'gym-001',
       grade: 'V4',
       color_tag: 'blue',
@@ -266,28 +277,23 @@ describe('submitRoute', () => {
     });
 
     expect(result).toEqual(MOCK_ROUTE);
-    expect(mockFrom).toHaveBeenCalledWith('routes');
-    expect(qb.insert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        gym_id: 'gym-001',
-        grade: 'V4',
-        color_tag: 'blue',
-        photo_url: 'https://example.com/photo.jpg',
-        submitted_by_user_id: 'user-001',
-        status: 'active',
-      }),
-    );
+    expect(mockRpc).toHaveBeenCalledWith('submit_route', {
+      p_gym_id: 'gym-001',
+      p_grade: 'V4',
+      p_color_tag: 'blue',
+      p_photo_url: 'https://example.com/photo.jpg',
+      p_section_label: null,
+    });
   });
 
   it('throws a duplicate-route error when the unique constraint is violated (23505)', async () => {
-    const qb = makeQueryBuilder({
+    mockRpc.mockResolvedValueOnce({
       data: null,
       error: { code: '23505', message: 'unique constraint violation' },
-    });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+    } as never);
 
     await expect(
-      submitRoute('user-001', {
+      submitRoute({
         gym_id: 'gym-001',
         grade: 'V4',
         color_tag: 'blue',
@@ -299,15 +305,33 @@ describe('submitRoute', () => {
     );
   });
 
-  it('throws a user-friendly error on unexpected DB failure', async () => {
-    const qb = makeQueryBuilder({
+  it('throws a pending-submission error when duplicate pending exists', async () => {
+    mockRpc.mockResolvedValueOnce({
       data: null,
-      error: { code: 'PGRST500', message: 'server error' },
-    });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+      error: { code: 'P0001', message: 'You already have a pending submission for this route combination' },
+    } as never);
 
     await expect(
-      submitRoute('user-001', {
+      submitRoute({
+        gym_id: 'gym-001',
+        grade: 'V4',
+        color_tag: 'blue',
+        photo_url: 'https://example.com/photo.jpg',
+        section_label: null,
+      }),
+    ).rejects.toThrow(
+      'You already have a pending submission for this grade and color at this gym.',
+    );
+  });
+
+  it('throws a user-friendly error on unexpected RPC failure', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST500', message: 'server error' },
+    } as never);
+
+    await expect(
+      submitRoute({
         gym_id: 'gym-001',
         grade: 'V4',
         color_tag: 'blue',
@@ -318,42 +342,33 @@ describe('submitRoute', () => {
   });
 });
 
-// ── retireRoute ───────────────────────────────────────────────────────────────
+// ── withdrawRoute ─────────────────────────────────────────────────────────────
 
-describe('retireRoute', () => {
+describe('withdrawRoute', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('updates status to retired with retired_at and retired_by_user_id', async () => {
+  it('calls delete on routes with the given routeId', async () => {
     const qb = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    await retireRoute('route-001', 'user-001');
+    await withdrawRoute('route-001');
 
     expect(mockFrom).toHaveBeenCalledWith('routes');
-    expect(qb.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'retired',
-        retired_by_user_id: 'user-001',
-      }),
-    );
-    // retired_at should be set (ISO string)
-    const updateCall = (qb.update as jest.Mock).mock.calls[0][0];
-    expect(typeof updateCall.retired_at).toBe('string');
+    expect(qb.delete).toHaveBeenCalled();
     expect(qb.eq).toHaveBeenCalledWith('id', 'route-001');
-    expect(qb.eq).toHaveBeenCalledWith('status', 'active');
   });
 
-  it('throws a user-friendly error when the update fails', async () => {
+  it('throws a user-friendly error when the delete fails', async () => {
     const qb = makeQueryBuilder({
       data: null,
       error: { code: 'PGRST301', message: 'DB error' },
     });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    await expect(retireRoute('route-001', 'user-001')).rejects.toThrow(
-      'Failed to retire route. Please try again.',
+    await expect(withdrawRoute('route-001')).rejects.toThrow(
+      'Failed to withdraw route. Please try again.',
     );
   });
 });

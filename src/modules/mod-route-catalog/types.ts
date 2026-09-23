@@ -19,7 +19,7 @@ export const ROUTE_COLORS = [
 export type RouteColor = (typeof ROUTE_COLORS)[number];
 
 /** Route lifecycle status. */
-export type RouteStatus = 'active' | 'retired';
+export type RouteStatus = 'active' | 'pending' | 'retired' | 'rejected';
 
 /**
  * Full Route row — mirrors the `routes` DB table.
@@ -69,5 +69,5 @@ export interface RouteSubmitInput {
 /** Filter state for the gym route list. */
 export interface RouteListFilters {
   grade: RouteGrade | null;
-  status: RouteStatus; // defaults to 'active' per AC-041
+  colorTag: RouteColor | null;
 }

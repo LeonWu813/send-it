@@ -59,7 +59,7 @@ export default function RouteSearchScreen({
     setErrorMessage(null);
     setHasSearched(true);
     try {
-      const routes = await listRoutes(trimmedGymId, { grade: null, status: 'active' });
+      const routes = await listRoutes(trimmedGymId, { grade: null, colorTag: null });
       setResults(routes);
     } catch {
       setErrorMessage(t('sends.errors.routeSearchFailed'));

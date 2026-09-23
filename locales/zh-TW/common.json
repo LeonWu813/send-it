@@ -126,6 +126,22 @@
       "notFound": "找不到該岩館。"
     }
   },
+  "routeCatalog": {
+    "noResults": "找不到符合的路線",
+    "addRoute": "找不到路線？新增一條",
+    "pendingApproval": "你的路線將在管理員審核後顯示",
+    "colors": {
+      "red": "紅色",
+      "orange": "橙色",
+      "yellow": "黃色",
+      "green": "綠色",
+      "blue": "藍色",
+      "purple": "紫色",
+      "pink": "粉紅色",
+      "white": "白色",
+      "black": "黑色"
+    }
+  },
   "routes": {
     "noResults": "找不到路線。",
     "status": {

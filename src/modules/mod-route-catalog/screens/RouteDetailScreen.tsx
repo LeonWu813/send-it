@@ -4,11 +4,11 @@
  * Shows the full detail of a single route:
  *   - Grade, gym/section, color badge, photo, status (active/retired)
  *   - Submitted by, created_at, retired_at (when applicable)
- *   - Retire action (any authenticated user, active routes only — AC-024)
  *   - Ascent list (MOD-004) — wired via AscentList component
  *   - Placeholder slot for beta videos (MOD-005)
  *
- * US-014: flag a route as retired.
+ * Note: Route retirement is now admin-only via Supabase Studio (AC-024b).
+ * The retire button and retireRoute() call have been removed.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -16,7 +16,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -32,7 +31,7 @@ import { useTheme } from '../../../lib/theme';
 import AscentList from '../../mod-send-logging/components/AscentList';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
 import RouteColorBadge from '../components/RouteColorBadge';
-import { loadRoute, retireRoute } from '../route-service';
+import { loadRoute } from '../route-service';
 import type { Route } from '../types';
 
 interface RouteDetailScreenProps {
@@ -56,7 +55,6 @@ export default function RouteDetailScreen({
   const [route, setRoute] = useState<Route | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isRetiring, setIsRetiring] = useState(false);
   const [isLogSendVisible, setIsLogSendVisible] = useState(false);
   /**
    * Incrementing key passed to AscentList. When this value changes,
@@ -86,21 +84,6 @@ export default function RouteDetailScreen({
     void fetchRoute();
   }, [fetchRoute]);
 
-  function handleRetirePress(): void {
-    Alert.alert(
-      t('routes.retire.confirmTitle'),
-      t('routes.retire.confirmBody'),
-      [
-        { text: t('common.cancel'), style: 'cancel' },
-        {
-          text: t('routes.retire.confirmAction'),
-          style: 'destructive',
-          onPress: () => void confirmRetire(),
-        },
-      ],
-    );
-  }
-
   function handleLogSendPress(): void {
     setIsLogSendVisible(true);
   }
@@ -114,19 +97,6 @@ export default function RouteDetailScreen({
 
   function handleLogSendCancel(): void {
     setIsLogSendVisible(false);
-  }
-
-  async function confirmRetire(): Promise<void> {
-    setIsRetiring(true);
-    try {
-      await retireRoute(routeId, session.user.id);
-      // Refresh route data to reflect retired status
-      await fetchRoute();
-    } catch {
-      Alert.alert(t('common.error'), t('routes.errors.retireFailed'));
-    } finally {
-      setIsRetiring(false);
-    }
   }
 
   if (isLoading) {
@@ -276,25 +246,6 @@ export default function RouteDetailScreen({
         </Text>
       </View>
 
-      {/* Retire action — only for active routes */}
-      {!isRetired && (
-        <Pressable
-          style={[styles.retireButton, isRetiring && styles.retireButtonDisabled]}
-          onPress={handleRetirePress}
-          disabled={isRetiring}
-          accessibilityRole="button"
-          accessibilityLabel={t('routes.retire.action')}
-          accessibilityState={{ disabled: isRetiring }}
-        >
-          {isRetiring ? (
-            <ActivityIndicator size="small" color={theme.colors.error} />
-          ) : (
-            <Text style={styles.retireButtonText}>
-              {t('routes.retire.action')}
-            </Text>
-          )}
-        </Pressable>
-      )}
     </ScrollView>
   );
 }
@@ -390,22 +341,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     placeholderSubtitle: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.textDisabled,
-    },
-    retireButton: {
-      marginTop: theme.spacing.xl,
-      paddingVertical: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.error,
-      alignItems: 'center',
-    },
-    retireButtonDisabled: {
-      opacity: 0.5,
-    },
-    retireButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-      fontWeight: theme.fontWeight.medium,
     },
     errorText: {
       fontSize: theme.fontSize.md,
