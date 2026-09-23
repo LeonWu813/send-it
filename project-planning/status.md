@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: d7fffd4393ae9a658ca4804b756e270f78a86dcb
-timestamp: 2026-09-23T01:27:54Z
+commit: 1366d4500192449f36d26afa937ecf89c92b3f21
+timestamp: 2026-09-23T00:00:00Z
 ```
 
 ## PM Updates
@@ -47,6 +47,219 @@ timestamp: 2026-09-23T01:27:54Z
 
 **Proposed Shared Conventions** (for Doc-Sync to carry into production.md):
 - Screen Layout & Safe Area Insets convention has already been written directly into `production.md` Shared Conventions as part of this review.
+
+## Tech Lead Review — Route Status Full Architecture (2026-09-23)
+
+**Context**: PRD Revision 4 [SUBSTANTIVE] locks the route approval gate and expands `Route.status` to a 4-value enum (`active | pending | retired | rejected`). This review supersedes the 2026-09-22 advisory (which recommended B2 + T3) by turning it into a concrete, implementable spec across data model, RLS, enum migration, the submission RPC, `app_settings`, the one-pending-per-combo constraint, withdrawal-by-delete, and Phase 1.5 forward-compat. Advisory only — no source or migration files changed here. Doc-Sync carries the outputs into the MOD-003 spec and production.md; Engineering implements in a `change`-mode migration.
+
+Decisions locked upstream that this review builds on: B2 (`pending` as a status value on `routes`, not a separate submission table), T3 (single-row `app_settings`), submission via `SECURITY DEFINER` RPC, withdrawal = row delete, one-pending-per-combo per submitter, admin via Studio (service_role) in Phase 1 with schema forward-compatible for in-app admin in Phase 1.5.
+
+---
+
+### 1. Enum migration (`route_status`: add `pending`, `rejected`)
+
+Existing type: `CREATE TYPE route_status AS ENUM ('active', 'retired')`.
+
+**PG15 behavior that governs the migration:**
+- On Postgres 15, `ALTER TYPE ... ADD VALUE` *can* run inside a transaction block, **but** a newly added enum value **cannot be referenced in the same transaction that added it** (Postgres restriction: the new label isn't committed/visible to other reads within the adding transaction; PG only lifted the in-txn *usage* restriction for values added in the same txn under narrow conditions, and Supabase's migration runner wraps each migration file in a single transaction). Because the new `pending` value is *used* by the RPC, the RLS policies, and the partial index in the same logical change, treating enum-add and enum-use as one transaction is unsafe.
+- **Mitigation (required): split into two migration files.**
+  - **Migration A** — enum values only, nothing that references them:
+    ```
+    ALTER TYPE route_status ADD VALUE IF NOT EXISTS 'pending';
+    ALTER TYPE route_status ADD VALUE IF NOT EXISTS 'rejected';
+    ```
+    Order does not matter functionally (enum ordinal order is cosmetic here since no code sorts by it), but add `pending` then `rejected` for readability. `IF NOT EXISTS` makes the file idempotent for `supabase db reset` re-runs.
+  - **Migration B** (separate file, later timestamp) — everything that *uses* the new values: `app_settings` table + seed, the `submit_route` RPC, the revised RLS policies, the new pending partial index, and the withdrawal DELETE policy. Because B is a distinct migration file, it runs in its own transaction after A has committed, so `'pending'` and `'rejected'` are fully visible.
+- **Engineer verification step**: run `supabase db reset` locally and confirm both files apply cleanly in order. If the runner ever collapses both into one transaction, the symptom is `ERROR: unsafe use of new value "pending" of enum type`. That error means A and B were not separated correctly — it is the canary for this whole item.
+- **Do not** attempt a `COMMIT;` mid-file workaround inside a single Supabase migration — the CLI's transaction wrapper makes that unreliable; file-splitting is the supported path.
+
+---
+
+### 2. Admin identity mechanism (forward-compatible for Phase 1.5)
+
+**Recommendation: use `app_metadata.role = 'admin'` on the Supabase auth user (a JWT claim), NOT a `public.admin_users` table.**
+
+- **Phase 1**: no in-app admin identity is needed at all — Leon acts as service_role in Studio, which bypasses RLS. So in Phase 1 this mechanism is *defined but unused by RLS*. That is intentional and correct.
+- **Phase 1.5**: in-app admin needs an RLS-visible identity. `app_metadata` is the right store because:
+  1. It is set only by service_role (Studio / admin API) — a user cannot self-escalate by editing it, unlike `user_metadata`. This matches the trust model exactly (admin is granted, never claimed).
+  2. Supabase mints it directly into the JWT, so RLS can read it with **zero extra table lookup** per policy evaluation. A `public.admin_users` table would add a subquery (`EXISTS (SELECT 1 FROM admin_users ...)`) to every admin-gated policy evaluation and require its own RLS.
+  3. It requires no schema at all now — nothing to migrate, nothing to keep in sync with auth.users.
+- **The forward-compatible RLS predicate to standardize on now** (so Phase 1 policies are written in a shape that Phase 1.5 extends without rewrite):
+  ```
+  COALESCE((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin'
+  ```
+  Wrap this in a stable helper so every policy references one place and Phase 1.5 can swap the implementation if ever needed:
+  ```
+  CREATE OR REPLACE FUNCTION public.is_admin()
+  RETURNS boolean
+  LANGUAGE sql STABLE
+  AS $$
+    SELECT COALESCE((auth.jwt() -> 'app_metadata' ->> 'role'), '') = 'admin';
+  $$;
+  ```
+  In Phase 1 no user carries this claim, so `public.is_admin()` is always `false` for real clients and `true` is effectively only reachable via service_role (which bypasses RLS anyway). Ship the helper and reference it in the SELECT/UPDATE policies now so Phase 1.5 is purely a matter of granting the claim to Leon's auth user — **no migration, no policy rewrite**.
+- **Risk / mitigation**: `auth.jwt()` returns the *session's* claims; a claim granted to a user mid-session is not visible until their token refreshes. Mitigation: acceptable — admin grants are rare and Leon can re-auth. Document it so it isn't mistaken for a bug in Phase 1.5.
+
+---
+
+### 3. RLS policies for `routes` (exact logic, replacing the current three policies)
+
+The current migration's policies (`routes_select_authenticated` = all rows to all authenticated; `routes_insert_own`; `routes_retire_authenticated`) must be **dropped and replaced** in Migration B. US-014 / user-retire is gone, so `routes_retire_authenticated` is removed entirely. New policy set:
+
+- **SELECT** (`routes_select_visible`) — a row is visible to an authenticated caller iff **any** of:
+  - `status = 'active'` (everyone sees active), OR
+  - `submitted_by_user_id = auth.uid() AND status = 'pending'` (submitter sees only their *own* pending row, read-only), OR
+  - `public.is_admin()` (Phase 1.5 admin sees everything; false for all Phase 1 clients).
+  - Net effect: `retired` and `rejected` are invisible to every normal user (including the original submitter — a rejected/retired route disappears from their view). A submitter sees their own pending row but not anyone else's pending row. service_role (Studio) sees all rows regardless (RLS bypass).
+  - **Important**: this is the top correctness fix. The existing `routes_select_authenticated` leaks all rows; it MUST be replaced or pending/rejected/retired routes pollute every user's gym list and — critically — the AC-020 match pool.
+
+- **INSERT** (no policy — blocked entirely) — remove `routes_insert_own`. Client cannot INSERT directly; all creation goes through `submit_route` (SECURITY DEFINER, which inserts as the function owner and is not subject to a client INSERT policy). Rationale: the auto-approve gate must be enforced server-side; a client INSERT policy would let a user set `status = 'active'` and self-approve. **Also revoke the INSERT grant**: `REVOKE INSERT ON public.routes FROM authenticated;` — the RPC does the insert with definer privileges, so `authenticated` needs no direct INSERT right.
+
+- **UPDATE** (`routes_admin_update`) — normal users cannot UPDATE at all. Only `public.is_admin()` may UPDATE (Phase 1.5). In Phase 1 this policy never matches a real client (admin transitions happen in Studio via service_role). Writing the policy now, gated on `is_admin()`, is the forward-compat move: approve (`pending→active`), reject (`pending→rejected`), and retire (`active→retired`) all become in-app admin UPDATEs in Phase 1.5 with no new policy. **Revoke the broad UPDATE grant** that the current migration gives (`GRANT ... UPDATE`) since no normal-user UPDATE path remains; keep UPDATE grant only insofar as `is_admin()` clients need it in 1.5 — safe to `GRANT UPDATE ON public.routes TO authenticated` while the policy restricts it to admins, or defer the grant to 1.5. Recommend deferring the UPDATE grant to Phase 1.5 to keep Phase 1 tight.
+
+- **DELETE** (`routes_withdraw_own_pending`) — a row may be deleted by the caller iff `submitted_by_user_id = auth.uid() AND status = 'pending'`. This is the withdrawal path (see §7). No other deletes for normal users. service_role deletes anything in Studio. Add `GRANT DELETE ON public.routes TO authenticated;` (the current migration grants only SELECT/INSERT/UPDATE) — required for the withdrawal DELETE policy to be usable.
+
+Summary of grant changes in Migration B: `REVOKE INSERT ON public.routes FROM authenticated;` `REVOKE UPDATE ON public.routes FROM authenticated;` (defer UPDATE re-grant to 1.5) `GRANT DELETE ON public.routes TO authenticated;` (SELECT grant stays.)
+
+---
+
+### 4. SECURITY DEFINER submission RPC (`submit_route`)
+
+Mirrors the existing `handle_new_auth_user` definer pattern (`SECURITY DEFINER`, `SET search_path = public`).
+
+**Signature** (order fixed for named `supabase.rpc` calls; do not pass `user_id` from the client — derive it server-side from `auth.uid()` so a caller cannot submit as someone else):
+```
+CREATE OR REPLACE FUNCTION public.submit_route(
+  p_gym_id        UUID,
+  p_grade         route_grade,
+  p_color_tag     route_color,
+  p_photo_url     TEXT,
+  p_section_label TEXT DEFAULT NULL
+) RETURNS public.routes
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+```
+Note: the task brief lists `user_id` as a parameter — **override that**: the submitter must be `auth.uid()` inside the function, never a client-supplied argument. Accepting `user_id` from the client is an impersonation hole. This is a flagged correction, not a TBD.
+
+**Logic (in order):**
+1. `v_uid := auth.uid();` — if NULL, `RAISE EXCEPTION 'not authenticated'` (function is `SECURITY DEFINER` but must still require a real session; grant EXECUTE to `authenticated` only, not `anon`).
+2. `p_photo_url` NOT NULL / non-empty check → else `RAISE EXCEPTION 'photo required'` (enforces AC "no photo, no submission" at the server, not just client).
+3. Read the toggle: `SELECT (value = 'true') INTO v_auto FROM public.app_settings WHERE key = 'route_auto_approve';` — if no row, treat as the seeded default `true` (defensive: `v_auto := COALESCE(v_auto, true)`).
+4. One-pending-per-combo guard: `IF EXISTS (SELECT 1 FROM public.routes WHERE gym_id = p_gym_id AND grade = p_grade AND color_tag = p_color_tag AND status = 'pending' AND submitted_by_user_id = v_uid) THEN RAISE EXCEPTION 'duplicate pending submission' USING ERRCODE = 'unique_violation'; END IF;` (belt-and-suspenders with the partial index in §6; the explicit check yields a clean, catchable error message; the index is the true guarantee).
+5. Compute status: `v_status := CASE WHEN v_auto THEN 'active' ELSE 'pending' END::route_status;`
+6. Insert and return the row:
+   ```
+   INSERT INTO public.routes (gym_id, section_label, grade, color_tag, photo_url, status, submitted_by_user_id)
+   VALUES (p_gym_id, p_section_label, p_grade, p_color_tag, p_photo_url, v_status, v_uid)
+   RETURNING * INTO v_row;
+   RETURN v_row;
+   ```
+   - When `v_auto = true`, the insert of a second `active` row for the same combo hits `routes_active_unique_idx` and raises `unique_violation` — this is the correct match-before-create backstop (client should have matched first, but the DB enforces it). Surface as a friendly "route already exists" message client-side.
+7. Grant: `GRANT EXECUTE ON FUNCTION public.submit_route(UUID, route_grade, route_color, TEXT, TEXT) TO authenticated;` and `REVOKE EXECUTE ... FROM anon, public;`
+
+**Client call**:
+```
+supabase.rpc('submit_route', { p_gym_id, p_grade, p_color_tag, p_photo_url, p_section_label })
+```
+Returns the inserted `routes` row (single object). The client uses the returned `status` to choose confirmation copy: active → "route added"; pending → the [I18N-PENDING] "submitted for review" message (AC-025).
+
+**Why the RPC and not an INSERT policy**: enforcing auto-approve in a `WITH CHECK` would require the policy to subquery `app_settings` on every insert and still could not prevent a client from choosing its own `status` unless the check also pinned status to the computed value — which reduces to reimplementing the RPC inside a policy. The definer RPC centralizes the gate in one server-side place, matches the shipped `handle_new_auth_user` pattern, and lets `app_settings` be service-role-only (see §5).
+
+---
+
+### 5. `app_settings` table
+
+```
+CREATE TABLE IF NOT EXISTS public.app_settings (
+  key         TEXT PRIMARY KEY,
+  value       TEXT NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+- **Seed** (Migration B): `INSERT INTO public.app_settings (key, value) VALUES ('route_auto_approve', 'true') ON CONFLICT (key) DO NOTHING;` (auto-approve ON at launch per D-AUTO-DEFAULT — Phase 1 behavior matches pre-gate behavior).
+- **RLS** (enabled from creation per convention): `ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;`
+  - **No SELECT policy for `authenticated`** — the client never reads the toggle directly. The only reader is `submit_route`, which is `SECURITY DEFINER` and reads the row as the function owner regardless of the caller's RLS. This is the tightest design: settings are never exposed to clients, and the client doesn't need the value (it learns the outcome from the RPC's returned `status`). Result: with RLS enabled and no policy, `authenticated`/`anon` get zero rows; service_role (Studio) reads/writes freely.
+  - **No INSERT/UPDATE/DELETE policies** → only service_role (Studio) can flip the toggle: `UPDATE public.app_settings SET value = 'false', updated_at = NOW() WHERE key = 'route_auto_approve';`
+  - **Grants**: do **not** `GRANT` any privilege on `app_settings` to `authenticated` or `anon`. The definer function's owner (postgres) already has access. This makes the table invisible to clients at both the grant and RLS layers.
+- **Value typing note**: stored as TEXT (`'true'`/`'false'`) for a generic key/value shape reusable by future settings. The RPC compares `value = 'true'`. If preferred, a `BOOLEAN` column is fine too — TEXT keeps the table polymorphic for later settings; either is acceptable, TEXT recommended for extensibility.
+
+---
+
+### 6. One-pending-per-combo constraint
+
+**Recommendation: add a second partial unique index AND keep the explicit RPC check — both, not either/or.**
+
+```
+CREATE UNIQUE INDEX routes_pending_unique_idx
+  ON public.routes (gym_id, grade, color_tag, submitted_by_user_id)
+  WHERE status = 'pending';
+```
+- **Why the index (the real guarantee)**: it makes the constraint race-proof and enforced regardless of write path (RPC, Studio, or any future path). The RPC's `IF EXISTS` check in §4.4 has a TOCTOU race under concurrent double-submit; only a unique index closes it. The index is the source of truth.
+- **Why also the RPC check**: the index raises a raw `unique_violation` with a generic message; the RPC's pre-check raises a clean, localizable error first in the common (non-concurrent) case, giving a better UX. The RPC catches the index violation as the fallback for the race.
+- **Scoping note — this is per-submitter, matching AC-029** ("no two pending for same gym+grade+color" is scoped to the *same user* per the D1 decision: one user can't spam duplicate pendings; two *different* users may each have a pending for the same combo, which is fine — they're competing submissions the admin adjudicates). The index key therefore includes `submitted_by_user_id`. 
+  - **Flagged nuance for PM/Doc-Sync to confirm wording**: AC-029 as summarized reads "no two pending for the same gym+grade+color," which could be read as global (across all users). The D1 decision and this index implement **per-submitter**. If Leon actually wants *global* one-pending (only one person may have a pending submission for a combo at a time), drop `submitted_by_user_id` from the index. Recommend **per-submitter** (as indexed above) because global-pending lets one user block others from submitting and complicates the two-competing-submissions adjudication model. Doc-Sync should make AC-029 explicit either way. Mitigation if unresolved: ship per-submitter (the less-restrictive, non-blocking choice) and note it.
+- **Active uniqueness is unchanged**: `routes_active_unique_idx` (`WHERE status = 'active'`) stays exactly as-is. `pending`, `retired`, `rejected` rows are excluded from it, so approval is where active-uniqueness is enforced (approving a second competing pending into `active` correctly collides — see §8 approval-collision note).
+
+---
+
+### 7. Withdrawal (row delete) — confirmed, with the required grant
+
+The brief's proposal is **correct**: a DELETE RLS policy `USING (submitted_by_user_id = auth.uid() AND status = 'pending')` is sufficient; no RPC is needed for withdrawal. A direct `supabase.from('routes').delete().eq('id', ...)` from the client is fine because RLS scopes the delete to the caller's own pending rows only.
+
+**One required addition the brief omits**: the current migration grants only `SELECT, INSERT, UPDATE` on `routes` to `authenticated` — there is **no DELETE grant**, so the DELETE policy alone would not make delete work (RLS filters rows but GRANT authorizes the verb). Migration B must add:
+```
+GRANT DELETE ON public.routes TO authenticated;
+```
+Guardrails already correct: because the policy predicate requires `status = 'pending'`, a user cannot delete an `active`/`retired`/`rejected` route, and cannot delete another user's pending row (not visible to them via SELECT and blocked by the DELETE `USING` anyway). Deleting the row (vs. status-changing) also cleanly frees the `(gym_id, grade, color_tag, submitted_by_user_id)` slot in `routes_pending_unique_idx`, so the user can resubmit immediately — the delete-not-flag choice is consistent with the constraint design.
+
+**FK note**: `ascents.route_id → routes.id ON DELETE ...` — a pending route has no ascents yet in the normal flow (you can't log a send against a non-active route the app won't show). But to be safe against any future path, confirm the `ascents.route_id` FK behavior. If it is `ON DELETE CASCADE`, deleting a pending route silently deletes any ascents — acceptable only because pending routes shouldn't have ascents. Doc-Sync/Engineer should verify no code path lets an ascent attach to a pending route; if one could, withdrawal semantics need review. Flagged as a low-probability integrity check, not a blocker.
+
+---
+
+### 8. Forward-compatibility — what Engineering must NOT do in Phase 1
+
+To keep Phase 1.5 in-app admin a zero-rework, additive change:
+
+1. **Do NOT create a `service_role`-only trigger or hardcoded `auth.role() = 'service_role'` check to perform admin status transitions.** Admin approve/reject/retire must be plain `UPDATE`s gated by `public.is_admin()` (§2/§3). In Phase 1 those UPDATEs simply only ever originate from Studio (service_role bypasses RLS); in Phase 1.5 the same policy admits an admin-claimed client with no change. A trigger that assumes service_role would have to be torn out for in-app admin.
+2. **Do NOT drop or inline the `public.is_admin()` helper.** Ship it in Phase 1 even though it always returns false for real clients. Phase 1.5 = grant the `app_metadata.role='admin'` claim to Leon's user; policies already reference the helper. If policies hardcode `false` or omit the admin branch, 1.5 requires a policy migration.
+3. **Do NOT enforce admin transitions in application/client code.** No "if service_role then allow" logic in the app; enforcement lives in RLS + the `is_admin()` predicate. Client admin logic can't be reused server-side and would be bypassable.
+4. **Do NOT store the auto-approve toggle anywhere but `app_settings`** (no env var, no deploy-time constant, no client flag). Phase 1.5 admin UI must be able to flip it with one authorized write; a non-DB store can't be toggled in-app.
+5. **Do NOT let `submit_route` accept a client-supplied `user_id` or client-supplied `status`.** Both are server-derived (auth.uid() and the toggle). A client-settable status makes the whole gate cosmetic and can't be tightened later without breaking existing callers.
+6. **Do NOT add rejection/retirement metadata as a separate table now, but leave room for it.** If Phase 1.5 wants reviewer notes / rejection reasons, add nullable columns (`reviewed_by_user_id`, `reviewed_at`, `review_note`) to `routes` then — the `status`-on-`routes` model (B2) accommodates this additively. Do not build a `route_reviews` table speculatively in Phase 1.
+7. **Do NOT rely on the RPC's `IF EXISTS` pending check as the sole constraint** — the partial unique index (§6) must exist so the guarantee holds for the future in-app admin and any Studio-side inserts.
+
+---
+
+### Concerns (must address in the change-mode migration)
+
+- **Pending/rejected/retired leak via the existing SELECT policy** — `routes_select_authenticated` currently returns all rows to all authenticated users. It MUST be dropped and replaced by `routes_select_visible` (§3) in the same migration that adds `pending`, or unreviewed/rejected/retired routes pollute every gym list and the AC-020 match pool. Top correctness risk.
+- **Enum add-and-use in one transaction will fail on PG15** — must split into Migration A (enum values) + Migration B (everything using them) per §1. Canary error: `unsafe use of new value ... of enum type`.
+- **`submit_route` must not accept `user_id` from the client** — derive from `auth.uid()`. The brief's listed signature includes `user_id`; implementing that verbatim is an impersonation vulnerability (§4).
+- **Grants lag the new policies** — `routes` currently lacks a DELETE grant (needed for withdrawal, §7) and still carries INSERT/UPDATE grants that should be revoked (§3). RLS without matching GRANTs (or with stale GRANTs) silently breaks the intended access shape.
+
+### Recommendations
+
+- Implement as two migration files: `..._route_status_enum.sql` (Migration A) and `..._route_approval_gate.sql` (Migration B). Verify with `supabase db reset`.
+- Standardize the admin check on `public.is_admin()` now; grant the claim to Leon only in Phase 1.5.
+- Keep `app_settings` fully client-invisible (RLS enabled, no policies, no grants); read it only inside `submit_route`.
+- Enforce one-pending-per-combo with both the partial unique index (guarantee) and the RPC pre-check (clean UX error).
+- Document the approval-time active-uniqueness collision (approving a 2nd competing pending into `active` raises `unique_violation` in Studio) in the MOD-003 spec as expected Phase 1 behavior, not a bug.
+
+### Approved (looks solid as-is)
+
+- B2 (`pending` on `routes`) + T3 (`app_settings`) remain the right calls under Revision 4; no reason to revisit the separate-table option.
+- The existing `routes_active_unique_idx` needs **no change** — its `WHERE status = 'active'` predicate already does the right thing for the expanded status set.
+- Withdrawal-by-DELETE via an RLS policy (no RPC) is correct — only the missing DELETE grant needs adding.
+- The `SECURITY DEFINER` submission RPC mirrors the shipped `handle_new_auth_user` pattern; no new architectural concept is introduced.
+- `ascents.route_id → routes.id` FK integrity is preserved: a route keeps one stable id from submission through approval (no id remapping, unlike a promote-on-approve separate-table design).
+
+### Proposed Shared Conventions (for Doc-Sync to carry into production.md)
+
+- **Admin identity**: gate admin-only RLS on a `public.is_admin()` helper reading `app_metadata.role = 'admin'` from the JWT (set only by service_role). Do not use a `user_metadata` claim (self-editable) or a lookup table (adds per-policy subquery) unless a specific need arises. Write admin-gated policies against the helper from day one even when no client yet carries the claim, so granting in-app admin later is additive.
+- **Enum evolution on PG15/Supabase**: adding an enum value and using it must be split across two migration files (add in file N, use in file N+1); never add-and-use an enum value in a single Supabase migration transaction.
+- **Server-enforced write gates**: when a write must honor an operator toggle or assign a server-controlled field (status, owner), route it through a `SECURITY DEFINER` RPC that derives the owner from `auth.uid()` and reads settings server-side; never accept owner/status/toggle-outcome as client arguments, and revoke the direct table grant for that verb.
+- **Runtime operator toggles**: store in a single `app_settings(key, value)` table with RLS enabled and no client policies/grants; read only inside definer functions so the setting is never exposed to clients.
 
 ## Module Map
 
