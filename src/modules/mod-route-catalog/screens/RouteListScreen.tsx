@@ -102,15 +102,6 @@ export default function RouteListScreen({
     setColorFilter((prev) => (prev === color ? null : color));
   }
 
-  // Deduplicated grades present in the loaded route list (for filter chips)
-  const availableGrades = useMemo(() => {
-    const seen = new Set<RouteGrade>();
-    for (const r of routes) {
-      seen.add(r.grade);
-    }
-    // Return in canonical grade order
-    return ROUTE_GRADES.filter((g) => seen.has(g));
-  }, [routes]);
 
   function renderRouteCard({ item }: { item: RouteSummary }): React.JSX.Element {
     return (
@@ -183,16 +174,14 @@ export default function RouteListScreen({
 
   const listHeader = (
     <View>
-      {/* Grade filter chips — only shown when routes are loaded */}
-      {availableGrades.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-        >
-          {availableGrades.map(renderGradeChip)}
-        </ScrollView>
-      )}
+      {/* Grade filter chips — all grades always shown */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+      >
+        {ROUTE_GRADES.map(renderGradeChip)}
+      </ScrollView>
 
       {/* Hold-color filter chips — all 9 colors always shown */}
       <ScrollView
