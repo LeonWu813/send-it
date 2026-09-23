@@ -84,7 +84,7 @@ export default function GymNavigator({
           gymId={view.gymId}
           gymName={view.gymName}
           session={session}
-          onBackToGym={navigateToList}
+          onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}
         />
       )}
     </View>

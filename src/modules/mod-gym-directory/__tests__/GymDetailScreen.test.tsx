@@ -75,7 +75,7 @@ describe('GymDetailScreen', () => {
   it('renders gym name, city/district, address, and grading system', async () => {
     mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
 
-    render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} />, renderOptions());
+    render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() =>
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
@@ -90,7 +90,7 @@ describe('GymDetailScreen', () => {
   it('shows bouldering_only_note for mixed gyms', async () => {
     mockLoadGym.mockResolvedValueOnce(MIXED_GYM);
 
-    render(<GymDetailScreen gymId="gym-009" onBack={jest.fn()} />, renderOptions());
+    render(<GymDetailScreen gymId="gym-009" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() =>
       expect(screen.getByText('double8 Climbing Lab')).toBeTruthy(),
@@ -112,7 +112,7 @@ describe('GymDetailScreen', () => {
     };
     mockLoadGym.mockResolvedValueOnce(gymWithBranch);
 
-    render(<GymDetailScreen gymId="gym-004" onBack={jest.fn()} />, renderOptions());
+    render(<GymDetailScreen gymId="gym-004" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() =>
       expect(screen.getByText('T-UP 原岩攀岩館 — Wanhua')).toBeTruthy(),
@@ -124,7 +124,7 @@ describe('GymDetailScreen', () => {
   it('shows an error message when gym is not found', async () => {
     mockLoadGym.mockResolvedValueOnce(null);
 
-    render(<GymDetailScreen gymId="nonexistent" onBack={jest.fn()} />, renderOptions());
+    render(<GymDetailScreen gymId="nonexistent" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() => {
       expect(screen.getByText('Gym not found.')).toBeTruthy();
@@ -134,7 +134,7 @@ describe('GymDetailScreen', () => {
   it('shows an error message when loading fails', async () => {
     mockLoadGym.mockRejectedValueOnce(new Error('DB error'));
 
-    render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} />, renderOptions());
+    render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() => {
       expect(
@@ -147,7 +147,7 @@ describe('GymDetailScreen', () => {
     const onBack = jest.fn();
     mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
 
-    render(<GymDetailScreen gymId="gym-001" onBack={onBack} />, renderOptions());
+    render(<GymDetailScreen gymId="gym-001" onBack={onBack} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() =>
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
@@ -155,5 +155,22 @@ describe('GymDetailScreen', () => {
 
     fireEvent.press(screen.getByText('Back'));
     expect(onBack).toHaveBeenCalled();
+  });
+
+  it('calls onViewRoutes with gymId and gymName when View Routes is pressed', async () => {
+    const onViewRoutes = jest.fn();
+    mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={onViewRoutes} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByText('View Routes'));
+    expect(onViewRoutes).toHaveBeenCalledWith('gym-001', 'MegaSTONE Climbing Gym');
   });
 });
