@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: 5ed7baca42ddde5b3ccf93b91c411d6a5cdba126
+commit: 59bd1c609df9d11e8ccb35d7de97f39448b0aee6
 timestamp: 2026-09-22T00:00:00Z
 ```
 
@@ -149,3 +149,86 @@ If Leon approves a moderation gate, the following PRD edits would be needed (to 
 ### 7. Next step
 
 Leon to decide among: (A) keep immediate-live, no change (recommended); (B) adopt the gate but ship auto-approve-ON for Phase 1, deferring the review UI to Phase 2; (C) full manual-review gate in Phase 1. On his decision, PM opens a `change`-mode pass and (for B/C) loops in the Tech Lead before any PRD edit. No PRD or code changes will be made until Leon approves.
+
+## Tech Lead Review — Route Submission Approval Architecture (2026-09-22)
+
+**Context**: Leon has approved Option B (add a route approval gate, auto-approve defaulted ON). This review answers the two open architecture questions. Advisory only — no code, migration, or PRD changes made here. Final decision rests with Leon + PM.
+
+### Recommendation summary
+
+- **Question 1 (table structure): recommend B2 — `pending` status in `routes`.**
+- **Question 2 (toggle storage): recommend T3 — a single-row `app_settings` table with `DEFAULT true`, editable via Studio SQL.** (T3 and T1 are the same table; T3 is the pragmatic framing of it.)
+
+### Question 1 — B1 (separate table) vs. B2 (pending status): recommend **B2**
+
+**Rationale for B2:**
+
+1. **Auto-approve-ON is the Phase 1 reality (per the PM alignment note), so the gate is almost always a no-op.** With auto-approve ON, a submission goes straight to `status = 'active'` — identical to today's insert path. B2 delivers this with the *existing* insert path unchanged: the client inserts into `routes` with `status = 'active'` (auto-approve) or `status = 'pending'` (gate on). B1 would force two divergent write paths (insert into `route_submissions`, then a separate promotion into `routes`), for a feature that is off at launch. That is disproportionate plumbing cost for a deferred capability.
+
+2. **B2 matches how the codebase already models review gates.** `gym_requests` (MOD-002) is the *submission-into-a-separate-table* pattern, and it works there because a gym request has a **different shape** than a gym row (name + city + google_maps_url vs. the full 14-column `gyms` row with lat/lng, districts, bilingual names). A route submission, by contrast, is **field-for-field identical** to a route row (gym_id, grade, color_tag, photo_url, submitted_by). There is no shape mismatch to justify a second table — B1 would duplicate the schema verbatim and create a copy-on-approve step that can drift.
+
+3. **The partial unique index already does the hard part for free.** `routes_active_unique_idx` is `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`. Pending rows are automatically excluded from the uniqueness constraint, so two users can submit the same route while one is pending without an index collision, and approval (`UPDATE status = 'active'`) is where the uniqueness is enforced — exactly the right moment. This is the strongest single argument for B2: the dedup machinery Leon already paid for extends to a pending state with **zero index changes**. (Caveat below on the approval-time collision.)
+
+4. **`ascents` FK integrity is preserved.** `ascents.route_id → routes.id`. Under B2 a route keeps one stable `id` from submission through approval, so any future "log a send on a route you just added" flow needs no id remapping. Under B1 the promotion step mints a *new* `routes.id`, orphaning anything that referenced the submission id — a latent bug surface.
+
+**What B2 costs (the real cons, to be explicit):**
+
+- **RLS must change so non-admins cannot see pending rows.** This is the one genuine downside and it must be handled carefully — see RLS implications below.
+- **Studio pending-queue query is slightly more cluttered** (`SELECT * FROM routes WHERE status = 'pending'` rather than a dedicated table). This is trivial and can be wrapped in a Studio-saved query or a view.
+
+**Why not B1:** clean separation is real but the value is low here because (a) the shapes are identical, (b) the gate is off at launch, (c) it breaks the stable-id property that `ascents` benefits from, and (d) it introduces a copy step that can silently diverge from the source row. B1 would be the right call only if route submissions were expected to carry review-only metadata that must never touch the live table (e.g. reviewer notes, rejection reasons at volume) — which is a Phase 2 concern at most and can be added as nullable columns on `routes` if it ever arises.
+
+### Question 2 — T1 / T2 / T3 for the auto-approve toggle: recommend **T3**
+
+T1 and T3 describe the **same artifact** — a single-row settings table read by the app and editable in Studio. T3 is simply the honest framing: "one row, `DEFAULT true`, changed via Studio SQL." I recommend that artifact, and reject T2.
+
+**Rationale:**
+
+- **T2 (Supabase project secret + Edge Function) is rejected.** It requires introducing an Edge Function into the route submission path, which is currently 100% client-side (`INSERT` into `routes` under RLS). That contradicts the shipped MOD-003 architecture and `production.md` §Architecture ("no bespoke backend server in Phase 1; route writes are client-side, RLS-checked"). Adding a function just to read one boolean is over-engineering, adds a cold-start latency to every submission, and creates an Edge Function dependency the stack doesn't otherwise need until MOD-007 notifications. Reserve Edge Functions for the event-driven flows that genuinely require service-role.
+- **T3/T1 (settings table) is the fit.** Leon can flip auto-approve with one `UPDATE` in Studio, no redeploy. The read is one cheap indexed lookup on a single-row table, cacheable at app launch (the value changes rarely). It's the same operational surface (Studio) that the whole Phase 1 admin story is built on.
+- **On the "round-trip per submission" con:** don't read it per-submission. Read `app_settings` once at app launch (or on a short TTL cache) alongside other bootstrap config. The toggle changing mid-session is not time-critical. This removes the only real T1 cost.
+
+**Important nuance — where auto-approve is actually *enforced*:** the client cannot be trusted to honor the toggle, because RLS lets an authenticated user insert their own route row directly with whatever `status` they choose. So the toggle value being *readable* by the client is only a UX convenience (to set the right initial status / show the right confirmation copy). **The gate itself must be enforced server-side in the RLS `WITH CHECK`**, not by client cooperation — see below.
+
+### RLS / migration / index implications (for whoever implements, if B2 + T3 approved)
+
+These are flags for the eventual `change`-mode migration, not instructions to act now.
+
+1. **SELECT policy must hide pending rows from non-owners/non-admins.** Current `routes_select_authenticated` exposes *all* rows to any authenticated user. Under B2 this would leak pending (unreviewed) routes into everyone's gym route list and — critically — into the AC-020 match pool, violating the PM's confirmed rule that pending rows must not appear as matches. The policy must become roughly: visible if `status = 'active'` OR `submitted_by_user_id = auth.uid()` (so submitters can see their own pending route). Admin (service_role) bypasses RLS and sees everything in Studio.
+
+2. **Match-before-create (AC-020) query must filter `status = 'active'` explicitly.** Even with the SELECT policy above, the match query should not rely solely on RLS to scope the pool — it must include `WHERE status = 'active'` so a submitter's own pending row is never offered to them as a match. The partial unique index stays exactly as-is (`WHERE status = 'active'`); no index change is needed. Confirm the gym route list query also filters to `active`.
+
+3. **INSERT policy must enforce the gate server-side, and this depends on the settings value.** This is the subtle part. Options, roughly in order of robustness:
+   - (a) Make the INSERT `WITH CHECK` consult `app_settings`: allow `status = 'active'` on insert only when the toggle is true, else force `status = 'pending'`. This requires the policy to read the settings row (a `SELECT` inside the policy predicate, e.g. via a `SECURITY DEFINER` helper function), which is doable but adds a subquery to every insert.
+   - (b) Simpler and arguably cleaner: **force all client inserts to `status = 'pending'`** via `WITH CHECK (status = 'pending')`, and implement auto-approve as a `BEFORE INSERT` trigger (or a `SECURITY DEFINER` RPC used as the submission entrypoint) that flips `status = 'active'` when `app_settings.route_auto_approve = true`. This keeps the "source of truth for the gate" in one server-side place and removes any client trust. Trade-off: routes no longer created by a bare client `INSERT`; submission goes through an RPC — a modest change to MOD-003's write path.
+   - Decision between (a) and (b) is an implementation-time call for the Engineer, to be captured in the MOD-003 spec. My lean is (b): it centralizes enforcement and matches the existing `SECURITY DEFINER` pattern already used for `handle_new_auth_user`.
+
+4. **Approval-time uniqueness collision must be handled gracefully.** Because pending rows bypass the partial unique index, two pending submissions for the same (gym_id, grade, color_tag) can coexist. Approving the second one (`UPDATE status = 'active'`) will hit `routes_active_unique_idx` and raise a unique-violation. In Phase 1 this surfaces to Leon in Studio as a raw error, which is acceptable (he can reject the duplicate). It should be **documented** in the MOD-003 spec as expected behavior so it isn't mistaken for a bug. A Phase 2 admin UI would catch this and offer a merge.
+
+5. **`app_settings` table needs its own RLS.** New table ⇒ RLS enabled from creation (project convention). SELECT: authenticated (the client needs to read the toggle for UX) — or restrict to service_role if enforcement moves fully server-side per 3(b), in which case the client doesn't need to read it at all and SELECT can be service_role-only. INSERT/UPDATE/DELETE: none (service_role/Studio only). If enforcement is via a `SECURITY DEFINER` function (3b), that function reads the row regardless of the caller's RLS, so **service_role-only SELECT + a definer function is the tightest design** and avoids exposing settings to clients entirely.
+
+6. **New `pending` enum value.** `ALTER TYPE route_status ADD VALUE 'pending';` — note Postgres cannot add an enum value inside a transaction block that then uses it in the same migration in older PG; on Postgres 15 (the stack's version) `ADD VALUE` is transaction-safe but the new value can't be used until the transaction commits. The migration should add the enum value and the settings table, and land policy/trigger changes such that the new value is usable — the Engineer should verify ordering in a local `supabase db reset`.
+
+7. **PRD/spec contradictions still stand (PM's list §6).** The gate contradicts "routes go live immediately" / "without waiting on partnerships" framing. Those PRD edits are a prerequisite before implementation, tagged `[SUBSTANTIVE]`, routed through Doc-Sync. Not a Tech Lead action.
+
+### Concerns (must address before implementing, if B2+T3 approved)
+
+- **Pending-row leak via the existing SELECT policy** — the current `routes_select_authenticated` policy will expose unreviewed rows to all users and to the match pool unless updated. This is the top correctness risk of adopting B2 and must be fixed in the same migration that adds `pending`.
+- **Client cannot be the enforcement point for auto-approve** — RLS lets a client set `status` freely today. The gate must be enforced server-side (INSERT `WITH CHECK` or definer RPC/trigger), or it is trivially bypassable.
+
+### Recommendations
+
+- Adopt **B2 + T3** with enforcement via a `SECURITY DEFINER` submission RPC (3b) that reads a service-role-only `app_settings` row. This centralizes the gate, keeps clients unable to self-approve, and requires zero change to the partial unique index.
+- Keep the toggle read out of the per-submission hot path — resolve it inside the definer function, not via a client round-trip.
+- Document the approval-time unique-collision (item 4) in the MOD-003 spec so it's understood as expected Phase 1 behavior.
+
+### Approved (looks solid as-is)
+
+- The partial unique index `routes_active_unique_idx` needs **no change** under B2 — its `WHERE status = 'active'` predicate already does the right thing for a pending state.
+- Keeping route submission client-side (rejecting T2's Edge Function) is consistent with the shipped architecture; no new infra dependency.
+- The `ascents.route_id → routes.id` FK is preserved intact under B2 (stable route id from submission through approval).
+
+### Proposed Shared Conventions (for Doc-Sync to carry into production.md, only if B2+T3 is approved)
+
+- **Review-gate modeling**: prefer a `status`-column gate on the primary table (with an RLS SELECT policy that hides non-active rows from non-owners) over a separate submission table, *unless* the submission's shape differs materially from the live row (as `gym_requests` does). Enforce the gate server-side (RLS `WITH CHECK` or a `SECURITY DEFINER` RPC), never by client cooperation.
+- **Runtime admin toggles**: store operator-flippable settings in a single `app_settings (key, value)` table read server-side; do not introduce an Edge Function solely to gate a client-side write.
