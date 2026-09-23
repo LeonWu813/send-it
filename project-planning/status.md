@@ -3,15 +3,27 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: 8c68f1ce7056fc414c46ffe651e42e618c640b9f
+commit: 7e32dfc69ca6b009aeac45c527188d3f2e82a461
 timestamp: 2026-09-22T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-22 [SUBSTANTIVE]** — Cross-module navigation ACs + navigation-gap audit (PRD Revision 5). Leon approved the change and all three decisions (add as formal PRD change; AC lives under MOD-002 Gym Directory; "View Routes" entry point at the **bottom** of the gym detail screen). PRD updated:
+  - **Status line**: `[SUBSTANTIVE] — Revision 5`; `**Revision**` bumped 4 → 5.
+  - **AC-005 (new, MOD-002)** — approved wording: a "View Routes" entry point at the **bottom** of the gym detail screen navigates to that gym's route catalog, passing gym ID + gym name; visible without additional action.
+  - **Navigation-gap audit — complete.** Audited every cross-module navigation/integration point implied by the user stories against §6 module dependencies. Already-covered handoffs confirmed: signup → home gym selection (AC-001/AC-002); route detail → log send (AC-010 names the route→log entry point); report/block targets named in AC-080/AC-082. Additional gaps found and closed with new ACs (each placed under the module that owns the destination entry point, per single-ownership):
+    - **AC-006 (new, MOD-002)** — gym directory list row → gym detail screen (tap a gym row to open its detail; passes gym identifier). AC-004 rendered the list but no AC specced opening a gym.
+    - **AC-042 (new, MOD-003)** — gym route list entry → route detail screen (tap a route to open its detail; passes route ID). Route detail is the entry point for AC-010/AC-037/AC-033; AC-040/AC-041 filtered the list but no AC specced opening a route.
+    - **AC-037 (new, MOD-005)** — "Add beta video" entry point on the route detail screen launches the beta capture/upload flow with route context pre-attached (binds upload to that route per AC-032). US-004 implied it; AC-033 only covered playback.
+    - **AC-058 (new, MOD-007)** — in-app notification inbox entry (beta-video-like) → the liked beta video on its route detail (resolves `target_id`). US-009 + AC-057 created the inbox but no AC specced the tap-through.
+    - **AC-064 (new, MOD-008)** — feed/user reference → that user's profile + send history, subject to privacy (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state. US-007/US-011 implied it; no AC specced the profile navigation entry point.
+  - **User story criteria lists updated**: US-004 += AC-037; US-006 += AC-005, AC-006, AC-042; US-009 += AC-058; US-011 += AC-064. All cited AC IDs verified to resolve to definitions in §8 (zero missing).
+  - **Impact**: module boundaries, dependencies, and phase plan unchanged; no new modules. Affected specs (for Doc-Sync delta): MOD-002 (AC-005, AC-006), MOD-003 (AC-042), MOD-005 (AC-037), MOD-007 (AC-058), MOD-008 (AC-064). Tagged [SUBSTANTIVE] because scope of covered behavior expands across five modules. Ready for Tech Lead confirmation of module ownership (AC-005/006 under MOD-002 per Leon's decision; the four audit ACs placed by destination-entry-point ownership), then Doc-Sync to update the five module specs.
 
 - **2026-09-23 [SUBSTANTIVE]** — Route submission approval gate + status lifecycle (PRD Revision 4). Leon's decisions all locked; PRD updated:
   - **Status line**: `[SUBSTANTIVE] — Revision 4`; `**Revision**` bumped 3 → 4.

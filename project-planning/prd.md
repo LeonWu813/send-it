@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 4
+**Status**: [SUBSTANTIVE] — Revision 5
 **Date**: 2026-09-21
-**Revision**: 4
+**Revision**: 5
 
 ---
 
@@ -92,7 +92,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to record or select a short video (≤60 sec), attach it to a specific route, and publish it,
 **so that** others attempting the route can learn from my beta.
 
-**Acceptance Criteria**: AC-030, AC-031, AC-032
+**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037
 
 ---
 
@@ -112,7 +112,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to open my gym's page and filter its route list by grade and active status,
 **so that** I know what's currently set before I show up.
 
-**Acceptance Criteria**: AC-040, AC-041
+**Acceptance Criteria**: AC-005, AC-006, AC-040, AC-041, AC-042
 
 ---
 
@@ -142,7 +142,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to receive a push notification when someone likes my video, subject to my notification preferences,
 **so that** I get feedback on my contributions.
 
-**Acceptance Criteria**: AC-054, AC-055, AC-056
+**Acceptance Criteria**: AC-054, AC-055, AC-056, AC-058
 
 ---
 
@@ -162,7 +162,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to see my full send history (filterable by gym, grade, date range) and basic stats (sends by grade, total sends, current streak, highest grade),
 **so that** I can see how I'm improving.
 
-**Acceptance Criteria**: AC-060, AC-061, AC-062
+**Acceptance Criteria**: AC-060, AC-061, AC-062, AC-064
 
 ---
 
@@ -422,6 +422,10 @@ The data flow for the two most important loops:
 
 **AC-004**: The system shall render the Taipei/New Taipei branch-level gym directory with every gym showing name, city/district, address, map pin, gym type, and (if present) photo when a user opens the Gyms tab.
 
+**AC-005** (new): The system shall present a "View Routes" entry point at the **bottom** of the gym detail screen that navigates the user to that gym's route catalog, passing the gym context (gym ID and gym name). The entry point must be visible without any additional action.
+
+**AC-006** (new): The system shall navigate a user from a gym row in the gym directory list to that gym's detail screen when the user taps the row, passing the selected gym's identifier.
+
 **AC-070**: The system shall accept a "request a gym" submission containing gym name, city, and optional Google Maps link, persist it to a queue readable by admins in Supabase Studio, and show the user a confirmation state when the submission succeeds.
 
 ---
@@ -451,6 +455,8 @@ The data flow for the two most important loops:
 **AC-040** (revised): The system shall, on a gym detail page, filter the route list by grade and by hold color using chip selectors. There shall be no free-text search input and no status filter for normal users.
 
 **AC-041** (revised): The system shall show normal users `active` routes only in the gym route list, with no status tag and no status filter surfaced to them.
+
+**AC-042** (new): The system shall navigate a user from a route entry in the gym route list to that route's detail screen when the user taps the entry, passing the selected route's identifier. The route detail screen is the entry point for logging a send (AC-010), uploading beta (AC-037), and watching beta (AC-033).
 
 ---
 
@@ -482,6 +488,8 @@ The data flow for the two most important loops:
 
 **AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
 
+**AC-037** (new): The system shall present an "Add beta video" entry point on the route detail screen that launches the beta video capture/selection flow with the route context (route ID) pre-attached, so the resulting upload is bound to that route (AC-032). The entry point must be visible without leaving the route detail screen.
+
 ---
 
 ### MOD-006 (Social Graph & Feed) Acceptance Criteria
@@ -508,6 +516,8 @@ The data flow for the two most important loops:
 
 **AC-057**: The system shall expose a Settings screen toggle for beta-video-like push notifications; when the toggle is off, no push is enqueued for that user for that event type, but the in-app `Notification` row is still created.
 
+**AC-058** (new): The system shall navigate a user from a beta-video-like entry in the in-app notification inbox to the liked beta video (on its route detail screen) when the user taps the entry, resolving the notification's `target_id` to the target beta video.
+
 > **Implementation note (MOD-007 push idempotency)**: The notification/push fan-out Edge Function must be invoked by a Postgres trigger on `Reaction` INSERT (via `pg_net`/webhook), never triggered from the client. The function must be idempotent: a unique constraint on `Notification(recipient_user_id, actor_user_id, type, target_id)` guarantees a second trigger fire (double-tap / client retry) cannot create a duplicate notification row or a duplicate push. This is a requirement for the MOD-007 spec.
 
 ---
@@ -519,6 +529,8 @@ The data flow for the two most important loops:
 **AC-061**: The system shall render basic stats: total sends, sends by grade (bar chart), current streak (consecutive days with ≥1 send), and highest grade climbed.
 
 **AC-062**: The system shall recalculate stats immediately after a new send log is saved and re-render the stats view without requiring a manual refresh.
+
+**AC-064** (new): The system shall navigate a user from another user's entry in the activity feed (or any surfaced user reference, e.g. a beta video author or follower) to that user's profile and send history, subject to the target's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state rather than the send history.
 
 ---
 
