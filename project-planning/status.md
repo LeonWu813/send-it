@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: 7e32dfc69ca6b009aeac45c527188d3f2e82a461
+commit: 436f09ac3341cfac3dc14b45bd21d4fc91f4e3be
 timestamp: 2026-09-22T00:00:00Z
 ```
 
@@ -41,6 +41,21 @@ timestamp: 2026-09-22T00:00:00Z
   - **AC-013 (MOD-004 Send Logging)**: After a send is successfully logged, the ascent list on the route detail screen must refresh immediately to show the new entry without requiring re-navigation. Addresses the known stale-list-after-modal-submission pattern (see Skill Recommendations).
   - **AC-036 (MOD-005 Beta Video)**: While a beta video is uploading, a progress overlay showing upload progress (0–100%) must be displayed. The overlay blocks further interaction until upload completes or fails, preventing double-submission.
   - Module boundaries, dependencies, and the phase plan are unchanged. No new modules added. Impact is confined to MOD-004 and MOD-005 specs; Doc-Sync must sync both.
+
+## Tech Lead Review — Navigation AC Ownership (2026-09-23)
+
+**Context**: PRD Revision 5 [SUBSTANTIVE] adds six cross-module navigation ACs via the PM's navigation-gap audit. This is an ownership confirmation only — not an architecture review. I verified each AC's placement against §6 module boundaries and inspected the shipped screens/navigators to classify each as a code gap (needs engineering) vs. a doc gap (code already works, spec didn't say so). Advisory only; no source, migration, spec, or PRD files changed.
+
+| AC | Ownership confirmed | Code gap or doc gap | Notes |
+|----|--------------------|--------------------|-------|
+| AC-005 | **Confirmed — MOD-002** (destination entry point lives on `GymDetailScreen`) | **Code gap** | `GymDetailScreen.tsx` has only an `onBack` prop — no "View Routes" affordance exists. More important: `RouteNavigator` is fully built and self-contained (takes `gymId`+`gymName`, wires RouteList→RouteDetail) but is **never mounted anywhere** — nothing imports it outside its own file, and `App.tsx` renders `GymNavigator` with no route flow beneath it. So AC-005 is not just "add a button": MOD-002's engineer must add an `onViewRoutes(gymId, gymName)` prop to `GymDetailScreen`, `GymNavigator` must gain a `routes` view state that mounts `RouteNavigator`, passing gym context. **This is the one AC that actually connects MOD-002 → MOD-003 at runtime; without it MOD-003's entire UI is currently unreachable.** Boundary note: the button + navigator mount are MOD-002-owned; `RouteNavigator` itself is MOD-003 and already accepts the required props, so no MOD-003 code change is needed for AC-005. |
+| AC-006 | **Confirmed — MOD-002** | **Doc gap** | Already implemented. `GymListScreen.tsx` row `onPress={() => onSelectGym(item.id)}` → `GymNavigator.navigateToDetail(gymId)` → `GymDetailScreen gymId={...}`. Passes the identifier as AC-006 requires. Spec/QA documentation-only; no engineering. |
+| AC-042 | **Confirmed — MOD-003** | **Doc gap** | Already implemented. `RouteListScreen.tsx` row `onPress={() => onSelectRoute(item.id)}` → `RouteNavigator.navigateToDetail(routeId)` → `RouteDetailScreen routeId={...}`. Documentation-only. **Caveat**: this path is only reachable once AC-005 mounts `RouteNavigator` — AC-042's code exists but is dead until AC-005 lands. Not an AC-042 defect; a dependency ordering note. |
+| AC-037 | **Confirmed — MOD-005** (owns the upload flow the entry point launches) | **Code gap** | `RouteDetailScreen.tsx` currently has a log-send entry point (`onLogSend`) and a placeholder text block for beta videos (`routes.detail.betaVideosPlaceholder`) — no "Add beta video" affordance. **Boundary flag**: the entry point *renders in* MOD-003's `RouteDetailScreen`, but the capture/upload flow it launches is MOD-005-owned. Recommend MOD-005's engineer owns the AC (it's their flow + route-context contract), implemented as a small MOD-003 host change: MOD-003 exposes a slot/prop (`onAddBetaVideo` or a MOD-005-provided component) on `RouteDetailScreen`, MOD-005 fills it. Same host-screen/owning-module split as AC-005. Since MOD-005 is Not started, this fits naturally into MOD-005's build; no separate MOD-003 change order is needed if MOD-005 owns the whole slot. |
+| AC-058 | **Confirmed — MOD-007** (owns the notification inbox, the source entry point) | **Code gap** | MOD-007 Not started. Placement correct: the inbox is MOD-007's; tap-through resolves `target_id` → the beta video on its `RouteDetailScreen`. Cross-module boundary: MOD-007 (source) navigates to a MOD-003 screen showing a MOD-005 video. MOD-007's engineer owns the navigation call + `target_id` resolution; depends on MOD-003's `RouteDetailScreen` accepting a route/video target and MOD-005 rendering the video inline (AC-033). Flag for the eventual MOD-007 spec: define the navigation contract (does it deep-link by `route_id` derived from the beta video, or scroll-to-video?) — that contract touches MOD-003/MOD-005 and should be pinned before MOD-007 build. |
+| AC-064 | **Confirmed — MOD-008** (owns the destination: profile + send history) | **Code gap** | MOD-006 and MOD-008 both Not started. Placement correct per destination-ownership: the feed/user-reference is MOD-006's (source), the profile+history destination is MOD-008's. MOD-008's engineer owns the destination screen and the privacy gate (AC-063 followers-only → hidden/403). The source affordance (tappable user reference) is MOD-006-owned and must be built when MOD-006 ships. Privacy enforcement (AC-063) is MOD-001's profile-privacy rule applied at the MOD-008 destination — confirm the followers-only/403 check runs server-side (RLS/RPC), not just client-side hiding, consistent with the MOD-006 feed-RPC convention already in the PRD. |
+
+**Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
 
