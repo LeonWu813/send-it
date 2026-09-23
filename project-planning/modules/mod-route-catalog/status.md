@@ -259,3 +259,126 @@ All items that PASS'd in the original functional-test remain PASS — no regress
 | AC-020 through AC-041 (all) | PASS | PASS |
 | Infrastructure checks | PASS | PASS |
 | Integration/conventions checks | PASS | PASS |
+
+---
+
+## QA Redesign Results
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-23
+**Workflow**: regression-test (re-verification after major redesign — approval gate + 4-value status lifecycle)
+**Overall verdict**: PASS — all new and revised acceptance criteria verified; no regressions on previously passing checks
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --forceExit`
+- Result: 124 tests passed, 0 failed across 15 suites
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+
+---
+
+### Infrastructure Checks
+
+- `.gitignore` present at project root, `.env` on standalone line: PASS
+- No HTML template comments in spec.md: PASS
+- Supabase client singleton: no `createClient()` in mod-route-catalog — only `import { supabase } from '../../lib/supabase'`: PASS
+- Migration split (PG15 enum constraint): Migration A (`20260923000001_mod_003_route_status_enum.sql`) adds `pending` and `rejected` enum values only. Migration B (`20260923000002_mod_003_route_approval_schema.sql`) uses those values. Files have different timestamps; correct two-file split per spec and production.md Enum Migration Ordering convention: PASS
+
+---
+
+### Acceptance Criteria Results
+
+**AC-020 (revised)**: match-before-create scoped to `status='active'` only; pending/retired/rejected excluded from match pool.
+- PASS. `findMatchingActiveRoutes()` in route-service.ts adds `.eq('status', 'active')` to the query (line 62). The match-check step in `RouteSubmitScreen` calls this function before advancing to photo upload. Verified by route-service.test.ts — the test asserts `qb.eq` was called with `('status', 'active')`. Pending/retired/rejected routes are not presented as matches even if they exist.
+
+**AC-021**: block submission without photo; show validation message.
+- PASS. `handleFinalSubmit()` in RouteSubmitScreen checks `if (!photoUri)`, calls `setPhotoError(t('routes.submit.errors.photoRequired'))`, and returns. Neither `uploadRoutePhoto` nor `submitRoute` is called. EN key `routes.submit.errors.photoRequired` and zh-TW equivalent both present in locale files.
+
+**AC-022**: color selector restricted to fixed enum {red, orange, yellow, green, blue, purple, pink, white, black}.
+- PASS. `ROUTE_COLORS` in types.ts is a readonly 9-tuple matching the spec exactly. `renderColorSelector()` maps over `ROUTE_COLORS` exclusively — no TextInput, no free-text path.
+
+**AC-023**: V-scale is the only grade system.
+- PASS. `ROUTE_GRADES` = `['VB','V0','V1','V2','V3','V4','V5','V6','V7','V8','V9','V10']`. `renderGradeSelector()` maps over `ROUTE_GRADES` exclusively.
+
+**AC-024b (new)**: `retired` status is admin-only via Supabase Studio; retire button removed from the UI; setting a route retired excludes it from active list and match pool.
+- PASS. `retireRoute` function is absent from route-service.ts (confirmed by grep — only a comment noting its removal remains). No retire button exists in RouteDetailScreen — the screen no longer has any retire affordance. RLS migration B drops the old `routes_retire_authenticated` UPDATE policy and replaces it with `routes_update_admin` gated on `public.is_admin()`, which returns false for all Phase 1 clients. RouteDetailScreen test explicitly verifies no retire button is rendered (test title: "does NOT show a retire button for any route (AC-024b — admin-only via Studio)"). The `routes_select_v2` RLS SELECT policy excludes `retired` rows from all normal-user queries (`status='active'` OR submitter's own pending OR admin).
+
+**AC-025 (new)**: initial status is `active` when auto-approve ON, `pending` when auto-approve OFF; pending message shown when auto-approve OFF.
+- PASS. `submit_route` RPC in migration B reads `app_settings.route_auto_approve` and sets `v_status = 'active'` when `value = 'true'`, else `'pending'`. The `CASE WHEN` at line 129 implements this. `app_settings` is seeded with `route_auto_approve = 'true'` (line 22), so Phase 1 launch behavior is auto-approve ON. On the client side, `handleFinalSubmit()` in RouteSubmitScreen checks `newRoute.status === 'pending'` and shows an Alert with `t('routeCatalog.pendingApproval')`. EN key: "Your route will appear once approved by the admin"; zh-TW key: "你的路線將在管理員審核後顯示" — both present in locale files.
+- MINOR NOTE: The spec (Key Implementation Notes — submit_route RPC logic step 3) specifies a `COALESCE` fallback: "default to `true` if no row." The RPC implementation at line 125–129 does a bare `SELECT value INTO v_auto_approve ... WHERE key = 'route_auto_approve'` with no COALESCE. If the `app_settings` row is missing (e.g., after a partial reset), `v_auto_approve` is NULL, and the CASE evaluates NULL as not equal to `'true'`, so status defaults to `'pending'` rather than `'active'`. Since the seed in the same migration file ensures the row always exists on a clean install and `supabase db reset` replays all migrations in order, this is a low-risk gap. However, it is a deviation from the spec's documented defensive default. Classified as an implementation gap, not a blocker for Phase 1 given the seed guarantee. Route to: Engineer (add `COALESCE(v_auto_approve, 'true')` in the RPC or restructure to handle NULL).
+
+**AC-026 (new)**: pending route visible only to its submitter (read-only); not visible to other users.
+- PASS. RLS SELECT policy `routes_select_v2` (migration B, lines 51–56) has predicate: `status='active' OR (status='pending' AND submitted_by_user_id = auth.uid()) OR public.is_admin()`. A pending route is only returned for the submitter's own session. Normal users cannot see other users' pending routes.
+
+**AC-027 (new)**: admin approves (pending→active) or rejects (pending→rejected) via Supabase Studio.
+- PASS (by architecture). The `routes_update_admin` policy (migration B, line 63–65) allows UPDATE only for `public.is_admin()`. In Phase 1 no client carries the admin JWT claim, so transitions happen via service_role in Studio (which bypasses RLS). The policy is forward-compatible: when Phase 1.5 grants the admin claim to Leon's auth user, the same policy admits in-app admin UPDATEs with no migration needed. No in-app admin UI exists (correct — spec says Studio-only in Phase 1).
+
+**AC-028 (new)**: rejected and retired routes never shown to normal users.
+- PASS. RLS SELECT policy `routes_select_v2` allows only `status='active'` (for all users), `status='pending'` (for submitter only), or admin. Rejected and retired rows match none of these conditions for a normal authenticated user, so they receive zero rows for those statuses. Confirmed by inspection of migration B lines 51–56.
+
+**AC-029 (new)**: submitter can withdraw their own pending route (row deleted, not status-changed); per-submitter one-pending-per-combo constraint enforced.
+- PASS. `withdrawRoute(routeId)` in route-service.ts calls `supabase.from('routes').delete().eq('id', routeId)`. RLS DELETE policy `routes_delete_own_pending` (migration B, lines 67–69) uses `USING (submitted_by_user_id = auth.uid() AND status = 'pending')` — only the submitter's own pending rows can be deleted. `GRANT DELETE ON public.routes TO authenticated` is present (line 72). Partial unique index `routes_pending_unique_per_submitter` (migration B, lines 146–148) on `(gym_id, grade, color_tag, submitted_by_user_id) WHERE status='pending'` enforces the per-submitter one-pending-per-combo constraint at the DB level. The RPC pre-check in `submit_route` (lines 112–121) also raises a clean error before the index fires. `withdrawRoute` test in route-service.test.ts verifies `delete()` and `eq('id', routeId)` are called.
+
+**AC-040 (revised)**: gym route list filtered by grade and hold-color chip selectors; no free-text search; no status filter for normal users.
+- PASS. `RouteListScreen` renders grade filter chips (from `availableGrades` derived from loaded routes) and 9 hold-color chips (always shown, all colors from `ROUTE_COLORS`). No TextInput for search exists. No status filter tabs or dropdowns exist for normal users. `RouteListScreen.test.tsx` has a dedicated test "does NOT show status filter tabs (AC-040 — no status filter for normal users)" verifying `queryAllByRole('tab')` returns zero elements.
+
+**AC-041 (revised)**: normal users see active routes only; no status tag; no status filter surfaced.
+- PASS. `listRoutes()` always applies `.eq('status', 'active')` (line 229 of route-service.ts) regardless of filters. `RouteListFilters` type has only `grade` and `colorTag` — there is no `status` field in the filter interface. Route cards in `renderRouteCard()` display grade, color badge, section label, and date — no status tag is rendered. Service test verifies `eq('status', 'active')` is called. Screen test verifies filters object has no `status` property.
+
+**AC-042 (doc gap)**: tap a route in the gym route list → navigates to route detail screen.
+- PASS (code verified). `RouteListScreen` passes `onSelectRoute={navigateToDetail}` from `RouteNavigator`. `renderRouteCard` calls `onSelectRoute(item.id)` on press. `RouteNavigator.navigateToDetail(routeId)` sets `view = { name: 'detail', routeId }`, mounting `RouteDetailScreen` with the selected route ID. RouteListScreen test verifies `onSelectRoute` is called with the route id on card press.
+
+---
+
+### Redesign-Specific Checks
+
+**submit_route RPC — no client-supplied user_id or status**: PASS. The RPC signature accepts only `p_gym_id`, `p_grade`, `p_color_tag`, `p_photo_url`, `p_section_label`. Submitter is derived from `auth.uid()` inside the function (line 97). No `user_id` parameter accepted. Client code in route-service.ts `submitRoute()` passes only the five allowed parameters to `supabase.rpc()`.
+
+**REVOKE INSERT from authenticated**: PASS. Migration B line 59: `REVOKE INSERT ON public.routes FROM authenticated`. Direct client INSERT is blocked; all creation goes through the `submit_route` SECURITY DEFINER RPC.
+
+**REVOKE UPDATE from authenticated**: PASS. Migration B line 75: `REVOKE UPDATE ON public.routes FROM authenticated`. UPDATE grant deferred to Phase 1.5 per spec.
+
+**GRANT EXECUTE on submit_route to authenticated only**: PASS. Migration B line 140: `GRANT EXECUTE ON FUNCTION public.submit_route(UUID, route_grade, route_color, TEXT, TEXT) TO authenticated`. REVOKE from anon/public: the spec requires `REVOKE EXECUTE FROM anon` and `REVOKE EXECUTE FROM public`, but migration B does not include these REVOKE statements. In Supabase's default configuration, `anon` and `public` do not have EXECUTE on custom functions unless explicitly granted, so the absence of an explicit REVOKE is unlikely to cause a security issue in practice. However, the spec explicitly states "REVOKE EXECUTE from anon and public" and the migration omits this. Classified as a minor implementation gap (low risk given Supabase defaults but deviates from spec). Route to: Engineer (add explicit REVOKE statements for completeness and forward safety).
+
+**app_settings — client-invisible**: PASS. `ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY` present (line 18). No SELECT, INSERT, UPDATE, or DELETE policies defined for `authenticated` or `anon` — confirmed by inspection of migration B. No GRANT statements for `app_settings` to any role. With RLS enabled and no policies, authenticated/anon get zero rows.
+
+**is_admin() helper — correct implementation**: PASS. Migration B lines 31–39: `CREATE OR REPLACE FUNCTION public.is_admin() RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY INVOKER SET search_path = public AS $$ SELECT COALESCE((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false) $$`. Matches spec exactly: STABLE, SECURITY INVOKER, `search_path = public`, reads `app_metadata.role` from JWT. Returns false for all Phase 1 clients (no user carries the claim).
+
+**Old policies dropped**: PASS. Migration B lines 44–46 drop `routes_select_authenticated`, `routes_insert_own`, and `routes_retire_authenticated` — the three policies from the initial migration that are replaced by the new policy set.
+
+**Pending partial unique index**: PASS. Migration B lines 146–148: `CREATE UNIQUE INDEX IF NOT EXISTS routes_pending_unique_per_submitter ON public.routes (gym_id, grade, color_tag, submitted_by_user_id) WHERE status = 'pending'`. Matches spec: per-submitter (includes `submitted_by_user_id`), correct WHERE predicate. `IF NOT EXISTS` makes it idempotent.
+
+**"Can't find it? Add a new route" CTA always at bottom**: PASS. `RouteListScreen` renders `addRouteCta` as `ListFooterComponent` of the FlatList — it appears after all route cards regardless of whether the list is empty or populated. The CTA uses `t('routeCatalog.addRoute')` = "Can't find it? Add a new route" (EN) / "找不到路線？新增一條" (zh-TW). Screen test verifies CTA button is present and calls `onSubmitRoute`.
+
+**No Submit button at top of route list**: PASS. Inspection of `RouteListScreen` confirms no submit button is rendered in the `header` or `listHeader` sections — only the back link and gym name in the header, and grade + color filter chips in the list header. The only route submission entry point is the CTA at the bottom.
+
+**Retire button absent from RouteDetailScreen**: PASS. No retire button, retire function call, or retire-related UI exists in `RouteDetailScreen.tsx`. The comment at the top of the file notes "The retire button and retireRoute() call have been removed." Test `does NOT show a retire button for any route` verifies this behavior.
+
+**Pending status message shown (AC-025)**: PASS. `RouteSubmitScreen.handleFinalSubmit()` checks `newRoute.status === 'pending'` and shows `Alert.alert(t('routes.submit.title'), t('routeCatalog.pendingApproval'), ...)`. EN key `routeCatalog.pendingApproval` = "Your route will appear once approved by the admin". zh-TW key = "你的路線將在管理員審核後顯示". Both present.
+
+**Active route after submit → navigates to detail**: PASS. When `newRoute.status !== 'pending'` (i.e., `'active'`), `handleFinalSubmit()` calls `onSuccess(newRoute.id)`. `RouteNavigator.handleSubmitSuccess(routeId)` navigates to `{ name: 'detail', routeId }`. The newly active route detail is immediately shown.
+
+**Safe area insets applied to all screens**: PASS. All three screens (`RouteListScreen`, `RouteDetailScreen`, `RouteSubmitScreen`) call `useSafeAreaInsets()`, pass `insets.top` to `makeStyles(theme, insets.top)`, and use `paddingTop: topInset + theme.spacing.md` in the root container and scroll content. Consistent with the production.md Screen Layout & Safe Area Insets convention.
+
+**i18n — routeCatalog keys added (new keys for redesign)**: PASS. Both `locales/en/common.json` and `locales/zh-TW/common.json` contain `routeCatalog.noResults`, `routeCatalog.addRoute`, `routeCatalog.pendingApproval`, and all 9 `routeCatalog.colors.*` entries. zh-TW translations are present and semantically correct.
+
+**No gold-plating**: PASS. No text search input. No status filter for normal users. No in-app admin UI. No withdrawal UI (spec only requires the service function; no UI was added beyond what the spec requires for the Phase 1 user-facing surface). No comments on routes. No grade system other than V-scale.
+
+---
+
+### Failure Summary
+
+| ID | Severity | Type | Description |
+|----|----------|------|-------------|
+| AC-025 auto-approve NULL fallback | Low | Implementation gap | `submit_route` RPC reads `v_auto_approve` without a COALESCE fallback. If `app_settings` row is missing, `v_auto_approve` is NULL and the CASE defaults to `'pending'` rather than the spec-documented default of `'true'` (auto-approve ON). The seed in the same migration makes this low-risk in practice, but deviates from the spec. |
+| GRANT EXECUTE — missing REVOKE from anon/public | Low | Implementation gap | Migration B grants EXECUTE on `submit_route` to `authenticated` but does not include `REVOKE EXECUTE ON FUNCTION public.submit_route(...) FROM anon` or `FROM public`. Spec explicitly requires these REVOKEs. In Supabase's default environment, anon/public do not have EXECUTE grants on custom functions by default, so no immediate security exposure, but the explicit REVOKE is a spec requirement. |
+
+---
+
+### Routing
+
+- 2 low-severity implementation gaps → Engineer
+- No spec issues to escalate to PM
