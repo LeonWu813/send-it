@@ -18,8 +18,6 @@
  * AC-043: pre-fill grade + color from RouteListScreen filter state via optional props.
  */
 
-import 'expo-blob';
-
 import type { Session } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';

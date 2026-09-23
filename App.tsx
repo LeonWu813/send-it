@@ -10,6 +10,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Initialize i18n — must be imported before any component that uses useTranslation
 import './src/lib/i18n';
+import 'expo-blob';
 import AuthNavigator from './src/modules/mod-auth-profile/AuthNavigator';
 import { useSession } from './src/modules/mod-auth-profile/hooks/useSession';
 import GymNavigator from './src/modules/mod-gym-directory/GymNavigator';
