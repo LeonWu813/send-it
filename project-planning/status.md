@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: e93bf946d0d255f7bcde1bed81d30b5cc501c3ed
+commit: 69714b3e33d44be55f5f689122986d38ee96621b
 timestamp: 2026-09-23T00:00:00Z
 ```
 
@@ -420,6 +420,25 @@ To keep Phase 1.5 in-app admin a zero-rework, additive change:
 **AMBIGUITY markers added:** none
 **CONFLICT markers added:** none
 **verify-sync.sh:** Skipped — this is a template-convention pass, not a structural PRD sync (no new modules, no phase plan changes, no production.md changes).
+
+### Sync Report — Delta Sync — 2026-09-23
+
+**Sync type:** delta
+**PRD Revision:** 6
+**PM Update reference:** 2026-09-23 [SUBSTANTIVE] — Route submission UX simplified: single-page submit, client-side match-check removed (PRD Revision 6)
+**Affected module:** MOD-003 (mod-route-catalog) only
+
+**Files modified:**
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced from PRD Revision updated to 6; Purpose updated to "filter-first, single-page, direct-submit" framing; Context rewritten to describe filter-first flow (RouteListScreen filter as the "does this route already exist?" check, single-page submit screen, no client-side match-check step, server-side duplicate protection unchanged); User Stories section updated: US-003 retitled from "Submit a new route with match-before-create" to "Submit a new route"; AC-020 replaced with revised single-page submit screen text (grade chips, hold-color chips, inline photo picker, optional section-label, "Add Route" button, no multi-step flow); AC-021 replaced with revised inline photo picker wording (client-side and server-side enforcement called out explicitly); AC-043 (new) added after AC-042 (pre-fill grade + color chips from RouteListScreen filter state); Input/Output Contract updated (match query result output removed — no client-side match-check step); Key Implementation Notes updated ("Photo required" note updated to reference inline photo picker; new "Single-page submit screen" note added; new "Pre-fill from filter state" note added; match pool reference removed from app_settings comment in Data Model).
+
+**Files not touched:**
+- `project-planning/production.md` — no shared conventions changed; module boundaries, dependencies, and phase plan unchanged.
+- All other module specs — change confined to MOD-003 per PM note.
+
+**Module removals noted:** none
+**AMBIGUITY markers added:** none
+**CONFLICT markers added:** none
+**verify-sync.sh result:** Skipped per delta-sync scope — this sync touches only existing fields within one module spec; no new module directories, no phase plan changes, no production.md changes.
 
 ## Skill Recommendations
 
