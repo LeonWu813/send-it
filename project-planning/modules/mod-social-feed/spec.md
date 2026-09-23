@@ -47,6 +47,12 @@ Climbers connected to the local Taiwan scene want to follow friends and strong l
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model (relevant tables)
 
 ```

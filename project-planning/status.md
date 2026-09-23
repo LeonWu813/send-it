@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-route-catalog
-mode: regression
-module: mod-route-catalog
-result: bugs-found
-commit: 32f8b0846caf3acd08981246fc94f937cb82373d
+agent: doc-sync
+mode: trivial
+module: n/a
+result: success
+commit: d02d30b351bd37b942b57989b9d41e7dd706d95d
 timestamp: 2026-09-23T00:00:00Z
 ```
 
@@ -370,6 +370,45 @@ To keep Phase 1.5 in-app admin a zero-rework, additive change:
 **CONFLICT markers added:**
 - none
 **verify-sync.sh result:** Skipped per delta-sync scope — this sync touches only AC additions within existing modules; no new module directories, no phase plan changes, no production.md changes. Pre-existing Check 4 FAIL (heading name mismatch) and Check 6 FAIL (no Phase Plan section) noted from prior sync remain unchanged and are not introduced by this delta.
+
+### Sync Report — Template Convention Pass — 2026-09-23
+
+**Sync type:** trivial (template-convention retroactive pass; not triggered by a PRD change)
+**PRD Revision:** 5 (unchanged)
+**Trigger:** Retroactive addition of `## Integration Points` section to all existing module specs, per updated spec template convention. No PRD change was made.
+
+**Files modified — `## Integration Points` section inserted after `## Acceptance Criteria Covered` and before `## Key Implementation Notes` (or at end of file where no Key Implementation Notes section exists):**
+- `project-planning/modules/mod-auth-profile/spec.md` — section added: `none`
+- `project-planning/modules/mod-gym-directory/spec.md` — section added: 2 populated entries (AC-005: GymNavigator.tsx + GymDetailScreen.tsx)
+- `project-planning/modules/mod-route-catalog/spec.md` — section added: 1 populated entry (AC-037: RouteDetailScreen.tsx slot/prop for MOD-005)
+- `project-planning/modules/mod-send-logging/spec.md` — section added: `none`
+- `project-planning/modules/mod-beta-video/spec.md` — section added: 2 populated entries (AC-037: RouteDetailScreen.tsx slot fill; AC-034: social feed beta video item)
+- `project-planning/modules/mod-social-feed/spec.md` — section added: `none`
+- `project-planning/modules/mod-notifications/spec.md` — section added: `none`
+- `project-planning/modules/mod-profile-history/spec.md` — section added: `none`
+- `project-planning/modules/mod-moderation/spec.md` — section added: `none`
+- `project-planning/modules/mod-localization-theme/spec.md` — section added: `none`
+- `project-planning/modules/mod-analytics/spec.md` — section added: `none`
+
+**Summary — `none` vs. populated:**
+
+| Module | Integration Points |
+|--------|--------------------|
+| MOD-001 Auth & Profile | none |
+| MOD-002 Gym Directory | populated (2 entries — AC-005) |
+| MOD-003 Route Catalog | populated (1 entry — AC-037 slot) |
+| MOD-004 Send Logging | none |
+| MOD-005 Beta Video | populated (2 entries — AC-037 fill, AC-034) |
+| MOD-006 Social Graph & Feed | none |
+| MOD-007 Notifications | none |
+| MOD-008 Profile History & Stats | none |
+| MOD-009 Moderation | none |
+| MOD-010 Localization & Theming | none |
+| MOD-011 Analytics | none |
+
+**AMBIGUITY markers added:** none
+**CONFLICT markers added:** none
+**verify-sync.sh:** Skipped — this is a template-convention pass, not a structural PRD sync (no new modules, no phase plan changes, no production.md changes).
 
 ## Skill Recommendations
 

@@ -43,6 +43,12 @@ The core climber loop â€” "log a send without interrupting my climbing rhythm" â
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model (relevant tables)
 
 ```

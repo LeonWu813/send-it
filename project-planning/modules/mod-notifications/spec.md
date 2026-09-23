@@ -49,6 +49,12 @@ Beta video uploaders need timely feedback when someone likes their video. The no
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model (relevant tables)
 
 ```

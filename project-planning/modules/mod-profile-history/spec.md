@@ -48,6 +48,12 @@ Climbers tracking progress want to see their full send history and basic stats w
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model (relevant tables)
 
 ```

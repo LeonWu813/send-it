@@ -73,6 +73,15 @@ The user story for the route list (US-006) specifies grade and hold-color filter
 
 ---
 
+## Integration Points
+
+1. **File to modify**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
+   **Change**: Expose a slot or prop (e.g., `onAddBetaVideo` callback or a MOD-005-provided component) on `RouteDetailScreen` so that MOD-005's engineer can wire the "Add beta video" entry point into the screen. The entry point must be visible without leaving the route detail screen. The capture/upload flow itself is owned entirely by MOD-005.
+   **Owner**: engineer-mod-route-catalog exposes the slot/prop; engineer-mod-beta-video fills it with the route-context-aware upload launcher and owns AC-037 end-to-end.
+   **AC**: AC-037
+
+---
+
 ## Data Model (relevant tables)
 
 ```

@@ -55,6 +55,20 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 
 ---
 
+## Integration Points
+
+1. **File to modify**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
+   **Change**: Fill the slot/prop exposed by MOD-003 (e.g., `onAddBetaVideo` callback or a MOD-005-provided component) with the route-context-aware beta video capture/selection launcher. The launcher receives the `route_id` pre-attached so the resulting upload is bound to the correct route (AC-032). This is a MOD-003 host-screen change owned by MOD-005.
+   **Owner**: engineer-mod-beta-video implements the slot fill and owns AC-037 end-to-end; engineer-mod-route-catalog confirms the slot/prop contract is satisfied before QA handoff on AC-037.
+   **AC**: AC-037
+
+2. **File to modify**: `src/modules/mod-social-feed/` (the feed item component that renders `BetaVideo` rows)
+   **Change**: Embed the MOD-005 inline video playback component into the activity feed item for beta video entries, so videos play inline within the feed without leaving the app (AC-034).
+   **Owner**: engineer-mod-beta-video exposes the inline playback component; engineer-mod-social-feed embeds it in the feed item renderer.
+   **AC**: AC-034
+
+---
+
 ## Data Model (relevant tables)
 
 ```

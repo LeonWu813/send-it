@@ -47,6 +47,12 @@ App Store Guideline 1.2 requires that apps with user-generated content provide (
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model (relevant tables)
 
 ```

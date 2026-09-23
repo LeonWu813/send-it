@@ -45,6 +45,12 @@ New climbers need a fast, trustworthy onboarding path that lets them complete si
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model (relevant tables)
 
 ```

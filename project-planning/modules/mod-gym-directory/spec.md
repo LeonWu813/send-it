@@ -46,6 +46,20 @@ Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app w
 
 ---
 
+## Integration Points
+
+1. **File to modify**: `src/modules/mod-gym-directory/GymNavigator.tsx`
+   **Change**: Add a `routes` view state to `GymNavigator` that renders `<RouteNavigator gymId={...} gymName={...} session={session} onBackToGym={...} />` (imported from `mod-route-catalog`). This is the runtime seam that makes MOD-003's entire UI reachable from the running app.
+   **Owner**: engineer-mod-gym-directory implements; engineer-mod-route-catalog confirms that `RouteNavigator`'s props contract is satisfied before QA handoff.
+   **AC**: AC-005
+
+2. **File to modify**: `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx`
+   **Change**: Add a "View Routes" button at the bottom of the screen that calls `onViewRoutes(gymId, gymName)`, triggering the `routes` view state in `GymNavigator`.
+   **Owner**: engineer-mod-gym-directory.
+   **AC**: AC-005
+
+---
+
 ## Data Model (relevant tables)
 
 ```

@@ -39,6 +39,12 @@ Analytics is cross-cutting — it supports the measurable goals in PRD §2 (Week
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model
 
 No Supabase tables owned by this module. PostHog events are sent directly from the client SDK. No PII fields are attached.

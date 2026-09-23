@@ -41,6 +41,12 @@ Send It targets the Taiwan indoor bouldering community, so Traditional Chinese (
 
 ---
 
+## Integration Points
+
+none
+
+---
+
 ## Data Model
 
 No dedicated Supabase tables for this module. Language preference and theme preference may be persisted locally (e.g., via `AsyncStorage` or Expo SecureStore) or on the `User` profile row if persistence across devices is desired. The PRD does not specify cross-device sync of language/theme preference — the minimal approach is local persistence.
