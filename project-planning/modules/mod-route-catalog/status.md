@@ -382,3 +382,83 @@ All items that PASS'd in the original functional-test remain PASS — no regress
 
 - 2 low-severity implementation gaps → Engineer
 - No spec issues to escalate to PM
+
+---
+
+## QA Single-Page Submit Regression Results
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-23
+**Workflow**: regression-test (re-verification after single-page submit redesign — PRD Revision 6, AC-020/021/043)
+**Overall verdict**: PASS — all three targeted ACs verified against the new implementation; no regressions on tsc or test suite
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false --forceExit`
+- Result: 131 tests passed, 0 failed across 15 suites
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+
+---
+
+### AC-020 (revised) — Single-page submit; no multi-step flow; no client-side match-check step
+
+**Verdict: PASS**
+
+Verification points:
+
+1. No multi-step state machine remaining. `RouteSubmitScreen.tsx` has no step variable, no `step` state, no `'form' | 'match-check' | 'photo'` union, and no call to `findMatchingActiveRoutes`. The component has a single `handleAddRoute()` async function that is the sole submit handler. There is no navigation between submission sub-steps.
+
+2. All sections are rendered simultaneously on mount without any interaction: grade chips, color chips, photo picker buttons, optional section-label field, and the "Add Route" button. No conditional rendering gates any section behind a prior step completion.
+
+3. "Add Route" button submits directly via `submitRoute()` RPC. The call sequence in `handleAddRoute()` is: `uploadRoutePhoto()` then `submitRoute({ gym_id, grade, color_tag, photo_url, section_label })`. There is no `findMatchingActiveRoutes` call anywhere in the submission path.
+
+4. Test "does not render a 'Check for Existing Routes' / match-check button (AC-020)" in `RouteSubmitScreen.test.tsx` explicitly verifies no check/match button is present. Test "renders as a single page — all sections visible without navigating steps" verifies all sections (grade chips, color chips, photo buttons, Add Route button) are visible on the initial render without any interaction.
+
+---
+
+### AC-021 (revised) — Inline validation blocks submit when grade, color, or photo missing
+
+**Verdict: PASS**
+
+Verification points:
+
+1. `handleAddRoute()` checks all three fields before proceeding. Specifically: `if (!selectedGrade)` sets `gradeError` and `hasError = true`; `if (!selectedColor)` sets `colorError` and `hasError = true`; `if (!photoUri)` sets `photoError` and `hasError = true`. All errors are collected before the early return — all missing-field errors appear simultaneously.
+
+2. When `hasError` is true, the function returns immediately. Neither `uploadRoutePhoto` nor `submitRoute` is called.
+
+3. Error messages are rendered inline below each section via `{gradeError ? <Text style={styles.errorText}>{gradeError}</Text> : null}` (and equivalent for color and photo). No modal or separate validation screen is used.
+
+4. Tests confirm: "shows inline photo error when Add Route pressed without a photo (AC-021)" verifies `mockSubmitRoute` is not called when grade + color are selected but no photo is attached. "does not call submitRoute when grade is missing" verifies `mockSubmitRoute` is not called when color is selected but no grade is.
+
+5. Photo preview shown inline after selection: when `photoUri` is non-null, the component renders `<Image source={{ uri: photoUri }} style={styles.photoPreview} />` with a "Change Photo" button replacing the "Take Photo" / "Choose from Library" buttons. Test "shows photo preview after photo is selected from library" verifies the "Change Photo" button appears after the library picker resolves with an asset.
+
+---
+
+### AC-043 — Pre-fill grade and color chips from RouteListScreen filter state
+
+**Verdict: PASS**
+
+Verification points:
+
+1. `RouteSubmitScreen` declares `initialGrade?: RouteGrade` and `initialColorTag?: RouteColor` props in the `RouteSubmitScreenProps` interface.
+
+2. State initialisation uses the props directly: `useState<RouteGrade | null>(initialGrade ?? null)` and `useState<RouteColor | null>(initialColorTag ?? null)`. On mount the chips reflect the filter state without any user interaction.
+
+3. `RouteListScreen.onSubmitRoute` is typed as `(grade?: RouteGrade, colorTag?: RouteColor) => void`. The CTA `onPress` passes `gradeFilter ?? undefined` and `colorFilter ?? undefined`, so unset filters pass `undefined` (which maps to `null` via `?? null` in the submit screen).
+
+4. `RouteNavigator.navigateToSubmit(grade?, colorTag?)` sets `view = { name: 'submit', initialGrade: grade, initialColorTag: colorTag }`. `RouteNavigator` renders `<RouteSubmitScreen ... initialGrade={view.initialGrade} initialColorTag={view.initialColorTag} />` when `view.name === 'submit'`. Both props are threaded from the list screen through the navigator to the submit screen without loss.
+
+5. Pre-filled chips remain editable: `handleAddRoute`'s `setSelectedGrade` and `setSelectedColor` calls on chip press replace the pre-filled value — no lock mechanism exists.
+
+6. Tests confirm: "pre-selects the grade chip when initialGrade prop is provided" verifies `accessibilityState.selected === true` on the V4 chip; "pre-selects the color chip when initialColorTag prop is provided" verifies `accessibilityState.selected === true` on the green chip; "opens with no chip pre-selected when no initialGrade/initialColorTag provided" verifies no chip has `selected === true`; "allows user to change a pre-filled chip after mount" verifies V5 becomes selected and V4 deselects after pressing V5 when initialGrade="V4".
+
+---
+
+### No Regressions
+
+- All 131 tests pass (up from 124 in the prior redesign QA run — the increase reflects new tests added for AC-043 and the updated single-page submit flow).
+- `npx tsc --noEmit` exits 0. No new TypeScript errors introduced.
+- The two low-severity implementation gaps noted in the prior redesign QA result (AC-025 COALESCE fallback; REVOKE EXECUTE from anon/public) are not affected by the single-page submit redesign and remain as previously documented.
