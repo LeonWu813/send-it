@@ -194,3 +194,108 @@ AC-115 is a one-character string fix (add trailing period to `locales/en/common.
 AC-114 spec note is a PM-level clarification: the AC text says "navigate to that gym's detail screen" but the spec's own Notes document the Phase 1 behavior as tab-switch only (deep-link deferred). If PM confirms the Notes take precedence over AC-114 text for Phase 1, no engineering change is needed.
 
 **Migration deployment note:** `supabase/migrations/20260924000002_mod_012_home.sql` is ready and correct. It must be applied to the live Supabase database before human QA of the saved-gyms feature.
+
+---
+
+### QA Run 2 — Regression — 2026-09-24
+
+**Workflow**: regression-test (re-verification after Engineer bugfix)
+
+**Bug being re-verified**: AC-115 FAIL from QA Run 1 — `locales/en/common.json` key `home.savedGyms.empty` missing trailing period; rendered text was "Tap the bookmark on any gym to save it" instead of "Tap the bookmark on any gym to save it."
+
+**Engineer fix**: updated `locales/en/common.json` `home.savedGyms.empty` to add the trailing period; updated `HomeScreen.test.tsx` AC-115 assertion to match the corrected string.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npm test -- --watchAll=false`: PASS — 155 tests, 17 suites, 0 failures
+- QA runner script: module directory and spec found; test command not configured in production.md (tests run manually above)
+
+Test counts are identical to QA Run 1 (155/17). No tests newly failing.
+
+---
+
+#### REGRESSION PASS AC-115: original failure scenario resolved
+
+Verification: `locales/en/common.json` line 237 — `"empty": "Tap the bookmark on any gym to save it."` — trailing period present.
+
+`HomeScreen.test.tsx` line 114 assertion: `screen.getByText('Tap the bookmark on any gym to save it.')` — matches the corrected locale value.
+
+`npm test` confirms the AC-115 test (`shows empty prompt when user has no saved gyms (AC-115)`) passes as part of the 155-test run.
+
+Input: user with zero saved gyms (same input as QA Run 1 failure).
+Actual: "Tap the bookmark on any gym to save it." (period present).
+Expected per spec: "Tap the bookmark on any gym to save it." (with period).
+Status: RESOLVED.
+
+---
+
+#### Re-verification of all previously passing items
+
+**AC-110** — PASS (no change to AppShell.tsx or TabBar.tsx; tab state initialization and icon-only tab bar unaffected by locale fix)
+
+**AC-111** — PASS (section order in HomeScreen.tsx JSX unaffected)
+
+**AC-112** — PASS (banners.ts and banner rendering unaffected; i18n.test.ts passes confirming banner keys intact)
+
+**AC-113** — PASS (View All callback and saved-gym strip rendering unaffected; test passes)
+
+**AC-114** — PASS with spec note carried forward (onSelectGym callback behavior unaffected; spec note regarding tab-switch vs. gym-detail navigation unchanged — still a PM-level clarification, not an engineering bug)
+
+**AC-123** — PASS (Following section header rendering unaffected)
+
+**AC-124** — PASS (`home.following.empty` = "Follow climbers to see them here" — no trailing period added to this key, consistent with the fix being scoped to `home.savedGyms.empty` only; zh-TW locale also unchanged)
+
+**Keep-alive mount strategy** — PASS (AppShell.tsx unchanged)
+
+**Bottom safe area — TabBar** — PASS (TabBar.tsx unchanged)
+
+**Top safe area — HomeScreen** — PASS (HomeScreen.tsx unchanged)
+
+**Cross-module import rule** — PASS (no import changes)
+
+**i18n completeness** — PASS (all `home.*` keys present in both locales; automated i18n.test.ts passes; fix added one character to one value, no keys added or removed)
+
+**Migration correctness** — PASS (migration file unchanged)
+
+**No hardcoded hex colors** — PASS (unchanged)
+
+**No inline string literals** — PASS (unchanged)
+
+**Gold-plating check** — PASS (no new features introduced by the fix)
+
+---
+
+#### Adjacent code check (fix proximity)
+
+The fix touches `locales/en/common.json` (one value changed) and `HomeScreen.test.tsx` (one assertion updated). Checked for regressions in adjacent items:
+
+- `home.following.empty` key is adjacent in the JSON file — value unchanged ("Follow climbers to see them here", no period added). Correct: the fix was scoped only to `home.savedGyms.empty`.
+- `home.savedGyms.title` and `home.savedGyms.viewAll` keys — values unchanged ("Saved Gyms", "View All"). Correct.
+- AC-112 banner test assertion (`'Competition'`) — unchanged and passes.
+- AC-113 "View All" test assertion — unchanged and passes.
+- AC-124 following empty state test assertion (`'Follow climbers to see them here'`) — unchanged and passes.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 2
+
+| AC | QA Run 1 | QA Run 2 |
+|----|----------|----------|
+| AC-110 | PASS | PASS |
+| AC-111 | PASS | PASS |
+| AC-112 | PASS | PASS |
+| AC-113 | PASS | PASS |
+| AC-114 | PASS (spec note) | PASS (spec note carried forward) |
+| AC-115 | FAIL | REGRESSION PASS |
+| AC-123 | PASS | PASS |
+| AC-124 | PASS | PASS |
+
+**Result: ALL CLEAR — MOD-012 ready for human QA**
+
+All acceptance criteria pass. The AC-115 bug is resolved. No regressions introduced. The outstanding AC-114 spec note (tab-switch vs. gym-detail navigation) remains a PM-level clarification item, not a blocking implementation bug.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
