@@ -11,13 +11,16 @@ jest.mock('../../../lib/supabase', () => ({
 
 jest.mock('../send-service', () => ({
   loadAscentsForRoute: jest.fn(),
+  deleteAscent: jest.fn(),
 }));
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { loadAscentsForRoute } from '../send-service';
+import { Alert } from 'react-native';
+
+import { deleteAscent, loadAscentsForRoute } from '../send-service';
 import AscentList from '../components/AscentList';
 import { renderOptions } from '../test-utils';
 import type { AscentWithProfile } from '../types';
@@ -25,6 +28,7 @@ import type { AscentWithProfile } from '../types';
 const mockLoadAscents = loadAscentsForRoute as jest.MockedFunction<
   typeof loadAscentsForRoute
 >;
+const mockDeleteAscent = deleteAscent as jest.MockedFunction<typeof deleteAscent>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -178,6 +182,76 @@ describe('AscentList', () => {
     await waitFor(() => {
       expect(mockLoadAscents).toHaveBeenCalledTimes(2);
       expect(screen.getByText('OtherClimber')).toBeTruthy();
+    });
+  });
+
+  it('shows a delete button only for the current user\'s own ascents', async () => {
+    mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT, MOCK_OTHER_ASCENT]);
+
+    render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // The delete button accessibility label matches 'Delete' or '刪除'
+      const deleteButtons = screen.queryAllByRole('button').filter(
+        (el) =>
+          el.props.accessibilityLabel === 'Delete' ||
+          el.props.accessibilityLabel === '刪除',
+      );
+      // Only one delete button — for own ascent (ascent-001, user-001)
+      // Other user's ascent (ascent-002, user-002) gets no delete button
+      expect(deleteButtons).toHaveLength(1);
+    });
+  });
+
+  it('shows Alert confirmation dialog when delete button is tapped', async () => {
+    mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT]);
+    const alertSpy = jest.spyOn(Alert, 'alert');
+
+    render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const deleteButtons = screen.queryAllByRole('button').filter(
+        (el) =>
+          el.props.accessibilityLabel === 'Delete' ||
+          el.props.accessibilityLabel === '刪除',
+      );
+      expect(deleteButtons).toHaveLength(1);
+      fireEvent.press(deleteButtons[0]);
+    });
+
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    alertSpy.mockRestore();
+  });
+
+  it('calls deleteAscent and removes the row optimistically when user confirms', async () => {
+    mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT]);
+    mockDeleteAscent.mockResolvedValueOnce(undefined);
+
+    // Intercept Alert.alert and immediately invoke the "Delete" button handler
+    jest.spyOn(Alert, 'alert').mockImplementationOnce((_title, _message, buttons) => {
+      const deleteButton = buttons?.find(
+        (b) => b.style === 'destructive',
+      );
+      deleteButton?.onPress?.();
+    });
+
+    render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByText('Leon')).toBeTruthy();
+    });
+
+    const deleteButtons = screen.queryAllByRole('button').filter(
+      (el) =>
+        el.props.accessibilityLabel === 'Delete' ||
+        el.props.accessibilityLabel === '刪除',
+    );
+    fireEvent.press(deleteButtons[0]);
+
+    await waitFor(() => {
+      expect(mockDeleteAscent).toHaveBeenCalledWith('ascent-001');
+      // Optimistically removed — Leon's ascent should be gone
+      expect(screen.queryByText('Leon')).toBeNull();
     });
   });
 });

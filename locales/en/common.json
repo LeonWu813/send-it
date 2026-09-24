@@ -193,6 +193,13 @@
       "retireFailed": "Failed to retire route. Please try again."
     }
   },
+  "sendLogging": {
+    "delete": {
+      "confirm": "Delete this send?",
+      "cancel": "Cancel",
+      "delete": "Delete"
+    }
+  },
   "sends": {
     "logSend": "Log Send",
     "selectRoute": "Select a Route",

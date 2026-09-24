@@ -193,6 +193,13 @@
       "retireFailed": "標記退場失敗，請再試一次。"
     }
   },
+  "sendLogging": {
+    "delete": {
+      "confirm": "刪除這筆紀錄？",
+      "cancel": "取消",
+      "delete": "刪除"
+    }
+  },
   "sends": {
     "logSend": "記錄完攀",
     "selectRoute": "選擇路線",

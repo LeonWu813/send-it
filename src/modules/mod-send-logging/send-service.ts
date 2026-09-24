@@ -13,6 +13,26 @@
 import { supabase } from '../../lib/supabase';
 import type { Ascent, AscentLogInput, AscentWithProfile } from './types';
 
+/**
+ * Delete an ascent (send) by its ID.
+ *
+ * RLS enforces that a user may only delete their own rows (ascents_delete_own).
+ * On any network or DB failure, throws an Error with a user-facing message.
+ *
+ * @param ascentId  UUID of the ascent to delete.
+ * @throws {Error} with a user-facing message on failure.
+ */
+export async function deleteAscent(ascentId: string): Promise<void> {
+  const { error } = await supabase
+    .from('ascents')
+    .delete()
+    .eq('id', ascentId);
+
+  if (error) {
+    throw new Error('Failed to delete your send. Please try again.');
+  }
+}
+
 /** Fields selected for the ascent list on a route detail page. */
 const ASCENT_LIST_SELECT =
   'id, user_id, route_id, style, attempts, note, logged_at, is_private, users(display_name)';

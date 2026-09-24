@@ -14,7 +14,7 @@ jest.mock('../../../lib/supabase', () => ({
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
-import { loadAscentsForRoute, logAscent } from '../send-service';
+import { deleteAscent, loadAscentsForRoute, logAscent } from '../send-service';
 import type { Ascent, AscentWithProfile } from '../types';
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
@@ -31,6 +31,7 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }) {
   const builder: any = {
     select: jest.fn().mockReturnThis(),
     insert: jest.fn().mockReturnThis(),
+    delete: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
     single: jest.fn().mockResolvedValue(result),
@@ -228,5 +229,36 @@ describe('loadAscentsForRoute', () => {
     const result = await loadAscentsForRoute('route-001');
 
     expect(result[0].display_name).toBe('Unknown');
+  });
+});
+
+// ── deleteAscent ──────────────────────────────────────────────────────────────
+
+describe('deleteAscent', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('deletes an ascent row by ID without returning data', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(deleteAscent('ascent-001')).resolves.toBeUndefined();
+
+    expect(mockFrom).toHaveBeenCalledWith('ascents');
+    expect(qb.delete).toHaveBeenCalled();
+    expect(qb.eq).toHaveBeenCalledWith('id', 'ascent-001');
+  });
+
+  it('throws a user-friendly error on network / DB failure', async () => {
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'network error' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(deleteAscent('ascent-001')).rejects.toThrow(
+      'Failed to delete your send. Please try again.',
+    );
   });
 });

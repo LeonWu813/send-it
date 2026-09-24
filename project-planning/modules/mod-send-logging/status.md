@@ -2,6 +2,51 @@
 
 ## Engineering Progress
 
+### Delete Ascent Feature (2026-09-24)
+
+**Mode:** bugfix (delete send — human QA request)
+**Date:** 2026-09-24
+**Engineer:** engineer-mod-send-logging
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/send-service.ts` — added `deleteAscent(ascentId: string): Promise<void>`, uses Supabase `.delete().eq('id', ascentId)`, throws user-facing error on failure
+- `src/modules/mod-send-logging/components/AscentList.tsx` — added trash-outline delete button on own ascent rows, Alert confirmation dialog, optimistic remove with re-fetch fallback on failure; imported `Ionicons` from `@expo/vector-icons` (already in tech stack)
+- `src/modules/mod-send-logging/__tests__/send-service.test.ts` — 2 new tests for `deleteAscent` (success path + error path); updated `makeQueryBuilder` to include `delete` method
+- `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — 3 new tests: delete button only on own ascents, Alert shown on tap, optimistic removal after confirm
+- `locales/en/common.json` — added `sendLogging.delete.confirm/cancel/delete` keys
+- `locales/zh-TW/common.json` — added `sendLogging.delete.confirm/cancel/delete` zh-TW translations
+
+#### Migration
+
+No new migration required. `ascents_delete_own` RLS policy was already present in `supabase/migrations/20260920000004_mod_004_send_logging.sql` (line 83–84). The coordinator confirmed this in the task; `GRANT DELETE ON public.ascents TO authenticated` is also present.
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test --watchAll=false) | PASS | 162/162 tests pass, 17 suites — 5 new tests added (2 send-service, 3 AscentList) |
+| Git scope — module boundary | FLAGGED | Same pre-existing pattern: `locales/` changes are production.md-required i18n parity; `.env.example`, `project-planning/setup.md`, `tsconfig.json`, other migration files are pre-existing uncommitted Tech Lead files not authored by this agent |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| Task requirements implemented | PASS — RLS DELETE policy confirmed present; `deleteAscent()` added; delete button on own rows; Alert confirmation; i18n keys in EN + zh-TW |
+| Every acceptance criterion addressed | PASS — delete is scoped to own ascents (RLS + UI guard); confirmation prevents accidental deletes; optimistic removal updates local state |
+| Edge cases handled | PASS — delete button hidden for other users' ascents; failure path re-fetches list to restore accurate state; Alert cancel does nothing |
+| No hardcoded values | PASS — all strings via i18n, all colors via theme tokens |
+| Conventions followed | PASS — Ionicons from existing `@expo/vector-icons` dep; Supabase singleton; no `createClient()` at call site |
+| No new dependencies | PASS — `@expo/vector-icons` already in package.json (used by other modules) |
+| Code is readable | PASS — `handleDeleteAscent` intent documented with inline comment; `onDelete` prop typed in `AscentRowProps` with JSDoc |
+| Not an AI/LLM module | N/A |
+| Spring Boot items | N/A — React Native project |
+
+---
+
+## Engineering Progress (Previous)
+
 **Mode:** bugfix (AC-013 addition)
 **Date:** 2026-09-21
 **Engineer:** engineer-mod-send-logging

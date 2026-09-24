@@ -13,14 +13,16 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useTheme } from '../../../lib/theme';
-import { loadAscentsForRoute } from '../send-service';
+import { deleteAscent, loadAscentsForRoute } from '../send-service';
 import type { AscentStyle, AscentWithProfile } from '../types';
 
 interface AscentListProps {
@@ -87,6 +89,38 @@ export default function AscentList({
     void fetchAscents();
   }, [fetchAscents, refreshKey]);
 
+  /**
+   * Optimistically remove the ascent from local state, then call deleteAscent.
+   * On failure, re-fetch the list to restore accurate state.
+   */
+  const handleDeleteAscent = useCallback(
+    (ascentId: string): void => {
+      Alert.alert(
+        t('sendLogging.delete.confirm'),
+        undefined,
+        [
+          {
+            text: t('sendLogging.delete.cancel'),
+            style: 'cancel',
+          },
+          {
+            text: t('sendLogging.delete.delete'),
+            style: 'destructive',
+            onPress: () => {
+              // Optimistic remove
+              setAscents((prev) => prev.filter((a) => a.id !== ascentId));
+              void deleteAscent(ascentId).catch(() => {
+                // Revert optimistic update on failure by re-fetching
+                void fetchAscents();
+              });
+            },
+          },
+        ],
+      );
+    },
+    [t, fetchAscents],
+  );
+
   return (
     <View style={styles.root}>
       {/* Section header + Log Send button — Tap 1 in the ≤4-tap flow (AC-010) */}
@@ -139,6 +173,7 @@ export default function AscentList({
             ascent={ascent}
             isOwn={ascent.user_id === session.user.id}
             theme={theme}
+            onDelete={handleDeleteAscent}
           />
         ))}
     </View>
@@ -151,9 +186,11 @@ interface AscentRowProps {
   ascent: AscentWithProfile;
   isOwn: boolean;
   theme: ReturnType<typeof useTheme>['theme'];
+  /** Called with the ascent ID when the user confirms deletion. */
+  onDelete: (ascentId: string) => void;
 }
 
-function AscentRow({ ascent, isOwn, theme }: AscentRowProps): React.JSX.Element {
+function AscentRow({ ascent, isOwn, theme, onDelete }: AscentRowProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const styles = makeStyles(theme);
 
@@ -162,11 +199,31 @@ function AscentRow({ ascent, isOwn, theme }: AscentRowProps): React.JSX.Element 
 
   return (
     <View style={styles.ascentRow}>
-      {/* Style badge */}
-      <View style={[styles.styleBadge, { backgroundColor: badgeColor }]}>
-        <Text style={styles.styleBadgeText}>
-          {t(`sends.styles.${ascent.style}`)}
-        </Text>
+      {/* Row header: style badge + delete button (own ascents only) */}
+      <View style={styles.ascentRowHeader}>
+        {/* Style badge */}
+        <View style={[styles.styleBadge, { backgroundColor: badgeColor }]}>
+          <Text style={styles.styleBadgeText}>
+            {t(`sends.styles.${ascent.style}`)}
+          </Text>
+        </View>
+
+        {/* Delete button — only shown to the owning user */}
+        {isOwn && (
+          <Pressable
+            onPress={() => onDelete(ascent.id)}
+            accessibilityRole="button"
+            accessibilityLabel={t('sendLogging.delete.delete')}
+            style={styles.deleteButton}
+            hitSlop={8}
+          >
+            <Ionicons
+              name="trash-outline"
+              size={16}
+              color={theme.colors.textSecondary}
+            />
+          </Pressable>
+        )}
       </View>
 
       {/* Attempts + date */}
@@ -261,12 +318,20 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       borderWidth: 1,
       borderColor: theme.colors.border,
     },
+    ascentRowHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: theme.spacing.xs,
+    },
     styleBadge: {
       alignSelf: 'flex-start',
       paddingHorizontal: theme.spacing.sm,
       paddingVertical: 2,
       borderRadius: theme.borderRadius.sm,
-      marginBottom: theme.spacing.xs,
+    },
+    deleteButton: {
+      padding: theme.spacing.xs,
     },
     styleBadgeText: {
       fontSize: theme.fontSize.xs,
