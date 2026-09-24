@@ -71,6 +71,27 @@
 
 **Result: READY FOR QA RE-VERIFICATION**
 
+### Bugfix — saved_gyms.user_id DEFAULT — 2026-09-24
+
+**Bug**: `saved_gyms.user_id` column was `NOT NULL` with no `DEFAULT`. The MOD-002 `saveGym()` service function inserts only `{ gym_id }` without passing `user_id` explicitly. At runtime this INSERT would fail with a NOT NULL constraint violation.
+
+**Fix**: Added `DEFAULT auth.uid()` to the `user_id` column definition in `supabase/migrations/20260924000002_mod_012_home.sql`. This is the standard Supabase pattern — the authenticated user's ID is filled automatically by Supabase and the RLS policy (`auth.uid() = user_id`) enforces ownership server-side.
+
+**Files changed:**
+- `supabase/migrations/20260924000002_mod_012_home.sql` — `user_id` column definition updated to include `DEFAULT auth.uid()`.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 155 tests, 17 suites, all pass |
+| Migration not yet applied to live database — file-only change is safe | PASS |
+
+**Commit**: 99863385c05c8136415a1fa54f1aa361c10b9f09
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24
