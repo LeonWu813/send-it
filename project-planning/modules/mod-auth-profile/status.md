@@ -345,3 +345,63 @@ None. All 15 previously-passing items continue to pass. No new failures introduc
 
 **Failure count: 0**
 **New regressions: 0**
+
+---
+
+## Engineering Progress — Rev 7 — 2026-09-24
+
+### Changes Implemented
+
+**Task 1 — Drop home_gym_id migration**
+- Created `supabase/migrations/20260924000001_mod_001_drop_home_gym_id.sql` — `ALTER TABLE public.users DROP COLUMN IF EXISTS home_gym_id;`. Dependent FK drops automatically with the column (Postgres behavior). No RLS policy or trigger references `home_gym_id` (verified clean per spec).
+
+**Task 2 — Remove home_gym_id source references (all six sites)**
+- `src/modules/mod-auth-profile/types.ts` — removed `home_gym_id` from `UserProfile`, removed `GymListItem` type, removed `HomeGymSelection` from `AuthStackParamList`, added `ProfileStackParamList`.
+- `src/modules/mod-auth-profile/auth-service.ts` — removed `home_gym_id` from SELECT strings in `loadProfile()` and `upsertProfile()`; deleted `setHomeGym()` function entirely.
+- `src/modules/mod-auth-profile/AuthNavigator.tsx` — removed `home_gym_id` gate and onboarding guard, removed `HomeGymSelectionScreen` import; after session → children directly (AC-001 revised).
+- `src/modules/mod-auth-profile/screens/HomeGymSelectionScreen.tsx` — file deleted.
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — removed `setHomeGym` import and entire `describe('setHomeGym')` block; removed `home_gym_id` from `loadProfile` and `upsertProfile` test fixtures.
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — removed `home_gym_id` from all profile fixtures in the test file.
+- `locales/en/common.json` — removed `onboarding.homeGym` section; removed `profile.homeGym`, `profile.noHomeGym`, `profile.changeHomeGym`; added `profile.editProfile`, `profile.sendHistory`, `profile.logout`.
+- `locales/zh-TW/common.json` — same removals and additions mirrored in zh-TW.
+
+**Task 3 — ProfileScreen (AC-116/117/118/119)**
+- Created `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`:
+  - AC-116: displays avatar, display name, bio from `useSession()` profile.
+  - AC-117: "Edit Profile" button calls `onNavigateEditProfile` prop.
+  - AC-118: placeholder `<Text>Send history coming soon</Text>` with TODO comment for MOD-008.
+  - AC-119: "Log Out" button calls `signOut()` from auth-service; `onAuthStateChange` in `useSession` routes back to signed-out state automatically.
+  - `useSafeAreaInsets()` + `makeStyles(theme, topInset)` pattern applied per production.md convention.
+  - All strings go through `useTranslation('common')` — no inline string literals.
+
+**Task 4 — ProfileNavigator entry point**
+- Created `src/modules/mod-auth-profile/ProfileNavigator.tsx`:
+  - Props: `session: Session` (threaded from AppShell/MOD-012).
+  - State machine: `ProfileView = 'profile' | 'editProfile'`.
+  - `'profile'` → ProfileScreen; `'editProfile'` → EditProfileScreen.
+  - Exported as default — MOD-012 AppShell mounts as Tab 3.
+- `AuthNavigator.tsx` continues to handle signed-out state (SignIn/SignUp). On session established, renders `children` (AppShell). No prop change to the `children` interface.
+
+**Task 5 — Self-check**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 143 tests, 15 suites, all pass |
+| i18n key completeness (every EN key has zh-TW counterpart) | PASS |
+| AC-001 (revised): session → app shell, no gym selection step | PASS |
+| AC-116: ProfileScreen shows display name, avatar, bio | PASS |
+| AC-117: Edit Profile entry navigates to EditProfileScreen | PASS |
+| AC-118: send history placeholder present with TODO comment | PASS |
+| AC-119: Logout button calls signOut(), session cleared reactively | PASS |
+| AC-063: privacy_setting unaffected — EditProfileScreen unchanged | PASS |
+| home_gym_id removed from all six source sites | PASS |
+| Migration file created | PASS |
+| ProfileNavigator exposed as public entry-point | PASS |
+| No hardcoded hex colors in new files | PASS |
+| No inline string literals in new files | PASS |
+| No new dependencies outside production.md tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| useSafeAreaInsets + makeStyles(theme, topInset) on all new screens | PASS |
+
+**Result: READY FOR QA**

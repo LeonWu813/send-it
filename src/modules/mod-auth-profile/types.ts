@@ -10,24 +10,21 @@ export interface UserProfile {
   id: string;
   display_name: string;
   avatar_url: string | null;
-  home_gym_id: string | null;
   bio: string | null;
   privacy_setting: PrivacySetting;
   created_at: string;
 }
 
-/** Gym row shape as needed for home-gym selection (minimal fields only). */
-export interface GymListItem {
-  id: string;
-  name: string;
-  city: string | null;
-}
-
-/** Navigation params for the auth/onboarding stacks. */
+/** Navigation params for the auth stack. */
 export type AuthStackParamList = {
   SignIn: undefined;
   SignUp: undefined;
-  HomeGymSelection: { isOnboarding: boolean };
   EditProfile: undefined;
   Settings: undefined;
+};
+
+/** Navigation params for the profile navigator (Tab 3). */
+export type ProfileStackParamList = {
+  Profile: undefined;
+  EditProfile: undefined;
 };

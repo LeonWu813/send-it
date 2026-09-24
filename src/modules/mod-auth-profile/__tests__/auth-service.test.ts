@@ -56,7 +56,6 @@ jest.mock('expo-crypto', () => ({
 import { supabase } from '../../../lib/supabase';
 import {
   loadProfile,
-  setHomeGym,
   signInWithEmail,
   signOut,
   signUpWithEmail,
@@ -179,7 +178,6 @@ describe('loadProfile', () => {
       id: 'user-123',
       display_name: 'Leon',
       avatar_url: null,
-      home_gym_id: null,
       bio: null,
       privacy_setting: 'public',
       created_at: '2026-01-01T00:00:00Z',
@@ -222,7 +220,6 @@ describe('upsertProfile', () => {
       id: 'user-123',
       display_name: 'New Name',
       avatar_url: null,
-      home_gym_id: null,
       bio: 'I climb V5',
       privacy_setting: 'followers_only',
       created_at: '2026-01-01T00:00:00Z',
@@ -244,34 +241,5 @@ describe('upsertProfile', () => {
     await expect(
       upsertProfile('user-123', { display_name: 'x' }),
     ).rejects.toThrow('Failed to save profile.');
-  });
-});
-
-describe('setHomeGym', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('updates home_gym_id on success', async () => {
-    const qb = {
-      update: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({ error: null }),
-    };
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
-
-    await setHomeGym('user-123', 'gym-456');
-    expect(qb.update).toHaveBeenCalledWith({ home_gym_id: 'gym-456' });
-  });
-
-  it('throws a user-friendly error when update fails', async () => {
-    const qb = {
-      update: jest.fn().mockReturnThis(),
-      eq: jest.fn().mockResolvedValue({ error: { message: 'DB error' } }),
-    };
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
-
-    await expect(setHomeGym('user-123', 'gym-456')).rejects.toThrow(
-      'Failed to save home gym. Please try again.',
-    );
   });
 });

@@ -203,7 +203,7 @@ export async function loadProfile(userId: string): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from('users')
     .select(
-      'id, display_name, avatar_url, home_gym_id, bio, privacy_setting, created_at',
+      'id, display_name, avatar_url, bio, privacy_setting, created_at',
     )
     .eq('id', userId)
     .single();
@@ -230,7 +230,7 @@ export async function upsertProfile(
     .from('users')
     .upsert({ id: userId, ...fields }, { onConflict: 'id' })
     .select(
-      'id, display_name, avatar_url, home_gym_id, bio, privacy_setting, created_at',
+      'id, display_name, avatar_url, bio, privacy_setting, created_at',
     )
     .single();
 
@@ -239,23 +239,6 @@ export async function upsertProfile(
   }
 
   return data as UserProfile;
-}
-
-/**
- * Set the user's home gym.
- */
-export async function setHomeGym(
-  userId: string,
-  gymId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('users')
-    .update({ home_gym_id: gymId })
-    .eq('id', userId);
-
-  if (error) {
-    throw new Error('Failed to save home gym. Please try again.');
-  }
 }
 
 /**
