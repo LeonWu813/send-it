@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
-mode: bugfix
+agent: qa-mod-home
+mode: regression
 module: mod-home
 result: success
-commit: 62eba5dc4794ef6eaf9b82d08986afc72bf7b3cb
-timestamp: 2026-09-24T00:00:00Z
+commit: 4edfd15471d0de943b39e7e92362e968f073a028
+timestamp: 2026-09-24T10:00:00Z
 ```
 
 ## PM Updates
@@ -467,7 +467,7 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-009 | mod-moderation         | Not started | —                         |
 | MOD-010 | mod-localization-theme | Not started | —                         |
 | MOD-011 | mod-analytics          | Not started | —                         |
-| MOD-012 | mod-home               | Not started | —                         |
+| MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
 

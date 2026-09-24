@@ -358,3 +358,144 @@ No new regressions in adjacent logic.
 All acceptance criteria pass. The AC-115 bug is resolved. No regressions introduced. The outstanding AC-114 spec note (tab-switch vs. gym-detail navigation) remains a PM-level clarification item, not a blocking implementation bug.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
+
+---
+
+### QA Run 3 — Regression — 2026-09-24
+
+**Workflow**: regression-test (re-verification after Engineer bugfix — human QA bugs)
+
+**Bugs being re-verified:**
+1. zh-TW locale keys `home.savedGyms.title` and `home.savedGyms.empty` used "體育館" instead of "岩館"
+2. Saved gyms did not refresh on Home tab return (keep-alive mount: useEffect([]) fires only once; fix: `isActive` prop + second useEffect)
+
+**Engineer fixes applied:**
+- `locales/zh-TW/common.json` — `home.savedGyms.title` → "已收藏岩館", `home.savedGyms.empty` → "點擊岩館的書籤圖示來收藏"
+- `HomeScreen.tsx` — `isActive: boolean` prop added; second `useEffect([isActive, loadSavedGyms])` calls `loadSavedGyms()` when `isActive` becomes true
+- `HomeNavigator.tsx` — `isActive` prop accepted and threaded to `HomeScreen`
+- `AppShell.tsx` — passes `isActive={activeTab === 'home'}` to `HomeNavigator`
+- `HomeScreen.test.tsx` — `isActive={true}` on all existing renders; two mocks changed from `mockReturnValueOnce` to `mockReturnValue`; new focus-refetch test added
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npm test -- --watchAll=false`: PASS — 157 tests, 17 suites, 0 failures
+- Test count increased from 155 (QA Run 2) to 157, consistent with Engineer's stated addition of a new focus-refetch test. All suites pass.
+
+---
+
+#### REGRESSION PASS — Bug 1: zh-TW locale keys use "岩館"
+
+Verification of `locales/zh-TW/common.json`:
+- `home.savedGyms.title`: "已收藏岩館" — "岩館" present, "體育館" absent. PASS.
+- `home.savedGyms.empty`: "點擊岩館的書籤圖示來收藏" — "岩館" present, "體育館" absent. PASS.
+
+Scope check: `gymDirectory.bookmark.save` (line 113) still reads "收藏體育館" — this is MOD-002's key and is explicitly out of scope for this fix. Correct.
+
+All other `home.*` zh-TW keys (`home.banners.*`, `home.savedGyms.viewAll`, `home.following.*`) contain neither "體育館" nor "岩館" — no unintended changes. PASS.
+
+Input: zh-TW locale file.
+Actual: `home.savedGyms.title` = "已收藏岩館", `home.savedGyms.empty` = "點擊岩館的書籤圖示來收藏".
+Expected: both keys use "岩館" per the bugfix.
+Status: RESOLVED.
+
+---
+
+#### REGRESSION PASS — Bug 2: isActive prop and focus-refetch useEffect
+
+Verification of `HomeScreen.tsx`:
+- `HomeScreenProps` interface declares `isActive: boolean` prop (line 45). PASS.
+- Initial-mount `useEffect`: `useEffect(() => { void loadSavedGyms(); }, [loadSavedGyms])` — present and unchanged (lines 103–105). PASS.
+- Focus-refetch `useEffect`: `useEffect(() => { if (isActive) { void loadSavedGyms(); } }, [isActive, loadSavedGyms])` — present at lines 111–115. Fires on every `isActive` true transition. PASS.
+
+Verification of `HomeNavigator.tsx`:
+- `HomeNavigatorProps` declares `isActive: boolean` (line 23). PASS.
+- `HomeScreen` receives `isActive={isActive}` (line 37). PASS.
+
+Verification of `AppShell.tsx`:
+- `HomeNavigator` receives `isActive={activeTab === 'home'}` (line 82). Evaluates to `true` when the Home tab is active, `false` otherwise. PASS.
+
+Verification of `HomeScreen.test.tsx`:
+- All six existing renders include `isActive={true}` (lines 87, 107, 129, 149, 173, 196, 214). PASS.
+- New test "refetches saved gyms when isActive changes from false to true" (line 228): renders with `isActive={false}`, updates mocks, rerenders with `isActive={true}`, asserts gym chip appears. PASS.
+
+Input: `isActive` prop threaded AppShell → HomeNavigator → HomeScreen.
+Actual: second useEffect fires when `isActive` flips to true; `loadSavedGyms` is called.
+Expected: saved gyms list refreshes on tab return.
+Status: RESOLVED.
+
+---
+
+#### Re-verification of all previously passing items
+
+**AC-110** — PASS. `AppShell.tsx` and `TabBar.tsx` unchanged in structure; `isActive` addition does not touch tab-bar rendering or default-tab initialization (`useState<TabKey>('home')`). TabBar tests (5) all pass.
+
+**AC-111** — PASS. Section order in `HomeScreen.tsx` JSX is unchanged: Banners → Saved Gyms → Following. The `isActive` prop gates a data-fetch, not section rendering order.
+
+**AC-112** — PASS. `banners.ts` and banner section rendering unchanged. Banner test passes.
+
+**AC-113** — PASS. "View All" callback and saved-gym strip rendering unchanged. The `isActive` refetch effect is additive; it does not alter strip rendering logic. Tests pass.
+
+**AC-114** — PASS with spec note carried forward. `onSelectGym` behavior and `AppShell.handleSelectGym` unchanged. Spec note regarding tab-switch vs. gym-detail deep-link is a PM-level item, not an engineering bug, and remains open.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, verified in QA Run 2, unchanged here). Test assertion at line 116 passes.
+
+**AC-123** — PASS. Following section header rendering unchanged. Test passes.
+
+**AC-124** — PASS. `home.following.empty` unchanged in both locales. Test passes.
+
+**Keep-alive mount strategy** — PASS. `AppShell.tsx` keep-alive logic (`display: 'none'` on inactive tab views) is unchanged. The `isActive` prop is derived from `activeTab === 'home'` within the existing `activeTab` state; no new mount/unmount introduced.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` unchanged. `paddingBottom: bottomInset + theme.spacing.sm` still applied.
+
+**Top safe area — HomeScreen** — PASS. `HomeScreen.tsx` `useSafeAreaInsets()` call and `makeStyles(theme, insets.top)` unchanged.
+
+**Cross-module import rule** — PASS. No new cross-module imports introduced. `AppShell.tsx` still imports only `GymNavigator` and `ProfileNavigator` as public entry-point components; `HomeScreen.tsx` still imports only `fetchSavedGymIds` as a public service function.
+
+**i18n completeness** — PASS. No keys added or removed. `i18n.test.ts` passes (included in the 157-test run). zh-TW `home.savedGyms.title` and `home.savedGyms.empty` updated in values only; key set unchanged.
+
+**Migration correctness** — PASS. `supabase/migrations/20260924000002_mod_012_home.sql` unchanged by this bugfix. DDL, FKs, RLS policies, and GRANT remain correct as verified in QA Run 1.
+
+**No hardcoded hex colors** — PASS. No style changes in this fix.
+
+**No inline string literals** — PASS. No new user-facing strings added inline.
+
+**Gold-plating check** — PASS. No features beyond spec introduced. The `isActive` prop is a required behavioral fix, not a speculative enhancement; the spec's keep-alive mount note explicitly anticipates this pattern.
+
+---
+
+#### Adjacent code check (fix proximity)
+
+Changes touch: `locales/zh-TW/common.json` (two values), `HomeScreen.tsx` (prop + useEffect), `HomeNavigator.tsx` (prop thread), `AppShell.tsx` (prop pass), `HomeScreen.test.tsx` (isActive additions + new test).
+
+Adjacent items verified:
+- `gymDirectory.bookmark.save` in zh-TW locale — still "收藏體育館" (MOD-002-owned, out of scope). PASS.
+- `home.following.*` zh-TW keys — unchanged. PASS.
+- `home.savedGyms.viewAll` zh-TW — unchanged. PASS.
+- Initial-mount `useEffect([loadSavedGyms])` in `HomeScreen.tsx` — preserved verbatim. PASS.
+- `AppShell` keep-alive view-style logic — unchanged; only `isActive` prop forwarding added. PASS.
+- `HomeNavigator` session/callback props — all forwarded correctly alongside the new `isActive` prop. PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 3
+
+| AC | QA Run 1 | QA Run 2 | QA Run 3 |
+|----|----------|----------|----------|
+| AC-110 | PASS | PASS | PASS |
+| AC-111 | PASS | PASS | PASS |
+| AC-112 | PASS | PASS | PASS |
+| AC-113 | PASS | PASS | PASS |
+| AC-114 | PASS (spec note) | PASS (spec note) | PASS (spec note) |
+| AC-115 | FAIL | REGRESSION PASS | PASS |
+| AC-123 | PASS | PASS | PASS |
+| AC-124 | PASS | PASS | PASS |
+
+**Result: ALL CLEAR — MOD-012 ready for human QA re-check**
+
+Both human-QA bugs are resolved: zh-TW locale uses "岩館" throughout the `home.*` namespace; saved gyms refresh on every Home tab activation via the `isActive` prop and focus-refetch `useEffect`. All 157 tests pass (157 total, 17 suites). No regressions introduced. TypeScript clean (0 errors). The outstanding AC-114 spec note (tab-switch vs. deep-link) remains a PM-level clarification item, not a blocking bug.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip.
