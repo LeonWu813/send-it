@@ -503,3 +503,140 @@ Verification points:
 - All 131 tests pass (up from 124 in the prior redesign QA run — the increase reflects new tests added for AC-043 and the updated single-page submit flow).
 - `npx tsc --noEmit` exits 0. No new TypeScript errors introduced.
 - The two low-severity implementation gaps noted in the prior redesign QA result (AC-025 COALESCE fallback; REVOKE EXECUTE from anon/public) are not affected by the single-page submit redesign and remain as previously documented.
+
+---
+
+## QA Human-QA Fix Regression — 2026-09-24
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-24
+**Workflow**: regression-test (re-verification after human QA fixes — Fix 1: button disabled before photo selected; Fix 2: conditional photo render on RouteDetailScreen)
+**Overall verdict**: PASS — both fixes verified; no regressions on any previously passing AC or test suite
+
+---
+
+### Context: Fixes Being Re-Verified
+
+The two reported human QA issues and their fixes:
+
+**Fix 1 (RouteSubmitScreen)**: "Add Route" button was previously only disabled during submission (`isSubmitting`). A user could tap without a photo and only then see a validation error. Fix: button is now `disabled={!photoUri || isSubmitting}` and dimmed (`primaryButtonDisabled` style applied when `!photoUri || isSubmitting`). A proactive inline hint `t('routeCatalog.submit.photoRequired')` renders above the button whenever no photo is selected and no photo error is already shown (`!photoUri && !photoError`).
+
+**Fix 2 (RouteDetailScreen)**: The route photo `<Image>` was rendered unconditionally from `route.photo_url`. Fix: wrapped in `{route.photo_url ? (<Image .../>) : null}` so the `<Image>` is only mounted when a URL is present.
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false`
+- Result: 159 tests passed, 0 failed across 17 suites
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+- Test count increased from 157 (engineer self-check) to 159 — two additional pre-existing tests from other modules; no mod-route-catalog test count changed.
+
+---
+
+### Fix 1 Verification — Button Disabled When No Photo (AC-021)
+
+**Source location**: `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` lines 401–421
+
+**Check 1 — Button `disabled` prop**
+- `disabled={!photoUri || isSubmitting}` at line 408. When `photoUri` is `null` (initial state, no photo selected), the expression evaluates `true` — button is disabled. When `photoUri` is a string (photo selected), the expression evaluates `false` — button is enabled (assuming not submitting). PASS.
+
+**Check 2 — Dimmed style applied**
+- `style={[styles.primaryButton, (!photoUri || isSubmitting) && styles.primaryButtonDisabled]}` at lines 403–406. `primaryButtonDisabled` at line 564 sets `opacity: 0.6`. The same condition as the `disabled` prop drives the dim — the two are in sync. PASS.
+
+**Check 3 — `accessibilityState.disabled` reflects button state**
+- `accessibilityState={{ disabled: !photoUri || isSubmitting }}` at line 411. Screen readers correctly announce the button as disabled when no photo is selected. PASS.
+
+**Check 4 — Inline hint renders proactively before any tap**
+- Lines 394–399: `{!photoUri && !photoError ? (<Text style={styles.photoRequiredHint}>{t('routeCatalog.submit.photoRequired')}</Text>) : null}`. On first render `photoUri` is `null` and `photoError` is `null`, so the hint is visible immediately. The hint disappears once a photo is selected (`photoUri` non-null) or once the validation error fires (`photoError` non-null). This gives the user proactive guidance without requiring a failed tap first. PASS.
+
+**Check 5 — Existing belt-and-suspenders validation unchanged**
+- `handleAddRoute()` still checks `if (!photoUri)` at line 167 and calls `setPhotoError(t('routes.submit.errors.photoRequired'))`. This path is now effectively unreachable for a normal user (the button is disabled), but it remains as a defensive guard for any edge path where button state and photo state diverge. The `routes.submit.errors.photoRequired` key = "A photo is required. Please take or choose a photo of the route." is distinct from the new hint key and remains present in both locale files. PASS.
+
+**Check 6 — No gold-plating introduced**
+- No new state variables beyond the existing `photoUri`, `photoError`, `isSubmitting`. No new service calls. No new props on `RouteSubmitScreenProps`. The only additions are the `disabled`/`style`/`accessibilityState` change on the button (3 lines) and the conditional hint text block (6 lines) plus its `photoRequiredHint` style in `makeStyles`. Strictly confined to the reported issue. PASS.
+
+---
+
+### Fix 2 Verification — Conditional Photo Render on RouteDetailScreen (AC-021)
+
+**Source location**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` lines 154–162
+
+**Check 1 — Conditional guard present**
+- `{route.photo_url ? (<Image source={{ uri: route.photo_url }} style={styles.photo} accessibilityLabel={...} resizeMode="cover" />) : null}` at lines 155–162. When `route.photo_url` is an empty string, `null`, or `undefined` (coerced to falsy), no `<Image>` is mounted. When it is a non-empty string, the `<Image>` renders. PASS.
+
+**Check 2 — Matches spec requirement**
+- Spec AC-021 (revised) states: "The photo requirement is enforced both client-side (the 'Add Route' button cannot submit without a photo) and server-side (the `submit_route` RPC rejects a submission with no photo)." The display side is implied by the data model requirement (`photo_url` required). The conditional guard correctly handles the edge case where a row exists with an empty or null `photo_url` — previously such a row would have caused a silent blank-image render. PASS.
+
+**Check 3 — No regression to route detail content**
+- All other content on `RouteDetailScreen` is unchanged: grade, color badge, gym name, section label, submitted_by_user_id, created_at, retired_at (when retired), `AscentList`, LogSend modal, beta-video placeholder. Verified by inspection of the file — the conditional `{route.photo_url ? ... : null}` block is isolated at lines 154–162. PASS.
+
+**Check 4 — Test coverage**
+- `RouteDetailScreen.test.tsx` test "shows the route photo" at line 79 uses `MOCK_ACTIVE_ROUTE` which has `photo_url: 'https://example.com/photo.jpg'` (non-empty). The test verifies the route loaded (grade "V5" visible) — the conditional renders the `<Image>` for a non-empty URL without issue. No test exercises the `photo_url = ''` edge case directly, but that is an existing gap in the test suite (not introduced by this fix). The fix itself is low-risk — the conditional is a simple falsy check on a string. PASS.
+
+---
+
+### i18n Key Verification — `routeCatalog.submit.photoRequired`
+
+**EN locale** (`locales/en/common.json` lines 137–141):
+- `routeCatalog.submit.photoRequired` = `"A photo is required"` — present. PASS.
+
+**zh-TW locale** (`locales/zh-TW/common.json` lines 137–141):
+- `routeCatalog.submit.photoRequired` = `"請上傳路線照片"` — present. PASS.
+
+**Key parity**: both locales have `routeCatalog.submit.addRoute`, `routeCatalog.submit.changePhoto`, and `routeCatalog.submit.photoRequired`. No key present in one locale is missing from the other. PASS.
+
+**Key distinct from existing error key**: `routeCatalog.submit.photoRequired` ("A photo is required") is intentionally shorter and more proactive than the existing `routes.submit.errors.photoRequired` ("A photo is required. Please take or choose a photo of the route."). Both serve different UX roles (proactive hint vs. post-tap validation error). No conflict. PASS.
+
+---
+
+### Regression — Previously Passing ACs
+
+All acceptance criteria that passed in prior QA runs remain verified against the current code. The two fixes are narrowly scoped to `RouteSubmitScreen.tsx` (button state + hint) and `RouteDetailScreen.tsx` (conditional photo render). No service functions, navigator, types, migration, or other screen files were modified. Specific regression checks for adjacent behavior:
+
+**AC-020 (single-page submit)**: No step variable, no `findMatchingActiveRoutes`, no multi-step flow. `handleAddRoute()` function is unchanged in logic — only the `disabled` condition on the submit button and an added conditional hint block above it. PASS.
+
+**AC-021 (photo required — validation path)**: The `handleAddRoute()` validation at lines 167–169 (`if (!photoUri) { setPhotoError(...); hasError = true; }`) is unchanged. The new button `disabled` prop prevents the normal user path from reaching this guard, but the guard remains for belt-and-suspenders. PASS.
+
+**AC-022 (color enum)**: `ROUTE_COLORS` and the color chip rendering are unchanged. PASS.
+
+**AC-023 (V-scale grades)**: `ROUTE_GRADES` and grade chip rendering are unchanged. PASS.
+
+**AC-024b (no retire button)**: `RouteDetailScreen.tsx` has no retire button — unchanged. The only change to the file is the conditional `route.photo_url ? ...` guard. PASS.
+
+**AC-025 (pending approval message)**: `handleAddRoute()` checks `newRoute.status === 'pending'` and shows the Alert — unchanged. PASS.
+
+**AC-040 (grade + color filter chips, no status filter)**: `RouteListScreen.tsx` unmodified. PASS.
+
+**AC-041 (active routes only, no status tag)**: `RouteListScreen.tsx` and `listRoutes()` unmodified. PASS.
+
+**AC-042 (tap route → detail)**: `RouteNavigator.tsx` and `RouteListScreen.tsx` unmodified. PASS.
+
+**AC-043 (pre-fill from filter state)**: `RouteSubmitScreen` props `initialGrade` and `initialColorTag` and their `useState` initialisers are unchanged. PASS.
+
+---
+
+### Summary
+
+| Item | Prior result | This regression result |
+|------|--------------|------------------------|
+| Fix 1: button disabled when no photo | N/A (new fix) | PASS |
+| Fix 2: conditional photo render | N/A (new fix) | PASS |
+| i18n key `routeCatalog.submit.photoRequired` (EN + zh-TW) | N/A (new fix) | PASS |
+| npm test (159 tests, 17 suites) | PASS | PASS |
+| npx tsc --noEmit | PASS | PASS |
+| AC-020 single-page submit | PASS | PASS |
+| AC-021 photo required validation | PASS | PASS |
+| AC-022 color enum | PASS | PASS |
+| AC-023 V-scale grades | PASS | PASS |
+| AC-024b no retire button | PASS | PASS |
+| AC-025 pending approval message | PASS | PASS |
+| AC-040 grade + color filters, no status filter | PASS | PASS |
+| AC-041 active routes only, no status tag | PASS | PASS |
+| AC-042 tap route → detail | PASS | PASS |
+| AC-043 pre-fill from filter state | PASS | PASS |
+| Safe area insets (all screens) | PASS | PASS |
+| No gold-plating | PASS | PASS |
+
+**Overall verdict: PASS. Both human-QA fixes verified correct. No regressions. Module ready for human QA re-check.**
