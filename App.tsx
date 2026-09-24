@@ -3,6 +3,12 @@
  *
  * Initializes cross-cutting providers (i18n, ThemeProvider) and then
  * renders the AuthNavigator, which handles session detection and routing.
+ *
+ * Composition hierarchy:
+ *   SafeAreaProvider → ThemeProvider → AuthNavigator → AppShell (MOD-012)
+ *
+ * AppShell owns the persistent three-tab navigation shell (MOD-012, AC-110).
+ * App.tsx is the composition root only — navigator-selection logic lives in AppShell.
  */
 
 import React from 'react';
@@ -13,20 +19,20 @@ import './src/lib/i18n';
 import 'expo-blob';
 import AuthNavigator from './src/modules/mod-auth-profile/AuthNavigator';
 import { useSession } from './src/modules/mod-auth-profile/hooks/useSession';
-import GymNavigator from './src/modules/mod-gym-directory/GymNavigator';
+import AppShell from './src/modules/mod-home/AppShell';
 import { ThemeProvider } from './src/lib/theme';
 
 /**
- * Authenticated app shell — rendered once the user is fully authenticated
- * and has a session. Renders the gym directory as the home screen (MOD-002).
- * Future modules (route catalog, send logging, etc.) will add tabs here.
+ * Authenticated shell wrapper — reads the session singleton and passes it
+ * to AppShell. Returns null if there is no session (AuthNavigator controls
+ * whether this is rendered at all, so null is a safety guard only).
  */
-function AppShell(): React.JSX.Element | null {
+function AuthenticatedApp(): React.JSX.Element | null {
   const { session } = useSession();
   if (!session) {
     return null;
   }
-  return <GymNavigator session={session} />;
+  return <AppShell session={session} />;
 }
 
 export default function App(): React.JSX.Element {
@@ -34,7 +40,7 @@ export default function App(): React.JSX.Element {
     <SafeAreaProvider>
       <ThemeProvider>
         <AuthNavigator>
-          <AppShell />
+          <AuthenticatedApp />
         </AuthNavigator>
       </ThemeProvider>
     </SafeAreaProvider>

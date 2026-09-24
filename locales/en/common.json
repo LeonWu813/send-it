@@ -225,6 +225,22 @@
       "routeSearchFailed": "Failed to search routes. Please try again."
     }
   },
+  "home": {
+    "banners": {
+      "competition": "Competition",
+      "newRoutes": "New Routes",
+      "community": "Community"
+    },
+    "savedGyms": {
+      "title": "Saved Gyms",
+      "viewAll": "View All",
+      "empty": "Tap the bookmark on any gym to save it"
+    },
+    "following": {
+      "title": "Following",
+      "empty": "Follow climbers to see them here"
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",

@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-auth-profile
-mode: implement
+agent: qa-mod-auth-profile
+mode: regression
 module: mod-auth-profile
-result: success
-commit: 171360cd2a108c5f236b3318e6a9d87e652fa04b
+result: bugs-found
+commit: 117c70e7faffcaa6efd1a3974d4554f3436e8733
 timestamp: 2026-09-24T00:00:00Z
 ```
 

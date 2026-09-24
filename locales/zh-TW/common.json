@@ -225,6 +225,22 @@
       "routeSearchFailed": "搜尋路線失敗，請再試一次。"
     }
   },
+  "home": {
+    "banners": {
+      "competition": "比賽",
+      "newRoutes": "新路線",
+      "community": "社群"
+    },
+    "savedGyms": {
+      "title": "已收藏體育館",
+      "viewAll": "查看全部",
+      "empty": "點擊體育館的書籤圖示來收藏"
+    },
+    "following": {
+      "title": "追蹤中",
+      "empty": "追蹤攀岩者以在此查看"
+    }
+  },
   "common": {
     "loading": "載入中…",
     "retry": "重試",
