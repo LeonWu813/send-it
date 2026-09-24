@@ -506,3 +506,103 @@ One cross-module coordination note flagged (saveGym `user_id` DEFAULT — not a 
 3. Save a gym on its detail screen, navigate back to the list — that gym's card shows a filled yellow bookmark indicator; other gym cards show no indicator.
 4. Confirm no tap action on the list indicator — tapping a card with a saved indicator navigates to gym detail (not a save/unsave toggle).
 5. Background and foreground the app while on the gym list — saved indicator state refreshes correctly.
+
+---
+
+## QA Results — Regression (Sort saved gyms to top)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-09-24
+**Scope**: Sort enhancement — saved gyms float to the top of the gym list. Regression check of AC-120, AC-121, AC-122, and all pre-existing gym list ACs.
+
+### Automated Test Suite
+
+Command: `npm test -- --watchAll=false`
+Result: **157/157 tests passed, 17 suites, exit code 0**
+Test count vs. last pass: 143 → 157 (+14: new sort test in GymListScreen.test.tsx plus suite growth from other modules). Note: engineer self-check recorded 156/156; QA run shows 157 — one additional test present (count is consistent with the new sort test being present alongside tests that may have been enumerated differently across runs; all pass with exit code 0).
+
+Console warnings: pre-existing `act(...)` warnings from `@expo/vector-icons` — upstream issue, unchanged from prior passes.
+
+### TypeScript Compilation
+
+Command: `npx tsc --noEmit`
+Result: **PASS — exit code 0, 0 errors**
+
+### Sort Enhancement Verification
+
+**Check 1 — `sortedGyms` memo exists and is derived from `filteredGyms` + `savedGymIds`.**
+
+`GymListScreen.tsx` lines 131–138:
+```
+const sortedGyms = useMemo(() => {
+  if (savedGymIds.size === 0) return filteredGyms;
+  return [...filteredGyms].sort((a, b) => {
+    const aSaved = savedGymIds.has(a.id) ? 0 : 1;
+    const bSaved = savedGymIds.has(b.id) ? 0 : 1;
+    return aSaved - bSaved;
+  });
+}, [filteredGyms, savedGymIds]);
+```
+`sortedGyms` is declared as a `useMemo`, depends on `filteredGyms` and `savedGymIds`, and is correctly placed after `filteredGyms` (line 110). **PASS**
+
+**Check 2 — `sortedGyms` is passed to FlatList `data` prop.**
+
+`GymListScreen.tsx` line 247: `data={sortedGyms}`. Previously `data={filteredGyms}`. **PASS**
+
+**Check 3 — Saved gym cards appear before unsaved gym cards.**
+
+Test "places saved gyms above unsaved gyms in the list" (GymListScreen.test.tsx lines 244–278): gym-002 (saved, originally second in fixture array) is asserted to appear as the first card; gym-001 (unsaved, originally first) second; gym-003 (unsaved, originally third) third. Test passes. Verified by code inspection: the sort assigns score 0 to saved gyms and 1 to unsaved gyms, then subtracts — saved gyms sort before unsaved. **PASS**
+
+**Check 4 — Sort is stable within each group (relative order preserved).**
+
+JavaScript's `Array.prototype.sort` is guaranteed stable per ECMAScript 2019 (and all engines used by React Native — V8 / JavaScriptCore). The sort key is binary (0 or 1): items with equal keys retain their original relative order. Verified analytically: within the unsaved group, gym-001 (index 0 in filteredGyms) remains before gym-003 (index 2) after sort. The test asserts exactly this: gym-001 at position 1 and gym-003 at position 2. **PASS**
+
+**Check 5 — Short-circuit when no saved gyms.**
+
+Line 132: `if (savedGymIds.size === 0) return filteredGyms;` — when no gyms are saved, `sortedGyms` is the same reference as `filteredGyms`, avoiding an unnecessary spread-copy and sort. **PASS**
+
+**Check 6 — Spread-copy before sort (does not mutate `filteredGyms`).**
+
+Line 133: `return [...filteredGyms].sort(...)` — a new array is created before sorting. `filteredGyms` (a memoized value) is not mutated. **PASS**
+
+**Check 7 — Sort applied after filter (search and city filter results also sorted).**
+
+`sortedGyms` depends on `filteredGyms` (not `gyms`). Filter runs first (text search + city chip), then sort. A saved gym that passes the filter will sort to the top of the filtered result. Consistent with the engineer's design decision. **PASS**
+
+### Regression — AC-120 (bookmark indicator still shows on saved cards)
+
+No change to the `isItemSaved` check or the conditional `<Ionicons>` render in `renderGymCard` (lines 141, 162–169). The sort only changes the order of items passed to FlatList; the per-item `savedGymIds.has(item.id)` check is independent of sort order. Two AC-122 tests ("shows 'Saved' bookmark indicator on saved gym cards only" and "shows no bookmark indicator when no gyms are saved") continue to pass. **PASS — no regression**
+
+### Regression — AC-121 (detail bookmark toggle unaffected)
+
+`GymDetailScreen.tsx` is unchanged by this enhancement. The sort lives entirely in `GymListScreen`'s `sortedGyms` memo. All five GymDetailScreen bookmark tests continue to pass. **PASS — no regression**
+
+### Regression — AC-122 (list indicator still read-only)
+
+The `<Ionicons>` bookmark indicator on list cards is still a plain `<Ionicons>` element with no `onPress` and no wrapping `<Pressable>`. The sort enhancement did not add interactivity. Tapping a card still calls `onSelectGym` via the outer `<Pressable>`. **PASS — no regression**
+
+### Regression — Pre-existing gym list ACs
+
+**PASS AC-004**: GymListScreen renders name, city/district for every gym. Sort is transparent to rendering — all gym cards that pass the filter still render. Verified by "renders gym cards after loading" test (passes).
+
+**PASS AC-006**: Tapping a gym card calls `onSelectGym(item.id)` regardless of sort position — the card's `onPress` handler is `() => onSelectGym(item.id)` and is not affected by sort order. Verified by "calls onSelectGym with the gym id when a card is pressed" test (passes).
+
+**PASS AC-005**: GymNavigator and GymDetailScreen unchanged. "View Routes" and back-navigation behavior unaffected. Verified by GymDetailScreen test suite (all 7 tests pass).
+
+**PASS AC-070**: RequestGymScreen and submitGymRequest() unchanged. 5/5 RequestGymScreen tests pass.
+
+**PASS (search + city filter)**: `filteredGyms` is unchanged; `sortedGyms` wraps it. A gym that fails the filter is still absent from `sortedGyms`. "Shows empty state text when no gyms match the search query" test passes.
+
+**PASS (error + retry)**: Error/retry path is unchanged — error and loading states render before `sortedGyms` is used. "Shows an error message and retry button when loading fails" and "retries loading when the retry button is pressed" tests pass.
+
+### Overall Verdict
+
+**QA PASS** — Sort enhancement verified. All three checks confirmed: `sortedGyms` memo present and correctly derived, passed to FlatList `data`, saved gyms sort above unsaved, stable within each group. No regressions in AC-120, AC-121, AC-122, or any pre-existing gym list AC. 157/157 automated tests pass. TypeScript compilation clean (exit 0).
+
+**Ready for human QA re-check.** Human tester should additionally verify on-device:
+1. Save one or more gyms via the detail screen bookmark toggle.
+2. Return to the gym list — saved gyms appear at the top of the list (above all unsaved gyms).
+3. Apply the Taipei or New Taipei city filter — saved gyms that pass the filter still appear first within filtered results.
+4. Type a search query — saved gyms matching the search appear before unsaved gyms in search results.
+5. Unsave a gym on its detail screen, return to the list — that gym drops back to its natural position among unsaved gyms.

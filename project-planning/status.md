@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-home
+agent: qa-mod-gym-directory
 mode: regression
-module: mod-home
+module: mod-gym-directory
 result: success
-commit: 4edfd15471d0de943b39e7e92362e968f073a028
-timestamp: 2026-09-24T10:00:00Z
+commit: aad46f080d267a05dea5f113268a3538555445e4
+timestamp: 2026-09-24T00:00:00Z
 ```
 
 ## PM Updates
