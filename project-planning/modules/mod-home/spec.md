@@ -4,7 +4,7 @@
 **Module Name**: Home
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002, MOD-006
-**Last Synced from PRD Revision**: 7
+**Last Synced from PRD Revision**: 8
 
 ---
 
@@ -50,7 +50,7 @@ As a climber connected to the local scene, I want a Home screen that shows annou
 - The Home screen shall render three sections in order: Banners, Saved Gyms, Following Climbers (AC-111).
 - The Banners section shall display up to 3 static, hardcoded banner cards in a horizontal scroll. If no banners are defined, the section shall be hidden (AC-112).
 - The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002) (AC-113).
-- Tapping a gym in the Saved Gyms strip shall navigate to that gym's detail screen (MOD-002) (AC-114).
+- Tapping a gym in the Saved Gyms strip shall navigate to the Gyms tab (Phase 1: switches to the Gyms tab; deep-link to a specific gym's detail screen is a future enhancement) (AC-114).
 - When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it." (AC-115).
 - The Following Climbers section shall display a horizontal scroll strip of climbers the current user follows (sourced from MOD-006 public service), each showing avatar and display name. Tapping a climber shall navigate to that climber's profile (AC-123).
 - When the current user follows no one, the Following Climbers section shall display an appropriate empty state (AC-124).
@@ -90,7 +90,7 @@ As a climber connected to the local scene, I want a Home screen that shows annou
 
 **AC-113** (new): The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002).
 
-**AC-114** (new): Tapping a gym in the Saved Gyms strip shall navigate to that gym's detail screen (MOD-002).
+**AC-114** (new): Tapping a gym in the Saved Gyms strip shall navigate to the Gyms tab (Phase 1: switches to the Gyms tab; deep-link to a specific gym's detail screen is a future enhancement).
 
 **AC-115** (new): When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it."
 

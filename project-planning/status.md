@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-home
-mode: regression
-module: mod-home
+agent: doc-sync
+mode: trivial
+module: n/a
 result: success
-commit: dd86e65b163bc92b397cc1217c19404ac46d39fd
-timestamp: 2026-09-24T00:00:00Z
+commit: af98d4172f5d2d1cc883a2524020401df93561e3
+timestamp: 2026-09-24T01:00:00Z
 ```
 
 ## PM Updates
@@ -593,6 +593,11 @@ The column drop touches **migrations, one service function, types, the onboardin
 **AMBIGUITY markers added:** none
 **CONFLICT markers added:** none
 **verify-sync.sh result:** Skipped per delta-sync scope — this sync touches only existing fields within one module spec; no new module directories, no phase plan changes, no production.md changes.
+
+
+### Sync Report — Trivial Passthrough — 2026-09-24
+
+Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 
 ## Skill Recommendations
 
