@@ -2,6 +2,27 @@
 
 ## Engineering Progress
 
+### Implementation — 2026-09-24 (Sort saved gyms to top — human QA request)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/screens/GymListScreen.tsx` — added `sortedGyms` useMemo after `filteredGyms`; sorts saved gyms (via `savedGymIds.has(a.id)`) to the top of the list, preserving relative order within each group. FlatList `data` prop updated from `filteredGyms` to `sortedGyms`. No extra DB calls; sort is reactive to `savedGymIds` state changes.
+- `src/modules/mod-gym-directory/__tests__/GymListScreen.test.tsx` — added one new test: "places saved gyms above unsaved gyms in the list". Saves gym-002 (middle of fixture array), asserts it appears as the first gym card, with gym-001 and gym-003 (unsaved) after.
+
+**Design decisions:**
+- Sort applied after filter so search/city-filter results are also sorted by saved status.
+- Short-circuit when `savedGymIds.size === 0` (no saved gyms) avoids unnecessary array copy on the common case.
+- Spread-copy (`[...filteredGyms]`) before sort to avoid mutating the memoized `filteredGyms` array.
+
+**Self-check:**
+- `npx tsc --noEmit` → EXIT 0, 0 errors
+- `npm test -- --watchAll=false` → 156/156 tests passed, 17 suites, exit code 0
+- New test: 1 (sort render-order test in GymListScreen.test.tsx)
+- Pre-existing `act(...)` console warnings from `@expo/vector-icons` — upstream issue, unchanged.
+
+**Commit:** `feat(mod-gym-directory): sort saved gyms to top of gym list`
+
+---
+
 ### Implementation — 2026-09-24 (Rev 7 — AC-120, AC-121, AC-122)
 
 **Files modified:**
