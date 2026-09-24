@@ -79,6 +79,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
         <View style={[styles.tabContent, activeTab !== 'home' && styles.hidden]}>
           <HomeNavigator
             session={session}
+            isActive={activeTab === 'home'}
             onViewAllGyms={handleViewAllGyms}
             onSelectGym={handleSelectGym}
           />

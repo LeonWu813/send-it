@@ -20,18 +20,21 @@ import HomeScreen from './screens/HomeScreen';
 
 interface HomeNavigatorProps {
   session: Session;
+  isActive: boolean;
   onViewAllGyms: () => void;
   onSelectGym: (gymId: string) => void;
 }
 
 export default function HomeNavigator({
   session,
+  isActive,
   onViewAllGyms,
   onSelectGym,
 }: HomeNavigatorProps): React.JSX.Element {
   return (
     <HomeScreen
       session={session}
+      isActive={isActive}
       onViewAllGyms={onViewAllGyms}
       onSelectGym={onSelectGym}
     />

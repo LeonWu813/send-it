@@ -38,6 +38,11 @@ import { fetchSavedGymIds } from '../../mod-gym-directory/gym-service';
 
 interface HomeScreenProps {
   session: Session;
+  /** True when the Home tab is the active tab in AppShell. Used to refetch
+   *  saved gyms whenever the user returns to the Home tab after saving a gym
+   *  on the Gyms tab. Required because AppShell uses keep-alive mount
+   *  (display: 'none'), so useEffect([]) only fires once on initial mount. */
+  isActive: boolean;
   onViewAllGyms: () => void;
   onSelectGym: (gymId: string) => void;
 }
@@ -53,6 +58,7 @@ interface SavedGymItem {
 
 export default function HomeScreen({
   session: _session,
+  isActive,
   onViewAllGyms,
   onSelectGym,
 }: HomeScreenProps): React.JSX.Element {
@@ -93,9 +99,20 @@ export default function HomeScreen({
     }
   }, []);
 
+  // Initial load on mount.
   useEffect(() => {
     void loadSavedGyms();
   }, [loadSavedGyms]);
+
+  // Re-fetch when the Home tab becomes active (keep-alive mount: the component
+  // is never unmounted when the user switches tabs, so useEffect([]) alone is
+  // insufficient — this effect fires each time isActive flips to true, which
+  // happens every time the user returns to the Home tab).
+  useEffect(() => {
+    if (isActive) {
+      void loadSavedGyms();
+    }
+  }, [isActive, loadSavedGyms]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 

@@ -29,7 +29,7 @@ jest.mock('../../../lib/banners', () => ({
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 
 import HomeScreen from '../screens/HomeScreen';
@@ -84,6 +84,7 @@ describe('HomeScreen', () => {
     render(
       <HomeScreen
         session={MOCK_SESSION}
+        isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
       />,
@@ -103,6 +104,7 @@ describe('HomeScreen', () => {
     render(
       <HomeScreen
         session={MOCK_SESSION}
+        isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
       />,
@@ -119,11 +121,12 @@ describe('HomeScreen', () => {
   it('renders saved gym chips when the user has saved gyms (AC-113)', async () => {
     mockFetchSavedGymIds.mockResolvedValue(['gym-001', 'gym-002']);
     const qb = makeSelectInBuilder({ data: GYM_FIXTURES, error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+    mockFrom.mockReturnValue(qb as unknown as ReturnType<typeof supabase.from>);
 
     render(
       <HomeScreen
         session={MOCK_SESSION}
+        isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
       />,
@@ -143,6 +146,7 @@ describe('HomeScreen', () => {
     render(
       <HomeScreen
         session={MOCK_SESSION}
+        isActive={true}
         onViewAllGyms={onViewAllGyms}
         onSelectGym={jest.fn()}
       />,
@@ -160,12 +164,13 @@ describe('HomeScreen', () => {
   it('calls onSelectGym with the gym ID when a gym chip is tapped (AC-114)', async () => {
     mockFetchSavedGymIds.mockResolvedValue(['gym-001']);
     const qb = makeSelectInBuilder({ data: [GYM_FIXTURES[0]], error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+    mockFrom.mockReturnValue(qb as unknown as ReturnType<typeof supabase.from>);
     const onSelectGym = jest.fn();
 
     render(
       <HomeScreen
         session={MOCK_SESSION}
+        isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={onSelectGym}
       />,
@@ -188,6 +193,7 @@ describe('HomeScreen', () => {
     render(
       <HomeScreen
         session={MOCK_SESSION}
+        isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
       />,
@@ -205,6 +211,7 @@ describe('HomeScreen', () => {
     render(
       <HomeScreen
         session={MOCK_SESSION}
+        isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
       />,
@@ -213,6 +220,43 @@ describe('HomeScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Following')).toBeTruthy();
+    });
+  });
+
+  // ── Focus-triggered refetch (Bug 2 fix) ─────────────────────────────────────
+
+  it('refetches saved gyms when isActive changes from false to true', async () => {
+    // Initially inactive — render with no saved gyms
+    mockFetchSavedGymIds.mockResolvedValue([]);
+
+    const { rerender } = render(
+      <HomeScreen
+        session={MOCK_SESSION}
+        isActive={false}
+        onViewAllGyms={jest.fn()}
+        onSelectGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    // Simulate user saving a gym on the Gyms tab, then switching back to Home
+    mockFetchSavedGymIds.mockResolvedValue(['gym-001']);
+    const qb = makeSelectInBuilder({ data: [GYM_FIXTURES[0]], error: null });
+    mockFrom.mockReturnValue(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await act(async () => {
+      rerender(
+        <HomeScreen
+          session={MOCK_SESSION}
+          isActive={true}
+          onViewAllGyms={jest.fn()}
+          onSelectGym={jest.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy();
     });
   });
 });
