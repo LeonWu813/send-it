@@ -111,7 +111,7 @@ describe('HomeScreen', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Tap the bookmark on any gym to save it'),
+        screen.getByText('Tap the bookmark on any gym to save it.'),
       ).toBeTruthy();
     });
   });

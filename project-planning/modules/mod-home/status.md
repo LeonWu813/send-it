@@ -51,6 +51,26 @@
 
 **Result: READY FOR QA**
 
+### Bugfix — AC-115 — 2026-09-24
+
+**Bug**: `locales/en/common.json` key `home.savedGyms.empty` was missing a trailing period.
+
+**Files changed:**
+- `locales/en/common.json` — `home.savedGyms.empty` value updated from `"Tap the bookmark on any gym to save it"` to `"Tap the bookmark on any gym to save it."`.
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — test assertion for AC-115 updated to match the corrected string with trailing period.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 155 tests, 17 suites, all pass |
+| `home.savedGyms.empty` value matches AC-115 spec (period present) | PASS |
+| Test assertion updated to match corrected string | PASS |
+| zh-TW locale unchanged (no period per Chinese punctuation convention) | PASS |
+
+**Result: READY FOR QA RE-VERIFICATION**
+
 ## QA Results
 
 ### Verification — 2026-09-24
