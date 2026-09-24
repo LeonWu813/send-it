@@ -10,7 +10,7 @@
 --   20260920000002_mod_002_gym_directory.sql  (public.gyms table)
 
 CREATE TABLE public.saved_gyms (
-  user_id    UUID        NOT NULL REFERENCES public.users(id)  ON DELETE CASCADE,
+  user_id    UUID        NOT NULL DEFAULT auth.uid() REFERENCES public.users(id)  ON DELETE CASCADE,
   gym_id     UUID        NOT NULL REFERENCES public.gyms(id)   ON DELETE CASCADE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, gym_id)
