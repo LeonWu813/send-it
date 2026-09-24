@@ -405,3 +405,133 @@ None. All 15 previously-passing items continue to pass. No new failures introduc
 | useSafeAreaInsets + makeStyles(theme, topInset) on all new screens | PASS |
 
 **Result: READY FOR QA**
+
+---
+
+## QA Run 3 — Rev 7 Verification — 2026-09-24
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: re-verification after Rev 7 changes (regression + new AC verification)
+**Scope**: Rev 7 primary focus (AC-001 revised, AC-116, AC-117, AC-118, AC-119) plus full regression of all in-scope ACs (AC-063)
+
+### Automated Test Suite
+
+Command: `npm test -- --watchAll=false`
+Result: 143 tests, 15 suites — all PASS
+Exit code: 0
+
+### TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+Exit code: 0
+
+### Rev 7 Primary Focus — Acceptance Criteria Verification
+
+**AC-001 (revised)** — On first run, the app shall navigate the user directly to the Home tab without requiring gym selection.
+
+PASS. `AuthNavigator.tsx` verified: the onboarding gate that checked `home_gym_id` and conditionally rendered `HomeGymSelectionScreen` has been removed entirely. The routing logic is now: isLoading → spinner; no session → SignIn/SignUp screens; session → `{children}` directly. There is no `home_gym_id` reference, no `isOnboarding` state, and no `HomeGymSelectionScreen` import anywhere in the file. The `HomeGymSelectionScreen.tsx` file is confirmed deleted — it does not appear in `src/modules/mod-auth-profile/screens/` (directory listing: `EditProfileScreen.tsx`, `ProfileScreen.tsx`, `SignInScreen.tsx`, `SignUpScreen.tsx`). No `home_gym_id` or `homeGym` references remain anywhere in `src/` (grep returns no matches).
+
+**AC-116** — The Profile screen shall display the current user's display name, avatar, and bio.
+
+PASS. `ProfileScreen.tsx` verified: renders `profile?.avatar_url` → `<Image>` (or `<View avatarPlaceholder>` when null); renders `profile?.display_name ?? ''` in a `<Text>`; renders `profile?.bio` in a `<Text>` when non-null. All three fields are sourced from `useSession().profile` which loads from the `users` table via `loadProfile()`. The `UserProfile` type confirms `display_name`, `avatar_url`, and `bio` fields are present with `home_gym_id` removed.
+
+**AC-117** — The Profile screen shall expose an Edit Profile entry point that opens editing of the current user's display name, avatar, bio, and privacy setting.
+
+PASS. `ProfileScreen.tsx` renders a `<Pressable>` with `accessibilityLabel={t('profile.editProfile')}` that calls `onNavigateEditProfile` on press. `ProfileNavigator.tsx` wires this: `onNavigateEditProfile={() => setView('editProfile')}` transitions the state machine from `'profile'` to `'editProfile'`, rendering `EditProfileScreen` with the current `userId` and `profile`. `EditProfileScreen` exposes display name, bio, avatar, and privacy setting fields — matching all four required fields.
+
+**AC-118** — The Profile screen shall embed the current user's send history (the MOD-008 profile-history-and-stats surface).
+
+PASS (placeholder acceptable per spec note). `ProfileScreen.tsx` lines 105–113: a `<View style={styles.sendHistorySection}>` renders the section title via `t('profile.sendHistory')` (i18n-correct) followed by a placeholder `<Text>Send history coming soon</Text>` with a `// TODO: replace with MOD-008 SendHistoryProfile component when MOD-008 ships` comment. The spec explicitly states "placeholder acceptable for now — MOD-008 provides the real component later." The section heading key `profile.sendHistory` is confirmed present in both `locales/en/common.json` (line 51: `"sendHistory": "Send History"`) and `locales/zh-TW/common.json` (line 51: `"sendHistory": "完攀紀錄"`).
+
+NOTE: The placeholder text `Send history coming soon` on line 110 of `ProfileScreen.tsx` is a raw inline string literal not wrapped in `useTranslation()`. This violates the production.md i18n convention ("All user-facing strings are pulled through the i18n hook — no inline string literals in components"). The engineer's self-check marked "No inline string literals in new files" as PASS, which is incorrect. However, the spec explicitly permits a placeholder here ("placeholder acceptable for now"), so the question is whether the placeholder text itself must go through i18n. Per production.md, it must — even a placeholder component is subject to the convention while it exists. Classification: implementation bug. Route to Engineer.
+
+FAIL (inline string literal): `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` line 110 — `<Text style={styles.sendHistoryPlaceholder}>Send history coming soon</Text>` — raw inline string literal without `useTranslation()`. Input=ProfileScreen renders for an authenticated user; Actual=hardcoded English string literal rendered; Expected per production.md shared convention=all user-facing strings go through i18n hook. Fix: either add a `profile.sendHistoryPlaceholder` key to both locale catalogs and wrap with `t('profile.sendHistoryPlaceholder')`, or remove the text entirely and render nothing (the section title already communicates the section's purpose).
+
+**AC-119** — The Profile screen shall expose a Logout control at the bottom that ends the session and returns the user to the signed-out state.
+
+PASS. `ProfileScreen.tsx` renders a `<Pressable>` with `accessibilityLabel={t('profile.logout')}` at the bottom of the `ScrollView`. On press, `handleLogout()` calls `signOut()` from `auth-service.ts`, which calls `supabase.auth.signOut()`. The `onAuthStateChange` listener in `useSession.ts` receives the `SIGNED_OUT` event, sets session to null, and clears the profile. `AuthNavigator` observes `session === null` and routes back to the `SignIn` screen — no explicit navigation needed. Loading state (`isSigningOut`) disables the button during the operation. Error state displays an error message from `t('auth.errors.signOutFailed')` on failure.
+
+### Regression — Existing ACs
+
+**AC-063** — The system shall enforce a profile privacy setting of `public` (default) or `followers_only`.
+
+PASS. No changes to `EditProfileScreen.tsx`, `upsertProfile()`, or the migration. The `privacy_setting` column remains defined as a Postgres ENUM with DEFAULT 'public' in migration `20260920000001_mod_001_user_profile.sql`. The `UserProfile` type still includes `privacy_setting: PrivacySetting` where `PrivacySetting = 'public' | 'followers_only'`. `auth-service.test.ts` upsertProfile test confirms `privacy_setting: 'followers_only'` is handled correctly.
+
+### Rev 7 Impact Map — Removal Verification
+
+**home_gym_id removed from all six required source sites:**
+
+- `auth-service.ts` — PASS. SELECT strings in `loadProfile()` and `upsertProfile()` confirmed: `'id, display_name, avatar_url, bio, privacy_setting, created_at'` — no `home_gym_id`. `setHomeGym()` function confirmed deleted. Grep for `home_gym_id` and `setHomeGym` in `src/` returns no matches.
+- `types.ts` — PASS. `UserProfile` interface: `id`, `display_name`, `avatar_url`, `bio`, `privacy_setting`, `created_at` — no `home_gym_id`. `GymListItem` type removed. `HomeGymSelection` removed from `AuthStackParamList`. `ProfileStackParamList` added.
+- `AuthNavigator.tsx` — PASS. No `home_gym_id` gate. No `HomeGymSelectionScreen` import. No `isOnboarding` state. Session → children directly.
+- `HomeGymSelectionScreen.tsx` — PASS. File deleted and confirmed absent.
+- `auth-service.test.ts` — PASS. `setHomeGym` import removed. `describe('setHomeGym')` block removed. `home_gym_id` field absent from all profile fixtures.
+- `useSession.test.ts` — PASS. `home_gym_id` field absent from all profile fixtures.
+
+**i18n keys — homeGym removed, profile keys added:**
+
+- `homeGym` keys removed — PASS. Grep for `homeGym`, `noHomeGym`, `changeHomeGym` in both locale files returns no matches. The `onboarding` section is also fully absent from both catalogs.
+- `editProfile` key present — PASS. Both locales: en=`"Edit Profile"`, zh-TW=`"編輯個人資料"`.
+- `sendHistory` key present — PASS. Both locales: en=`"Send History"`, zh-TW=`"完攀紀錄"`.
+- `logout` key present — PASS. Both locales: en=`"Log Out"`, zh-TW=`"登出"`.
+
+**Migration file:**
+
+- `supabase/migrations/20260924000001_mod_001_drop_home_gym_id.sql` — PASS. File exists. Content: `ALTER TABLE public.users DROP COLUMN IF EXISTS home_gym_id;`. No RLS policy or trigger in migration 001 references `home_gym_id` (policies reference `auth.role()`, `auth.uid()` only; trigger inserts `id` and `display_name` only).
+
+**ProfileNavigator entry point:**
+
+- PASS. `ProfileNavigator.tsx` exists at `src/modules/mod-auth-profile/ProfileNavigator.tsx`. Exported as `export default function ProfileNavigator`. Accepts `session: Session` prop. State machine: `'profile'` renders `ProfileScreen`, `'editProfile'` renders `EditProfileScreen`. This is the public entry point for MOD-012 AppShell to mount as Tab 3.
+
+### Shared Convention Checks (Rev 7 new files)
+
+**Safe area insets (ProfileScreen.tsx)**
+PASS. `useSafeAreaInsets()` is called; `insets.top` passed to `makeStyles(theme, insets.top)`. `makeStyles` accepts `topInset: number` as second parameter. `scrollContent` uses `paddingTop: topInset + theme.spacing.md`. Conforms exactly to the production.md "Screen Layout & Safe Area Insets" convention.
+
+**No hardcoded hex colors (ProfileScreen.tsx, ProfileNavigator.tsx)**
+PASS. All style values use `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.fontWeight.*`, `theme.borderRadius.*` tokens. No `#RRGGBB` or `rgba(...)` literals.
+
+**Supabase singleton**
+PASS. No new `createClient()` call sites. `ProfileScreen.tsx` imports `signOut` from `auth-service`, not from supabase directly.
+
+**No service_role key in client code**
+PASS. No new env var reads in any Rev 7 file.
+
+**TypeScript strict mode — no unguarded `any`**
+PASS. `npx tsc --noEmit` exits 0. No new `any` types in production files.
+
+**Cross-module import rule (production.md)**
+PASS. `ProfileNavigator.tsx` imports only from within `mod-auth-profile/` (EditProfileScreen, ProfileScreen, useSession hook — all internal). It does not reach into any other module's `screens/` or `components/`. Correct boundary.
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| AC-001 (revised): session → app shell directly, no gym selection gate | PASS |
+| AC-116: ProfileScreen displays display name, avatar, bio | PASS |
+| AC-117: Edit Profile entry opens EditProfileScreen | PASS |
+| AC-118: Send history section present (placeholder acceptable per spec) | PASS (with FAIL noted — see below) |
+| AC-119: Logout control at bottom ends session | PASS |
+| AC-063 regression: privacy_setting unaffected | PASS |
+| home_gym_id removed from all six source sites | PASS |
+| Drop migration exists (20260924000001_mod_001_drop_home_gym_id.sql) | PASS |
+| HomeGymSelectionScreen.tsx deleted | PASS |
+| homeGym keys removed from both locale files | PASS |
+| editProfile / sendHistory / logout keys present in both locales | PASS |
+| ProfileNavigator exposed as default export (public entry point) | PASS |
+| Safe area insets (useSafeAreaInsets + makeStyles) on ProfileScreen | PASS |
+| No hardcoded hex colors in new files | PASS |
+| No service_role key in client code | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS |
+| Automated test suite (143 tests, 15 suites) | PASS |
+| Inline string literal in ProfileScreen.tsx line 110 | **FAIL** |
+
+**Overall verdict: FAIL**
+
+**Failure count: 1**
+**Failure classification: implementation bug — route to Engineer**
+
+FAIL (inline string): `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` line 110 — the send history placeholder renders `<Text style={styles.sendHistoryPlaceholder}>Send history coming soon</Text>` as a raw inline string literal without `useTranslation()`. Input=ProfileScreen renders for an authenticated user; Actual=hardcoded English string "Send history coming soon" rendered to screen; Expected per production.md shared convention=all user-facing strings go through the i18n hook. Fix: add `profile.sendHistoryPlaceholder` to both locale catalogs and wrap with `t('profile.sendHistoryPlaceholder')`, or remove the placeholder text entirely and let the section title alone communicate the section.
+
+Note: this is the same class of violation caught in QA Run 1 (App.tsx inline string) and fixed in QA Run 2. The pattern recurs in placeholder sections — see Skill Recommendations.
