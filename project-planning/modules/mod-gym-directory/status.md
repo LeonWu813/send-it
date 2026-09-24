@@ -2,6 +2,25 @@
 
 ## Engineering Progress
 
+### Implementation — 2026-09-24 (i18n terminology fix — replace all zh-TW 體育館 with 岩館)
+
+**Files modified:**
+- `locales/zh-TW/common.json` — replaced `"收藏體育館"` with `"收藏岩館"` at `gymDirectory.bookmark.save` (line 113). This was the sole remaining occurrence of "體育館" in any locale file.
+
+**Verification:**
+- Searched all files under `locales/zh-TW/` and `locales/en/` for "體育館" — zero occurrences remain after fix.
+- Confirmed `home.savedGyms.*` keys already use "岩館" — no regression.
+- `npx tsc --noEmit` → EXIT 0, 0 errors
+- `npm test -- --watchAll=false` → 157/157 tests passed, 17 suites, exit code 0
+
+**Self-check:**
+- TypeScript: PASS (exit 0)
+- Tests: PASS (157/157, 17 suites)
+- Scope: change is limited to `locales/zh-TW/common.json` (owned by this module)
+- No new dependencies introduced
+
+---
+
 ### Implementation — 2026-09-24 (Sort saved gyms to top — human QA request)
 
 **Files modified:**
