@@ -71,6 +71,44 @@
 
 **Result: READY FOR QA RE-VERIFICATION**
 
+### Bugfix — zh-TW label + saved gyms focus refetch — 2026-09-24
+
+**Bugs fixed (human QA):**
+
+1. **zh-TW translation — "體育館" → "岩館" in home keys**
+   - `home.savedGyms.title`: "已收藏體育館" → "已收藏岩館"
+   - `home.savedGyms.empty`: "點擊體育館的書籤圖示來收藏" → "點擊岩館的書籤圖示來收藏"
+   - No other home keys contained "體育館". (`gymDirectory.bookmark.save` contains "體育館" but is owned by MOD-002, not in scope here.)
+
+2. **Saved gyms not showing on Home screen after tab-switch**
+   - Root cause: keep-alive mount means `useEffect([loadSavedGyms])` only fires once on initial mount. When a user saves a gym on the Gyms tab and switches back to Home, `loadSavedGyms` is never re-called because the component is kept alive with `display: 'none'` and never unmounts.
+   - Fix: added `isActive: boolean` prop (`true` when Home tab is active). A second `useEffect([isActive, loadSavedGyms])` calls `loadSavedGyms()` each time `isActive` flips to `true`. AppShell passes `isActive={activeTab === 'home'}` to HomeNavigator, which threads it to HomeScreen.
+
+**Files changed:**
+- `locales/zh-TW/common.json` — updated `home.savedGyms.title` and `home.savedGyms.empty`
+- `src/modules/mod-home/screens/HomeScreen.tsx` — added `isActive` prop + focus-refetch useEffect
+- `src/modules/mod-home/HomeNavigator.tsx` — threaded `isActive` prop
+- `src/modules/mod-home/AppShell.tsx` — pass `isActive={activeTab === 'home'}` to HomeNavigator
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — added `isActive={true}` to all renders; switched two `mockReturnValueOnce` to `mockReturnValue` (multi-call safety for the focus-refetch effect); added new test covering focus-triggered refetch
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 157 tests, 17 suites, all pass (+2 from new focus-refetch test) |
+| zh-TW home.savedGyms.title uses "岩館" | PASS |
+| zh-TW home.savedGyms.empty uses "岩館" | PASS |
+| No other home.* zh-TW keys mention "體育館" | PASS |
+| isActive prop propagates AppShell → HomeNavigator → HomeScreen | PASS |
+| Focus-refetch useEffect fires on isActive → true | PASS |
+| Initial mount still fetches (first useEffect unchanged) | PASS |
+| New test: refetch on isActive false→true transition | PASS |
+
+**Commit**: 62eba5dc4794ef6eaf9b82d08986afc72bf7b3cb
+
+---
+
 ### Bugfix — saved_gyms.user_id DEFAULT — 2026-09-24
 
 **Bug**: `saved_gyms.user_id` column was `NOT NULL` with no `DEFAULT`. The MOD-002 `saveGym()` service function inserts only `{ gym_id }` without passing `user_id` explicitly. At runtime this INSERT would fail with a NOT NULL constraint violation.
