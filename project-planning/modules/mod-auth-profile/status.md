@@ -408,6 +408,22 @@ None. All 15 previously-passing items continue to pass. No new failures introduc
 
 ---
 
+## Engineering Progress — Bugfix — 2026-09-24 (inline string in ProfileScreen)
+
+**QA failure addressed**: `ProfileScreen.tsx` line 110 rendered `<Text style={styles.sendHistoryPlaceholder}>Send history coming soon</Text>` — a hardcoded inline string literal without `useTranslation()`, violating the production.md shared convention: "All user-facing strings are pulled through the i18n hook — no inline string literals in components."
+
+**Fix applied**: Removed the placeholder text entirely. The section title `t('profile.sendHistory')` already communicates the section's purpose. The `// TODO: replace with MOD-008 SendHistoryProfile component when MOD-008 ships` comment is retained. No i18n keys added (same rationale as QA Run 2 AppShell fix — throwaway strings are removed, not translated).
+
+**Self-check results (bugfix)**
+- [PASS] `npx tsc --noEmit` — 0 errors (exit 0)
+- [PASS] `npm test -- --watchAll=false` — 155 tests, 17 suites, all pass (exit 0)
+- [PASS] No inline string literals remain in `ProfileScreen.tsx` — all user-facing strings go through `useTranslation()`
+- [PASS] No i18n catalog changes required — no throwaway key added to either locale
+- [PASS] `sendHistoryPlaceholder` style remains in `makeStyles` — unused style, no TypeScript error (StyleSheet unused keys do not trigger tsc)
+- [PASS] No other files modified outside `ProfileScreen.tsx` (module boundary respected)
+
+---
+
 ## QA Run 3 — Rev 7 Verification — 2026-09-24
 
 **QA agent**: qa-mod-auth-profile
