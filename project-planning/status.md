@@ -3,15 +3,31 @@
 ## Last Action
 
 ```
-agent: qa-mod-route-catalog
-mode: regression
-module: mod-route-catalog
-result: success
-commit: ac9892748bad99e39d0c52a36115932ec033b5b0
-timestamp: 2026-09-23T00:00:00Z
+agent: pm
+mode: change
+module: n/a
+result: rev7-substantive
+commit: 34119c652773e78930310f4e2320298677eb74e7
+timestamp: 2026-09-24T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-24 [SUBSTANTIVE]** — Tab shell + Home screen + Profile screen + saved-gyms data model (PRD Revision 7). Leon's decisions all finalized; PRD updated to Revision 7 [SUBSTANTIVE]. Summary of changes:
+  - **Status line / Revision** bumped 6 → 7.
+  - **§1 Overview** — now describes the persistent three-tab bottom shell (Home / Gyms / Profile) and the multi-gym saved list replacing the single home-gym concept.
+  - **§5 Architecture** — single-navigator shell replaced with the three-tab shell: Tab 1 (Home) hosts MOD-012, Tab 2 (Gyms) hosts the existing gym navigation stack (MOD-002 + MOD-003 beneath), Tab 3 (Profile) hosts MOD-001 profile surface + MOD-008 send history. Flagged the tab shell as an app-level architecture concern requiring **Tech Lead review** for mount point and module boundary decisions.
+  - **§9 Data Model** — removed `home_gym_id` from the User entity; added new `SavedGym(user_id FK ON DELETE CASCADE, gym_id FK ON DELETE CASCADE, created_at, PK(user_id, gym_id))` join table; added RLS note (user reads/writes only their own rows).
+  - **§6 Module Breakdown** — MOD-001 purpose updated (Profile surface: name/avatar/bio, Edit Profile, embedded send history, Logout; no home gym); MOD-002 purpose updated (read-only saved indicator on list, interactive bookmark toggle on detail); **new MOD-012 "Home"** added (dir `mod-home`; deps MOD-001, MOD-002, MOD-006).
+  - **§8 Acceptance Criteria**:
+    - MOD-001: removed AC-001 (home-gym first-run), AC-002 (home-gym select), AC-003 (signup+home-gym timing); AC-001 rewritten (first run → Home, no gym selection); AC-063 unchanged; added AC-116 (profile shows name/avatar/bio), AC-117 (Edit Profile: name/avatar/bio/privacy), AC-118 (embed send history), AC-119 (Logout control).
+    - MOD-002: added AC-120 (detail bookmark toggle saved=filled-yellow / unsaved=gray), AC-121 (tap toggles saved_gyms, optimistic update, only save/unsave point), AC-122 (list shows read-only filled-yellow indicator on saved cards, nothing on unsaved, no tap action).
+    - MOD-003: added AC-044 (RouteDetailScreen does not display submitter "由誰新增"; `submitted_by_user_id` retained for RLS/constraints only).
+    - **New MOD-012 section**: AC-110 (3 icon-only tabs, Home default after login), AC-111 (Home sections order: Banners, Saved Gyms, Following Climbers), AC-112 (≤3 static hardcoded banners, hidden if none), AC-113 (saved-gyms strip using gym.photo_url + name, View All → gym list), AC-114 (tap gym → detail), AC-115 (empty prompt "Tap the bookmark on any gym to save it"), AC-123 (following-climbers strip avatar+name, tap → profile), AC-124 (empty state when following no one).
+  - **§10 NFR** — added saved_gyms RLS requirement (authenticated users read/write only their own rows).
+  - **User Stories** — US-001 rewritten (removed home-gym selection; first run → Home; now cites AC-001 only); added US-019 (save multiple gyms) and US-020 (Home screen with saved gyms + followed climbers). US-011 also mapped to MOD-001 (profile embeds send history).
+  - **Banners** are static/hardcoded in-app (no new table). AC-100 analytics event "home gym set" → "gym saved"; §2 Goal "set a home gym" → "save a gym".
+  - **Impact**: **new module MOD-012 (mod-home)** added to Phase 1 module list; module boundaries and dependencies changed (MOD-012 new; MOD-001/MOD-002 scope expanded). Data model changed (SavedGym added, home_gym_id removed) — requires new migration + RLS. The three-tab shell is an app-level architecture concern. **Requires Tech Lead architecture review** (tab shell mount points, module boundaries, saved_gyms table/RLS), then Doc-Sync to create the MOD-012 spec + engineer/QA agents and delta-sync MOD-001/MOD-002/MOD-003 specs + production.md. Tagged [SUBSTANTIVE]. Module Map updated below (MOD-012 → mod-home). Doc-Sync NOT invoked here (per coordinator direction).
 
 - **2026-09-23 [SUBSTANTIVE]** — Route submission UX simplified: single-page submit, client-side match-check removed (PRD Revision 6). Leon (via coordinator) approved the change; AC-022 and AC-023 confirmed unchanged; RouteListScreen CTA label "Can't find it? Add a new route." stays as-is (only the submit-screen button becomes "Add Route"). Rationale: the RouteListScreen grade + color filter already serves as the "does this route exist?" check, so the separate client-side match-check step is redundant. Server-side duplicate protection is unchanged (the `submit_route` RPC pre-check + the partial unique index on active routes; the per-submitter pending unique index still guards AC-029). PRD updated:
   - **Status line**: `[SUBSTANTIVE] — Revision 6`; `**Revision**` bumped 5 → 6.
@@ -314,6 +330,7 @@ To keep Phase 1.5 in-app admin a zero-rework, additive change:
 | MOD-009 | mod-moderation         | Not started | —                         |
 | MOD-010 | mod-localization-theme | Not started | —                         |
 | MOD-011 | mod-analytics          | Not started | —                         |
+| MOD-012 | mod-home               | Not started | —                         |
 
 ## Sync Reports
 

@@ -1,15 +1,15 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 6
+**Status**: [SUBSTANTIVE] — Revision 7
 **Date**: 2026-09-23
-**Revision**: 6
+**Revision**: 7
 
 ---
 
 ## 1. Project Overview
 
-**Send It** is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at their home gym, and connect with other climbers in the local scene.
+**Send It** is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at the gyms they follow, and connect with other climbers in the local scene. The app is organized around a persistent three-tab bottom navigation shell — Home, Gyms, and Profile — with the Home tab as the landing screen after login. Rather than a single fixed home gym, each climber maintains a multi-gym saved list: they bookmark any gyms they care about and see them, alongside the climbers they follow, on the Home screen.
 
 Indoor bouldering has grown fast in Taiwan — Taipei and New Taipei have the highest concentration of gyms, with more scattered across Taoyuan, Hsinchu, Taichung, Kaohsiung, Yilan, and Tainan — but climbers currently have no dedicated app that combines send logging, beta video sharing, live gym route lists, and local social features. Today this happens informally through PTT posts, Instagram/Threads stories, or word of mouth, or through global apps (Kaya, Vertical-Life, 27 Crags) that are outdoor-crag-centric, not localized for Taiwan gyms, and don't reflect local color-based tape conventions. One small local app (記石) exists but is log-only — no beta video, no cross-gym route database, no social layer.
 
@@ -21,7 +21,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 
 ### Goals
 
-- A new user can complete signup, set a home gym, and log their first send in under 3 minutes end-to-end.
+- A new user can complete signup, save a gym, and log their first send in under 3 minutes end-to-end.
 - Any climber can log a send in under 30 seconds and ≤4 taps from a known route page.
 - Every gym in the seeded directory (Taipei + New Taipei branch-level) has a verified address and map pin before Phase 1 launch.
 - Beta videos upload, transcode, and become playable in-app within 60 seconds of upload completion on a normal 4G/LTE connection.
@@ -54,13 +54,13 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 
 ## 3. User Stories
 
-### US-001: Sign up and set home gym
+### US-001: Sign up and start using the app
 
 **As a** new climber,
-**I want** to sign up (via email, Apple, or Google) and select my home gym from the curated directory,
-**so that** I can start logging sends without having to bootstrap gym data myself.
+**I want** to sign up (via email, Apple, or Google) and land directly on the Home screen,
+**so that** I can start exploring gyms and logging sends without a mandatory setup step.
 
-**Acceptance Criteria**: AC-001, AC-002, AC-003
+**Acceptance Criteria**: AC-001
 
 ---
 
@@ -226,6 +226,26 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 
 ---
 
+### US-019: Save multiple gyms for quick access
+
+**As a** climber who trains at more than one gym,
+**I want** to bookmark any gym and have all my saved gyms available from the Home screen,
+**so that** I can quickly jump to the gyms I care about without a single fixed home gym.
+
+**Acceptance Criteria**: AC-113, AC-114, AC-115, AC-120, AC-121, AC-122
+
+---
+
+### US-020: See my saved gyms and followed climbers on a Home screen
+
+**As a** climber connected to the local scene,
+**I want** a Home screen that shows announcement banners, my saved gyms, and the climbers I follow,
+**so that** I have a single landing surface that surfaces the gyms and people most relevant to me.
+
+**Acceptance Criteria**: AC-110, AC-111, AC-112, AC-113, AC-114, AC-115, AC-123, AC-124
+
+---
+
 ## 4. Tech Stack
 
 | Component        | Name + Version                                      | Notes                                                                                                                                       |
@@ -247,6 +267,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
 
 - The **client** owns rendering, local UI state, client-side video compression, client-generated thumbnails, and localization. It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
+- The client's top-level UI is a **persistent three-tab bottom navigation shell**. **Tab 1 (Home)** hosts the Home surface (MOD-012). **Tab 2 (Gyms)** hosts the existing gym navigation stack (MOD-002 gym directory + detail, with MOD-003 route catalog reachable beneath it). **Tab 3 (Profile)** hosts the current user's profile surface (MOD-001) with their embedded send history and stats (MOD-008). The Home tab is the default tab after login. This tab shell is an app-level architecture concern: the mount point for each tab's navigator and the module boundaries between the shell and the surfaces it hosts require Tech Lead review before implementation.
 - **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gyms are readable by all authenticated users and writable only by admins; routes are readable by all authenticated users for `active` rows, with `pending` rows visible only to their submitter, and are writable by the submitting user on insert (initial status `active` when auto-approve is ON, else `pending`), while status transitions to `retired` or `rejected` and approval of `pending` routes are admin-only via Supabase Studio.
 - **Supabase Storage** hosts avatars, gym photos, route photos, and (Phase 1 only) beta videos + client-generated thumbnails. When the migration trigger fires, video uploads cut over to **Cloudflare Stream** while metadata continues to live in Postgres.
 - **Supabase Edge Functions** handle event-driven workflows that must not run on the client: on `Reaction` insert with `target_type = beta_video`, an Edge Function inserts a `Notification` row and enqueues an APNs push (respecting `NotificationPreference`) via Expo Push to all `DeviceToken` rows for the recipient.
@@ -264,9 +285,9 @@ The data flow for the two most important loops:
 
 ### MOD-001: Auth & Profile
 
-**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, home gym selection, avatar, bio, and highest-grade display.
+**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and expose a Logout control. There is no home gym concept — saved gyms live in MOD-012.
 
-**User Stories**: US-001, US-012
+**User Stories**: US-001, US-011, US-012
 
 **Dependencies**: none
 
@@ -274,9 +295,9 @@ The data flow for the two most important loops:
 
 ### MOD-002: Gym Directory
 
-**Purpose**: Serve the admin-curated gym directory (branch-level rows), gym detail pages, gym search/filter, and the "request a gym" submission form.
+**Purpose**: Serve the admin-curated gym directory (branch-level rows), gym detail pages, gym search/filter, and the "request a gym" submission form. Own the saved-gym bookmark interaction: a read-only saved indicator on gym list cards and an interactive bookmark toggle on the gym detail screen that adds/removes the gym from the user's saved gyms list.
 
-**User Stories**: US-001, US-006, US-013
+**User Stories**: US-006, US-013, US-019
 
 **Dependencies**: MOD-001
 
@@ -372,11 +393,21 @@ The data flow for the two most important loops:
 
 ---
 
+### MOD-012: Home
+
+**Purpose**: Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders three sections — a static banner strip, the user's saved gyms strip, and the climbers the user follows — and provides navigation from those sections into the gym detail and user profile surfaces.
+
+**User Stories**: US-020, US-019
+
+**Dependencies**: MOD-001, MOD-002, MOD-006
+
+---
+
 ## 7. Phases & Milestones
 
 ### Phase 1: iOS MVP — Taipei/New Taipei launch
 
-**Modules**: MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011
+**Modules**: MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012
 
 **Scope summary**: iOS-only React Native + Expo app. Auth (Email + Apple + Google). Admin-curated gym directory seeded with Taipei/New Taipei branch-level rows (top-rope-only gyms excluded). Route submission with match-before-create using fixed hold/tape color enum, V-scale grade forced across all gyms. Send logging (no offline queue — error message on failure). Beta video upload (60 sec cap, client-side compression, client-generated thumbnail). Follow + chronological activity feed. Beta-video likes with APNs push notifications + preference toggle. Profile history + basic stats. Report + Block (App Store 1.2 compliance). English + zh-TW (device-locale default, zh-TW fallback, Settings toggle). Light + Dark mode (OS preference + Settings override). PostHog analytics. Admin surface = Supabase Studio only. Video hosting = Supabase Storage.
 
@@ -408,13 +439,17 @@ The data flow for the two most important loops:
 
 ### MOD-001 (Auth & Profile) Acceptance Criteria
 
-**AC-001**: The system shall allow a new user to complete signup via Email, Apple Sign-In, or Google Sign-In and reach the home gym selection screen when they open the app for the first time.
-
-**AC-002**: The system shall allow a signed-in user to select exactly one home gym from the curated directory and persist that selection to their profile.
-
-**AC-003**: The system shall complete signup + home gym selection in under 60 seconds of user-perceived interaction time for a user on a normal 4G/LTE connection when they follow the happy path.
+**AC-001** (revised): On first run, the system shall navigate the user directly to the Home screen after signup via Email, Apple Sign-In, or Google Sign-In, without requiring any gym selection step.
 
 **AC-063**: The system shall enforce a profile privacy setting of `public` (default) or `followers_only`, and when set to `followers_only` shall return 403/hidden for logs and beta video listings requested by non-followers.
+
+**AC-116** (new): The Profile screen shall display the current user's display name, avatar, and bio.
+
+**AC-117** (new): The Profile screen shall expose an Edit Profile entry point that opens editing of the current user's display name, avatar, bio, and privacy setting.
+
+**AC-118** (new): The Profile screen shall embed the current user's send history (the MOD-008 profile-history-and-stats surface).
+
+**AC-119** (new): The Profile screen shall expose a Logout control at the bottom that ends the session and returns the user to the signed-out state.
 
 ---
 
@@ -427,6 +462,12 @@ The data flow for the two most important loops:
 **AC-006** (new): The system shall navigate a user from a gym row in the gym directory list to that gym's detail screen when the user taps the row, passing the selected gym's identifier.
 
 **AC-070**: The system shall accept a "request a gym" submission containing gym name, city, and optional Google Maps link, persist it to a queue readable by admins in Supabase Studio, and show the user a confirmation state when the submission succeeds.
+
+**AC-120** (new): The gym detail screen (GymDetailScreen) shall display a bookmark icon that toggles between a saved state (filled, yellow) and an unsaved state (gray), reflecting whether the gym is in the current user's saved gyms list.
+
+**AC-121** (new): Tapping the bookmark icon on the gym detail screen shall add or remove the gym from the current user's `saved_gyms` list and update the icon state immediately (optimistic update). The gym detail screen is the only save/unsave action point.
+
+**AC-122** (new): The gym list screen shall display a filled yellow bookmark indicator on gym cards that are in the current user's saved gyms list; no indicator is shown for unsaved gyms. The list indicator is read-only — tapping it performs no save/unsave action.
 
 ---
 
@@ -459,6 +500,8 @@ The data flow for the two most important loops:
 **AC-042** (new): The system shall navigate a user from a route entry in the gym route list to that route's detail screen when the user taps the entry, passing the selected route's identifier. The route detail screen is the entry point for logging a send (AC-010), uploading beta (AC-037), and watching beta (AC-033).
 
 **AC-043** (new): The system shall pre-fill the route submit screen's grade and color chips from the RouteListScreen filter state when the user opens the submit screen. RouteListScreen passes its current grade filter and color filter values as optional parameters to the submit screen; if a grade filter was active when the user tapped "Add Route", the corresponding grade chip shall be pre-selected, and if a color filter was active, the corresponding color chip shall be pre-selected. When a filter is unset, the corresponding chip shall open unselected. Pre-filled chips remain editable by the user before submission.
+
+**AC-044** (new): The route detail screen (RouteDetailScreen) shall not display the route's submitter ("由誰新增" / Submitted By). The `submitted_by_user_id` field remains in the data model for RLS and constraint purposes only and is never surfaced in the route detail UI.
 
 ---
 
@@ -564,9 +607,29 @@ The data flow for the two most important loops:
 
 ### MOD-011 (Analytics) Acceptance Criteria
 
-**AC-100**: The system shall emit PostHog events for at minimum: signup completed, home gym set, first send logged, first beta video uploaded, beta video liked, session start.
+**AC-100**: The system shall emit PostHog events for at minimum: signup completed, gym saved, first send logged, first beta video uploaded, beta video liked, session start.
 
 **AC-101**: The system shall not send PII beyond `user_id` and non-identifying context fields to PostHog.
+
+---
+
+### MOD-012 (Home) Acceptance Criteria
+
+**AC-110** (new): The system shall present a persistent bottom tab bar with three icon-only tabs: Home (house icon), Gyms (climb icon), and Profile (person icon). The Home tab is the default tab after login.
+
+**AC-111** (new): The Home screen shall render three sections in order: Banners, Saved Gyms, and Following Climbers.
+
+**AC-112** (new): The Banners section shall display up to 3 static, hardcoded banner cards in a horizontal scroll. If no banners are defined, the section shall be hidden.
+
+**AC-113** (new): The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002).
+
+**AC-114** (new): Tapping a gym in the Saved Gyms strip shall navigate to that gym's detail screen (MOD-002).
+
+**AC-115** (new): When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it."
+
+**AC-123** (new): The Following Climbers section shall display a horizontal scroll strip of the climbers the current user follows (sourced from MOD-006), each showing the climber's avatar and display name. Tapping a climber shall navigate to that climber's profile.
+
+**AC-124** (new): When the current user follows no one, the Following Climbers section shall display an appropriate empty state.
 
 ---
 
@@ -574,7 +637,7 @@ The data flow for the two most important loops:
 
 ```
 User
- - id, display_name, avatar_url, home_gym_id (nullable, FK Gym),
+ - id, display_name, avatar_url,
    bio, privacy_setting (public | followers_only), created_at
 
 Gym  (admin-maintained, branch-level rows for multi-branch gyms)
@@ -582,6 +645,11 @@ Gym  (admin-maintained, branch-level rows for multi-branch gyms)
    address_text, lat, lng, gym_type (bouldering | top_rope | both),
    photo_url (nullable), official_grading_system (default 'V'),
    created_at, updated_at
+
+SavedGym  (join table — a user's bookmarked gyms)
+ - user_id (FK User, ON DELETE CASCADE), gym_id (FK Gym, ON DELETE CASCADE),
+   created_at
+ - PK: (user_id, gym_id)
 
 GymRequest
  - id, requested_by_user_id, name, city, google_maps_url (nullable),
@@ -667,6 +735,7 @@ Block  (App Store Guideline 1.2 requirement)
 **Notes**:
 
 - All tables are guarded by Supabase Row-Level Security policies.
+- `SavedGym` is the join table backing the multi-gym saved list (it replaces the removed single `User.home_gym_id`). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved gyms.
 - The `Route.match_key` is a Postgres `GENERATED ALWAYS AS ... STORED` column. Uniqueness of active routes is enforced at the database level by a partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` — not only in application code — so that reused tape colors after a wall reset don't collide with historical retired routes.
 - `DeviceToken` uses Expo Push under the hood; APNs is the transport for iOS in Phase 1. Android tokens land here in Phase 2.
 - `NotificationPreference` is designed to grow — Phase 2 will add columns for expanded notification types.
@@ -679,6 +748,7 @@ Block  (App Store Guideline 1.2 requirement)
 - **Platform**: iOS 16+ (Phase 1). Android is Phase 2.
 - **Video**: 60-second maximum. Client-side compression before upload. Client-generated thumbnail. Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
 - **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions), with RLS policies on every user-writable table. No custom backend server in Phase 1.
+- **Saved gyms**: The `saved_gyms` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-gyms list.
 - **Auth**: Email, Apple Sign-In, and Google Sign-In. Apple Sign-In is required by the App Store since Google Sign-In is offered.
 - **Push notifications**: APNs via Expo Push. Phase 1 fires for beta-video likes only, and only when the recipient's `NotificationPreference.beta_video_like` is true. A settings screen exposes the toggle.
 - **Offline tolerance**: Phase 1 does **not** queue sends offline. On any network failure, the user sees a clear error message and can retry. Offline queue is Phase 2.
@@ -733,7 +803,7 @@ Most previously-open questions were resolved during PRD confirmation. Remaining 
 - **Admin bandwidth for reports**: With Supabase Studio as the only report review surface, response time depends on operator (Leon) checking Studio. Mitigation adopted (AC-085): a scheduled Edge Function emails Leon a 6-hourly digest of open reports older than 12 hours. Residual risk: App Store may still expect a faster in-app moderation queue; a lightweight in-app admin surface is held in the Phase 2 slot if review flags it.
 - **APNs deliverability tail**: The AC-056 target of ≥95% delivery within 30 seconds depends on Expo Push + APNs latency and on device state. Needs measurement post-launch — if the tail is worse than expected, revisit push architecture in Phase 2.
 - **App Store Guideline 1.2 review outcome**: Report + Block are implemented, but App Store review is not deterministic. Risk: additional moderation requirements surface during review (e.g., faster response SLA, in-app moderation queue). Mitigation: keep Phase 2 slot available for a lightweight in-app admin surface if needed.
-- **Cold start for routes at newly-seeded gyms**: Routes start empty per gym until users submit. Mitigation: Leon to personally seed home-gym routes + a few beta videos before opening to beta users.
+- **Cold start for routes at newly-seeded gyms**: Routes start empty per gym until users submit. Mitigation: Leon to personally seed routes at a few gyms + a few beta videos before opening to beta users.
 - **PostHog free-tier ceiling**: Free tier has monthly event caps. Risk: hitting the cap mid-month kills analytics. Mitigation: monitor volume; consider event sampling if approaching cap.
 
 ---
