@@ -460,3 +460,172 @@ None found. All 119 tests pass. No new TypeScript errors. No previously passing 
 | New regressions | None |
 
 **Overall status: PENDING HUMAN SIGN-OFF** — AC-013 is implemented and verified via code inspection and unit test. All previously passing checks continue to pass. Human must complete the updated test script (Tests A through I, including new Test A2 for AC-013) before this module is marked QA PASS.
+
+---
+
+## QA Run 3 — Regression — 2026-09-24
+
+**QA Agent:** qa-mod-send-logging
+**Workflow:** regression-test (re-verification after delete ascent feature added from human QA feedback)
+**Re-verifying:** New delete ascent feature — `deleteAscent()` in send-service, trash-outline button in AscentList, Alert confirmation, optimistic removal, i18n keys in both locales.
+
+---
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npm test -- --watchAll=false` (full suite) | PASS | 162/162 tests, 17 suites, exit 0 |
+| `npx tsc --noEmit` | PASS | Zero TypeScript errors, strict mode enabled |
+| mod-send-logging unit tests | PASS | 5 new tests added: 2 in send-service (deleteAscent success + error), 3 in AscentList (delete button only on own rows, Alert fires on tap, optimistic removal on confirm) |
+
+NOTE: Two `act(...)` warnings appear in the test output from `RequestGymScreen.test.tsx` and `RouteSubmitScreen.test.tsx` — both are a pre-existing pattern caused by Ionicons async font loading in those modules. These warnings appeared in prior QA runs and are not introduced by this change. The `AscentList.test.tsx` suite runs without this warning.
+
+---
+
+### Delete Feature Verification
+
+**deleteAscent() in send-service.ts:**
+- REGRESSION PASS (inspected): `deleteAscent(ascentId: string): Promise<void>` at line 25 calls `.from('ascents').delete().eq('id', ascentId)`. Checks `error` field; if truthy throws `Error('Failed to delete your send. Please try again.')`. Returns `void` on success (no data returned, correct for a DELETE).
+- REGRESSION PASS (inspected): RLS policy `ascents_delete_own` at `supabase/migrations/20260920000004_mod_004_send_logging.sql` line 81–84: `FOR DELETE USING (auth.uid() = user_id)`. Policy was pre-existing; no new migration needed. `GRANT DELETE ON public.ascents TO authenticated` confirmed at line 88.
+- REGRESSION PASS (test): `send-service.test.ts` "deletes an ascent row by ID without returning data" — verifies `mockFrom` called with `'ascents'`, `qb.delete` called, `qb.eq` called with `('id', 'ascent-001')`, resolves to `undefined`.
+- REGRESSION PASS (test): `send-service.test.ts` "throws a user-friendly error on network / DB failure" — verifies rejects with `'Failed to delete your send. Please try again.'` when Supabase returns an error object.
+
+**Delete button visibility — own ascents only:**
+- REGRESSION PASS (inspected): `AscentList.tsx` line 174 passes `isOwn={ascent.user_id === session.user.id}` to each `AscentRow`. `AscentRow` at line 212 renders the delete button only inside `{isOwn && (...)}`. Other-user rows receive `isOwn={false}` and the button is absent entirely.
+- REGRESSION PASS (test): `AscentList.test.tsx` "shows a delete button only for the current user's own ascents" — renders one own ascent (`user_id: 'user-001'`) and one other-user ascent (`user_id: 'user-002'`) with session `user.id: 'user-001'`. Queries for buttons with `accessibilityLabel === 'Delete'` (EN) or `'刪除'` (zh-TW). Asserts `toHaveLength(1)` — only the own row gets the button.
+
+**Alert confirmation dialog:**
+- REGRESSION PASS (inspected): `handleDeleteAscent` at line 96 calls `Alert.alert(t('sendLogging.delete.confirm'), undefined, [...])` with two buttons: cancel (`style: 'cancel'`) and delete (`style: 'destructive'`). The delete button's `onPress` performs the optimistic remove and calls `deleteAscent`. Tapping cancel leaves state unchanged (no `onPress` on cancel button).
+- REGRESSION PASS (test): `AscentList.test.tsx` "shows Alert confirmation dialog when delete button is tapped" — spies on `Alert.alert`, taps the delete button, asserts `alertSpy.toHaveBeenCalledTimes(1)`.
+
+**Optimistic removal with re-fetch fallback:**
+- REGRESSION PASS (inspected): `handleDeleteAscent` line 111: `setAscents((prev) => prev.filter((a) => a.id !== ascentId))` — removes row from local state immediately. Line 112: `void deleteAscent(ascentId).catch(() => { void fetchAscents(); })` — if the delete call rejects, triggers a full re-fetch to restore accurate state. The `.catch()` path is correctly bound to `fetchAscents` (in `useCallback` dependency), so re-fetch uses the stable callback reference.
+- REGRESSION PASS (test): `AscentList.test.tsx` "calls deleteAscent and removes the row optimistically when user confirms" — mocks `Alert.alert` to immediately invoke the destructive button handler, verifies `mockDeleteAscent` called with `'ascent-001'`, and verifies `screen.queryByText('Leon')` is null (row removed from render).
+
+**i18n keys — sendLogging.delete.* in both locales:**
+- REGRESSION PASS (inspected + script): EN locale has `sendLogging.delete.confirm = "Delete this send?"`, `sendLogging.delete.cancel = "Cancel"`, `sendLogging.delete.delete = "Delete"`. zh-TW locale has `sendLogging.delete.confirm = "刪除這筆紀錄？"`, `sendLogging.delete.cancel = "取消"`, `sendLogging.delete.delete = "刪除"`. Both locales have 190 keys total (up from 176 after this and other additions since QA Run 2) — zero mismatch (verified by key-flatten script).
+
+**No hardcoded colors in new delete button styles:**
+- REGRESSION PASS (inspected): `deleteButton` style at line 333 uses only `theme.spacing.xs` for padding. `Ionicons` icon color set to `theme.colors.textSecondary` — a theme token. No hex literals in any new style block.
+
+**Supabase singleton convention:**
+- REGRESSION PASS: `send-service.ts` still imports `{ supabase } from '../../lib/supabase'`. `deleteAscent` uses the singleton directly; no `createClient()` at the call site.
+
+**No new dependencies:**
+- REGRESSION PASS: `@expo/vector-icons` (used for `Ionicons`) was already in `package.json` and used by MOD-002 and MOD-003 screens. This addition does not introduce a new package.
+
+---
+
+### Previously Passing Items — Re-verification
+
+**AC-010 (≤4 taps):**
+- REGRESSION PASS: No changes to `LogSendScreen` or modal open/close tap flow. The delete button is an independent affordance on existing ascent rows and does not affect the log-send tap count. 6/6 LogSendScreen tests pass. PASS.
+- PENDING HUMAN SIGN-OFF: unchanged. See Test A in the manual test script above.
+
+**AC-011 (grade not stored):**
+- REGRESSION PASS: No changes to `send-service.ts` `logAscent()` or `types.ts`. `deleteAscent` adds no `grade` field. 9 send-service tests (including "does not include a grade field") + 2 new deleteAscent tests all pass. PASS.
+
+**AC-012 (clear error on failure):**
+- REGRESSION PASS: No changes to `LogSendScreen.tsx`. 6/6 LogSendScreen tests pass. PASS.
+
+**AC-013 (list refreshes after log):**
+- REGRESSION PASS: `refreshKey` prop and `useEffect` dependency array in `AscentList.tsx` are unchanged. The delete flow uses optimistic state update (not `refreshKey`), so the two mechanisms are independent and do not interfere. The AC-013 unit test "re-fetches ascents when refreshKey increments" still passes. PASS.
+
+**i18n parity (EN/zh-TW):**
+- REGRESSION PASS: 190 keys in EN, 190 keys in zh-TW — zero mismatch. The 3 new `sendLogging.delete.*` keys are present and matching in both locales. PASS.
+
+**Gold-plating check:**
+- REGRESSION PASS: Delete feature is scoped to own rows only (UI guard + RLS). No offline queue, no comments, no likes, no grade override, no stats — all non-goals from the spec are still absent. PASS.
+
+**TypeScript strict mode:**
+- REGRESSION PASS: `tsc --noEmit` exits with zero errors. `deleteAscent(ascentId: string): Promise<void>` is correctly typed. `AscentRowProps.onDelete` typed as `(ascentId: string) => void`. No `any` without documented reason. PASS.
+
+---
+
+### New Human Sign-off Tests (added this run)
+
+Append the following to the existing manual test script (Tests A–I above). Complete in iOS Simulator before marking QA PASS.
+
+---
+
+#### TEST J: Delete own send — confirmation and removal
+
+**Environment:** iOS Simulator (iPhone 12 or newer, iOS 16+), Light and Dark mode.
+
+1. Sign in with the test account that has at least one logged ascent on a route.
+2. Navigate to that route's detail screen. Observe the ascent list — the own send is visible.
+3. Tap the trash icon on an own ascent row. Confirm:
+   - An alert dialog appears with a confirmation message (e.g., "Delete this send?").
+   - Two buttons are present: a cancel option and a destructive delete option.
+4. Tap Cancel. Confirm the row remains in the list — no deletion occurred.
+5. Tap the trash icon again. Tap the Delete (destructive) button. Confirm:
+   - The row disappears immediately from the list (optimistic removal).
+   - No error message appears.
+6. Refresh the screen (navigate away and back). Confirm the deleted send is no longer present.
+7. **PASS CRITERIA:** Trash icon visible only on own rows. Confirmation alert fires before any deletion. Cancel leaves the row. Confirm removes the row optimistically and the deletion persists on re-fetch.
+
+---
+
+#### TEST K: Delete button absent on other users' sends
+
+1. Navigate to a route detail that has at least one send from another user (not the signed-in account).
+2. Inspect the ascent list. Confirm:
+   - No trash icon is visible on rows belonging to other users.
+   - The trash icon is visible only on own rows (if any exist).
+3. **PASS CRITERIA:** Trash icon never rendered on rows where `ascent.user_id !== session.user.id`.
+
+---
+
+#### TEST L: Delete failure re-fetches list (error recovery)
+
+1. Enable Airplane Mode.
+2. Navigate to a route with an own ascent.
+3. Tap the trash icon → confirm delete in the alert. Confirm:
+   - The row disappears immediately (optimistic removal fires before the network call).
+   - After the network call fails, the row reappears in the list (re-fetch fallback restores state).
+4. **PASS CRITERIA:** On delete failure, the row is restored to the list so the user does not lose data. No silent data corruption.
+
+---
+
+#### TEST M: zh-TW delete labels
+
+1. Set device locale to zh-TW.
+2. Navigate to a route with an own ascent. Tap the trash icon.
+3. Confirm the alert text is in zh-TW: confirmation message "刪除這筆紀錄？", cancel button "取消", delete button "刪除".
+4. **PASS CRITERIA:** All three `sendLogging.delete.*` keys render in zh-TW. No raw key names or English fallback strings shown.
+
+---
+
+**Updated human sign-off scope:** Tests A–I (unchanged from QA Run 2) plus new Tests J–M for the delete feature. Complete all tests in both Light and Dark mode before marking MOD-004 as QA PASS.
+
+---
+
+### New Regressions
+
+None found. All 162 tests pass. No new TypeScript errors. No previously passing manual or code-inspection checks have changed.
+
+---
+
+### Summary — QA Run 3
+
+| Category | Result |
+|----------|--------|
+| Automated tests | PASS — 162/162 (+5 new tests for delete feature) |
+| TypeScript | PASS — zero errors |
+| deleteAscent() — correct DELETE + error throw | REGRESSION PASS — code inspection + unit tests |
+| RLS DELETE policy pre-existing in migration | REGRESSION PASS — confirmed in migration SQL |
+| Delete button only on own rows (UI guard) | REGRESSION PASS — code inspection + unit test |
+| Alert confirmation before delete | REGRESSION PASS — code inspection + unit test |
+| Optimistic removal with re-fetch fallback | REGRESSION PASS — code inspection + unit test |
+| i18n parity (EN/zh-TW) — 3 new delete keys | REGRESSION PASS — 190 keys each, zero mismatch |
+| No hardcoded hex colors | REGRESSION PASS |
+| No new dependencies | REGRESSION PASS — @expo/vector-icons pre-existing |
+| Supabase singleton convention | REGRESSION PASS |
+| AC-010 (≤4 taps) | REGRESSION PASS (code) / PENDING HUMAN SIGN-OFF (UI) |
+| AC-011 (grade not stored) | REGRESSION PASS |
+| AC-012 (error on failure) | REGRESSION PASS |
+| AC-013 (list refreshes after log) | REGRESSION PASS |
+| New regressions | None |
+
+**Overall status: PENDING HUMAN SIGN-OFF** — all automated and code-inspection checks pass. Delete feature is implemented and verified. Human must complete the updated test script (Tests A–M) before marking MOD-004 as QA PASS.
