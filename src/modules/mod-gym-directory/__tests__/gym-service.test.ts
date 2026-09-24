@@ -16,7 +16,14 @@ jest.mock('../../../lib/supabase', () => {
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
-import { listGyms, loadGym, submitGymRequest } from '../gym-service';
+import {
+  fetchSavedGymIds,
+  listGyms,
+  loadGym,
+  saveGym,
+  submitGymRequest,
+  unsaveGym,
+} from '../gym-service';
 import type { Gym, GymSummary } from '../types';
 
 // ── Typed mock helper ─────────────────────────────────────────────────────────
@@ -39,6 +46,7 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }) {
     eq: jest.fn().mockReturnThis(),
     single: jest.fn().mockResolvedValue(result),
     insert: jest.fn().mockResolvedValue(result),
+    delete: jest.fn().mockReturnThis(),
     // Make the builder itself awaitable (thenable) so that
     // `await supabase.from('x').select(...).order(...)` resolves to `result`.
     then: resolvedPromise.then.bind(resolvedPromise),
@@ -228,5 +236,109 @@ describe('submitGymRequest', () => {
         google_maps_url: null,
       }),
     ).rejects.toThrow('Failed to submit gym request. Please try again.');
+  });
+});
+
+// ── fetchSavedGymIds ──────────────────────────────────────────────────────────
+
+describe('fetchSavedGymIds', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns an array of gym ID strings when saved gyms exist', async () => {
+    const qb = makeQueryBuilder({
+      data: [{ gym_id: 'gym-001' }, { gym_id: 'gym-002' }],
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchSavedGymIds();
+
+    expect(result).toEqual(['gym-001', 'gym-002']);
+    expect(mockFrom).toHaveBeenCalledWith('saved_gyms');
+    expect(qb.select).toHaveBeenCalledWith('gym_id');
+  });
+
+  it('returns an empty array when the user has no saved gyms', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchSavedGymIds();
+
+    expect(result).toEqual([]);
+  });
+
+  it('throws a user-friendly error when Supabase returns an error', async () => {
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'DB error' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(fetchSavedGymIds()).rejects.toThrow(
+      'Failed to load saved gyms. Please try again.',
+    );
+  });
+});
+
+// ── saveGym ───────────────────────────────────────────────────────────────────
+
+describe('saveGym', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('inserts a saved_gyms row for the given gymId on success', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await saveGym('gym-001');
+
+    expect(mockFrom).toHaveBeenCalledWith('saved_gyms');
+    expect(qb.insert).toHaveBeenCalledWith({ gym_id: 'gym-001' });
+  });
+
+  it('throws a user-friendly error when the insert fails', async () => {
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'conflict' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(saveGym('gym-001')).rejects.toThrow(
+      'Failed to save gym. Please try again.',
+    );
+  });
+});
+
+// ── unsaveGym ─────────────────────────────────────────────────────────────────
+
+describe('unsaveGym', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('deletes the saved_gyms row for the given gymId on success', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await unsaveGym('gym-001');
+
+    expect(mockFrom).toHaveBeenCalledWith('saved_gyms');
+    expect(qb.delete).toHaveBeenCalled();
+    expect(qb.eq).toHaveBeenCalledWith('gym_id', 'gym-001');
+  });
+
+  it('throws a user-friendly error when the delete fails', async () => {
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST500', message: 'server error' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(unsaveGym('gym-001')).rejects.toThrow(
+      'Failed to unsave gym. Please try again.',
+    );
   });
 });

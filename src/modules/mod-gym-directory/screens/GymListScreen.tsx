@@ -7,14 +7,17 @@
  * AC-004: renders the Taipei/New Taipei branch-level gym directory with every
  * gym showing name, city/district, and (if present) photo when a user opens
  * the Gyms tab.
+ * AC-122: saved gym cards display a filled yellow bookmark indicator (read-only).
  *
  * Filter support: text search (name/city/district in both languages) + city filter chips.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Pressable,
   StyleSheet,
@@ -27,7 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import i18n from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme';
-import { listGyms } from '../gym-service';
+import { fetchSavedGymIds, listGyms } from '../gym-service';
 import type { GymSummary } from '../types';
 
 interface GymListScreenProps {
@@ -57,6 +60,9 @@ export default function GymListScreen({
   const [searchText, setSearchText] = useState('');
   const [cityFilter, setCityFilter] = useState<string | null>(null);
 
+  // AC-122: set of saved gym IDs (read-only indicator on cards)
+  const [savedGymIds, setSavedGymIds] = useState<Set<string>>(new Set());
+
   const fetchGyms = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -70,9 +76,35 @@ export default function GymListScreen({
     }
   }, [t]);
 
+  const fetchSaved = useCallback(async (): Promise<void> => {
+    try {
+      const ids = await fetchSavedGymIds();
+      setSavedGymIds(new Set(ids));
+    } catch {
+      // Saved indicator is best-effort — silently ignore failures
+    }
+  }, []);
+
   useEffect(() => {
     void fetchGyms();
-  }, [fetchGyms]);
+    void fetchSaved();
+  }, [fetchGyms, fetchSaved]);
+
+  // Re-fetch saved IDs when the app comes back to the foreground (e.g. after
+  // the user saves/unsaves on GymDetailScreen and returns to the list).
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === 'active'
+      ) {
+        void fetchSaved();
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [fetchSaved]);
 
   // Apply search text + city filter
   const filteredGyms = useMemo(() => {
@@ -96,6 +128,7 @@ export default function GymListScreen({
   }, [gyms, searchText, cityFilter]);
 
   function renderGymCard({ item }: { item: GymSummary }): React.JSX.Element {
+    const isItemSaved = savedGymIds.has(item.id);
     return (
       <Pressable
         style={({ pressed }) => [
@@ -115,6 +148,15 @@ export default function GymListScreen({
               <Text style={styles.branchLabel}>{item.branch_label}</Text>
             ) : null}
           </View>
+          {/* AC-122: filled yellow bookmark indicator for saved gyms only (read-only) */}
+          {isItemSaved ? (
+            <Ionicons
+              name="bookmark"
+              size={20}
+              color={theme.colors.warning}
+              accessibilityLabel={t('gymDirectory.bookmark.saved')}
+            />
+          ) : null}
         </View>
         <Text style={styles.district}>
           {localizedCity(item)} · {localizedDistrict(item)}

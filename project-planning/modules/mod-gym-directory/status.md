@@ -2,6 +2,36 @@
 
 ## Engineering Progress
 
+### Implementation — 2026-09-24 (Rev 7 — AC-120, AC-121, AC-122)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/gym-service.ts` — added `fetchSavedGymIds()`, `saveGym(gymId)`, `unsaveGym(gymId)`. All three functions use the shared Supabase singleton. `saveGym`/`unsaveGym` throw on error so UI can revert optimistic updates.
+- `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx` — added `isSaved` state; fetches saved status via `fetchSavedGymIds()` in parallel with `loadGym()` on mount; header row now has a `Pressable` bookmark button (Ionicons `"bookmark"` filled yellow / `"bookmark-outline"` gray); `handleBookmarkToggle` implements optimistic update with revert on error.
+- `src/modules/mod-gym-directory/screens/GymListScreen.tsx` — added `savedGymIds` (Set) state; fetches via `fetchSavedGymIds()` on mount; re-fetches on `AppState` foreground transition; gym cards show filled yellow `"bookmark"` Ionicons indicator for saved gyms only (read-only, no tap action).
+- `locales/en/common.json` — added `gymDirectory.bookmark.save`, `gymDirectory.bookmark.unsave`, `gymDirectory.bookmark.saved`.
+- `locales/zh-TW/common.json` — added matching zh-TW keys.
+- `src/modules/mod-gym-directory/__tests__/gym-service.test.ts` — added test suites for `fetchSavedGymIds`, `saveGym`, `unsaveGym` (6 new tests); added `delete` to `makeQueryBuilder`.
+- `src/modules/mod-gym-directory/__tests__/GymDetailScreen.test.tsx` — added `mockFetchSavedGymIds/saveGym/unsaveGym`; default `mockFetchSavedGymIds.mockResolvedValue([])` in `beforeEach`; 5 new bookmark tests (AC-120: unsaved label, AC-120: saved label, AC-121: optimistic save, AC-121: optimistic unsave, AC-121: revert on error).
+- `src/modules/mod-gym-directory/__tests__/GymListScreen.test.tsx` — added `mockFetchSavedGymIds` with default `[]` in `beforeEach`; 2 new AC-122 tests (shows indicator for saved gyms, shows none when no gyms saved).
+
+**Design decisions:**
+- Bookmark color: `theme.colors.warning` (warm yellow `#F9A825` light / `#FFB300` dark) — nearest semantic token matching the warm yellow spec intent; no hardcoded hex colors per Shared Conventions.
+- Saved status fetched in parallel with gym detail using `Promise.all()` — no extra round-trip latency.
+- `GymListScreen` re-fetches saved IDs on `AppState` `active` transition (background → foreground) so the list reflects changes made on GymDetailScreen without requiring a manual refresh.
+- No `saved_gyms` migration created — per spec, that is owned by MOD-012.
+
+### Self-Check Results — 2026-09-24 (Rev 7)
+
+**TypeScript:**
+- `npx tsc --noEmit` → EXIT 0, 0 errors
+
+**Tests:**
+- `npm test -- --watchAll=false` → 143/143 tests passed, 15 suites, exit code 0
+- New tests: 13 (6 gym-service, 5 GymDetailScreen, 2 GymListScreen)
+- `act(...)` console warnings: pre-existing upstream issue in `@expo/vector-icons` Icon font loading — not a test correctness issue; present in route-catalog tests prior to this change.
+
+---
+
 ### Implementation — 2026-09-20
 
 **Files created:**

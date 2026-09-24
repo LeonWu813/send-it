@@ -21,6 +21,9 @@ import { renderOptions } from '../test-utils';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const mockListGyms = gymService.listGyms as jest.MockedFunction<typeof gymService.listGyms>;
+const mockFetchSavedGymIds = gymService.fetchSavedGymIds as jest.MockedFunction<
+  typeof gymService.fetchSavedGymIds
+>;
 
 const GYM_FIXTURES: GymSummary[] = [
   {
@@ -66,6 +69,8 @@ const GYM_FIXTURES: GymSummary[] = [
 describe('GymListScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: no saved gyms — safe baseline for all existing tests
+    mockFetchSavedGymIds.mockResolvedValue([]);
   });
 
   it('renders gym cards after loading', async () => {
@@ -192,5 +197,47 @@ describe('GymListScreen', () => {
     await waitFor(() =>
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
     );
+  });
+
+  // AC-122: saved gym cards show a bookmark indicator
+  it('shows a "Saved" bookmark indicator on saved gym cards only (AC-122)', async () => {
+    mockListGyms.mockResolvedValueOnce(GYM_FIXTURES);
+    // gym-001 is saved; gym-002 and gym-003 are not
+    mockFetchSavedGymIds.mockResolvedValueOnce(['gym-001']);
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    // The "Saved" accessibility label should appear exactly once (for gym-001)
+    const savedLabels = screen.getAllByLabelText('Saved');
+    expect(savedLabels).toHaveLength(1);
+  });
+
+  it('shows no bookmark indicator when no gyms are saved (AC-122)', async () => {
+    mockListGyms.mockResolvedValueOnce(GYM_FIXTURES);
+    mockFetchSavedGymIds.mockResolvedValueOnce([]); // nothing saved
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    expect(screen.queryByLabelText('Saved')).toBeNull();
   });
 });

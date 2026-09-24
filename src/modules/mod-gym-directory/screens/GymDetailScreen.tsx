@@ -7,6 +7,8 @@
  *
  * AC-004 (gym detail portion): gym showing name, city/district, address,
  * map pin, gym type, and (if present) photo when a user opens the gym.
+ * AC-120: bookmark icon reflecting saved state (filled yellow / gray outline).
+ * AC-121: tapping the bookmark icon optimistically toggles save/unsave.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +28,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import i18n from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme';
-import { loadGym } from '../gym-service';
+import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
 import type { Gym } from '../types';
 
 interface GymDetailScreenProps {
@@ -56,15 +58,23 @@ export default function GymDetailScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // AC-120, AC-121: saved-gym bookmark state
+  const [isSaved, setIsSaved] = useState(false);
+
   const fetchGym = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data = await loadGym(gymId);
+      // Fetch gym detail and saved status in parallel
+      const [data, savedIds] = await Promise.all([
+        loadGym(gymId),
+        fetchSavedGymIds(),
+      ]);
       if (!data) {
         setErrorMessage(t('gymDirectory.errors.notFound'));
       } else {
         setGym(data);
+        setIsSaved(savedIds.includes(gymId));
       }
     } catch {
       setErrorMessage(t('gymDirectory.errors.loadFailed'));
@@ -76,6 +86,25 @@ export default function GymDetailScreen({
   useEffect(() => {
     void fetchGym();
   }, [fetchGym]);
+
+  /**
+   * AC-121: Optimistic bookmark toggle.
+   * Flips the icon immediately, fires the DB write async, reverts on error.
+   */
+  const handleBookmarkToggle = useCallback(async (): Promise<void> => {
+    const wasSaved = isSaved;
+    setIsSaved(!wasSaved);
+    try {
+      if (wasSaved) {
+        await unsaveGym(gymId);
+      } else {
+        await saveGym(gymId);
+      }
+    } catch {
+      // Revert optimistic update on failure
+      setIsSaved(wasSaved);
+    }
+  }, [gymId, isSaved]);
 
   const isMixed = gym?.gym_type === 'both';
 
@@ -118,15 +147,34 @@ export default function GymDetailScreen({
       style={styles.root}
       contentContainerStyle={styles.contentContainer}
     >
-      {/* Back navigation */}
-      <Pressable
-        onPress={onBack}
-        style={styles.backLink}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.back')}
-      >
-        <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-      </Pressable>
+      {/* Header row: back navigation + bookmark toggle (AC-120, AC-121) */}
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={onBack}
+          style={styles.backLink}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+        </Pressable>
+        <Pressable
+          onPress={() => { void handleBookmarkToggle(); }}
+          style={styles.bookmarkButton}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isSaved
+              ? t('gymDirectory.bookmark.unsave')
+              : t('gymDirectory.bookmark.save')
+          }
+          accessibilityState={{ selected: isSaved }}
+        >
+          <Ionicons
+            name={isSaved ? 'bookmark' : 'bookmark-outline'}
+            size={28}
+            color={isSaved ? theme.colors.warning : theme.colors.textSecondary}
+          />
+        </Pressable>
+      </View>
 
       {/* Gym photo (when present) */}
       {gym.photo_url ? (
@@ -213,8 +261,17 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.lg,
     },
-    backLink: {
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: theme.spacing.md,
+    },
+    backLink: {
+      // no extra margin — headerRow handles spacing
+    },
+    bookmarkButton: {
+      padding: theme.spacing.xs,
     },
     photo: {
       width: '100%',

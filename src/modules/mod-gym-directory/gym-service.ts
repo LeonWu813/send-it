@@ -5,6 +5,8 @@
  * - Uses the shared Supabase singleton from src/lib/supabase.ts.
  * - Gyms are read-only from the client; writes are admin-only via Studio.
  * - GymRequests are insertable by authenticated users.
+ * - saved_gyms: INSERT and DELETE owned by MOD-002; SELECT scoped by RLS to
+ *   auth.uid(). Table DDL is owned by MOD-012 migration.
  * - All errors are wrapped with user-facing messages before propagation.
  */
 
@@ -62,6 +64,71 @@ export async function loadGym(gymId: string): Promise<Gym | null> {
 
   return data as Gym;
 }
+
+// ── Saved Gyms (AC-120, AC-121, AC-122) ──────────────────────────────────────
+
+/**
+ * Returns the set of gym IDs the current user has saved.
+ *
+ * Uses RLS — only rows where user_id = auth.uid() are returned.
+ * The `saved_gyms` table is created by the MOD-012 migration.
+ *
+ * @returns Array of gym ID strings (may be empty).
+ * @throws {Error} with a user-facing message on unexpected failure.
+ */
+export async function fetchSavedGymIds(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('saved_gyms')
+    .select('gym_id');
+
+  if (error) {
+    throw new Error('Failed to load saved gyms. Please try again.');
+  }
+
+  return ((data as { gym_id: string }[]) ?? []).map((row) => row.gym_id);
+}
+
+/**
+ * Adds a gym to the current user's saved list.
+ *
+ * Inserts a row into `saved_gyms` for (auth.uid(), gymId).
+ * RLS enforces that the user can only insert rows for their own user_id.
+ * MOD-012 migration must have run before this is called.
+ *
+ * @param gymId UUID of the gym to save.
+ * @throws {Error} so that the UI can revert the optimistic update on failure.
+ */
+export async function saveGym(gymId: string): Promise<void> {
+  const { error } = await supabase
+    .from('saved_gyms')
+    .insert({ gym_id: gymId });
+
+  if (error) {
+    throw new Error('Failed to save gym. Please try again.');
+  }
+}
+
+/**
+ * Removes a gym from the current user's saved list.
+ *
+ * Deletes the (auth.uid(), gymId) row from `saved_gyms`.
+ * RLS enforces that the user can only delete their own rows.
+ *
+ * @param gymId UUID of the gym to unsave.
+ * @throws {Error} so that the UI can revert the optimistic update on failure.
+ */
+export async function unsaveGym(gymId: string): Promise<void> {
+  const { error } = await supabase
+    .from('saved_gyms')
+    .delete()
+    .eq('gym_id', gymId);
+
+  if (error) {
+    throw new Error('Failed to unsave gym. Please try again.');
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Submit a "request a gym" form entry.

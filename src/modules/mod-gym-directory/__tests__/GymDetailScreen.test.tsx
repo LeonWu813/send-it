@@ -13,15 +13,24 @@ jest.mock('../../../lib/supabase', () => ({
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import GymDetailScreen from '../screens/GymDetailScreen';
 import * as gymService from '../gym-service';
 import type { Gym } from '../types';
 import { renderOptions } from '../test-utils';
 
-// ── Typed mock helper ─────────────────────────────────────────────────────────
+// ── Typed mock helpers ────────────────────────────────────────────────────────
 const mockLoadGym = gymService.loadGym as jest.MockedFunction<
   typeof gymService.loadGym
+>;
+const mockFetchSavedGymIds = gymService.fetchSavedGymIds as jest.MockedFunction<
+  typeof gymService.fetchSavedGymIds
+>;
+const mockSaveGym = gymService.saveGym as jest.MockedFunction<
+  typeof gymService.saveGym
+>;
+const mockUnsaveGym = gymService.unsaveGym as jest.MockedFunction<
+  typeof gymService.unsaveGym
 >;
 
 const BOULDERING_GYM: Gym = {
@@ -70,6 +79,10 @@ const MIXED_GYM: Gym = {
 describe('GymDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: no saved gyms (safe baseline for all existing tests)
+    mockFetchSavedGymIds.mockResolvedValue([]);
+    mockSaveGym.mockResolvedValue(undefined);
+    mockUnsaveGym.mockResolvedValue(undefined);
   });
 
   it('renders gym name, city/district, address, and grading system', async () => {
@@ -172,5 +185,111 @@ describe('GymDetailScreen', () => {
 
     fireEvent.press(screen.getByText('View Routes'));
     expect(onViewRoutes).toHaveBeenCalledWith('gym-001', 'MegaSTONE Climbing Gym');
+  });
+
+  // AC-120, AC-121: Bookmark icon
+  it('shows bookmark-outline (unsaved) when the gym is not in saved list (AC-120)', async () => {
+    mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
+    mockFetchSavedGymIds.mockResolvedValueOnce([]); // gym-001 not saved
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    // Button accessible as "Save gym" (unsaved state label)
+    expect(screen.getByLabelText('Save gym')).toBeTruthy();
+  });
+
+  it('shows bookmark (saved/filled) when the gym is in the saved list (AC-120)', async () => {
+    mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
+    mockFetchSavedGymIds.mockResolvedValueOnce(['gym-001']); // gym-001 is saved
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    // Button accessible as "Unsave gym" (saved state label)
+    expect(screen.getByLabelText('Unsave gym')).toBeTruthy();
+  });
+
+  it('optimistically toggles from unsaved to saved on bookmark press and calls saveGym (AC-121)', async () => {
+    mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
+    mockFetchSavedGymIds.mockResolvedValueOnce([]); // start unsaved
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    // Press the "Save gym" button
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Save gym'));
+    });
+
+    // After toggle, label should be "Unsave gym"
+    expect(screen.getByLabelText('Unsave gym')).toBeTruthy();
+    expect(mockSaveGym).toHaveBeenCalledWith('gym-001');
+  });
+
+  it('optimistically toggles from saved to unsaved on bookmark press and calls unsaveGym (AC-121)', async () => {
+    mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
+    mockFetchSavedGymIds.mockResolvedValueOnce(['gym-001']); // start saved
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    // Press the "Unsave gym" button
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Unsave gym'));
+    });
+
+    // After toggle, label should be "Save gym"
+    expect(screen.getByLabelText('Save gym')).toBeTruthy();
+    expect(mockUnsaveGym).toHaveBeenCalledWith('gym-001');
+  });
+
+  it('reverts bookmark state when saveGym throws (AC-121 optimistic revert)', async () => {
+    mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
+    mockFetchSavedGymIds.mockResolvedValueOnce([]); // start unsaved
+    mockSaveGym.mockRejectedValueOnce(new Error('network error'));
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    // Press save — should optimistically flip then revert
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Save gym'));
+    });
+
+    // Revert: back to "Save gym" (unsaved state)
+    await waitFor(() =>
+      expect(screen.getByLabelText('Save gym')).toBeTruthy(),
+    );
   });
 });

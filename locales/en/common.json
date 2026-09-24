@@ -34,28 +34,13 @@
       "networkError": "Network error. Please check your connection and retry."
     }
   },
-  "onboarding": {
-    "homeGym": {
-      "title": "Pick Your Home Gym",
-      "subtitle": "Select the gym you climb at most.",
-      "searchPlaceholder": "Search gyms…",
-      "skip": "Skip for now",
-      "confirm": "Set as Home Gym",
-      "noResults": "No gyms found.",
-      "errors": {
-        "saveFailed": "Failed to save home gym. Please try again."
-      }
-    }
-  },
   "profile": {
     "title": "Profile",
     "editTitle": "Edit Profile",
+    "editProfile": "Edit Profile",
     "displayName": "Display Name",
     "bio": "Bio",
     "bioPlaceholder": "Tell other climbers about yourself…",
-    "homeGym": "Home Gym",
-    "noHomeGym": "No home gym set",
-    "changeHomeGym": "Change Home Gym",
     "avatar": "Profile Photo",
     "changeAvatar": "Change Photo",
     "privacy": "Profile Privacy",
@@ -63,6 +48,8 @@
     "privacyFollowersOnly": "Followers Only",
     "privacyPublicDescription": "Anyone can see your sends and beta videos.",
     "privacyFollowersOnlyDescription": "Only followers can see your sends and beta videos.",
+    "sendHistory": "Send History",
+    "logout": "Log Out",
     "save": "Save",
     "cancel": "Cancel",
     "errors": {
@@ -121,6 +108,11 @@
     "cityFilter": {
       "taipei": "Taipei",
       "newTaipei": "New Taipei"
+    },
+    "bookmark": {
+      "save": "Save gym",
+      "unsave": "Unsave gym",
+      "saved": "Saved"
     },
     "errors": {
       "loadFailed": "Failed to load gyms. Please try again.",
