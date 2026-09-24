@@ -3,15 +3,17 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
-mode: bugfix
-module: mod-home
-result: success
-commit: 5c42a833d539280aa5b70b527e66379cbba195c4
+agent: pm
+mode: change
+module: n/a
+result: rev7-trivial-ac114-wording
+commit: 39ca035c37c95413b6a2a15d886202863ceabbff
 timestamp: 2026-09-24T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-24 [TRIVIAL]** — AC-114 wording aligned with Phase 1 tab-switch scope. AC-114 changed from "navigate to that gym's detail screen (MOD-002)" to "navigate to the Gyms tab (Phase 1: switches to the Gyms tab; deep-link to a specific gym's detail screen is a future enhancement)." Wording-only change: module boundaries (MOD-012 owns the Home strip, MOD-002 owns gym detail), dependencies, and the phase plan are unchanged; no new modules. PRD Revision bumped 7 → 8, Status line tagged [TRIVIAL]. Affected spec for Doc-Sync passthrough: MOD-012 (mod-home).
 
 - **2026-09-24 [SUBSTANTIVE]** — Tab shell + Home screen + Profile screen + saved-gyms data model (PRD Revision 7). Leon's decisions all finalized; PRD updated to Revision 7 [SUBSTANTIVE]. Summary of changes:
   - **Status line / Revision** bumped 6 → 7.

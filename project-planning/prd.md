@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 7
+**Status**: [TRIVIAL] — Revision 8
 **Date**: 2026-09-23
-**Revision**: 7
+**Revision**: 8
 
 ---
 
@@ -623,7 +623,7 @@ The data flow for the two most important loops:
 
 **AC-113** (new): The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002).
 
-**AC-114** (new): Tapping a gym in the Saved Gyms strip shall navigate to that gym's detail screen (MOD-002).
+**AC-114** (new): Tapping a gym in the Saved Gyms strip shall navigate to the Gyms tab (Phase 1: switches to the Gyms tab; deep-link to a specific gym's detail screen is a future enhancement).
 
 **AC-115** (new): When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it."
 
