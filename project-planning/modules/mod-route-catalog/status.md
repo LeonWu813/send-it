@@ -385,6 +385,47 @@ All items that PASS'd in the original functional-test remain PASS — no regress
 
 ---
 
+## Bugfix (2026-09-24) — Human QA: photo required gate + route photo display
+
+**Issues fixed (human QA, coordinator-reported):**
+
+### Fix 1 — Photo is required on submit (button disabled until photo selected)
+
+**Root cause**: The "Add Route" button was disabled only during submission (`isSubmitting`). A user could tap it without a photo and only then see the inline validation error. The button was not proactively disabled until a photo was selected.
+
+**Fix**:
+- Submit button is now disabled (`disabled={!photoUri || isSubmitting}`) and visually dimmed when no photo is selected (the `primaryButtonDisabled` opacity style applies to both conditions).
+- An inline hint message using the new i18n key `routeCatalog.submit.photoRequired` is shown above the button whenever no photo has been selected and the photo-required error has not yet been triggered. This provides proactive guidance before the user taps submit.
+- New i18n keys added to both locales:
+  - EN `routeCatalog.submit.photoRequired` = "A photo is required"
+  - zh-TW `routeCatalog.submit.photoRequired` = "請上傳路線照片"
+- The existing `routes.submit.errors.photoRequired` validation error (shown after tapping submit with no grade/color) is retained and still shown when `handleAddRoute` is invoked and no photo is present (belt-and-suspenders for any edge path where the button state and photo state diverge).
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — button `disabled` and `style` conditions updated; inline `photoRequiredHint` text added above the button; `photoRequiredHint` style added to `makeStyles`.
+- `locales/en/common.json` — `routeCatalog.submit.photoRequired` key added.
+- `locales/zh-TW/common.json` — `routeCatalog.submit.photoRequired` key added.
+
+### Fix 2 — Route photo displayed on RouteDetailScreen
+
+**Root cause diagnosis**: All three layers were inspected:
+1. `ROUTE_DETAIL_SELECT` in `route-service.ts` — already includes `photo_url`. No change needed.
+2. `Route` type in `types.ts` — already has `photo_url: string`. No change needed.
+3. `RouteDetailScreen.tsx` — already renders `<Image source={{ uri: route.photo_url }} />`. However, if `photo_url` is an empty string or the image fails to load, the Image renders but shows nothing. More critically, the type declares `photo_url: string` (non-nullable) but a legacy row could have an empty or null value — the `<Image>` would silently fail to render. Also, the spec requirement is "only if photo_url is present."
+
+**Fix**: Wrapped the `<Image>` in a conditional `{route.photo_url ? (...) : null}` so the component only renders when a URL is actually present. This matches the spec requirement and handles any edge-case rows.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — photo `<Image>` wrapped in conditional guard.
+
+### Self-check (bugfix)
+
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 157 tests, 17 suites, 0 failures
+- PASS: i18n key parity — `routeCatalog.submit.photoRequired` present in both EN and zh-TW locales
+- PASS: No gold-plating — changes confined to the two reported issues; no spec requirements added
+- PASS: No new dependencies introduced
+
 ## QA Single-Page Submit Regression Results
 
 **QA agent**: qa-mod-route-catalog

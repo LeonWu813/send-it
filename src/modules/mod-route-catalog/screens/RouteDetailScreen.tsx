@@ -151,13 +151,15 @@ export default function RouteDetailScreen({
         <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
       </Pressable>
 
-      {/* Route photo */}
-      <Image
-        source={{ uri: route.photo_url }}
-        style={styles.photo}
-        accessibilityLabel={`${route.grade} ${route.color_tag} route photo`}
-        resizeMode="cover"
-      />
+      {/* Route photo — only rendered when photo_url is present (AC-021) */}
+      {route.photo_url ? (
+        <Image
+          source={{ uri: route.photo_url }}
+          style={styles.photo}
+          accessibilityLabel={`${route.grade} ${route.color_tag} route photo`}
+          resizeMode="cover"
+        />
+      ) : null}
 
       {/* Status badge (retired only — active is the default state) */}
       {isRetired && (

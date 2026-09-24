@@ -136,7 +136,8 @@
     },
     "submit": {
       "addRoute": "Add Route",
-      "changePhoto": "Change Photo"
+      "changePhoto": "Change Photo",
+      "photoRequired": "A photo is required"
     }
   },
   "routes": {

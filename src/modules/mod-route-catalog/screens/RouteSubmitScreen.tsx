@@ -391,17 +391,24 @@ export default function RouteSubmitScreen({
         />
       </View>
 
-      {/* Add Route button */}
+      {/* AC-021: inline validation message when photo is absent and user has not yet selected one */}
+      {!photoUri && !photoError ? (
+        <Text style={styles.photoRequiredHint}>
+          {t('routeCatalog.submit.photoRequired')}
+        </Text>
+      ) : null}
+
+      {/* Add Route button — disabled until a photo is selected (AC-021) */}
       <Pressable
         style={[
           styles.primaryButton,
-          isSubmitting && styles.primaryButtonDisabled,
+          (!photoUri || isSubmitting) && styles.primaryButtonDisabled,
         ]}
         onPress={() => void handleAddRoute()}
-        disabled={isSubmitting}
+        disabled={!photoUri || isSubmitting}
         accessibilityRole="button"
         accessibilityLabel={t('routeCatalog.submit.addRoute')}
-        accessibilityState={{ disabled: isSubmitting }}
+        accessibilityState={{ disabled: !photoUri || isSubmitting }}
       >
         {isSubmitting ? (
           <ActivityIndicator size="small" color={theme.colors.textInverse} />
@@ -566,6 +573,12 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontSize: theme.fontSize.sm,
       color: theme.colors.error,
       marginTop: theme.spacing.xs,
+    },
+    photoRequiredHint: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.xs,
+      textAlign: 'center',
     },
   });
 }

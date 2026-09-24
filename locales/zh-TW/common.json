@@ -136,7 +136,8 @@
     },
     "submit": {
       "addRoute": "新增路線",
-      "changePhoto": "更換照片"
+      "changePhoto": "更換照片",
+      "photoRequired": "請上傳路線照片"
     }
   },
   "routes": {
