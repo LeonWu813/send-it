@@ -127,6 +127,16 @@ export default function GymListScreen({
     });
   }, [gyms, searchText, cityFilter]);
 
+  // Sort: saved gyms float to the top; order within each group is preserved.
+  const sortedGyms = useMemo(() => {
+    if (savedGymIds.size === 0) return filteredGyms;
+    return [...filteredGyms].sort((a, b) => {
+      const aSaved = savedGymIds.has(a.id) ? 0 : 1;
+      const bSaved = savedGymIds.has(b.id) ? 0 : 1;
+      return aSaved - bSaved;
+    });
+  }, [filteredGyms, savedGymIds]);
+
   function renderGymCard({ item }: { item: GymSummary }): React.JSX.Element {
     const isItemSaved = savedGymIds.has(item.id);
     return (
@@ -234,7 +244,7 @@ export default function GymListScreen({
 
       {/* Gym list */}
       <FlatList
-        data={filteredGyms}
+        data={sortedGyms}
         keyExtractor={(item) => item.id}
         renderItem={renderGymCard}
         contentContainerStyle={styles.listContent}

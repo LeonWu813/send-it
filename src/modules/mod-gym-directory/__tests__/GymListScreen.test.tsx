@@ -240,4 +240,40 @@ describe('GymListScreen', () => {
 
     expect(screen.queryByLabelText('Saved')).toBeNull();
   });
+
+  it('places saved gyms above unsaved gyms in the list', async () => {
+    // gym-002 and gym-003 are in the middle/end of the fixture array; gym-002 is saved.
+    // After sorting, gym-002 (saved) should appear before gym-001 and gym-003 (unsaved).
+    mockListGyms.mockResolvedValueOnce(GYM_FIXTURES);
+    mockFetchSavedGymIds.mockResolvedValueOnce(['gym-002']);
+
+    render(
+      <GymListScreen
+        onSelectGym={jest.fn()}
+        onRequestGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('T-UP 原岩攀岩館 — Wanhua')).toBeTruthy(),
+    );
+
+    // getAllByRole('button') returns cards in DOM order (top to bottom).
+    // The first card should be gym-002 (saved), followed by gym-001 and gym-003.
+    const cards = screen.getAllByRole('button');
+    // Filter to gym cards only (exclude the request-gym button at the bottom)
+    const gymCards = cards.filter((el) => {
+      const label = el.props?.accessibilityLabel ?? '';
+      return (
+        label.includes('MegaSTONE') ||
+        label.includes('Wanhua') ||
+        label.includes('double8')
+      );
+    });
+
+    expect(gymCards[0].props.accessibilityLabel).toContain('Wanhua'); // gym-002 (saved) — first
+    expect(gymCards[1].props.accessibilityLabel).toContain('MegaSTONE'); // gym-001 (unsaved) — second
+    expect(gymCards[2].props.accessibilityLabel).toContain('double8'); // gym-003 (unsaved) — third
+  });
 });
