@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
-result: rev7-substantive
-commit: 34119c652773e78930310f4e2320298677eb74e7
+result: success
+commit: 420997a2cbe4c96aceceedbed8486d11276f9688
 timestamp: 2026-09-24T00:00:00Z
 ```
 
@@ -314,6 +314,141 @@ To keep Phase 1.5 in-app admin a zero-rework, additive change:
 - **Enum evolution on PG15/Supabase**: adding an enum value and using it must be split across two migration files (add in file N, use in file N+1); never add-and-use an enum value in a single Supabase migration transaction.
 - **Server-enforced write gates**: when a write must honor an operator toggle or assign a server-controlled field (status, owner), route it through a `SECURITY DEFINER` RPC that derives the owner from `auth.uid()` and reads settings server-side; never accept owner/status/toggle-outcome as client arguments, and revoke the direct table grant for that verb.
 - **Runtime operator toggles**: store in a single `app_settings(key, value)` table with RLS enabled and no client policies/grants; read only inside definer functions so the setting is never exposed to clients.
+
+## Tech Lead Review — Rev 7 Tab Shell + Saved Gyms + Home Module (2026-09-24)
+
+**Context**: PRD Revision 7 [SUBSTANTIVE] adds the persistent three-tab bottom shell (Home / Gyms / Profile), the `SavedGym` join table, removes `User.home_gym_id`, and introduces MOD-012 (mod-home) as an aggregator. The PM flagged three items for Tech Lead review: tab shell mount point + module boundaries, `saved_gyms` table/RLS, and the `home_gym_id` removal impact. This review answers all four areas the coordinator raised. Advisory only — no source, migration, spec, or PRD files changed here. Doc-Sync carries the Proposed Shared Conventions and schema decisions into the MOD-012 spec + production.md; Engineering implements in module `change`-mode work. Findings are grounded in the shipped code (`App.tsx`, `AuthNavigator.tsx`, `GymNavigator.tsx`, `auth-service.ts`, migrations 001/002) as of this date.
+
+---
+
+### Area 1 — App-level tab shell: mount point, state ownership, mount strategy, bottom inset
+
+**(a) Directory structure — recommend `AppShell` lives in MOD-012 (`src/modules/mod-home/`), NOT a new top-level `src/shell/`.**
+
+Rationale:
+- PRD §6 makes MOD-012's purpose explicit: *"Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface."* The shell is not orphan infrastructure — the PRD assigns it an owner. Creating a separate `src/shell/` directory would split the shell across two ownership boundaries (a top-level dir owned by nobody vs. mod-home owning only the Home surface), which fights the single-owner model the whole framework depends on. Keep the shell and the Home surface in one module so one engineer (`engineer-mod-home`) owns the seam.
+- Concretely: `src/modules/mod-home/AppShell.tsx` (the tab shell), `src/modules/mod-home/HomeNavigator.tsx` (Tab 1 content), `src/modules/mod-home/screens/HomeScreen.tsx`, plus a `components/TabBar.tsx`. The shell imports the *public navigator entry points* of MOD-002 and MOD-001 (see Area 4 for the import rule).
+- `App.tsx` changes minimally: it currently renders `<GymNavigator session={session} />` inside `AppShell()` — that inline `AppShell` in `App.tsx` gets replaced with an import of `mod-home`'s `AppShell`. `App.tsx` stays the composition root (SafeAreaProvider → ThemeProvider → AuthNavigator → AppShell) but no longer contains navigator-selection logic. Note: `App.tsx` itself is not module-owned; the coordinator/engineer-mod-home edit to swap the import is a small root change that belongs to the MOD-012 build (same host-screen/owning-module pattern used for AC-005).
+
+**(b) Active-tab state — recommend it lives inside `AppShell` (a `useState<TabKey>` in `mod-home/AppShell.tsx`), NOT in `App.tsx`.**
+
+Rationale:
+- Consistent with the shipped pattern: every navigator in this codebase is a self-contained view-state machine (`GymNavigator` holds its own `GymView` state; `AuthNavigator` holds `authView`). `App.tsx` deliberately holds no navigation state today. Putting tab state in `App.tsx` would break that convention and force `App.tsx` to re-render the whole tree on every tab switch.
+- Default tab = `'home'` (AC-110: "Home tab is the default tab after login"). The state machine shape mirrors `GymView`: `type TabKey = 'home' | 'gyms' | 'profile'`.
+
+**(c) Mount strategy — recommend keep-alive (all three tab trees mounted, hidden via `display: 'none'`), NOT unmount/remount.**
+
+Rationale:
+- **Scroll position + navigation depth preservation is the deciding factor.** Tab 2 (Gyms) hosts `GymNavigator`, which itself descends into `GymDetailScreen` → `RouteNavigator` → `RouteDetailScreen`. If the Gyms tab unmounts on switch, a user who drilled into a route, flips to Home, and flips back loses their entire nav stack and scroll position — a jarring, sub-standard mobile UX. Keep-alive preserves each tab's internal state machine across switches for free (the `GymView`/`RouteView` `useState` survives because the component isn't unmounted).
+- **Implementation**: render all three tab subtrees, wrap each in a `View` whose style toggles `display: activeTab === key ? 'flex' : 'none'`. `display: 'none'` in React Native fully removes the subtree from layout/paint but keeps it mounted (state intact) — this is the correct RN idiom (do NOT use `flex: 0`, which still lays out and can leak touch targets / measurement).
+- **Cost / mitigation**: keep-alive mounts all three trees eagerly at first render, so first-paint does slightly more work. For Phase 1's three tabs this is negligible (Home = 3 static-ish sections; Gyms = one list; Profile = one profile + embedded history). If cold-start (§10 NFR: ≤3s) ever regresses, the mitigation is lazy-mount-on-first-visit + keep-alive-after (mount a tab the first time it becomes active, then never unmount) — but do NOT build that speculatively; plain keep-alive is the Phase 1 recommendation. Flagged so the engineer knows the escape hatch exists.
+
+**(d) Session threading — recommend continue the shipped prop-passing pattern; do NOT introduce a session context for this.**
+
+- `GymNavigator` already takes `session: Session` as a prop (confirmed in `GymNavigator.tsx`). `AppShell` receives `session` (it renders only when `AuthNavigator` has confirmed a session) and passes it to each of the three tab navigators as a prop, exactly as `App.tsx` does today for `GymNavigator`. `useSession` remains the singleton subscription for reactive session changes (as `AuthNavigator` comments already note). No new context is warranted — three consumers, one hop, is not prop-drilling pain.
+
+**(e) Bottom tab bar inset — extends the existing `makeStyles(theme, topInset)` convention to a bottom inset.**
+
+- The tab bar is pinned to the bottom of the screen and must clear the home-indicator safe area (`insets.bottom`, ~34px on Face ID devices). The existing production.md "Screen Layout & Safe Area Insets" convention only standardizes `insets.top` passed as `makeStyles(theme, topInset)`. The tab bar needs `insets.bottom`.
+- **Recommendation**: the `TabBar` component calls `useSafeAreaInsets()` and applies `paddingBottom: insets.bottom` (plus a spacing token for the icon row) to its container, so the tab bar's touch targets sit above the home indicator. This is additive to the existing convention, not a replacement — top-inset handling on the *screens inside each tab* is unchanged. See Proposed Shared Convention "Bottom Safe Area for Pinned Bottom Bars" below.
+- **Interaction with per-screen top inset**: each tab's screens keep passing `insets.top` into their own `makeStyles` per the existing convention. Additionally, screens inside a tab whose content scrolls to the very bottom should reserve room for the tab bar height + `insets.bottom` in their scroll `contentContainerStyle` `paddingBottom` so the last row isn't hidden behind the bar. Flag this in the MOD-012 spec as an integration note for MOD-002/MOD-001 screens hosted in tabs (low-risk, but a known "content hidden behind tab bar" pitfall).
+
+---
+
+### Area 2 — `saved_gyms` join table: schema and RLS
+
+**Confirmed as specified in PRD §9, with the following exact implementation decisions:**
+
+- **`ON DELETE CASCADE` on both FKs — confirmed correct.** `gym_id → gyms.id ON DELETE CASCADE` (deleting a gym removes its saves) and `user_id → users.id ON DELETE CASCADE` (deleting a user removes their saves) are both right — a save row is meaningless without either parent. Note `users.id` itself is `REFERENCES auth.users(id) ON DELETE CASCADE` (confirmed in migration 001), so account deletion cascades cleanly through `users` → `saved_gyms`.
+- **PK `(user_id, gym_id)` — confirmed.** Composite PK enforces "a user saves a gym at most once" (idempotent save) at the DB level; no separate unique constraint needed.
+- **RLS policy set — confirmed: SELECT / INSERT / DELETE for own rows only, no UPDATE.** This is exactly right and matches PRD §9 + §10 NFR ("authenticated user may read and write only their own rows"). Exact policies:
+  - SELECT `saved_gyms_select_own`: `USING (user_id = auth.uid())`
+  - INSERT `saved_gyms_insert_own`: `WITH CHECK (user_id = auth.uid())`
+  - DELETE `saved_gyms_delete_own`: `USING (user_id = auth.uid())`
+  - **No UPDATE policy** — a save has no mutable fields (unsave = DELETE, not UPDATE). Correct to omit.
+  - `ALTER TABLE public.saved_gyms ENABLE ROW LEVEL SECURITY;` from creation (project convention).
+- **Grants**: `GRANT SELECT, INSERT, DELETE ON public.saved_gyms TO authenticated;` — must be granted explicitly (RLS filters rows, GRANT authorizes the verb; the route-catalog review already documented this exact gotcha). Do NOT grant UPDATE. Do not grant to `anon`.
+- **Index — recommend adding one covering index; do NOT rely on PK alone.** The Home screen queries `WHERE user_id = auth.uid()` on every Home render (AC-113). The composite PK `(user_id, gym_id)` is a usable index for that predicate because `user_id` is the *leading* column of the PK — so a bare `WHERE user_id = ?` *can* use the PK index. **However**, the Home strip needs to render each saved gym's `photo_url` + name (AC-113), which requires joining to `gyms`. The efficient shape is: `saved_gyms` filtered by `user_id`, then joined to `gyms` on `gym_id`. The leading-column PK index already serves the `user_id` filter, so a *separate* single-column index on `user_id` would be redundant. **Net recommendation: PK is sufficient for the `user_id` filter — no extra index required.** Add a standalone `gym_id` index ONLY if a "who saved this gym" reverse lookup is ever needed (it is not in Phase 1 — no AC reads saves by gym). Documenting this so the engineer does not add a redundant `user_id` index out of caution.
+- **Migration file — recommend a NEW migration owned by MOD-012, named `2026XXXXXX_mod_012_home.sql`** (follow the `_mod_0NN_<module>` convention, e.g. `20260924000001_mod_012_home.sql`). Rationale: `saved_gyms` is MOD-012's data (PRD §6: "saved gyms live in MOD-012"; the `SavedGym` entity backs US-019/US-020 owned by MOD-012). Do NOT name it `_mod_002_saved_gyms` — MOD-002 owns the *interaction* (bookmark toggle UI, AC-120/121/122) but MOD-012 owns the *table*. Keeping the table in the mod-012 migration matches the "table owned by the module that owns the entity" pattern (cf. `gym_requests` in the mod-002 migration). MOD-002's bookmark screens read/write `saved_gyms` cross-module — that is a service-layer import concern (Area 4), not a reason to move the table's migration.
+  - **Ordering note**: this migration must land after migrations 001 (users) and 002 (gyms) since both FKs reference them. Its timestamp (2026092400xxxx) is naturally later than the existing 20260923 files — no ordering hazard.
+
+---
+
+### Area 3 — `home_gym_id` removal: full impact map
+
+The column drop touches **migrations, one service function, types, the onboarding gate, a whole screen, tests, and locale files.** Complete inventory (grounded in a repo-wide grep):
+
+**Migrations (Engineer, MOD-001 / drop migration):**
+- `20260920000001_mod_001_user_profile.sql` line 23 — declares `home_gym_id UUID`.
+- `20260920000002_mod_002_gym_directory.sql` lines 51–58 — adds `users_home_gym_id_fkey` FK (`ON DELETE SET NULL`).
+- **Do NOT edit the historical migrations.** They represent applied state. Add a **new forward migration** that drops the column: `ALTER TABLE public.users DROP COLUMN home_gym_id;`.
+  - **FK cascade concern — confirmed benign.** `DROP COLUMN home_gym_id` automatically drops the dependent `users_home_gym_id_fkey` constraint (Postgres drops constraints that depend on a dropped column). No separate `DROP CONSTRAINT` needed, and no data-integrity fallout — the FK was `ON DELETE SET NULL`, so nothing cascades *out* of `users` when the column disappears. Confirmed as the coordinator's brief states.
+  - **RLS check — clear.** Grepped migration 001 policies (`users_select_authenticated`, `users_update_own`, `users_insert_own`) and the `handle_new_auth_user` trigger: **none reference `home_gym_id`.** The trigger inserts only `(id, display_name)`. So the drop needs no policy or trigger changes. Flagged clean.
+  - **Where to place the drop migration**: recommend a MOD-001-owned migration (`2026XXXXXX_mod_001_drop_home_gym.sql`) since `users` is MOD-001's table, OR fold the `DROP COLUMN` into the `mod_012_home.sql` migration alongside `saved_gyms` creation (the SavedGym table is described in §9 as replacing `home_gym_id`, so co-locating the swap is defensible). **Recommend the standalone MOD-001 migration** to keep table ownership clean (`users` = MOD-001). PM/Doc-Sync to confirm which module's engineer owns the drop; my lean is MOD-001 owns the `users` DDL, MOD-012 owns `saved_gyms`.
+
+**Source files that reference `home_gym_id` (Engineer must remove — these will break the build once the column is gone):**
+- `src/modules/mod-auth-profile/auth-service.ts` — line 206 (`loadProfile` select string includes `home_gym_id`), line 233 (`upsertProfile` select string), lines 247–256 (the entire `setHomeGym()` function). Remove `home_gym_id` from both select strings; delete `setHomeGym()` entirely (no home gym concept).
+- `src/modules/mod-auth-profile/types.ts` — line 13 (`home_gym_id: string | null` on `UserProfile`), line 30 (`HomeGymSelection: { isOnboarding: boolean }` route param). Remove both.
+- `src/modules/mod-auth-profile/AuthNavigator.tsx` — lines 8–9, 11 (doc comments), line 22 (import of `HomeGymSelectionScreen`), lines 80–89 (the onboarding gate `if (!onboardingComplete && !effectiveProfile?.home_gym_id)` that routes to `HomeGymSelectionScreen`). **This is the AC-001 behavior change**: per revised AC-001, first run must go directly to Home with no gym-selection step. The entire home-gym onboarding branch must be deleted so a fresh session falls straight through to `children` (the AppShell → Home tab). The `onboardingComplete` state and `HomeGymSelectionScreen` render both become dead and should be removed.
+- `src/modules/mod-auth-profile/screens/HomeGymSelectionScreen.tsx` — the whole screen. Delete the file (no longer reachable; AC-001 revised removes the flow). Also drop the tests targeting it.
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — lines 59, 182, 225, 250–273 (imports `setHomeGym`, `home_gym_id: null` fixtures, the `describe('setHomeGym')` block). Remove.
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — lines 85, 121 (`home_gym_id: null` in profile fixtures). Remove the field from fixtures.
+
+**Locale files (Engineer, cross-cutting per the i18n Skill Recommendation):**
+- `locales/en/common.json` and `locales/zh-TW/common.json` — the `homeGym` object (line 38) and the `homeGym` / `noHomeGym` / `changeHomeGym` keys (lines 56–58). Remove the now-orphaned home-gym strings in both locales to keep catalogs clean. (These map to the deleted `HomeGymSelectionScreen` and profile home-gym UI.)
+
+**First-run flow (AC-001) restatement for the engineer**: the revised first-run path is `AuthNavigator` (session detected) → straight to `children` → `AppShell` → default tab = Home. The removed `HomeGymSelectionScreen` gate is what currently intercepts first-run; deleting it *is* the AC-001 implementation. `App.tsx` / `AppShell` need no special first-run logic — "land on Home" is just "default `TabKey = 'home'`" (Area 1b).
+
+**Ownership note**: all the mod-auth-profile source/test/type changes are MOD-001-owned (`engineer-mod-auth-profile`). The `AppShell` swap in `App.tsx` and the Home tab are MOD-012-owned (`engineer-mod-home`). The `users.home_gym_id` DROP migration is MOD-001-owned DDL. These should be sequenced: MOD-001 removes home-gym (unblocks a clean profile surface for AC-116–119) → MOD-012 builds the shell that mounts the now-home-gym-free profile navigator.
+
+---
+
+### Area 4 — MOD-012 as aggregator: module-boundary rule
+
+**Recommendation: keep MOD-012 as a thin aggregator module (do NOT fold Home sections into MOD-002/MOD-006), with a strict "public surface only" cross-module import rule.**
+
+**(a) Aggregator vs. folding into owning modules — recommend aggregator.**
+- Folding (MOD-002 owns a `HomeGymStrip`, MOD-006 owns a `FollowingStrip`, rendered into a Home screen owned by... whom?) leaves the Home *screen composition* and the *tab shell* ownerless, which is exactly the problem the PRD solved by creating MOD-012. The PRD already assigns MOD-012 ownership of the Home surface and shell (§6) with deps on MOD-001/002/006 — the aggregator abstraction is the intended design. Ratify it.
+- The aggregator stays *thin*: it owns layout/composition (the three sections, empty states AC-115/AC-124, the static banners AC-112) and navigation *out* to MOD-002 gym detail (AC-114) and MOD-008/MOD-001 profiles (AC-123). It does NOT own gym data-fetching or follow-graph logic — those stay in their modules' service layers.
+
+**(b) Cross-module import rule — recommend: MOD-012 may import owning modules' *service functions and navigator entry points*, NOT their internal screens/components.**
+- **Allowed**: `mod-home` imports `gym-service.ts` functions from `mod-gym-directory` (to fetch the saved-gyms-with-gym-data for the strip) and the follow-list function from `mod-social-feed` (MOD-006, `mod-social-feed/*-service.ts`). It imports the *navigator entry points* it mounts as tabs: `GymNavigator` (MOD-002) and the Profile navigator (MOD-001). This mirrors the shipped pattern where `GymNavigator` already imports `RouteNavigator` (MOD-003) as a public entry point — the precedent for cross-module navigator mounting is established and working.
+- **Disallowed**: reaching into another module's `screens/` or `components/` internals (e.g. importing `GymDetailScreen` directly, or a private list-row component). Cross-module coupling goes through service functions (data) and navigator components (mounting) only — the two documented public surfaces. This keeps MOD-002/MOD-006 free to refactor their internals without breaking Home.
+- **Consequence for the saved-gyms fetch**: the Home strip's "saved gyms with photo_url + name" query is a join of `saved_gyms` (MOD-012's table) to `gyms` (MOD-002's table). Recommend this read lives in **MOD-012's own service layer** (`mod-home/home-service.ts`) issuing the join query directly against both tables via the Supabase client — this is a read-only cross-table SELECT gated by `saved_gyms` RLS (user sees only own saves) and `gyms` RLS (all authenticated can read gyms), so it is safe and needs no MOD-002 function. The *write* side (bookmark toggle on `saved_gyms`, AC-120/121) is MOD-002-owned per the PRD and lives in `mod-gym-directory`'s service layer. So: **MOD-012 reads `saved_gyms` (+ join gyms) for the strip; MOD-002 writes `saved_gyms` for the toggle.** Both modules touch the same table but on different verbs with the same RLS fence — acceptable and explicit. Flag this shared-table access in both specs so it isn't mistaken for a boundary violation.
+- **Following-climbers section (AC-123)**: sourced from MOD-006's follow data. MOD-012 calls a MOD-006 service function returning the followed-users list (avatar + display_name). MOD-006 is Not started, so this contract is defined when MOD-006 ships; flag in the MOD-012 spec that the follow-list read is a MOD-006 public-service dependency (MOD-012 must not query the `follows` table directly — that read must respect MOD-006's block-filtering composition rule, the same reason the feed uses a SECURITY INVOKER RPC per the existing MOD-006 implementation note). **Important**: the followed-climbers read should go through MOD-006's service (which applies block filtering), NOT a raw `follows` SELECT in mod-home, to stay consistent with the block-symmetry requirement (AC-082/084).
+
+**(c) Banner data location — recommend `src/lib/banners.ts` (a constant file outside any module), NOT inline in the Home screen.**
+- AC-112: up to 3 static hardcoded banners, section hidden if none. Putting the banner array in `src/lib/banners.ts` (alongside the existing `src/lib/theme.ts`, `src/lib/i18n.ts`, `src/lib/supabase.ts` shared-lib pattern) keeps the Home screen component presentational and makes the banner set editable in one obvious place without touching component logic. `mod-home` imports it. `src/lib/` is the established home for cross-cutting non-module constants — banners fit there. (Banner *copy* that is user-facing should reference i18n keys, not hardcoded English/zh-TW strings, per the localization convention — the `banners.ts` file holds structure/keys/image refs, the strings live in the locale catalogs.)
+
+---
+
+### Concerns (must address during MOD-012 / MOD-001 change work)
+
+- **`home_gym_id` drop breaks the build until all six source/test files are updated in the same change** — the column drop and the `auth-service.ts` / `types.ts` / `AuthNavigator.tsx` / `HomeGymSelectionScreen.tsx` / test / locale edits must ship together, or `loadProfile`/`upsertProfile` will SELECT a non-existent column at runtime and TypeScript will still reference a removed field. Sequence the MOD-001 removal as one atomic change.
+- **`saved_gyms` needs explicit GRANTs, not just RLS policies** — the route-catalog review already caught this class of bug (RLS filters rows; GRANT authorizes the verb). `GRANT SELECT, INSERT, DELETE ON public.saved_gyms TO authenticated;` must be in the migration, or the bookmark toggle and Home strip silently fail.
+- **Keep-alive tab shell must use `display: 'none'`, not conditional unmount** — unmounting loses the Gyms tab's drill-down nav stack (Gym → Route → RouteDetail) and scroll position on every tab switch. This is a UX-correctness requirement, not a preference (Area 1c).
+- **Following-climbers read must go through MOD-006's block-filtered service, not a raw `follows` SELECT** — a direct query in mod-home would bypass block symmetry (AC-084) and duplicate the composition MOD-006 owns. Defer this section's data wiring until MOD-006 ships its service, or stub it behind the empty state (AC-124) in the interim.
+
+### Recommendations
+
+- Mount `AppShell` in `src/modules/mod-home/`; tab state in `AppShell` (`useState<TabKey>`, default `'home'`); keep-alive mount strategy via `display: 'none'`; thread `session` as a prop to each tab navigator (no new context).
+- Create `saved_gyms` in a MOD-012 migration (`2026XXXXXX_mod_012_home.sql`); PK-only index is sufficient (no extra `user_id` index); three RLS policies (select/insert/delete own) + explicit grants; no UPDATE.
+- Drop `home_gym_id` in a standalone MOD-001 forward migration; remove the six source/test/locale reference sites; delete `HomeGymSelectionScreen`; delete the onboarding gate in `AuthNavigator` (that deletion *is* revised AC-001).
+- Ratify MOD-012 as a thin aggregator; enforce "public service functions + navigator entry points only" for cross-module imports; put banners in `src/lib/banners.ts` (structure/keys) with strings in locale catalogs; MOD-012 reads `saved_gyms`+join, MOD-002 writes `saved_gyms`.
+
+### Approved (looks solid as-is)
+
+- The three-tab shell extends the shipped state-machine-per-navigator pattern cleanly — no navigation library needed, consistent with `GymNavigator`/`RouteNavigator`/`AuthNavigator` already in the tree. No architectural concern with the local-state navigation approach for tabs.
+- `SavedGym` schema in PRD §9 (dual `ON DELETE CASCADE`, composite PK, own-rows RLS) is correct exactly as written — confirmed, only the grants + migration placement needed pinning.
+- `DROP COLUMN home_gym_id` is a clean drop — no RLS policy or trigger references it (verified), and the dependent FK drops automatically with no cascade fallout (the FK was `ON DELETE SET NULL`).
+- The precedent for cross-module navigator mounting already exists and works: `GymNavigator` imports and mounts `RouteNavigator` (MOD-003). MOD-012 mounting MOD-002/MOD-001 navigators is the same, proven pattern.
+
+### Proposed Shared Conventions (for Doc-Sync to carry into production.md)
+
+- **App shell & tab navigation**: the persistent tab shell lives in the module that owns it (MOD-012 `mod-home`), not a separate top-level dir. Tab state is a local `useState<TabKey>` in the shell component (state-machine-per-navigator convention). Tabs use a keep-alive mount strategy — all tab subtrees stay mounted and are hidden with `display: 'none'` (never conditional unmount, never `flex: 0`) so each tab's internal navigation stack and scroll position survive tab switches. Session is threaded to tab navigators as a prop; `useSession` remains the singleton for reactive session changes.
+- **Bottom safe area for pinned bottom bars**: any UI element pinned to the bottom of the screen (tab bar, sticky footer) must call `useSafeAreaInsets()` and apply `paddingBottom: insets.bottom` (plus a spacing token) so touch targets clear the home indicator. Screens hosted inside a tab must add the tab-bar height + `insets.bottom` to their scroll `contentContainerStyle` `paddingBottom` so bottom content isn't hidden behind the bar. This complements the existing top-inset `makeStyles(theme, topInset)` convention.
+- **Cross-module imports**: a module may import another module's *public service functions* (data) and *navigator entry-point components* (mounting) only — never its internal `screens/` or `components/`. Aggregator modules (MOD-012) compose other modules exclusively through these two public surfaces. When two modules must touch the same table, split by verb with the shared RLS fence (e.g. MOD-012 reads `saved_gyms`, MOD-002 writes it) and document the shared-table access in both specs.
+- **Shared non-module constants**: cross-cutting static data that belongs to no single module (e.g. hardcoded banner definitions) lives in `src/lib/` (alongside `theme.ts`, `i18n.ts`). Such files hold structure/keys/image refs only; user-facing strings stay in the i18n locale catalogs, never inlined.
 
 ## Module Map
 
