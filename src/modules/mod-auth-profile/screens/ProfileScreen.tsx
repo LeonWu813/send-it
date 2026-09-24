@@ -106,9 +106,6 @@ export default function ProfileScreen({
       <View style={styles.sendHistorySection}>
         <Text style={styles.sectionTitle}>{t('profile.sendHistory')}</Text>
         {/* TODO: replace with MOD-008 SendHistoryProfile component when MOD-008 ships */}
-        <Text style={styles.sendHistoryPlaceholder}>
-          Send history coming soon
-        </Text>
       </View>
 
       {/* Error message */}
