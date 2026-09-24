@@ -25,7 +25,7 @@ Analytics is cross-cutting — it supports the measurable goals in PRD §2 (Week
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - (cross-cutting; supports measurable goals in PRD §2 rather than a single user story)
 

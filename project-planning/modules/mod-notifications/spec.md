@@ -26,7 +26,7 @@ Beta video uploaders need timely feedback when someone likes their video. The no
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-009**: Receive push notification for beta-video likes
 - **US-010**: Manage notification preferences

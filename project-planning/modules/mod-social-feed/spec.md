@@ -26,7 +26,7 @@ Climbers connected to the local Taiwan scene want to follow friends and strong l
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-007**: Follow other climbers and see their activity
 - **US-008**: Like a beta video

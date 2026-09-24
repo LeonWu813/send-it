@@ -26,7 +26,7 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-004**: Upload a beta video for a route
 - **US-005**: Watch beta inline on a route

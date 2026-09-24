@@ -2,15 +2,15 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 4 (2026-09-21)
+**Last synced from PRD**: rev 7 (2026-09-24)
 
 ---
 
 ## Project Overview
 
-Send It is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at their home gym, and connect with other climbers in the local scene.
+Send It is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at the gyms they follow, and connect with other climbers in the local scene. The app is organized around a persistent three-tab bottom navigation shell — Home, Gyms, and Profile — with the Home tab as the landing screen after login. Rather than a single fixed home gym, each climber maintains a multi-gym saved list: they bookmark any gyms they care about and see them, alongside the climbers they follow, on the Home screen.
 
-Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a match-before-create route submission flow that keeps user-submitted data clean without waiting on official gym partnerships.
+Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a filter-first route submission flow with server-enforced duplicate protection that keeps user-submitted data clean without waiting on official gym partnerships.
 
 ---
 
@@ -35,6 +35,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
 
 - The **client** owns rendering, local UI state, client-side video compression, client-generated thumbnails, and localization. It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
+- The client's top-level UI is a **persistent three-tab bottom navigation shell**. **Tab 1 (Home)** hosts the Home surface (MOD-012). **Tab 2 (Gyms)** hosts the existing gym navigation stack (MOD-002 gym directory + detail, with MOD-003 route catalog reachable beneath it). **Tab 3 (Profile)** hosts the current user's profile surface (MOD-001) with their embedded send history and stats (MOD-008). The Home tab is the default tab after login. The tab shell (`AppShell`) lives in `src/modules/mod-home/` (MOD-012 owns it). Tab state is a local `useState<TabKey>` in `AppShell`. All tab subtrees are kept alive using `display: 'none'` (never conditional unmount). Session is threaded to each tab navigator as a prop; `useSession` remains the singleton for reactive session changes.
 - **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gyms are readable by all authenticated users and writable only by admins; routes are readable by all authenticated users for `active` rows, with `pending` rows visible only to their submitter, and are writable by the submitting user on insert (initial status `active` when auto-approve is ON, else `pending`), while status transitions to `retired` or `rejected` and approval of `pending` routes are admin-only via Supabase Studio.
 - **Supabase Storage** hosts avatars, gym photos, route photos, and (Phase 1 only) beta videos + client-generated thumbnails. When the migration trigger fires, video uploads cut over to Cloudflare Stream while metadata continues to live in Postgres.
 - **Supabase Edge Functions** handle event-driven workflows that must not run on the client: on `Reaction` insert with `target_type = beta_video`, an Edge Function inserts a `Notification` row and enqueues an APNs push (respecting `NotificationPreference`) via Expo Push to all `DeviceToken` rows for the recipient.
@@ -52,8 +53,8 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 
 | MOD-ID  | Directory              | Module Name                  | One-line description                                                                                      |
 |---------|------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------|
-| MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD, privacy, home gym selection.      |
-| MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form.                       |
+| MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD (name/avatar/bio/privacy), Profile tab surface with send history and Logout. |
+| MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form, and saved-gym bookmark toggle (add/remove from saved_gyms). |
 | MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, 4-value status lifecycle, submitter-only pending visibility, admin approve/reject/retire via Studio. |
 | MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override.                     |
 | MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection, client-side compression, thumbnail, storage upload, inline playback.             |
@@ -63,6 +64,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 | MOD-009 | mod-moderation         | Moderation (Report & Block)  | Report submission, symmetric block/unblock, feed filtering, scheduled report-digest Edge Function.        |
 | MOD-010 | mod-localization-theme | Localization & Theming       | i18n catalog loading, device-locale detection, zh-TW fallback, language toggle, Light/Dark theming.       |
 | MOD-011 | mod-analytics          | Analytics                    | PostHog event instrumentation across the app (cross-cutting; no user-facing UI).                          |
+| MOD-012 | mod-home               | Home                         | Persistent three-tab bottom navigation shell (AppShell) and Home screen (banners, saved-gyms strip, following-climbers strip). |
 
 ---
 
@@ -76,6 +78,7 @@ src/
     supabase.ts                # Supabase client singleton — only place createClient() is called
     theme.ts                   # Theme provider / tokens
     i18n.ts                    # i18n initialization
+    banners.ts                 # Static banner definitions (structure/keys/image refs; strings in i18n catalogs)
   modules/
     mod-auth-profile/
     mod-gym-directory/
@@ -88,6 +91,11 @@ src/
     mod-moderation/
     mod-localization-theme/
     mod-analytics/
+    mod-home/
+      AppShell.tsx             # Persistent three-tab shell (MOD-012 owns)
+      HomeNavigator.tsx        # Tab 1 content navigator
+      screens/HomeScreen.tsx
+      components/TabBar.tsx
 supabase/
   migrations/                  # All schema changes as Supabase CLI migrations
   functions/                   # Edge Functions
@@ -172,6 +180,26 @@ Use `SECURITY DEFINER` functions for any server-side enforcement that the client
 ### app_settings Table Pattern
 
 For admin-controlled feature toggles read server-side, use a single `public.app_settings (key TEXT PRIMARY KEY, value TEXT)` table with NO client-facing grants or RLS policies. RLS is enabled with no policies so authenticated and anon users receive zero rows. Read only inside DEFINER functions. Do not expose the table to authenticated users. Admin manages values via Supabase Studio (service_role bypasses RLS).
+
+### App Shell & Tab Navigation
+
+The persistent tab shell lives in the module that owns it (MOD-012, `src/modules/mod-home/`), not a separate top-level directory. Tab state is a local `useState<TabKey>` in the shell component (`AppShell.tsx`), defaulting to `'home'` (AC-110: Home tab is the default after login). This follows the state-machine-per-navigator convention already used by `GymNavigator`, `RouteNavigator`, and `AuthNavigator`.
+
+Tabs use a **keep-alive mount strategy**: all three tab subtrees are rendered simultaneously and toggled with `display: activeTab === key ? 'flex' : 'none'`. Do NOT use conditional unmount (component state is lost) and do NOT use `flex: 0` (still lays out, leaks touch targets). Keep-alive preserves each tab's internal navigation stack and scroll position across tab switches. Session is threaded to tab navigators as a prop; `useSession` remains the singleton for reactive session changes.
+
+### Bottom Safe Area for Pinned Bottom Bars
+
+Any UI element pinned to the bottom of the screen (tab bar, sticky footer) must call `useSafeAreaInsets()` and apply `paddingBottom: insets.bottom` (plus a spacing token for the icon row) to its container so touch targets clear the home indicator. Screens hosted inside a tab whose content scrolls to the bottom should add the tab-bar height plus `insets.bottom` to their scroll `contentContainerStyle` `paddingBottom` so the last row is not hidden behind the bar. This complements the existing top-inset `makeStyles(theme, topInset)` convention.
+
+### Cross-Module Imports
+
+A module may import another module's **public service functions** (data layer) and **navigator entry-point components** (mounting) only — never its internal `screens/` or `components/` subdirectories directly. Aggregator modules (MOD-012) compose other modules exclusively through these two public surfaces.
+
+When two modules must touch the same table, split access by verb and enforce with the shared RLS fence (e.g., MOD-012 reads `saved_gyms` via SELECT, MOD-002 writes `saved_gyms` via INSERT/DELETE). Document the shared-table access in both specs so it is not mistaken for a boundary violation.
+
+### Shared Non-Module Constants
+
+Cross-cutting static data that belongs to no single module (e.g., hardcoded banner definitions) lives in `src/lib/` alongside `theme.ts` and `i18n.ts`. These files hold structure, keys, and image refs only; all user-facing strings stay in the i18n locale catalogs and are never inlined into constant files.
 
 ### TypeScript Strict Mode
 

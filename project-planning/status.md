@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 420997a2cbe4c96aceceedbed8486d11276f9688
-timestamp: 2026-09-24T00:00:00Z
+commit: c1c7bc663f96943a50d8c1d4949fb15b156d475b
+timestamp: 2026-09-24T12:00:00Z
 ```
 
 ## PM Updates
@@ -754,3 +754,46 @@ These are flags for the eventual `change`-mode migration, not instructions to ac
 
 - **Review-gate modeling**: prefer a `status`-column gate on the primary table (with an RLS SELECT policy that hides non-active rows from non-owners) over a separate submission table, *unless* the submission's shape differs materially from the live row (as `gym_requests` does). Enforce the gate server-side (RLS `WITH CHECK` or a `SECURITY DEFINER` RPC), never by client cooperation.
 - **Runtime admin toggles**: store operator-flippable settings in a single `app_settings (key, value)` table read server-side; do not introduce an Edge Function solely to gate a client-side write.
+
+## Current Phase
+
+Phase 1 — iOS MVP, Taipei + New Taipei launch
+
+## Phase Plan
+
+- **Phase 1 (iOS MVP — Taipei/New Taipei launch)**: MOD-001 through MOD-012. Auth (Email + Apple + Google), admin-curated gym directory, route submission with match-before-create + fixed color enum + V-scale, send logging, beta video upload, follow + activity feed, beta-video likes with APNs push, profile history + stats, Report + Block, English + zh-TW, Light + Dark mode, PostHog analytics, Supabase Studio admin, tab shell (AppShell) with Home/Gyms/Profile tabs, saved-gyms strip, following-climbers strip.
+- **Phase 2 (Community depth + Android)**: Android build, offline send queue, expanded push notifications, comments (conditional), retire/reset voting, ascent pyramid, gym-info edit suggestions, Cloudflare Stream video migration (if trigger hit in Phase 1).
+- **Phase 3 (Gym partnerships)**: Gym-claimed profiles, official route-setter publishing, gym-facing analytics, optional gym subscription monetization.
+
+### Sync Report — Delta Sync — 2026-09-24
+
+**Sync type:** delta
+**PRD Revision:** 7
+**PM Update reference:** 2026-09-24 [SUBSTANTIVE] — Tab shell + Home screen + Profile screen + saved-gyms data model (PRD Revision 7)
+
+**Files created:**
+- `project-planning/modules/mod-home/spec.md` — MOD-012 spec created from template with full content: purpose, context (US-019, US-020, US-001 implicit), Related User Stories, requirements, input/output contract, dependencies, acceptance criteria (AC-110 through AC-115, AC-123, AC-124), integration points (AppShell mounts MOD-002/MOD-001 navigators; saved_gyms read; MOD-006 service dependency), data model (SavedGym DDL, RLS, grants), key implementation notes, out of scope.
+- `project-planning/modules/mod-home/status.md` — empty Engineering Progress + QA Results template.
+- `.claude/agents/engineer-mod-home.md` — engineer wrapper for MOD-012.
+- `.claude/agents/qa-mod-home.md` — QA wrapper for MOD-012.
+
+**Files modified:**
+- `project-planning/production.md` — Last synced revision updated (rev 4 → rev 7); Project Overview updated to reflect multi-gym saved list and three-tab shell; Architecture Overview updated with tab shell paragraph (AppShell in mod-home, keep-alive mount, tab state ownership, session threading, bottom inset); Module Index updated (MOD-001 description updated, MOD-002 description updated, MOD-012 added); Directory Layout updated (banners.ts added to src/lib/, mod-home added with AppShell/HomeNavigator/screens/components); Four new Shared Conventions added: App Shell & Tab Navigation, Bottom Safe Area for Pinned Bottom Bars, Cross-Module Imports, Shared Non-Module Constants.
+- `project-planning/modules/mod-auth-profile/spec.md` — Last Synced updated to 7; Purpose updated (no home gym, Profile tab surface described); Context updated (direct Home tab on first run, home_gym_id removal note); User Stories Covered section renamed to Related User Stories; US-011 added; AC-001 rewritten (first run → Home, no gym selection); AC-002 and AC-003 removed; AC-116, AC-117, AC-118, AC-119 added; Requirements section added; Integration Points updated (ProfileNavigator entry point, MOD-008 embedding); Data Model updated (home_gym_id removed, DROP COLUMN note); Input/Output Contract updated; Key Implementation Notes updated (home_gym_id impact map added, ProfileNavigator note added); Out of Scope updated (saved gyms note added).
+- `project-planning/modules/mod-gym-directory/spec.md` — Last Synced updated to 7; Purpose updated (saved-gym bookmark interaction added); Context updated (MOD-002 save/unsave ownership, migration sequencing note); User Stories Covered section renamed to Related User Stories; US-019 added; AC-120, AC-121, AC-122 added; Integration Point 3 added (shared saved_gyms table access); Data Model updated (SavedGym table added with note about MOD-012 migration ownership, RLS, grants); Input/Output Contract updated (saved-gym bookmark inputs/outputs added); Key Implementation Notes updated (saved-gym write ownership note, optimistic update note, list indicator note added); Out of Scope updated (saved_gyms DDL and Home strip notes added).
+- `project-planning/modules/*/spec.md` (all 11 existing specs) — `## User Stories Covered` heading renamed to `## Related User Stories` to match template convention and pass verify-sync.sh Check 4.
+- `project-planning/status.md` — Last Action updated; Phase Plan section added (fixes pre-existing Check 6 failure); Current Phase section added; this Sync Report added.
+
+**Module removals noted:** none
+
+**AMBIGUITY markers added:** none
+
+**CONFLICT markers added:** none
+
+**verify-sync.sh result:** 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md (MOD-012 spec created).
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (script bug): awk range `/^## Related User Stories/,/^## /` terminates immediately because the start line matches the end condition. All specs have correct `## Related User Stories` headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync.

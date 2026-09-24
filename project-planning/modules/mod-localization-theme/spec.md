@@ -24,7 +24,7 @@ Send It targets the Taiwan indoor bouldering community, so Traditional Chinese (
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-017**: Use the app in Traditional Chinese or English
 - **US-018**: Use the app in Dark Mode

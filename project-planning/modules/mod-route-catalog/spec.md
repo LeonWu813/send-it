@@ -34,7 +34,7 @@ The user story for the route list (US-006) specifies grade and hold-color filter
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-003**: Submit a new route
 - **US-006**: Browse currently active routes at a gym

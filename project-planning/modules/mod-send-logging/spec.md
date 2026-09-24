@@ -25,7 +25,7 @@ The core climber loop â€” "log a send without interrupting my climbing rhythm" â
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-002**: Log a send quickly
 

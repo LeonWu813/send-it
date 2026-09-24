@@ -4,33 +4,37 @@
 **Module Name**: Gym Directory
 **Phase**: 1
 **Dependencies**: MOD-001
-**Last Synced from PRD Revision**: 5
+**Last Synced from PRD Revision**: 7
 
 ---
 
 ## Purpose
 
-Serve the admin-curated gym directory (branch-level rows), gym detail pages, gym search/filter, and the "request a gym" submission form.
+Serve the admin-curated gym directory (branch-level rows), gym detail pages, gym search/filter, and the "request a gym" submission form. Own the saved-gym bookmark interaction: a read-only saved indicator on gym list cards and an interactive bookmark toggle on the gym detail screen that adds/removes the gym from the user's saved gyms list.
 
 ---
 
 ## Context
 
-Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app with real local gym coverage. Send It's wedge is an admin-curated, branch-level gym directory seeded with Taipei and New Taipei gyms on day one — so the app has real coverage without waiting on official gym partnerships. Gyms are admin-maintained (read-only for regular users) and are the foundation that MOD-003 (Route Catalog) and MOD-001 (home gym selection) depend on. For Phase 1, the seed covers 13 branches across Taipei and New Taipei; top-rope-only gyms (Camp4 達文西攀岩館 and Wusa 攀岩館) are explicitly excluded. Mixed gyms are included, but only their bouldering areas are represented in-app. Every gym must have a verified address and map pin before Phase 1 GA. Climbers whose gyms are not in the directory can submit a "request a gym" form (US-013); these requests are queued for admin review in Supabase Studio and are not auto-added.
+Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app with real local gym coverage. Send It's wedge is an admin-curated, branch-level gym directory seeded with Taipei and New Taipei gyms on day one — so the app has real coverage without waiting on official gym partnerships. Gyms are admin-maintained (read-only for regular users) and are the foundation that MOD-003 (Route Catalog) depends on. For Phase 1, the seed covers 13 branches across Taipei and New Taipei; top-rope-only gyms (Camp4 達文西攀岩館 and Wusa 攀岩館) are explicitly excluded. Mixed gyms are included, but only their bouldering areas are represented in-app. Every gym must have a verified address and map pin before Phase 1 GA. Climbers whose gyms are not in the directory can submit a "request a gym" form (US-013); these requests are queued for admin review in Supabase Studio and are not auto-added.
+
+MOD-002 also owns the save/unsave bookmark interaction for gyms. The `saved_gyms` table is created in MOD-012's migration — MOD-002 engineer must coordinate with MOD-012 engineer on migration sequencing (MOD-012 migration must run first to create the `saved_gyms` table before MOD-002 can write to it). MOD-002 owns the INSERT/DELETE write operations on `saved_gyms`. MOD-012 reads `saved_gyms` (SELECT + join to gyms) for the Home screen Saved Gyms strip — that read is MOD-012's concern, not MOD-002's.
 
 **Non-goals for this module:**
 - User-created gyms (Phase 1 — admin-curated only; missing gyms captured via request form).
 - Cities other than Taipei and New Taipei (Phase 2+ backlog).
 - Official gym partnerships and gym-facing dashboards (Phase 3).
 - In-app admin tooling for gym CRUD (Supabase Studio only).
+- The `saved_gyms` table creation (owned by MOD-012 migration).
+- The saved-gyms strip on the Home screen (owned by MOD-012).
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
-- **US-001**: Sign up and set home gym (home gym selection reads from this directory)
 - **US-006**: Browse currently active routes at a gym (gym directory list row → gym detail screen → route catalog entry point; partially — the gym-detail-to-routes navigation belongs to AC-005)
 - **US-013**: Request a missing gym
+- **US-019**: Save multiple gyms for quick access
 
 ---
 
@@ -38,11 +42,17 @@ Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app w
 
 **AC-004**: The system shall render the Taipei/New Taipei branch-level gym directory with every gym showing name, city/district, address, map pin, gym type, and (if present) photo when a user opens the Gyms tab.
 
-**AC-006** (new — doc gap, code already works): The system shall navigate a user from a gym row in the gym directory list to that gym's detail screen when the user taps the row, passing the selected gym's identifier.
+**AC-006** (doc gap, code already works): The system shall navigate a user from a gym row in the gym directory list to that gym's detail screen when the user taps the row, passing the selected gym's identifier.
 
-**AC-005** (new — code gap): The system shall present a "View Routes" entry point at the bottom of the gym detail screen that navigates the user to that gym's route catalog, passing the gym context (gym ID and gym name). The entry point must be visible without any additional action.
+**AC-005** (code gap): The system shall present a "View Routes" entry point at the bottom of the gym detail screen that navigates the user to that gym's route catalog, passing the gym context (gym ID and gym name). The entry point must be visible without any additional action.
 
 **AC-070**: The system shall accept a "request a gym" submission containing gym name, city, and optional Google Maps link, persist it to a queue readable by admins in Supabase Studio, and show the user a confirmation state when the submission succeeds.
+
+**AC-120** (new): The gym detail screen (GymDetailScreen) shall display a bookmark icon that toggles between a saved state (filled, yellow) and an unsaved state (gray), reflecting whether the gym is in the current user's saved gyms list.
+
+**AC-121** (new): Tapping the bookmark icon on the gym detail screen shall add or remove the gym from the current user's `saved_gyms` list and update the icon state immediately (optimistic update). The gym detail screen is the only save/unsave action point.
+
+**AC-122** (new): The gym list screen shall display a filled yellow bookmark indicator on gym cards that are in the current user's saved gyms list; no indicator is shown for unsaved gyms. The list indicator is read-only — tapping it performs no save/unsave action.
 
 ---
 
@@ -58,6 +68,8 @@ Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app w
    **Owner**: engineer-mod-gym-directory.
    **AC**: AC-005
 
+3. **Shared table access**: MOD-002 engineer owns the INSERT/DELETE write operations on `saved_gyms` (AC-120, AC-121). MOD-012 reads `saved_gyms` (SELECT + join to gyms) for the Home screen strip — this is a cross-module shared-table access split by verb with the shared RLS fence. See also: MOD-012 spec Integration Points.
+
 ---
 
 ## Data Model (relevant tables)
@@ -72,9 +84,14 @@ Gym  (admin-maintained, branch-level rows for multi-branch gyms)
 GymRequest
  - id, requested_by_user_id, name, city, google_maps_url (nullable),
    status (pending | added | rejected), created_at, reviewed_at (nullable)
+
+SavedGym  (join table — a user's bookmarked gyms; table created in MOD-012 migration)
+ - user_id (FK User, ON DELETE CASCADE), gym_id (FK Gym, ON DELETE CASCADE),
+   created_at
+ - PK: (user_id, gym_id)
 ```
 
-All tables guarded by Supabase Row-Level Security policies. `Gym` rows are readable by all authenticated users and writable only by admins. `GymRequest` rows are insertable by authenticated users and readable by admins only.
+All tables guarded by Supabase Row-Level Security policies. `Gym` rows are readable by all authenticated users and writable only by admins. `GymRequest` rows are insertable by authenticated users and readable by admins only. `SavedGym` RLS scopes reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()`. GRANT: `SELECT, INSERT, DELETE ON public.saved_gyms TO authenticated` (no UPDATE).
 
 ---
 
@@ -96,6 +113,15 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - `GymRequest` row inserted with `status = pending`
 - Confirmation state shown to user
 
+**Inputs (saved-gym bookmark toggle):**
+- Authenticated user session
+- `gym_id` of the gym to save or unsave
+
+**Outputs (saved-gym bookmark toggle):**
+- INSERT or DELETE on `saved_gyms` for `(user_id, gym_id)`
+- Optimistic UI update on GymDetailScreen bookmark icon (AC-121)
+- Read-only filled yellow indicator on gym list cards for saved gyms (AC-122)
+
 ---
 
 ## Key Implementation Notes
@@ -108,6 +134,9 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - `GymRequest` insert is allowed by authenticated users (RLS); the request queue is visible to admins in Supabase Studio. Admin review and status update (`pending → added | rejected`) happens in Studio, not in-app.
 - All gym CRUD happens via Supabase Studio in Phase 1 — no in-app admin UI.
 - **AC-005 is the seam connecting MOD-002 to MOD-003.** `GymNavigator.tsx` must add a `routes` view state that renders `RouteNavigator` (from mod-route-catalog) with props `gymId`, `gymName`, `session`, `onBackToGym`. `GymDetailScreen.tsx` must add a "View Routes" button at the bottom that calls `onViewRoutes(gymId, gymName)`. `RouteNavigator` itself needs no changes.
+- **Saved-gym write ownership**: MOD-002 engineer implements the INSERT (save) and DELETE (unsave) operations on `saved_gyms` for the bookmark toggle on GymDetailScreen (AC-120, AC-121). The `saved_gyms` table is created in MOD-012's migration file — MOD-012 migration must run first. MOD-002 engineer must coordinate with MOD-012 engineer on migration sequencing.
+- **Saved-gym read on gym list (AC-122)**: the gym list screen must read the current user's `saved_gyms` to determine which gym cards to display the filled yellow indicator on. This is a SELECT query scoped by RLS to `user_id = auth.uid()`. No save/unsave action is triggered by tapping the indicator on the list.
+- **Optimistic update (AC-121)**: the GymDetailScreen bookmark icon must update immediately on tap before the Supabase INSERT/DELETE round-trip completes. If the round-trip fails, the icon must revert to the pre-tap state.
 
 ---
 
@@ -118,6 +147,8 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - Official gym partnerships, gym claim flows, and gym-facing dashboards (Phase 3).
 - In-app admin tooling for gym management (Supabase Studio only).
 - Route data (owned by MOD-003).
+- The `saved_gyms` table DDL/migration (owned by MOD-012).
+- The Saved Gyms strip on the Home screen (owned by MOD-012).
 
 ## Phase 1 Seed Gym List
 

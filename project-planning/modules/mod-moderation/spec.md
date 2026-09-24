@@ -24,7 +24,7 @@ App Store Guideline 1.2 requires that apps with user-generated content provide (
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-015**: Report inappropriate content
 - **US-016**: Block another user

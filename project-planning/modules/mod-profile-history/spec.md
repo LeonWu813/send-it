@@ -27,7 +27,7 @@ Climbers tracking progress want to see their full send history and basic stats w
 
 ---
 
-## User Stories Covered
+## Related User Stories
 
 - **US-011**: View my profile history and stats
 - **US-012**: Set profile privacy (privacy gating applies to other-user profile navigation — AC-064 enforces the followers-only hidden state when a non-follower navigates to a `followers_only` profile)
