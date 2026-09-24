@@ -551,3 +551,131 @@ PASS. `ProfileNavigator.tsx` imports only from within `mod-auth-profile/` (EditP
 FAIL (inline string): `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` line 110 — the send history placeholder renders `<Text style={styles.sendHistoryPlaceholder}>Send history coming soon</Text>` as a raw inline string literal without `useTranslation()`. Input=ProfileScreen renders for an authenticated user; Actual=hardcoded English string "Send history coming soon" rendered to screen; Expected per production.md shared convention=all user-facing strings go through the i18n hook. Fix: add `profile.sendHistoryPlaceholder` to both locale catalogs and wrap with `t('profile.sendHistoryPlaceholder')`, or remove the placeholder text entirely and let the section title alone communicate the section.
 
 Note: this is the same class of violation caught in QA Run 1 (App.tsx inline string) and fixed in QA Run 2. The pattern recurs in placeholder sections — see Skill Recommendations.
+
+---
+
+## QA Run 4 — Regression — 2026-09-24 (ProfileScreen inline string fix)
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification after bug fix)
+**Original failure**: QA Run 3 FAIL — `ProfileScreen.tsx` line 110 rendered `<Text style={styles.sendHistoryPlaceholder}>Send history coming soon</Text>` — a hardcoded inline string literal without `useTranslation()`, violating the production.md i18n convention.
+
+### Bug Re-Verification
+
+**Original failure scenario**: `ProfileScreen.tsx` send history section rendered a raw `<Text>` element containing "Send history coming soon" (a hardcoded English string) without `useTranslation()`.
+
+REGRESSION PASS: Fix confirmed. The `<Text style={styles.sendHistoryPlaceholder}>Send history coming soon</Text>` element has been removed entirely from `ProfileScreen.tsx`. The send history section (lines 105–109) now contains only:
+
+```
+<View style={styles.sendHistorySection}>
+  <Text style={styles.sectionTitle}>{t('profile.sendHistory')}</Text>
+  {/* TODO: replace with MOD-008 SendHistoryProfile component when MOD-008 ships */}
+</View>
+```
+
+All `<Text>` elements in `ProfileScreen.tsx` confirmed i18n-correct:
+- Line 82: `{profile?.display_name ?? ''}` — data value, not a string literal
+- Line 86: `{profile.bio}` — data value, not a string literal
+- Line 100: `{t('profile.editProfile')}` — i18n key
+- Line 107: `{t('profile.sendHistory')}` — i18n key
+- Line 113: `{errorMessage}` — runtime error value, not a string literal
+- Line 131: `{t('profile.logout')}` — i18n key
+
+Grep for `"Send history coming\|coming soon\|sendHistoryPlaceholder` as a rendered element returns no matches in the `<Text>` render tree. The `sendHistoryPlaceholder` style key remains in `makeStyles` (unused style; does not trigger TypeScript errors — StyleSheet key presence without a consumer is not an error). No new string literals of any kind were introduced.
+
+### Automated Test Suite (QA Run 4)
+
+Command: `npm test -- --watchAll=false`
+Result: 155 tests, 17 suites — all PASS
+Exit code: 0
+
+All 17 suites passed (17 total, no failures, no skips).
+Note: two suites emit a React `act(...)` warning for an `@expo/vector-icons` `Icon` state update — this is a pre-existing warning from a third-party component, not introduced by this fix, and does not affect test results.
+
+### TypeScript Strict Mode (QA Run 4)
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+Exit code: 0
+
+### Re-Verification of All Previously Passing Items
+
+**AC-001 (revised)** — PASS. No change to `AuthNavigator.tsx` or routing logic; session → children directly, no gym selection gate. Confirmed unchanged from QA Run 3.
+
+**AC-116** — PASS. No change to the avatar/display name/bio rendering in `ProfileScreen.tsx`. The three fields still render from `useSession().profile`. Confirmed unchanged.
+
+**AC-117** — PASS. No change to the Edit Profile `<Pressable>` or `ProfileNavigator.tsx` state machine wiring. Confirmed unchanged.
+
+**AC-118** — PASS. Send history section now contains only the i18n section title (`t('profile.sendHistory')`) and the TODO comment — no inline string literal. The section renders, satisfying the spec requirement that the Profile screen embed the send history surface (placeholder acceptable per spec). Both `profile.sendHistory` keys confirmed present: `en="Send History"`, `zh-TW="完攀紀錄"`. The original FAIL is now resolved.
+
+**AC-119** — PASS. No change to the Logout `<Pressable>`, `handleLogout()`, or `signOut()` call chain. Confirmed unchanged.
+
+**AC-063** — PASS. No change to `EditProfileScreen.tsx`, `upsertProfile()`, or migration. `privacy_setting` column unchanged.
+
+**Supabase singleton** — PASS. No new `createClient()` call sites introduced.
+
+**No service_role key in client code** — PASS. No new env var reads introduced.
+
+**No hardcoded hex colors in components** — PASS. No hex literals introduced by the fix.
+
+**All user-facing strings through i18n (production.md convention)** — PASS. Fix resolves the original FAIL. Every `<Text>` in `ProfileScreen.tsx` now uses either `t()`, a runtime data value, or no string literal. Grep for raw inline string literals in `src/modules/mod-auth-profile/` returns no matches.
+
+**Both EN and zh-TW catalogs complete** — PASS. No locale catalog changes were made by this fix (the removed string was deleted, not translated — consistent with the QA Run 2 AppShell fix precedent). The i18n.test.ts key-completeness test passes as part of the 155-test suite.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0; no type errors introduced.
+
+**EXPO_PUBLIC_ prefix convention** — PASS. No new env var reads introduced.
+
+**Migration exists and RLS enabled** — PASS. No migration changes; schema unchanged.
+
+**Data model matches spec** — PASS. No schema or type changes.
+
+**ProfileNavigator exposed as public entry point** — PASS. No change to `ProfileNavigator.tsx`.
+
+**Safe area insets (useSafeAreaInsets + makeStyles) on ProfileScreen** — PASS. No change to the safe area inset pattern.
+
+**No gold-plating** — PASS. Fix removed content (the placeholder string) with no new functionality introduced.
+
+**Apple Sign-In visually equivalent to Google Sign-In** — PASS. `SignInScreen.tsx` unchanged.
+
+**home_gym_id removed from all six source sites** — PASS. No changes to any of the six impact-map files.
+
+**Drop migration exists** — PASS. `supabase/migrations/20260924000001_mod_001_drop_home_gym_id.sql` unchanged.
+
+**No HTML template comments in spec.md** — PASS. `spec.md` was not modified.
+
+**.env in .gitignore** — PASS. `.gitignore` was not modified.
+
+### New Regressions
+
+None. All previously-passing items continue to pass. No new failures introduced by the fix.
+
+### Summary
+
+| Item | QA Run 3 | QA Run 4 |
+|------|----------|----------|
+| AC-001 (revised): session → app shell directly, no gym selection gate | PASS | PASS |
+| AC-116: ProfileScreen displays display name, avatar, bio | PASS | PASS |
+| AC-117: Edit Profile entry opens EditProfileScreen | PASS | PASS |
+| AC-118: Send history section present (no inline string) | FAIL | PASS (fixed) |
+| AC-119: Logout control at bottom ends session | PASS | PASS |
+| AC-063 regression: privacy_setting unaffected | PASS | PASS |
+| home_gym_id removed from all six source sites | PASS | PASS |
+| Drop migration exists | PASS | PASS |
+| HomeGymSelectionScreen.tsx deleted | PASS | PASS |
+| homeGym keys removed from both locale files | PASS | PASS |
+| editProfile / sendHistory / logout keys present in both locales | PASS | PASS |
+| ProfileNavigator exposed as default export (public entry point) | PASS | PASS |
+| Safe area insets on ProfileScreen | PASS | PASS |
+| No hardcoded hex colors in new files | PASS | PASS |
+| All user-facing strings through i18n | FAIL | PASS (fixed) |
+| No service_role key in client code | PASS | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS | PASS |
+| Automated test suite (155 tests, 17 suites) | 143/15 PASS | 155/17 PASS |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**MOD-001 is ready for human QA sign-off.**

@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
-module: n/a
-result: rev7-trivial-ac114-wording
-commit: 39ca035c37c95413b6a2a15d886202863ceabbff
+agent: qa-mod-auth-profile
+mode: regression
+module: mod-auth-profile
+result: success
+commit: 87a9d5fbca04a52f757300b76f5d06bc4181ec4b
 timestamp: 2026-09-24T00:00:00Z
 ```
 
@@ -456,7 +456,7 @@ The column drop touches **migrations, one service function, types, the onboardin
 
 | MOD-ID  | Directory              | Status      | Agent last acted          |
 |---------|------------------------|-------------|---------------------------|
-| MOD-001 | mod-auth-profile       | QA Passed   | qa-mod-auth-profile       |
+| MOD-001 | mod-auth-profile       | QA Pending Human Sign-off | qa-mod-auth-profile       |
 | MOD-002 | mod-gym-directory      | QA Passed   | qa-mod-gym-directory      |
 | MOD-003 | mod-route-catalog      | QA Pending Human Sign-off | qa-mod-route-catalog |
 | MOD-004 | mod-send-logging       | QA Pending Human Sign-off | qa-mod-send-logging |
