@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-auth-profile
+agent: qa-mod-home
 mode: regression
-module: mod-auth-profile
+module: mod-home
 result: success
-commit: cb63eb70b5cdf8982dc6f2d6aefa0d0c386e9e50
+commit: dd86e65b163bc92b397cc1217c19404ac46d39fd
 timestamp: 2026-09-24T00:00:00Z
 ```
 
