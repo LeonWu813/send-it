@@ -27,7 +27,7 @@ CREATE TYPE ascent_style AS ENUM ('flash', 'top', 'attempt', 'project');
 
 CREATE TABLE IF NOT EXISTS public.ascents (
   id          UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id     UUID          NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  user_id     UUID          NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   route_id    UUID          NOT NULL REFERENCES public.routes(id) ON DELETE CASCADE,
   style       ascent_style  NOT NULL,
   attempts    INTEGER       NOT NULL CHECK (attempts >= 1),
@@ -82,3 +82,7 @@ CREATE POLICY "ascents_delete_own"
   ON public.ascents
   FOR DELETE
   USING (auth.uid() = user_id);
+
+-- ── Role privileges ───────────────────────────────────────────────────────────
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.ascents TO authenticated;
