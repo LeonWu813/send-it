@@ -31,7 +31,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
-import RouteColorBadge from '../components/RouteColorBadge';
 import { fetchSavedRouteIds, listRoutes } from '../route-service';
 import type { RouteColor, RouteGrade, RouteListFilters, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
@@ -225,8 +224,6 @@ export default function RouteListScreen({
                 accessibilityLabel={t('routeCatalog.bookmark.saved')}
               />
             ) : null}
-            {/* Color badge kept alongside the formatted name */}
-            <RouteColorBadge color={item.color_tag} size="sm" />
           </View>
         </View>
         <Text style={styles.dateText}>

@@ -38,7 +38,6 @@ import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import AscentList from '../../mod-send-logging/components/AscentList';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
-import RouteColorBadge from '../components/RouteColorBadge';
 import { fetchSavedRouteIds, getPhotoSignedUrl, loadRoute, saveRoute, unsaveRoute } from '../route-service';
 import type { Route, RouteColor } from '../types';
 
@@ -286,12 +285,6 @@ export default function RouteDetailScreen({
         ) : null}
       </View>
 
-      {/* Grade + color badge kept for visual clarity */}
-      <View style={styles.gradeRow}>
-        <Text style={styles.gradeText}>{route.grade}</Text>
-        <RouteColorBadge color={route.color_tag} size="md" />
-      </View>
-
       {/* Gym / section */}
       <Text style={styles.sectionLabel}>
         {t('routes.detail.gym')}
@@ -306,11 +299,7 @@ export default function RouteDetailScreen({
         </>
       ) : null}
 
-      {/* Submitted by + date */}
-      <Text style={styles.sectionLabel}>
-        {t('routes.detail.submittedBy')}
-      </Text>
-      <Text style={styles.infoText}>{route.submitted_by_user_id}</Text>
+      {/* Added on date */}
       <Text style={styles.sectionLabel}>
         {t('routes.detail.addedOn')}
       </Text>
@@ -430,17 +419,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontWeight: theme.fontWeight.bold,
       color: theme.colors.textPrimary,
       flexShrink: 1,
-    },
-    gradeRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.sm,
-      marginBottom: theme.spacing.md,
-    },
-    gradeText: {
-      fontSize: theme.fontSize.display,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
     },
     sectionLabel: {
       fontSize: theme.fontSize.xs,

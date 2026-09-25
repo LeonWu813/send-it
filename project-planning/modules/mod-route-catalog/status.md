@@ -829,6 +829,47 @@ Full test suite confirms: 168 tests, 0 failures. No previously-passing test is n
 
 ---
 
+## Engineering Progress — Human QA UI Fixes (2026-09-25)
+
+**Issues fixed (human QA, coordinator-reported):**
+
+### Fix 1 — RouteDetailScreen: single-line header (grade removed, routeNameRow is the header)
+
+**Root cause**: The screen showed two visual layers — a `gradeRow` (standalone grade text + color badge) beneath the `routeNameRow` (formatted name + achievement icon). Human QA read this as a "two-line header with title and subtitle."
+
+**Fix**: Removed the `gradeRow` block entirely (`route.grade` text node + `RouteColorBadge`). The `routeNameRow` — which already showed `formatRouteName(route)` ("V3 Blue" or "V3 Blue (Cave)") plus the achievement icon — is now the sole title element. The `RouteColorBadge` import was removed from `RouteDetailScreen.tsx` (no longer used). The `gradeRow` and `gradeText` style entries were removed from `makeStyles`.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — removed `gradeRow` JSX block, removed `RouteColorBadge` import, removed unused styles
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — updated all "route loaded" assertions from `getByText('V5')` (exact, matched the now-removed standalone grade text node) to `queryAllByText(/V5/).length > 0` (regex, matches grade inside the composed route name)
+
+### Fix 2 — RouteDetailScreen: remove "由誰新增" (submittedBy) field
+
+**Root cause**: The `routes.detail.submittedBy` label and `route.submitted_by_user_id` value were rendered unconditionally on the detail screen.
+
+**Fix**: Removed both the section label (`routes.detail.submittedBy`) and the `submitted_by_user_id` text element from the JSX. The "Added on" date remains. No test covered this element so no test update was needed.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — removed submittedBy label + value block
+
+### Fix 3 — RouteListScreen: remove color badge from route card
+
+**Root cause**: Each route card displayed `<RouteColorBadge color={item.color_tag} size="sm" />` on the right side of the card header. The color is already encoded in the route name text ("V3 Blue"), making the badge redundant.
+
+**Fix**: Removed `<RouteColorBadge color={item.color_tag} size="sm" />` from `cardHeaderRight`. Removed the `RouteColorBadge` import from `RouteListScreen.tsx`. Achievement icon and saved bookmark indicator remain in `cardHeaderRight`. No test directly asserted the presence of the color badge, so no test update was needed.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — removed `RouteColorBadge` usage and import
+
+### Self-check (2026-09-25)
+
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 314 tests, 27 suites, 0 failures
+- PASS: All pre-existing tests unaffected (console warnings are pre-existing `act(...)` warnings from expo vector icons, not new failures)
+- PASS: No gold-plating — strictly confined to the three reported UI issues
+
+---
+
 ## QA Rev 9 Results
 
 **QA agent**: qa-mod-route-catalog

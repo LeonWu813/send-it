@@ -106,7 +106,10 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('V5')).toBeTruthy();
+      // Grade appears in the composed route name ("V5 Purple (Main Wall)" or "V5 紫色 (Main Wall)")
+      const gradeMatches = screen.queryAllByText(/V5/);
+      expect(gradeMatches.length).toBeGreaterThan(0);
+      // Section label appears as a standalone info text element
       expect(screen.getByText('Main Wall')).toBeTruthy();
     });
   });
@@ -203,8 +206,8 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Route loaded — grade visible
-      expect(screen.getByText('V5')).toBeTruthy();
+      // Route loaded — grade visible inside the composed route name
+      expect(screen.queryAllByText(/V5/).length).toBeGreaterThan(0);
     });
   });
 
@@ -216,7 +219,7 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('V5')).toBeTruthy();
+      expect(screen.queryAllByText(/V5/).length).toBeGreaterThan(0);
     });
 
     expect(mockGetPhotoSignedUrl).toHaveBeenCalledWith(MOCK_ACTIVE_ROUTE.photo_url);
@@ -235,7 +238,7 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('V5')).toBeTruthy();
+      expect(screen.queryAllByText(/V5/).length).toBeGreaterThan(0);
     });
 
     // Photo should not be rendered when signing fails (non-fatal — screen still loads).
@@ -249,7 +252,7 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('V5')).toBeTruthy();
+      expect(screen.queryAllByText(/V5/).length).toBeGreaterThan(0);
     });
 
     const retireButtons = screen.queryAllByRole('button').filter(
@@ -296,7 +299,7 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('V5')).toBeTruthy();
+      expect(screen.queryAllByText(/V5/).length).toBeGreaterThan(0);
     });
 
     const allText = screen.toJSON();
@@ -320,7 +323,7 @@ describe('RouteDetailScreen', () => {
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('V5')).toBeTruthy();
+      expect(screen.queryAllByText(/V5/).length).toBeGreaterThan(0);
     });
 
     const backButtons = screen.queryAllByRole('button').filter(
