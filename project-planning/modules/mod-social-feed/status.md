@@ -4,7 +4,7 @@
 
 **Status**: Complete — migration bug fixed, tsc clean, 277/277 tests pass.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
-**Bug-fix commit**: (see below)
+**Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Date**: 2026-09-24
 
 ### Bug Fix (2026-09-24)
