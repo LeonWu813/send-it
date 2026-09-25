@@ -661,3 +661,113 @@ All acceptance criteria that passed in prior QA runs remain verified against the
 | No gold-plating | PASS | PASS |
 
 **Overall verdict: PASS. Both human-QA fixes verified correct. No regressions. Module ready for human QA re-check.**
+
+---
+
+## QA Signed-URL Regression — 2026-09-24
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-24
+**Workflow**: regression-test (re-verification after private-bucket signed-URL fix — `getPhotoSignedUrl` + `RouteDetailScreen` `photoUri` state)
+**Overall verdict**: PASS — fix verified correct; all previously passing ACs and the full test suite unaffected
+
+---
+
+### Fix Being Re-Verified
+
+**Root cause (reported)**: `uploadRoutePhoto()` stored the output of `getPublicUrl()` in `routes.photo_url`. Because the `route-photos` bucket is private, that `/object/public/` URL is inaccessible (400/403), causing `<Image>` to silently render nothing.
+
+**Fix**: Added `getPhotoSignedUrl(photoUrl: string): Promise<string>` to `route-service.ts`. After `loadRoute()` resolves, `RouteDetailScreen.fetchRoute` calls `getPhotoSignedUrl` and stores the resulting 1-hour signed URL in `photoUri` state. The `<Image>` receives `photoUri` (not `route.photo_url`). Signing failure is caught non-fatally — `photoUri` stays `null`, the image is omitted, and the rest of the screen renders normally.
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false`
+- Result: 168 tests passed, 0 failed across 17 suites
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+- Count vs. previous QA run (159 tests): +9 tests — 4 new `getPhotoSignedUrl` tests in route-service.test.ts, 2 new tests in RouteDetailScreen.test.tsx, and 3 tests from other modules that were added independently. No mod-route-catalog tests removed.
+
+---
+
+### Verification 1 — `getPhotoSignedUrl` function in `route-service.ts`
+
+**Source**: `/Users/tsan/Desktop/MacBookPro/send-it/src/modules/mod-route-catalog/route-service.ts` lines 200–219
+
+- Function exists: PASS. `export async function getPhotoSignedUrl(photoUrl: string): Promise<string>` at line 200.
+- Calls `createSignedUrl`: PASS. `supabase.storage.from('route-photos').createSignedUrl(storagePath, 3600)` at line 212 — bucket name correct, TTL 3600 seconds (1 hour) as specified.
+- Path extraction: PASS. Strips `'/object/public/route-photos/'` prefix from the stored URL using `indexOf` + `slice` — the same prefix that `getPublicUrl` produces.
+- Error handling non-fatal to caller: PASS. Function throws `Error('Failed to load route photo. Please try again.')` on: (a) URL missing the expected prefix; (b) `createSignedUrl` returning an error object; (c) `data.signedUrl` being empty/falsy. The throw is caught by `RouteDetailScreen.fetchRoute`'s inner try/catch (lines 85–87), which sets `photoUri = null` and does not propagate — the screen remains functional.
+
+---
+
+### Verification 2 — `RouteDetailScreen.tsx` `photoUri` state and `<Image>` usage
+
+**Source**: `/Users/tsan/Desktop/MacBookPro/send-it/src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
+
+- `photoUri` state declared: PASS. `const [photoUri, setPhotoUri] = useState<string | null>(null)` at line 57.
+- `getPhotoSignedUrl` called after route load: PASS. Inside `fetchRoute` (line 68), after `loadRoute` resolves with a non-null route, lines 81–91 check `data.photo_url` and call `getPhotoSignedUrl(data.photo_url)`, storing the result in `photoUri`. When `photo_url` is falsy, `photoUri` is set to `null` directly (line 90).
+- `<Image>` uses `photoUri` not `route.photo_url`: PASS. Line 175: `<Image source={{ uri: photoUri }} .../>`. `route.photo_url` is not referenced in the `<Image>` source prop anywhere in the file.
+- Signing failure leaves screen functional: PASS. Lines 85–87: `catch { setPhotoUri(null); }` — signing failure is silently swallowed, `photoUri` is null, the `{photoUri ? <Image .../> : null}` guard at line 174 prevents any `<Image>` mount, and execution continues normally to render grade, color, gym name, ascent list, etc.
+
+---
+
+### Verification 3 — New tests
+
+**route-service.test.ts — `getPhotoSignedUrl` describe block**
+
+Source: `/Users/tsan/Desktop/MacBookPro/send-it/src/modules/mod-route-catalog/__tests__/route-service.test.ts` lines 404–457
+
+4 tests verified:
+1. "extracts the storage path and returns a signed URL" (line 413): calls `mockStorageFrom` with `'route-photos'`, calls `createSignedUrl` with `'user-001/1234567890-abc.jpg'` and `3600`, returns the signed URL. PASS.
+2. "throws a user-facing error when the URL does not contain the expected prefix" (line 429): `getPhotoSignedUrl('https://example.com/some/other/path.jpg')` rejects with `'Failed to load route photo. Please try again.'`. PASS.
+3. "throws a user-facing error when createSignedUrl returns an error" (line 435): `signedUrlResult` set to `{ data: null, error: { message: 'signing failed' } }` → rejects with the same user-facing message. PASS.
+4. "throws a user-facing error when signedUrl is missing from response" (line 446): `signedUrlResult` set to `{ data: { signedUrl: '' }, error: null }` → rejects with the same user-facing message (empty string is falsy, caught by `!data?.signedUrl`). PASS.
+
+**RouteDetailScreen.test.tsx — 2 new tests**
+
+Source: `/Users/tsan/Desktop/MacBookPro/send-it/src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` lines 95–128
+
+1. "calls getPhotoSignedUrl with photo_url and renders the signed URL (private bucket fix)" (line 95): asserts `mockGetPhotoSignedUrl` called with `MOCK_ACTIVE_ROUTE.photo_url`; if any `<Image>` is present, its `source.uri` must equal the signed URL (not the raw photo_url). PASS.
+2. "does not render the photo when getPhotoSignedUrl fails" (line 115): `mockGetPhotoSignedUrl` rejects; asserts `screen.queryAllByRole('image')` returns `[]` — no image rendered when signing fails, screen remains usable (grade "V5" still visible). PASS.
+
+---
+
+### Verification 4 — Regression: AC-020 (submit), AC-021 (photo + required), AC-043 (pre-fill), AC-040/041/042 (list/filter/detail)
+
+None of the files modified by this fix touch the submit flow, the list screen, or the navigator. Confirmed by inspection:
+
+- `RouteSubmitScreen.tsx` — not modified by this fix. AC-020 single-page submit, AC-021 photo-required button/validation, AC-043 pre-fill props all unchanged. PASS.
+- `RouteListScreen.tsx` — not modified. AC-040 grade+color filters (no status filter), AC-041 active-only, AC-042 tap-to-detail all unchanged. PASS.
+- `RouteNavigator.tsx` — not modified. Navigation state machine unchanged. PASS.
+- `route-service.ts` additions are additive only (`getPhotoSignedUrl` is a new export; no existing function was changed). All prior service function tests continue to pass. PASS.
+- `RouteDetailScreen.tsx` changes are confined to: (a) import of `getPhotoSignedUrl`; (b) `photoUri` state; (c) the `fetchRoute` inner try/catch; (d) `<Image source={{ uri: photoUri }}>` replacing `<Image source={{ uri: route.photo_url }}>`. No other screen content changed. AC-024b (no retire button), AC-025 (pending message path in submit screen — unrelated), AC-026/027/028/029 (RLS/migration — unrelated) all unaffected. PASS.
+
+Full test suite confirms: 168 tests, 0 failures. No previously-passing test is now failing.
+
+---
+
+### Summary
+
+| Item | Prior result | This regression result |
+|------|--------------|------------------------|
+| `getPhotoSignedUrl` function exists | N/A (new function) | PASS |
+| `getPhotoSignedUrl` calls `createSignedUrl(path, 3600)` | N/A | PASS |
+| `getPhotoSignedUrl` errors non-fatal to screen | N/A | PASS |
+| `RouteDetailScreen` `photoUri` state populated after load | N/A | PASS |
+| `<Image>` uses `photoUri` not `route.photo_url` | N/A | PASS |
+| Signing failure leaves screen functional | N/A | PASS |
+| route-service.test.ts `getPhotoSignedUrl` describe (4 tests) | N/A | PASS |
+| RouteDetailScreen.test.tsx signed-URL tests (2 tests) | N/A | PASS |
+| npm test (168 tests, 17 suites) | PASS (159) | PASS (168) |
+| npx tsc --noEmit | PASS | PASS |
+| AC-020 single-page submit | PASS | PASS |
+| AC-021 photo required (submit + detail) | PASS | PASS |
+| AC-043 pre-fill from filter state | PASS | PASS |
+| AC-040 grade + color filters, no status filter | PASS | PASS |
+| AC-041 active routes only, no status tag | PASS | PASS |
+| AC-042 tap route → detail | PASS | PASS |
+| All other previously passing ACs | PASS | PASS |
+
+**Overall verdict: PASS. Signed-URL fix verified correct. No regressions. Module ready for human QA re-check.**
