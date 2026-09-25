@@ -50,4 +50,134 @@ Video playback: `expo-av` (15.x, installed). Phase 1 video selection: `expo-imag
 
 ## QA Results
 
-<!-- Filled by qa-mod-beta-video agent -->
+**QA agent**: qa-mod-beta-video
+**Mode**: functional-test (first-time verification)
+**Date**: 2026-09-24
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 225 tests, 21 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+
+---
+
+### AC-by-AC Verification
+
+**AC-030** — PASS
+Rejection of videos longer than 60 seconds before upload begins. Verified in `BetaVideoUploader.validateDuration()`: `durationSec > MAX_DURATION_SECONDS` (where `MAX_DURATION_SECONDS = 60`). Upload never starts on rejection — `uploadBetaVideo` is not called. Boundary: exactly 60 seconds is accepted (correct per spec "≤ 60 sec"). Test covers 90-second rejection case and confirms `uploadBetaVideo` not called.
+
+**AC-031** — PARTIAL PASS (spec issue flagged separately)
+Client-side handling uses `expo-image-picker` with `videoMaxDuration: 60`. The thumbnail upload is implemented in `beta-video-service.uploadBetaVideo`. However, the thumbnail is not generated as an extracted frame — `BetaVideoUploader.tsx` line 157 sets `localThumbnailUri = asset.uri` (the video URI itself), so the video file is uploaded twice: once as the video and once as the thumbnail placeholder. The spec says "generate a thumbnail on the client" and implementation notes cite "a frame extracted at 1 second." The engineer documents this as a Phase 1 simplification with an upgrade path. See SPEC ISSUE below.
+
+**AC-032** — PASS
+Every `BetaVideo` row includes `route_id`. `BetaVideoSection` receives `routeId` prop and passes it to `BetaVideoUploader` which passes it to `uploadBetaVideo`. The DB migration has `route_id UUID NOT NULL REFERENCES public.routes(id) ON DELETE CASCADE`. The insert payload always includes `route_id: input.route_id`. The table has no mechanism for a video to attach to more than one route — enforced by the FK structure.
+
+**AC-033** — PASS
+`BetaVideoPlayer.tsx` renders inline via expo-av `Video` component with `useNativeControls` and `ResizeMode.CONTAIN`. No external link or browser is opened. Pressing the thumbnail play button transitions state from thumbnail overlay to the video player (tested in `BetaVideoPlayer.test.tsx` — play button disappears after press, confirming switch). The component is also designed to be reusable by MOD-006 for AC-034.
+
+**AC-034** — PASS (component exposure only; MOD-006 embedding is out of scope for this module)
+`BetaVideoPlayer` is a self-contained component with `videoUrl`, `thumbnailUrl`, `durationSeconds`, `caption` props. The spec's Integration Points section explicitly places the feed embedding responsibility on MOD-006 ("engineer-mod-social-feed embeds it in the feed item renderer"). MOD-005's obligation is to expose the component — which it does. MOD-006 is not yet built; this is a known dependency ordering gap, not a MOD-005 defect.
+
+**AC-035** — FAIL (implementation bug — route to Engineer)
+`FAIL AC-035: Input=[video with .mov extension and no mimeType], Actual=[accepted, no error surfaced], Expected=[rejected with clear error per spec — MP4 container only]`
+
+The spec states: "The system shall reject, on ingest, any beta video upload whose muxed output is not H.264 (baseline profile) video + AAC audio in an **MP4 container**."
+
+The implementation in `BetaVideoUploader.validateVideoFormat()` (lines 74–91) accepts `.mov` files as a secondary path when `mimeType` is absent:
+```
+if (!uri.endsWith('.mp4') && !uri.endsWith('.mov')) {
+  if (!asset.mimeType) {
+    return t('betaVideo.errors.invalidFormat');
+  }
+}
+```
+A video with a `.mov` URI and no `mimeType` passes validation. Additionally, the user-facing error message in both locales explicitly says "Only MP4 or MOV videos are supported" — which directly contradicts the spec requirement of MP4 container only.
+
+The spec's production.md Video Pipeline Convention also states: "All client-side video compression outputs H.264 (baseline profile) + AAC audio in an MP4 container. Any upload whose muxed output does not conform to H.264/AAC/MP4 must be rejected on ingest with a clear error surfaced to the user (AC-035)." `.mov` is not an MP4 container.
+
+**Routing**: implementation bug → Engineer (fix `validateVideoFormat` to reject `.mov` when mimeType is absent, and update the error message in both locale files to say "MP4 only").
+
+**AC-036** — PASS
+`BetaVideoUploader` renders a `Modal` with `visible={isUploading}` during upload. The Modal is transparent/fade animated, has an `ActivityIndicator`, a title ("Uploading…"), and percent progress text. `onRequestClose` is intentionally a no-op — the overlay is non-dismissable. The disabled state on the "Add Beta Video" button (`disabled={isUploading}`) prevents double-submission. `setIsUploading(false)` is in the `finally` block so it always clears on completion or failure.
+
+**AC-037** — PASS
+`BetaVideoSection` is the public entry-point component imported in `RouteDetailScreen.tsx` line 37. It receives `routeId={route.id}` (pre-attached at render time). `BetaVideoUploader` renders the "Add Beta Video" button as an always-visible `Pressable`. The button is visible without leaving the route detail screen. `session.user.id` is threaded from `RouteDetailScreen` through `BetaVideoSection` to `BetaVideoUploader` as `userId`. Tested in both `BetaVideoUploader.test.tsx` and `BetaVideoSection.test.tsx`.
+
+---
+
+### Integration Checks
+
+**Cross-module import rule** — PASS
+`RouteDetailScreen.tsx` imports only `BetaVideoSection` from `mod-beta-video`. No internal `screens/` or other `components/` are imported from MOD-005 outside its own directory.
+
+**Supabase client singleton** — PASS
+`beta-video-service.ts` imports from `../../lib/supabase` and never calls `createClient()` directly. No `service_role` key usage in client code.
+
+**i18n — en locale** — PASS
+All `betaVideo.*` keys present: `sectionTitle`, `addVideo`, `noVideos`, `uploading`, `uploadProgress`, `player.play`, `player.thumbnailAlt`, `errors.loadFailed`, `errors.uploadFailed`, `errors.tooLong`, `errors.invalidFormat`, `errors.permissionDenied`. No inline string literals in component JSX.
+
+**i18n — zh-TW locale** — PASS
+All `betaVideo.*` keys present with zh-TW translations. Every EN key has a zh-TW counterpart. No missing keys detected.
+
+**No hardcoded hex colors** — PASS
+All styling uses `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.fontWeight.*`, `theme.borderRadius.*` tokens. No hardcoded hex values in any MOD-005 component.
+
+**Safe area insets** — PASS (not applicable to sub-components)
+MOD-005 components (`BetaVideoPlayer`, `BetaVideoUploader`, `BetaVideoSection`) are sub-components mounted inside `RouteDetailScreen`, not top-level screens. The safe-area inset convention applies to screens (`useSafeAreaInsets` + `makeStyles(theme, topInset)`). `RouteDetailScreen.tsx` correctly implements this: `useSafeAreaInsets()` at line 78, `makeStyles(theme, insets.top)` at line 79, `paddingTop: topInset + theme.spacing.md` in `contentContainerStyle`.
+
+**No HTML template comments in spec** — PASS
+No `<!-- -->` comments found in `project-planning/modules/mod-beta-video/spec.md`.
+
+**Gold-plating check** — PASS
+Implementation is confined to ACs 030–037. No features implemented beyond spec scope.
+
+---
+
+### Regression Check — RouteDetailScreen ACs
+
+**AC-042** — PASS (unaffected)
+`RouteDetailScreen` still accepts `routeId` prop and renders route detail. Navigation path from RouteListScreen unchanged. BetaVideoSection addition is additive only.
+
+**AC-044** — NOTE (pre-existing issue, not introduced by MOD-005)
+`RouteDetailScreen.tsx` lines 310–313 render `submitted_by_user_id` with label "SUBMITTED BY". AC-044 (added in PRD Rev 7 via PM update) says this field should not be displayed. This was not introduced by MOD-005 and was present before this module's changes. This is a pre-existing MOD-003 issue — out of scope for this QA run.
+
+**AC-045** — PASS (unaffected)
+`formatRouteName` helper and route name display in `RouteDetailScreen` unchanged. Tests pass.
+
+**AC-046** — PASS (unaffected)
+Bookmark toggle, optimistic update, `fetchSavedRouteIds`, `saveRoute`, `unsaveRoute` all present and tested. BetaVideoSection is additive below the existing content.
+
+**AC-047** — PASS (unaffected)
+`RouteListScreen` saved indicator logic unchanged. No MOD-005 changes touch `RouteListScreen`.
+
+---
+
+### Spec Issues (escalate to PM, not Engineer)
+
+**SPEC ISSUE — AC-031 thumbnail generation scope**
+The spec requires "generate a thumbnail on the client" and notes "e.g., a frame extracted at 1 second." The implementation uploads the video URI as the thumbnail placeholder (Phase 1 simplification — `localThumbnailUri = asset.uri`). This means the thumbnail stored in `BetaVideo.thumbnail_url` is a full video file, not an image frame. The spec is silent on whether this Phase 1 simplification is acceptable. The engineer documents an upgrade path to `ffmpeg-kit-react-native` for Phase 2. The `upload` call in `beta-video-service.ts` correctly uses `contentType: 'image/jpeg'` for the thumbnail slot, but the actual data is a video file.
+
+If the spec intends "a JPEG thumbnail image frame" as required behavior in Phase 1 (not Phase 2), this is an implementation bug for Engineer. If the spec accepts the Phase 1 simplification, this needs a spec update to explicitly note the Phase 1 scope reduction.
+
+Recommendation: escalate to PM to clarify whether thumbnail frame extraction is required in Phase 1 or acceptable to defer to Phase 2.
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md**
+The spec says: "The final library choice must be confirmed during MOD-005 engineering and documented in this spec before coding begins." The confirmed library choice (`expo-image-picker` for Phase 1 selection, `expo-av` for playback) is documented in `status.md` Engineering Progress but not in `spec.md` itself. This is a Doc-Sync task to update the spec with the confirmed library choice.
+
+---
+
+### Verdict
+
+**BUGS FOUND** — 1 implementation bug (AC-035), 2 spec issues (AC-031 thumbnail scope, spec library-choice doc gap).
+
+The AC-035 format validation bug is the only clear implementation defect: `.mov` files are accepted when the spec requires MP4 container only, and the error message contradicts the spec. This must be fixed before human QA.
+
+The AC-031 thumbnail issue requires PM clarification on Phase 1 scope before routing to Engineer.
+
+The library-choice doc gap is a Doc-Sync task.
