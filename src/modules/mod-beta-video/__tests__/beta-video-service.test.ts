@@ -190,8 +190,8 @@ describe('uploadBetaVideo', () => {
     };
   }
 
-  it('AC-032: uploads video + thumbnail then inserts row with route_id', async () => {
-    // fetch mock: returns a blob for both video and thumbnail URIs
+  it('AC-032: uploads video then inserts row with route_id (Phase 1 — no separate thumbnail upload)', async () => {
+    // Phase 1: only the video is uploaded; thumbnail_url is set to the video path.
     mockFetch.mockResolvedValue({
       ok: true,
       blob: async () => new Blob(['video-data'], { type: 'video/mp4' }),
@@ -208,7 +208,7 @@ describe('uploadBetaVideo', () => {
       {
         route_id: 'route-001',
         localVideoUri: 'file:///path/to/video.mp4',
-        localThumbnailUri: 'file:///path/to/thumb.jpg',
+        localThumbnailUri: 'file:///path/to/video.mp4', // Phase 1: same as video URI
         duration_seconds: 30,
       },
       'user-001',
@@ -220,20 +220,24 @@ describe('uploadBetaVideo', () => {
     // AC-036: progress was reported
     expect(progressCalls.length).toBeGreaterThan(0);
     expect(progressCalls[progressCalls.length - 1].percent).toBe(100);
+    // Phase 1: exactly one Storage upload call (video only — no separate thumbnail)
+    expect(storageBucket.upload).toHaveBeenCalledTimes(1);
+    expect(storageBucket.upload).toHaveBeenCalledWith(
+      expect.stringMatching(/\.mp4$/),
+      expect.any(Blob),
+      expect.objectContaining({ contentType: 'video/mp4' }),
+    );
   });
 
-  it('throws and cleans up thumbnail when video upload fails', async () => {
+  it('throws (no cleanup needed) when video upload fails', async () => {
+    // Phase 1: only one upload — if it fails, nothing was stored, no cleanup needed.
     mockFetch.mockResolvedValue({
       ok: true,
       blob: async () => new Blob(['data'], { type: 'video/mp4' }),
     } as Response);
 
     const storageBucket = {
-      upload: jest
-        .fn()
-        // First call (thumbnail) succeeds, second call (video) fails
-        .mockResolvedValueOnce({ data: {}, error: null })
-        .mockResolvedValueOnce({ data: null, error: new Error('upload failed') }),
+      upload: jest.fn().mockResolvedValue({ data: null, error: new Error('upload failed') }),
       remove: jest.fn().mockResolvedValue({ data: null, error: null }),
     };
     (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
@@ -243,18 +247,18 @@ describe('uploadBetaVideo', () => {
         {
           route_id: 'route-001',
           localVideoUri: 'file:///path/to/video.mp4',
-          localThumbnailUri: 'file:///path/to/thumb.jpg',
+          localThumbnailUri: 'file:///path/to/video.mp4',
           duration_seconds: 30,
         },
         'user-001',
       ),
     ).rejects.toThrow('Failed to upload video');
 
-    // Cleanup: thumbnail should have been removed
-    expect(storageBucket.remove).toHaveBeenCalled();
+    // No artifact was stored — remove should NOT have been called
+    expect(storageBucket.remove).not.toHaveBeenCalled();
   });
 
-  it('throws and cleans up both artifacts when row insert fails', async () => {
+  it('throws and cleans up video artifact when row insert fails', async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       blob: async () => new Blob(['data'], { type: 'video/mp4' }),
@@ -274,14 +278,14 @@ describe('uploadBetaVideo', () => {
         {
           route_id: 'route-001',
           localVideoUri: 'file:///path/to/video.mp4',
-          localThumbnailUri: 'file:///path/to/thumb.jpg',
+          localThumbnailUri: 'file:///path/to/video.mp4',
           duration_seconds: 30,
         },
         'user-001',
       ),
     ).rejects.toThrow('Failed to save beta video');
 
-    // Cleanup: both artifacts should have been removed
+    // Cleanup: the video artifact should have been removed
     expect(storageBucket.remove).toHaveBeenCalled();
   });
 });

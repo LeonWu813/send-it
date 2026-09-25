@@ -2,7 +2,25 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-24 (AC-035 .mov rejection)
+**Status**: Bug fix applied — 2026-09-24 (Phase 1 thumbnail content-type mismatch)
+
+### Bug Fix — Phase 1 thumbnail content-type mismatch (2026-09-24)
+
+**Commit**: (see git log)
+
+**Root cause:** `uploadBetaVideo` in `beta-video-service.ts` was uploading `localThumbnailUri` (which `BetaVideoUploader` sets to `asset.uri` — the same video URI) to Supabase Storage with `contentType: 'image/jpeg'`. This caused a content-type mismatch because the data was a video file, not a JPEG.
+
+**Fix:**
+- Removed the thumbnail Storage upload phase entirely (was `contentType: 'image/jpeg'`, data was video bytes).
+- Per PM ruling (PRD Revision 10, AC-031 Phase 1 clause): `thumbnail_url` is set to the video's storage path (`videoPath`). This is a valid retrievable URL — callers signing it via `getThumbnailSignedUrl` receive a signed URL for the same video file, which AVPlayer can display as a still.
+- Cleanup logic updated: on row insert failure, only `videoPath` is removed (no separate thumbnail path exists in Phase 1).
+- Progress phases updated: removed thumbnail phase (10%/30%); video phase now starts at 10%.
+- Tests updated in `beta-video-service.test.ts`:
+  - Happy-path test asserts exactly one `storage.upload` call with `contentType: 'video/mp4'`.
+  - Video-upload-failure test asserts `storage.remove` is NOT called (nothing was stored yet).
+  - Row-insert-failure test asserts `storage.remove` IS called for the video artifact.
+- `npx tsc --noEmit`: PASS (0 errors)
+- `npm test -- --watchAll=false`: PASS (277 tests, 24 suites, 0 failures)
 
 ### Bug Fix — AC-035 (2026-09-24)
 

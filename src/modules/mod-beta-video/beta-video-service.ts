@@ -65,27 +65,13 @@ export async function uploadBetaVideo(
 ): Promise<BetaVideo> {
   const timestamp = Date.now();
   const videoPath = `${userId}/${input.route_id}/${timestamp}.mp4`;
-  const thumbnailPath = `${userId}/${input.route_id}/${timestamp}_thumb.jpg`;
 
-  // ── Phase 1: Upload thumbnail ─────────────────────────────────────────────
-  onProgress?.({ percent: 10, phase: 'thumbnail' });
-
-  const thumbnailBlob = await uriToBlob(input.localThumbnailUri);
-  const { error: thumbError } = await supabase.storage
-    .from(BETA_VIDEO_BUCKET)
-    .upload(thumbnailPath, thumbnailBlob, {
-      contentType: 'image/jpeg',
-      upsert: false,
-    });
-
-  if (thumbError) {
-    throw new Error('Failed to upload thumbnail. Please try again.');
-  }
-
-  onProgress?.({ percent: 30, phase: 'thumbnail' });
-
-  // ── Phase 2: Upload video ─────────────────────────────────────────────────
-  onProgress?.({ percent: 40, phase: 'video' });
+  // ── Phase 1: Upload video ─────────────────────────────────────────────────
+  // Phase 1 PM ruling (AC-031): true JPEG thumbnail frame extraction is deferred
+  // to Phase 2. The video URI itself is the placeholder thumbnail. No separate
+  // thumbnail Storage upload is performed — thumbnail_url is set to the video's
+  // storage path so it remains a valid retrievable URL.
+  onProgress?.({ percent: 10, phase: 'video' });
 
   const videoBlob = await uriToBlob(input.localVideoUri);
   const { error: videoError } = await supabase.storage
@@ -96,14 +82,12 @@ export async function uploadBetaVideo(
     });
 
   if (videoError) {
-    // Clean up the thumbnail we already uploaded
-    await supabase.storage.from(BETA_VIDEO_BUCKET).remove([thumbnailPath]);
     throw new Error('Failed to upload video. Please try again.');
   }
 
   onProgress?.({ percent: 80, phase: 'video' });
 
-  // ── Phase 3: Insert BetaVideo row ─────────────────────────────────────────
+  // ── Phase 2: Insert BetaVideo row ─────────────────────────────────────────
   onProgress?.({ percent: 90, phase: 'saving' });
 
   const { data, error: insertError } = await supabase
@@ -112,7 +96,9 @@ export async function uploadBetaVideo(
       route_id: input.route_id,
       user_id: userId,
       video_url: videoPath,
-      thumbnail_url: thumbnailPath,
+      // Phase 1: thumbnail_url stores the video storage path as a placeholder.
+      // Phase 2 will replace this with a real JPEG frame URL (ffmpeg-kit-react-native).
+      thumbnail_url: videoPath,
       duration_seconds: input.duration_seconds,
       caption: input.caption ?? null,
     })
@@ -120,8 +106,8 @@ export async function uploadBetaVideo(
     .single();
 
   if (insertError) {
-    // Clean up both artifacts
-    await supabase.storage.from(BETA_VIDEO_BUCKET).remove([videoPath, thumbnailPath]);
+    // Clean up the video artifact
+    await supabase.storage.from(BETA_VIDEO_BUCKET).remove([videoPath]);
     throw new Error('Failed to save beta video. Please try again.');
   }
 
