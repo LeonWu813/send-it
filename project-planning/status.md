@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-social-feed
-mode: bugfix
-module: mod-social-feed
+agent: qa-mod-beta-video
+mode: regression
+module: mod-beta-video
 result: success
-commit: 3cfe732e62df4ba15f6f2d0120746f1febee04b6
-timestamp: 2026-09-24T19:00:00Z
+commit: 858ad141416c3734683c2630a7582ebd7cdb76ce
+timestamp: 2026-09-24T20:00:00Z
 ```
 
 ## PM Updates
@@ -608,8 +608,8 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-002 | mod-gym-directory      | QA Passed   | qa-mod-gym-directory      |
 | MOD-003 | mod-route-catalog      | QA Pending Human Sign-off | qa-mod-route-catalog |
 | MOD-004 | mod-send-logging       | QA Pending Human Sign-off | qa-mod-send-logging |
-| MOD-005 | mod-beta-video         | Bugs Found  | qa-mod-beta-video         |
-| MOD-006 | mod-social-feed        | Not started | —                         |
+| MOD-005 | mod-beta-video         | QA Pending Human Sign-off | qa-mod-beta-video         |
+| MOD-006 | mod-social-feed        | QA Pending Human Sign-off | qa-mod-social-feed        |
 | MOD-007 | mod-notifications      | Not started | —                         |
 | MOD-008 | mod-profile-history    | Not started | —                         |
 | MOD-009 | mod-moderation         | Not started | —                         |

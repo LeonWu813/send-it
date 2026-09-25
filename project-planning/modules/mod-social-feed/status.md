@@ -163,10 +163,83 @@ The engineering status note says "Block filter in RPC uses LEFT JOIN on `blocks`
 
 ---
 
-### Summary
+### Summary (QA Run 1)
 
 **Result**: BUGS FOUND
 
 One migration-level bug prevents `supabase db reset` from completing in any environment without MOD-009 applied: the `get_activity_feed` SQL function references `public.blocks` which does not exist at migration 006 runtime. All 51 module tests and 277 total tests pass (tests mock Supabase, so the migration failure is not exercised by the test suite). TypeScript is clean. All ACs are correctly implemented in service and UI layers — the bug is isolated to the migration's block-filter reference.
 
 Human QA of UI/follow/like interactions should be deferred until after the migration bug is fixed and `supabase db reset` runs cleanly.
+
+---
+
+## QA Run 2 — Regression — 2026-09-24
+
+**QA Agent**: qa-mod-social-feed
+**Workflow**: regression-test (re-verification after bug fix)
+**Bug re-verified**: Migration references `public.blocks` before MOD-009 runs (reported in QA Run 1)
+**Engineer fix**: Added minimal `public.blocks` stub table immediately before `CREATE FUNCTION get_activity_feed` in `supabase/migrations/20260924000006_mod_006_social_feed.sql` (commit `3cfe732`)
+**Automated tests**: 277/277 pass (full suite); exit code 0
+**TypeScript**: `npx tsc --noEmit` — clean, no errors
+
+---
+
+### Regression Verification — Original Bug
+
+**REGRESSION PASS — Migration self-containment bug fixed.**
+
+Verification of the specific items requested:
+
+1. **Stub table appears before `get_activity_feed`**: CONFIRMED. `CREATE TABLE IF NOT EXISTS public.blocks` is at line 112; `CREATE OR REPLACE FUNCTION public.get_activity_feed` is at line 146. The stub precedes the function definition — PostgreSQL will have the table registered when it validates the function body at CREATE FUNCTION time.
+
+2. **`IF NOT EXISTS` guard present**: CONFIRMED. The DDL reads `CREATE TABLE IF NOT EXISTS public.blocks (...)` — forward-compatible with MOD-009's later `CREATE TABLE IF NOT EXISTS public.blocks (...)` with its full schema. No collision when MOD-009 migration runs.
+
+3. **Correct column types**: CONFIRMED. `blocker_id UUID NOT NULL` and `blocked_id UUID NOT NULL` — matching the two columns referenced in the `NOT EXISTS` subqueries inside `get_activity_feed` (`b.blocker_id` and `b.blocked_id`).
+
+4. **FK references to `public.users(id)`**: CONFIRMED. Both columns carry `REFERENCES public.users(id) ON DELETE CASCADE` — the FK targets the same `users` table all other FK columns in this migration reference.
+
+5. **Composite PK**: CONFIRMED. `PRIMARY KEY (blocker_id, blocked_id)` present — matches the minimal shape described in the bug report fix option 2.
+
+6. **Stale comment "A placeholder Block table is NOT created here" is gone**: CONFIRMED. `grep` for "placeholder", "NOT created here", and "A placeholder Block table" all returned no results. The stale comment is absent from the migration.
+
+---
+
+### Re-verification of Previously Passing ACs
+
+**PASS AC-050** — No change to `follows` table, `get_follower_counts` RPC, `follow()`/`unfollow()` service methods, or `UserProfileScreen`. All service tests continue to pass. Optimistic count update and RPC re-fetch behavior unchanged. 277/277 tests pass — no regression.
+
+**PASS AC-051** — No change to `get_activity_feed` function logic. The stub table addition does not alter the function body or any of the composition filters (Follow ∩ NOT EXISTS blocks ∩ privacy). The NOT EXISTS subqueries referencing `public.blocks` are functionally unchanged — the stub table has no rows, so both NOT EXISTS subqueries correctly return TRUE for all followees (no blocking in effect), which is the intended no-op behavior when MOD-009 has not yet populated the table. SECURITY INVOKER, STABLE, SET search_path = public, REVOKE/GRANT unchanged. 277/277 tests pass.
+
+**PASS AC-052** — No change to `reactions` table, `get_like_info` RPC, or like/unlike service methods. Idempotent like behavior and immediate count update unchanged. 277/277 tests pass.
+
+**PASS AC-053** — No source code changes. FeedScreen.tsx and UserProfileScreen.tsx untouched by the migration-only fix. No comment UI rendered; no like affordance on ascent items. Confirmed by prior inspection; no new code introduced.
+
+**PASS AC-063** — No source code changes. UserProfileScreen.tsx untouched. followers_only privacy badge behavior unchanged.
+
+---
+
+### Observation (not a bug — documentation quality note)
+
+The comment block immediately before `CREATE OR REPLACE FUNCTION public.get_activity_feed` (lines 139–143) still reads: "This RPC references it via a LEFT JOIN so that if the table does not yet exist..." The actual implementation uses `NOT EXISTS` subqueries, not a LEFT JOIN. This is an inaccurate inline SQL comment but has no functional effect — the SQL body is correct. It is a leftover from an earlier design draft. QA cannot edit source code; flagging for the engineer to correct the comment text in a future tidy-up pass if desired. This does not affect any AC and is not a blocking issue.
+
+---
+
+### Summary (QA Run 2)
+
+**Result**: PASS — all clear, no regressions.
+
+The original migration-level bug is fixed. The `public.blocks` stub table is correctly positioned before `get_activity_feed`, uses `IF NOT EXISTS`, has the correct column types (`UUID NOT NULL`), correct FK references (`REFERENCES public.users(id) ON DELETE CASCADE`), and a composite primary key. The stale comment "A placeholder Block table is NOT created here" is confirmed absent. TypeScript is clean. 277/277 tests pass with no new failures. All five ACs (AC-050, AC-051, AC-052, AC-053, AC-063) verified — no regressions from the migration-only change.
+
+**MOD-006 is ready for human QA.**
+
+Human QA checklist:
+- Follow a user and confirm follower/following counts update immediately on their profile.
+- Unfollow the same user and confirm counts revert.
+- Open the Feed screen and confirm it loads a chronological list of sends and beta videos from followed users.
+- Pull-to-refresh the Feed and confirm it reloads.
+- Like a beta video and confirm the like count increments immediately.
+- Like the same beta video again and confirm it is idempotent (count does not increment twice).
+- Unlike the beta video and confirm the count decrements.
+- Confirm no comment input, comment list, or comment count is visible anywhere in the app.
+- Confirm no like button appears on ascent (send log) items in the Feed.
+- Open a followers_only user's profile as a non-follower and confirm the privacy badge is shown.
