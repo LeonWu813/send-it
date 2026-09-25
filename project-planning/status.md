@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
-mode: bugfix
+agent: qa-mod-home
+mode: regression
 module: mod-home
 result: success
-commit: 78e3440155cf59d087db0066b0f3b70a7ec3bf79
+commit: 6047f24ca281173d1a0a0605fec7cf85ca001247
 timestamp: 2026-09-24T00:00:00Z
 ```
 

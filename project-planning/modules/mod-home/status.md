@@ -1006,3 +1006,135 @@ The AC-123 behavioral requirement is satisfied. All other ACs pass. The blocking
 Route to: Engineer (`engineer-mod-home`). Fix: `mod-social-feed` must expose `UserProfileScreen` at a public path outside `screens/` (e.g. a re-export at `src/modules/mod-social-feed/UserProfileScreen.tsx`), and `AppShell.tsx` must update the import path accordingly.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip.
+
+---
+
+### QA Run 7 — Regression — 2026-09-24
+
+**Workflow**: regression-test (re-verification after Engineer fixed cross-module import violation flagged in QA Run 5 and QA Run 6)
+
+**Bug being re-verified**: Cross-module import rule FAIL from QA Run 5 and QA Run 6 — `AppShell.tsx` imported `UserProfileScreen` directly from `'../mod-social-feed/screens/UserProfileScreen'`, violating the `production.md` convention that prohibits importing from another module's `screens/` subdirectory.
+
+**Engineer fixes applied (as described in invocation):**
+- `src/modules/mod-social-feed/UserProfileNavigator.tsx` created — single re-export: `export { default } from './screens/UserProfileScreen'`. Exposes `UserProfileScreen` as a public entry-point component at the `mod-social-feed` module root, outside `screens/`.
+- `src/modules/mod-home/AppShell.tsx` — import path on line 42 changed from `'../mod-social-feed/screens/UserProfileScreen'` to `'../mod-social-feed/UserProfileNavigator'`. Comment block on lines 28–32 updated to document the public entry-point path.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npm test -- --watchAll=false`: PASS — 314 tests, 27 suites, 0 failures
+- Test count matches QA Run 6 (314 / 27). No tests newly failing. No tests newly passing (the fix is import-path only; no new test cases added).
+
+---
+
+#### REGRESSION PASS — Cross-module import rule: fix verified
+
+**Fix 1 — UserProfileNavigator.tsx created at mod-social-feed root:**
+`src/modules/mod-social-feed/UserProfileNavigator.tsx` exists. Content: `export { default } from './screens/UserProfileScreen';` — a single re-export of the default from the `screens/` subdirectory. This exposes `UserProfileScreen` at the `mod-social-feed` module root as a public entry-point component, outside `screens/`. PASS.
+
+**Fix 2 — AppShell.tsx import path updated:**
+`AppShell.tsx` line 42: `import UserProfileScreen from '../mod-social-feed/UserProfileNavigator';`. The import no longer reaches into `mod-social-feed/screens/`. PASS.
+
+**production.md compliance:**
+The convention (line 196) allows importing "public service functions (data layer) and navigator entry-point components (mounting)" — never `screens/` or `components/` subdirectories directly. `UserProfileNavigator.tsx` is at the module root (not inside `screens/`) and serves as the public mounting point for the `UserProfileScreen` component. The import in `AppShell.tsx` now points to this module-root file. PASS — cross-module import rule satisfied.
+
+**Comment block in AppShell.tsx updated:**
+Lines 28–32 of `AppShell.tsx` now read: "UserProfileScreen from mod-social-feed/UserProfileNavigator (public module-root entry-point component; does not reach into screens/)." Stale reference to `screens/` removed. PASS.
+
+Input: `AppShell.tsx` importing `UserProfileScreen` cross-module.
+Actual (after fix): import path is `'../mod-social-feed/UserProfileNavigator'` — a module-root file, not a `screens/` subdirectory path.
+Expected per production.md: cross-module imports must target public service functions or navigator entry-point components only; `screens/` subdirectory imports are prohibited.
+Status: RESOLVED.
+
+---
+
+#### AC-123 — tap-to-navigate: runtime behavior unaffected by import-path fix
+
+The import change is purely a path resolution change — the same `UserProfileScreen` component is resolved at runtime (via `UserProfileNavigator`'s single re-export). All AC-123 behavioral verification carried forward from QA Run 5:
+
+- Climber chip is a `Pressable` with `onPress={() => onSelectClimber(user.id)}` — PASS.
+- `onSelectClimber` prop flows `HomeScreen` → `HomeNavigator` → `AppShell` — PASS.
+- `AppShell` `handleSelectClimber` sets `targetUserId`; overlay renders `UserProfileScreen` when `targetUserId` is non-null — PASS.
+- Overlay dismissed via `onBack` → `handleClimberProfileBack` → `setTargetUserId(null)` — PASS.
+- Test `'calls onSelectClimber with the correct user ID when a climber chip is tapped (AC-123)'` passes as part of the 314-test run — PASS.
+
+---
+
+#### Re-verification of all previously passing items
+
+**AC-110** — PASS. `AppShell.tsx` `useState<TabKey>('home')` default and three-tab structure unchanged. The import-path fix does not touch tab state or tab-bar rendering. TabBar tests (5) all pass.
+
+**AC-111** — PASS. Section order in `HomeScreen.tsx` JSX unchanged: Banners → Saved Gyms → Following Climbers. Import change is in `AppShell.tsx`, not `HomeScreen.tsx`.
+
+**AC-112** — PASS. `banners.ts` and banner rendering unchanged. Banner test passes.
+
+**AC-113** — PASS. "View All" callback and saved-gym strip rendering unchanged. Tests pass.
+
+**AC-114** — PASS with spec note carried forward. `onSelectGym` and `AppShell.handleSelectGym` behavior unchanged. Spec note (tab-switch vs. gym-detail deep-link) remains a PM-level clarification item, not a blocking engineering bug.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, unchanged). Test assertion passes.
+
+**AC-123** — REGRESSION PASS (both behavioral and import-rule). See above.
+
+**AC-124** — PASS. `home.following.empty` = "Follow climbers to see their activity" — unchanged in both locales. Empty state test passes.
+
+**isActive / focus-refetch for saved gyms** — PASS. `loadSavedGyms` useEffect pattern in `HomeScreen.tsx` unchanged. Focus-refetch test passes.
+
+**isActive / focus-refetch for following** — PASS. `loadFollowing` useEffect pattern in `HomeScreen.tsx` unchanged. Focus-refetch test passes.
+
+**Keep-alive mount strategy** — PASS. `AppShell.tsx` keep-alive logic (`display: 'none'` on inactive tab views) unchanged. The overlay (`absoluteFill`, `zIndex: 10`) is rendered outside the tab content area and does not interfere with the keep-alive strategy.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` unchanged. `paddingBottom: bottomInset + theme.spacing.sm` applied.
+
+**Top safe area — HomeScreen** — PASS. `useSafeAreaInsets()` and `makeStyles(theme, insets.top)` unchanged.
+
+**i18n completeness** — PASS. No locale keys added or removed. `i18n.test.ts` passes (included in the 314-test run). All `home.*` keys remain present in both EN and zh-TW.
+
+**Migration correctness** — PASS. `supabase/migrations/20260924000002_mod_012_home.sql` unchanged by this fix.
+
+**No hardcoded hex colors** — PASS. No style changes introduced by the import-path fix.
+
+**No inline string literals** — PASS. No new user-facing strings introduced.
+
+**Gold-plating check** — PASS. `UserProfileNavigator.tsx` is a single-line re-export — the minimal surface needed to satisfy the cross-module import rule. No speculative additions.
+
+---
+
+#### Adjacent code check (fix proximity)
+
+Changes touch: `src/modules/mod-social-feed/UserProfileNavigator.tsx` (new file, one line), `src/modules/mod-home/AppShell.tsx` (import path on line 42, comment block on lines 28–32).
+
+Adjacent items verified:
+- `AppShell.tsx` `GymNavigator` and `ProfileNavigator` imports (lines 40–41) — unchanged; still import from their respective module roots. PASS.
+- `AppShell.tsx` tab state, handlers, keep-alive logic, overlay render — all unchanged beyond the import path. PASS.
+- `src/modules/mod-social-feed/UserProfileScreen.tsx` — unchanged; `UserProfileNavigator.tsx` re-exports its default; no behavioral change. PASS.
+- `UserProfileScreen.test.tsx` (mod-social-feed test suite) — passes as part of the 314-test run; the new re-export file requires no new test (it is a passthrough, not logic). PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 7
+
+| AC / Check | QA Run 6 | QA Run 7 |
+|---|---|---|
+| AC-110 | PASS | PASS |
+| AC-111 | PASS | PASS |
+| AC-112 | PASS | PASS |
+| AC-113 | PASS | PASS |
+| AC-114 | PASS (spec note) | PASS (spec note) |
+| AC-115 | PASS | PASS |
+| AC-123 | REGRESSION PASS (behavioral) | REGRESSION PASS (behavioral + import rule) |
+| AC-124 | PASS | PASS |
+| Cross-module import rule | FAIL — AppShell imports from mod-social-feed/screens/ | REGRESSION PASS — AppShell imports from mod-social-feed/UserProfileNavigator (module root) |
+| `npx tsc --noEmit` | PASS — 0 errors | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 314 tests, 27 suites | PASS — 314 tests, 27 suites |
+
+**Result: ALL CLEAR — MOD-012 ready for human QA**
+
+All acceptance criteria pass. The cross-module import violation that blocked QA Runs 5 and 6 is resolved: `src/modules/mod-social-feed/UserProfileNavigator.tsx` now exposes `UserProfileScreen` at the `mod-social-feed` module root, and `AppShell.tsx` imports from that public path. No regressions introduced. TypeScript clean (0 errors). 314/314 tests pass.
+
+The outstanding AC-114 spec note (tab-switch vs. gym-detail deep-link, Phase 1 scoping) remains a PM-level clarification item and is not a blocking implementation bug.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
