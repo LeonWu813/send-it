@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-beta-video
-mode: bugfix
+agent: qa-mod-beta-video
+mode: regression
 module: mod-beta-video
 result: success
-commit: 69a4c6be55df77b141d7f4ae778a0ce4724dad3c
-timestamp: 2026-09-25T00:00:00Z
+commit: 4dbdf8a2fdb4a9b1dcd781568f121ad925ef9cc7
+timestamp: 2026-09-25T09:00:00Z
 ```
 
 ## PM Updates
