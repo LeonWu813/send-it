@@ -32,7 +32,7 @@ import { useTheme } from '../../../lib/theme';
 import AscentList from '../../mod-send-logging/components/AscentList';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
 import RouteColorBadge from '../components/RouteColorBadge';
-import { loadRoute } from '../route-service';
+import { loadRoute, getPhotoSignedUrl } from '../route-service';
 import type { Route } from '../types';
 
 interface RouteDetailScreenProps {
@@ -54,6 +54,7 @@ export default function RouteDetailScreen({
   const styles = makeStyles(theme, insets.top);
 
   const [route, setRoute] = useState<Route | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLogSendVisible, setIsLogSendVisible] = useState(false);
@@ -73,6 +74,21 @@ export default function RouteDetailScreen({
         setErrorMessage(t('routes.errors.notFound'));
       } else {
         setRoute(data);
+        // Generate a signed URL for the private route-photos bucket.
+        // photo_url stores the storage path (from getPublicUrl) which is
+        // inaccessible for a private bucket; createSignedUrl produces a
+        // time-limited URL that the Image component can actually load.
+        if (data.photo_url) {
+          try {
+            const signed = await getPhotoSignedUrl(data.photo_url);
+            setPhotoUri(signed);
+          } catch {
+            // Non-fatal: photo simply won't render if signing fails.
+            setPhotoUri(null);
+          }
+        } else {
+          setPhotoUri(null);
+        }
       }
     } catch {
       setErrorMessage(t('routes.errors.loadFailed'));
@@ -151,10 +167,13 @@ export default function RouteDetailScreen({
         <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
       </Pressable>
 
-      {/* Route photo — only rendered when photo_url is present (AC-021) */}
-      {route.photo_url ? (
+      {/* Route photo — rendered only when a signed URL was successfully generated.
+          The route-photos bucket is private; photo_url stores the raw storage
+          path (returned by getPublicUrl) which is not directly accessible.
+          getPhotoSignedUrl() converts it to a 1-hour signed URL (AC-021). */}
+      {photoUri ? (
         <Image
-          source={{ uri: route.photo_url }}
+          source={{ uri: photoUri }}
           style={styles.photo}
           accessibilityLabel={`${route.grade} ${route.color_tag} route photo`}
           resizeMode="cover"

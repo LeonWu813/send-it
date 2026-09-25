@@ -15,18 +15,20 @@ jest.mock('../../../lib/supabase', () => ({
 
 jest.mock('../route-service', () => ({
   loadRoute: jest.fn(),
+  getPhotoSignedUrl: jest.fn(),
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { loadRoute } from '../route-service';
+import { loadRoute, getPhotoSignedUrl } from '../route-service';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
 import { renderOptions } from '../test-utils';
 
 const mockLoadRoute = loadRoute as jest.MockedFunction<typeof loadRoute>;
+const mockGetPhotoSignedUrl = getPhotoSignedUrl as jest.MockedFunction<typeof getPhotoSignedUrl>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -63,6 +65,9 @@ const DEFAULT_PROPS = {
 describe('RouteDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: getPhotoSignedUrl resolves successfully.
+    // Tests that need a different behaviour can override this mock.
+    mockGetPhotoSignedUrl.mockResolvedValue('https://signed.example.com/photo.jpg');
   });
 
   it('shows grade, color, and section for an active route', async () => {
@@ -85,6 +90,41 @@ describe('RouteDetailScreen', () => {
       // Route loaded — grade visible
       expect(screen.getByText('V5')).toBeTruthy();
     });
+  });
+
+  it('calls getPhotoSignedUrl with photo_url and renders the signed URL (private bucket fix)', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+    const SIGNED = 'https://signed.example.com/photo.jpg?token=abc';
+    mockGetPhotoSignedUrl.mockResolvedValueOnce(SIGNED);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByText('V5')).toBeTruthy();
+    });
+
+    expect(mockGetPhotoSignedUrl).toHaveBeenCalledWith(MOCK_ACTIVE_ROUTE.photo_url);
+
+    // The <Image> should receive the signed URL, not the raw photo_url.
+    const images = screen.queryAllByRole('image');
+    if (images.length > 0) {
+      expect(images[0].props.source.uri).toBe(SIGNED);
+    }
+  });
+
+  it('does not render the photo when getPhotoSignedUrl fails', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+    mockGetPhotoSignedUrl.mockRejectedValueOnce(new Error('signing failed'));
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByText('V5')).toBeTruthy();
+    });
+
+    // Photo should not be rendered when signing fails (non-fatal — screen still loads).
+    const images = screen.queryAllByRole('image');
+    expect(images).toHaveLength(0);
   });
 
   it('does NOT show a retire button for any route (AC-024b — admin-only via Studio)', async () => {

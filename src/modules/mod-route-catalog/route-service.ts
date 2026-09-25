@@ -182,6 +182,43 @@ export async function withdrawRoute(routeId: string): Promise<void> {
 }
 
 /**
+ * Generate a signed URL for a route photo stored in the private
+ * `route-photos` Supabase Storage bucket.
+ *
+ * The `photo_url` column stores the output of `getPublicUrl()`, which is a
+ * full URL of the form:
+ *   `{supabaseUrl}/storage/v1/object/public/route-photos/{storagePath}`
+ *
+ * Since the bucket is private, that URL is inaccessible. This function
+ * extracts the storage path from the stored URL and generates a signed URL
+ * valid for 1 hour.
+ *
+ * @param photoUrl  The value stored in `routes.photo_url` (a full storage URL).
+ * @returns         A signed URL valid for 1 hour.
+ * @throws {Error}  with a user-facing message on failure.
+ */
+export async function getPhotoSignedUrl(photoUrl: string): Promise<string> {
+  // Extract the storage path by stripping everything up to and including
+  // "/object/public/route-photos/" from the stored URL.
+  const BUCKET_PREFIX = '/object/public/route-photos/';
+  const prefixIndex = photoUrl.indexOf(BUCKET_PREFIX);
+  if (prefixIndex === -1) {
+    throw new Error('Failed to load route photo. Please try again.');
+  }
+  const storagePath = photoUrl.slice(prefixIndex + BUCKET_PREFIX.length);
+
+  const { data, error } = await supabase.storage
+    .from('route-photos')
+    .createSignedUrl(storagePath, 3600);
+
+  if (error || !data?.signedUrl) {
+    throw new Error('Failed to load route photo. Please try again.');
+  }
+
+  return data.signedUrl;
+}
+
+/**
  * Load the full detail record for a single route by ID.
  *
  * @param routeId  UUID of the route to load.

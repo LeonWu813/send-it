@@ -18,10 +18,36 @@ jest.mock('../../../lib/supabase', () => {
   };
 });
 
+// ── Storage builder helper ────────────────────────────────────────────────────
+/**
+ * Builds a chainable storage builder for mocking supabase.storage.from().
+ * Supports upload, getPublicUrl, and createSignedUrl.
+ */
+function makeStorageBuilder(opts: {
+  uploadResult?: { error: unknown };
+  publicUrl?: string;
+  signedUrlResult?: { data: { signedUrl: string } | null; error: unknown };
+}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+  const builder: any = {
+    upload: jest.fn().mockResolvedValue(opts.uploadResult ?? { error: null }),
+    getPublicUrl: jest
+      .fn()
+      .mockReturnValue({ data: { publicUrl: opts.publicUrl ?? '' } }),
+    createSignedUrl: jest
+      .fn()
+      .mockResolvedValue(
+        opts.signedUrlResult ?? { data: { signedUrl: 'https://signed.url/photo.jpg' }, error: null },
+      ),
+  };
+  return builder;
+}
+
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
 import {
   findMatchingActiveRoutes,
+  getPhotoSignedUrl,
   listRoutes,
   loadRoute,
   submitRoute,
@@ -373,7 +399,63 @@ describe('withdrawRoute', () => {
   });
 });
 
-// ── Storage mock not invoked for non-upload tests ────────────────────────────
+// ── getPhotoSignedUrl ─────────────────────────────────────────────────────────
+
+describe('getPhotoSignedUrl', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  const STORED_URL =
+    'https://abc.supabase.co/storage/v1/object/public/route-photos/user-001/1234567890-abc.jpg';
+  const SIGNED_URL = 'https://abc.supabase.co/storage/v1/object/sign/route-photos/user-001/1234567890-abc.jpg?token=xyz';
+
+  it('extracts the storage path and returns a signed URL', async () => {
+    const storageBuilder = makeStorageBuilder({
+      signedUrlResult: { data: { signedUrl: SIGNED_URL }, error: null },
+    });
+    mockStorageFrom.mockReturnValueOnce(storageBuilder as unknown as ReturnType<typeof supabase.storage.from>);
+
+    const result = await getPhotoSignedUrl(STORED_URL);
+
+    expect(result).toBe(SIGNED_URL);
+    expect(mockStorageFrom).toHaveBeenCalledWith('route-photos');
+    expect(storageBuilder.createSignedUrl).toHaveBeenCalledWith(
+      'user-001/1234567890-abc.jpg',
+      3600,
+    );
+  });
+
+  it('throws a user-facing error when the URL does not contain the expected prefix', async () => {
+    await expect(
+      getPhotoSignedUrl('https://example.com/some/other/path.jpg'),
+    ).rejects.toThrow('Failed to load route photo. Please try again.');
+  });
+
+  it('throws a user-facing error when createSignedUrl returns an error', async () => {
+    const storageBuilder = makeStorageBuilder({
+      signedUrlResult: { data: null, error: { message: 'signing failed' } },
+    });
+    mockStorageFrom.mockReturnValueOnce(storageBuilder as unknown as ReturnType<typeof supabase.storage.from>);
+
+    await expect(getPhotoSignedUrl(STORED_URL)).rejects.toThrow(
+      'Failed to load route photo. Please try again.',
+    );
+  });
+
+  it('throws a user-facing error when signedUrl is missing from response', async () => {
+    const storageBuilder = makeStorageBuilder({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
+      signedUrlResult: { data: { signedUrl: '' } as any, error: null },
+    });
+    mockStorageFrom.mockReturnValueOnce(storageBuilder as unknown as ReturnType<typeof supabase.storage.from>);
+
+    await expect(getPhotoSignedUrl(STORED_URL)).rejects.toThrow(
+      'Failed to load route photo. Please try again.',
+    );
+  });
+});
+
+// ── Storage mock declared to prevent unused-var lint errors ──────────────────
 // (uploadRoutePhoto is tested separately as it requires fetch + storage mocks)
-// The mockStorageFrom is declared to prevent unused-var lint errors.
 void mockStorageFrom;
