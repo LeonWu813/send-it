@@ -28,9 +28,8 @@
  * Cross-module imports:
  *   - GymNavigator from mod-gym-directory (public entry-point component).
  *   - ProfileNavigator from mod-auth-profile (public entry-point component).
- *   - UserProfileScreen from mod-social-feed/screens (public entry point per
- *     invocation scope: cross-module component import is permitted when it is
- *     the module's public entry-point surface).
+ *   - UserProfileScreen from mod-social-feed/UserProfileNavigator (public
+ *     module-root entry-point component; does not reach into screens/).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -40,7 +39,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
 import GymNavigator from '../mod-gym-directory/GymNavigator';
-import UserProfileScreen from '../mod-social-feed/screens/UserProfileScreen';
+import UserProfileScreen from '../mod-social-feed/UserProfileNavigator';
 import TabBar, { type TabKey } from './components/TabBar';
 import HomeNavigator from './HomeNavigator';
 

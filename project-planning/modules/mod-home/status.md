@@ -160,6 +160,29 @@
 
 ---
 
+### Bugfix — cross-module import violation in AppShell.tsx — 2026-09-24
+
+**Bug**: `AppShell.tsx` imported `UserProfileScreen` directly from `'../mod-social-feed/screens/UserProfileScreen'`, which violates the `production.md` cross-module import convention ("never import from another module's `screens/` or `components/` subdirectories directly"). Flagged by QA in QA Run 5 and QA Run 6.
+
+**Fix**: Changed the import path to use the public module-root entry point that MOD-006 had already created (`src/modules/mod-social-feed/UserProfileNavigator.tsx` re-exports the default from `./screens/UserProfileScreen`). Also updated the stale comment in `AppShell.tsx` that incorrectly referenced the `screens/` path.
+
+**Files changed:**
+- `src/modules/mod-home/AppShell.tsx` — line 43: import path changed from `'../mod-social-feed/screens/UserProfileScreen'` to `'../mod-social-feed/UserProfileNavigator'`; stale comment updated to reflect the public entry-point path.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 314 tests, 27 suites, all pass |
+| Cross-module import rule: AppShell no longer imports from mod-social-feed/screens/ | PASS |
+| UserProfileNavigator.tsx exists at mod-social-feed module root | PASS |
+| Same default export — no runtime behavior change | PASS |
+
+**Result: READY FOR QA RE-VERIFICATION**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24
