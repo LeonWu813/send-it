@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 8
-**Date**: 2026-09-23
-**Revision**: 8
+**Status**: [SUBSTANTIVE] — Revision 9
+**Date**: 2026-09-24
+**Revision**: 9
 
 ---
 
@@ -43,6 +43,9 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 - User-created gyms are out of scope for Phase 1 — missing gyms are captured via a "request a gym" form only.
 - User-editable grade overrides are out of scope for Phase 1 — the gym's posted grade is the source of truth.
 - Per-user grade systems other than V-scale are out of scope for Phase 1 — all Phase 1 gyms are forced to V-scale mapping.
+- A user-editable free-text route name is out of scope for Phase 1 — a route's display name is composed automatically from its grade and hold color (with optional section label), not entered by the submitter.
+- A dedicated saved-routes surface on the Profile or Home tab is out of scope for Phase 1 — saved routes are surfaced only in the browse flow (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list); a saved-routes list view is backlog for a later phase.
+- A "project" ascent style is out of scope — Phase 1 supports exactly three ascent styles (flash, top, attempt); the historical `project` value is removed from the UI and the database enum.
 - Cities other than Taipei and New Taipei are out of scope for Phase 1 (Taoyuan, Hsinchu, Taichung, Kaohsiung, Yilan, Tainan are backlog for a later phase).
 - Top-rope-only gyms are excluded from the Phase 1 seed directory (Camp4 達文西攀岩館 and Wusa 攀岩館 are excluded on this basis).
 - In-app admin tooling is out of scope for Phase 1 — Supabase Studio is the sole admin surface.
@@ -70,7 +73,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 **I want** to log a send (route + style + attempts + optional note) in under 30 seconds and ≤4 taps from a known route page,
 **so that** logging doesn't interrupt my climbing rhythm.
 
-**Acceptance Criteria**: AC-010, AC-011, AC-012
+**Acceptance Criteria**: AC-010, AC-011, AC-012, AC-014
 
 ---
 
@@ -82,7 +85,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 
 The route list uses grade and hold-color filter chips only (no free-text search). The "Can't find it? Add a new route" CTA is always shown at the bottom of the route list — not only when the list is empty — because even when matching routes exist the climber may not find their specific route. The filtered route list is itself the "does this route already exist?" check: the climber filters by grade + color, sees no match, and taps the CTA. There is no separate client-side match-check step. Tapping the CTA opens a single-page submit screen (grade and color chips pre-filled from the active filters) with an "Add Route" button that submits directly. Server-side duplicate protection keeps data clean: the `submit_route` RPC pre-check and the partial unique index on active routes enforce uniqueness at the database level.
 
-**Acceptance Criteria**: AC-020, AC-021, AC-022, AC-023, AC-043
+**Acceptance Criteria**: AC-020, AC-021, AC-022, AC-023, AC-043, AC-045
 
 ---
 
@@ -112,7 +115,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to open my gym's page and filter its route list by grade and active status,
 **so that** I know what's currently set before I show up.
 
-**Acceptance Criteria**: AC-005, AC-006, AC-040, AC-041, AC-042
+**Acceptance Criteria**: AC-005, AC-006, AC-040, AC-041, AC-042, AC-045
 
 ---
 
@@ -159,10 +162,10 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 ### US-011: View my profile history and stats
 
 **As a** climber tracking my progress,
-**I want** to see my full send history (filterable by gym, grade, date range) and basic stats (sends by grade, total sends, current streak, highest grade),
+**I want** to see my full send history (filterable by gym, grade, date range) and basic stats (sends by grade, total sends, current streak, highest grade), with each logged send showing an achievement icon for its style,
 **so that** I can see how I'm improving.
 
-**Acceptance Criteria**: AC-060, AC-061, AC-062, AC-064
+**Acceptance Criteria**: AC-060, AC-061, AC-062, AC-064, AC-065
 
 ---
 
@@ -246,6 +249,16 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 
 ---
 
+### US-021: Bookmark a route while browsing
+
+**As a** climber who wants to keep track of routes I plan to try,
+**I want** to bookmark a route from its detail screen and see a read-only saved indicator on that route in the gym route list,
+**so that** I can recognize the routes I've saved while browsing without a separate saved-routes screen.
+
+**Acceptance Criteria**: AC-046, AC-047
+
+---
+
 ## 4. Tech Stack
 
 | Component        | Name + Version                                      | Notes                                                                                                                                       |
@@ -268,7 +281,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 
 - The **client** owns rendering, local UI state, client-side video compression, client-generated thumbnails, and localization. It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
 - The client's top-level UI is a **persistent three-tab bottom navigation shell**. **Tab 1 (Home)** hosts the Home surface (MOD-012). **Tab 2 (Gyms)** hosts the existing gym navigation stack (MOD-002 gym directory + detail, with MOD-003 route catalog reachable beneath it). **Tab 3 (Profile)** hosts the current user's profile surface (MOD-001) with their embedded send history and stats (MOD-008). The Home tab is the default tab after login. This tab shell is an app-level architecture concern: the mount point for each tab's navigator and the module boundaries between the shell and the surfaces it hosts require Tech Lead review before implementation.
-- **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gyms are readable by all authenticated users and writable only by admins; routes are readable by all authenticated users for `active` rows, with `pending` rows visible only to their submitter, and are writable by the submitting user on insert (initial status `active` when auto-approve is ON, else `pending`), while status transitions to `retired` or `rejected` and approval of `pending` routes are admin-only via Supabase Studio.
+- **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, saved gyms, saved routes, and notification preferences; gyms are readable by all authenticated users and writable only by admins; routes are readable by all authenticated users for `active` rows, with `pending` rows visible only to their submitter, and are writable by the submitting user on insert (initial status `active` when auto-approve is ON, else `pending`), while status transitions to `retired` or `rejected` and approval of `pending` routes are admin-only via Supabase Studio.
 - **Supabase Storage** hosts avatars, gym photos, route photos, and (Phase 1 only) beta videos + client-generated thumbnails. When the migration trigger fires, video uploads cut over to **Cloudflare Stream** while metadata continues to live in Postgres.
 - **Supabase Edge Functions** handle event-driven workflows that must not run on the client: on `Reaction` insert with `target_type = beta_video`, an Edge Function inserts a `Notification` row and enqueues an APNs push (respecting `NotificationPreference`) via Expo Push to all `DeviceToken` rows for the recipient.
 - **PostHog** SDK ships client-side events (signup, first send, video upload, retention markers). No PII beyond user_id is sent.
@@ -305,9 +318,9 @@ The data flow for the two most important loops:
 
 ### MOD-003: Route Catalog
 
-**Purpose**: Own the route submission match-before-create flow, the standardized `gym + grade + hold color` match key, route detail pages, the route status lifecycle (`active` / `pending` / `retired` / `rejected`), submitter-only pending visibility and withdrawal, and the fixed hold/tape color enum. Admin approval/rejection/retirement is performed via Supabase Studio in Phase 1.
+**Purpose**: Own the route submission match-before-create flow, the standardized `gym + grade + hold color` match key, the composed route display name (grade + color + optional section label), route detail pages, the route status lifecycle (`active` / `pending` / `retired` / `rejected`), submitter-only pending visibility and withdrawal, the fixed hold/tape color enum, and the saved-route bookmark interaction (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list). Admin approval/rejection/retirement is performed via Supabase Studio in Phase 1.
 
-**User Stories**: US-003, US-006
+**User Stories**: US-003, US-006, US-021
 
 **Dependencies**: MOD-001, MOD-002
 
@@ -315,7 +328,7 @@ The data flow for the two most important loops:
 
 ### MOD-004: Send Logging
 
-**Purpose**: Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override).
+**Purpose**: Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override) and restricting the ascent style to the three-value set (flash, top, attempt).
 
 **User Stories**: US-002
 
@@ -355,7 +368,7 @@ The data flow for the two most important loops:
 
 ### MOD-008: Profile History & Stats
 
-**Purpose**: Render the current user's (and other users', per privacy) send history with gym/grade/date filters and basic stats (sends by grade bar chart, total sends, current streak, highest grade).
+**Purpose**: Render the current user's (and other users', per privacy) send history with gym/grade/date filters and basic stats (sends by grade bar chart, total sends, current streak, highest grade), displaying an achievement icon for each logged send's ascent style.
 
 **User Stories**: US-011
 
@@ -409,7 +422,7 @@ The data flow for the two most important loops:
 
 **Modules**: MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012
 
-**Scope summary**: iOS-only React Native + Expo app. Auth (Email + Apple + Google). Admin-curated gym directory seeded with Taipei/New Taipei branch-level rows (top-rope-only gyms excluded). Route submission with match-before-create using fixed hold/tape color enum, V-scale grade forced across all gyms. Send logging (no offline queue — error message on failure). Beta video upload (60 sec cap, client-side compression, client-generated thumbnail). Follow + chronological activity feed. Beta-video likes with APNs push notifications + preference toggle. Profile history + basic stats. Report + Block (App Store 1.2 compliance). English + zh-TW (device-locale default, zh-TW fallback, Settings toggle). Light + Dark mode (OS preference + Settings override). PostHog analytics. Admin surface = Supabase Studio only. Video hosting = Supabase Storage.
+**Scope summary**: iOS-only React Native + Expo app. Auth (Email + Apple + Google). Admin-curated gym directory seeded with Taipei/New Taipei branch-level rows (top-rope-only gyms excluded). Route submission with match-before-create using fixed hold/tape color enum, V-scale grade forced across all gyms; routes carry a composed display name (grade + color + optional section label). Route bookmarking in the browse flow (bookmark on route detail, read-only saved indicator on the gym route list). Send logging (no offline queue — error message on failure) with a three-value ascent style (flash, top, attempt). Beta video upload (60 sec cap, client-side compression, client-generated thumbnail). Follow + chronological activity feed. Beta-video likes with APNs push notifications + preference toggle. Profile history + basic stats with per-send achievement icons. Report + Block (App Store 1.2 compliance). English + zh-TW (device-locale default, zh-TW fallback, Settings toggle). Light + Dark mode (OS preference + Settings override). PostHog analytics. Admin surface = Supabase Studio only. Video hosting = Supabase Storage.
 
 **Milestone**: All Phase 1 acceptance criteria pass on a production Supabase project and a TestFlight build; the seeded gym directory (branch-level Taipei/New Taipei, excluding Camp4 達文西攀岩館 and Wusa 攀岩館) is loaded and every gym has a verified address and map pin; the App Store submission passes Guideline 1.2 review with Report and Block flows functional.
 
@@ -417,9 +430,9 @@ The data flow for the two most important loops:
 
 ### Phase 2: Community depth + Android
 
-**Modules**: (new modules TBD in a later PRD revision — Android build config, offline send queue, expanded notifications, comments, retire/reset voting, ascent pyramid, gym-info edit suggestions, Cloudflare Stream migration if trigger has fired)
+**Modules**: (new modules TBD in a later PRD revision — Android build config, offline send queue, expanded notifications, comments, retire/reset voting, ascent pyramid, gym-info edit suggestions, Cloudflare Stream migration if trigger has fired, dedicated saved-routes list surface)
 
-**Scope summary**: Android build (Expo config extension). Offline send queue with local persistence + sync-on-reconnect. Expanded push notifications (new routes at followed gyms, someone flashed your project, new follower). Comments (if community demand and moderation bandwidth exist). Community-driven route retire/reset workflow with light voting. Ascent pyramid visualization. "Suggest an edit" flow for gym metadata. Cloudflare Stream video migration executed if Phase 1 crossed the cost/storage trigger.
+**Scope summary**: Android build (Expo config extension). Offline send queue with local persistence + sync-on-reconnect. Expanded push notifications (new routes at followed gyms, someone flashed your project, new follower). Comments (if community demand and moderation bandwidth exist). Community-driven route retire/reset workflow with light voting. Ascent pyramid visualization. "Suggest an edit" flow for gym metadata. A dedicated saved-routes list surface (Phase 1 only surfaces saved routes in the browse flow). Cloudflare Stream video migration executed if Phase 1 crossed the cost/storage trigger.
 
 **Milestone**: Android build published to Play Store; offline queue verified across airplane-mode/reconnect cycles; expanded notification types delivering ≥95% within 30 seconds; comments (if shipped) have working report + delete flows.
 
@@ -497,11 +510,17 @@ The data flow for the two most important loops:
 
 **AC-041** (revised): The system shall show normal users `active` routes only in the gym route list, with no status tag and no status filter surfaced to them.
 
-**AC-042** (new): The system shall navigate a user from a route entry in the gym route list to that route's detail screen when the user taps the entry, passing the selected route's identifier. The route detail screen is the entry point for logging a send (AC-010), uploading beta (AC-037), and watching beta (AC-033).
+**AC-042** (new): The system shall navigate a user from a route entry in the gym route list to that route's detail screen when the user taps the entry, passing the selected route's identifier. The route detail screen is the entry point for logging a send (AC-010), uploading beta (AC-037), watching beta (AC-033), and saving the route (AC-046).
 
 **AC-043** (new): The system shall pre-fill the route submit screen's grade and color chips from the RouteListScreen filter state when the user opens the submit screen. RouteListScreen passes its current grade filter and color filter values as optional parameters to the submit screen; if a grade filter was active when the user tapped "Add Route", the corresponding grade chip shall be pre-selected, and if a color filter was active, the corresponding color chip shall be pre-selected. When a filter is unset, the corresponding chip shall open unselected. Pre-filled chips remain editable by the user before submission.
 
 **AC-044** (new): The route detail screen (RouteDetailScreen) shall not display the route's submitter ("由誰新增" / Submitted By). The `submitted_by_user_id` field remains in the data model for RLS and constraint purposes only and is never surfaced in the route detail UI.
+
+**AC-045** (new): The system shall compose a route's display name automatically from its grade and hold color in the form "`<grade> <Color>`" (e.g. "V3 Blue"), appending the section label in parentheses when a section label is present (e.g. "V3 Blue (Cave)"). The display name is not a stored, user-editable field — it is derived from the route's `grade`, `color_tag`, and optional `section_label` at display time. The composed name shall be used consistently wherever a route is labeled (the gym route list, the route detail screen header, and any surfaced reference to the route). There is no free-text route-name input on the submit screen.
+
+**AC-046** (new): The route detail screen (RouteDetailScreen) shall display a bookmark toggle that reflects whether the route is in the current user's saved routes list and, when tapped, shall add or remove the route from the user's `saved_routes` list and update the toggle state immediately (optimistic update). The route detail screen is the only save/unsave action point for routes.
+
+**AC-047** (new): The gym route list (RouteListScreen) shall display a read-only saved indicator on route entries that are in the current user's saved routes list; no indicator is shown for unsaved routes. The list indicator is read-only — tapping it performs no save/unsave action (tapping the route entry navigates to its detail screen per AC-042). No saved-routes list surface is provided on the Profile or Home tab in Phase 1.
 
 ---
 
@@ -514,6 +533,8 @@ The data flow for the two most important loops:
 **AC-012**: The system shall, when the network request to save a send fails, display a clear error message to the user (Phase 1 does not queue sends offline).
 
 **AC-013**: After a send is successfully logged, the ascent list on the route detail screen refreshes immediately to show the new entry without requiring re-navigation.
+
+**AC-014** (new): The system shall restrict the ascent style selector to the fixed three-value enum {flash, top, attempt}. The `project` style is removed — it is not selectable in the UI and is not a valid value in the `ascent_style` database enum. Any historical ascent previously logged with `project` shall be treated as `attempt` (see §9 Data Model migration note).
 
 ---
 
@@ -576,6 +597,8 @@ The data flow for the two most important loops:
 **AC-062**: The system shall recalculate stats immediately after a new send log is saved and re-render the stats view without requiring a manual refresh.
 
 **AC-064** (new): The system shall navigate a user from another user's entry in the activity feed (or any surfaced user reference, e.g. a beta video author or follower) to that user's profile and send history, subject to the target's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state rather than the send history.
+
+**AC-065** (new): The system shall display an achievement icon for each logged send in the send history, mapped from the send's ascent style: `flash` → a flash (⚡) achievement icon, `top` → a send/top-out achievement icon, and `attempt` → a project/tried achievement icon (🎯). The icon set covers exactly the three ascent styles (there is no `project` style; the former `project` achievement maps to the `attempt` style per AC-014).
 
 ---
 
@@ -651,6 +674,11 @@ SavedGym  (join table — a user's bookmarked gyms)
    created_at
  - PK: (user_id, gym_id)
 
+SavedRoute  (join table — a user's bookmarked routes)
+ - user_id (FK User, ON DELETE CASCADE), route_id (FK Route, ON DELETE CASCADE),
+   created_at
+ - PK: (user_id, route_id)
+
 GymRequest
  - id, requested_by_user_id, name, city, google_maps_url (nullable),
    status (pending | added | rejected), created_at, reviewed_at (nullable)
@@ -666,6 +694,9 @@ Route
    status (route_status enum: active | pending | retired | rejected),
    submitted_by_user_id (FK User),
    created_at, retired_at (nullable), retired_by_user_id (nullable, FK User)
+   -- A route's display name is NOT a stored column. It is composed at display time
+   -- from grade + color_tag (+ section_label when present), e.g. "V3 Blue" or
+   -- "V3 Blue (Cave)" (AC-045). There is no free-text, user-editable route name.
    -- route_status values:
    --   active   = live and climbable; visible to all users.
    --              Set by the system (auto-approve ON) or by an admin.
@@ -683,9 +714,11 @@ Route
 
 Ascent (a "log")
  - id, user_id (FK User), route_id (FK Route),
-   style (flash | top | attempt | project), attempts,
+   style (ascent_style enum: flash | top | attempt), attempts,
    note, logged_at, is_private
    -- grade is NOT stored per-log; always read from route.grade at display time
+   -- The 'project' ascent style is REMOVED. ascent_style has exactly three
+   -- values (flash | top | attempt). See migration note below.
 
 BetaVideo
  - id, route_id (FK Route), user_id (FK User),
@@ -736,6 +769,9 @@ Block  (App Store Guideline 1.2 requirement)
 
 - All tables are guarded by Supabase Row-Level Security policies.
 - `SavedGym` is the join table backing the multi-gym saved list (it replaces the removed single `User.home_gym_id`). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved gyms.
+- `SavedRoute` is the join table backing the saved-routes bookmark (US-021, AC-046/AC-047). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved routes. `route_id` is `ON DELETE CASCADE` so a saved-route row disappears if the underlying route is deleted (e.g. a withdrawn pending route). **This is a new join table and requires Tech Lead architecture review (table placement/ownership, RLS policy set, grants) before Doc-Sync/Engineering implements it** — mirror the confirmed `saved_gyms` design (composite PK, dual `ON DELETE CASCADE`, own-rows-only SELECT/INSERT/DELETE RLS, no UPDATE, explicit grants).
+- A route's **display name is composed, not stored** (AC-045): it is derived at display time from `grade` + `color_tag` (+ `section_label` when present), e.g. "V3 Blue" / "V3 Blue (Cave)". There is no free-text route-name column and no user-editable route name.
+- **`ascent_style` enum change — `project` removed (requires Tech Lead architecture review).** PostgreSQL does not support dropping a value from an existing enum type directly. The migration must: (1) create a new `ascent_style` enum containing exactly `flash | top | attempt` (without `project`); (2) migrate any existing rows whose style is `project` to `attempt`; (3) alter the `ascents.style` column to the new enum type and drop the old enum. This is a data-model migration with data backfill and enum swap — **it requires Tech Lead architecture review before Doc-Sync/Engineering implements it** (safe migration ordering, transaction boundaries, and the PG restriction that a newly created type + column swap + old-type drop must be sequenced correctly, consistent with the project's established two-file enum-migration convention).
 - The `Route.match_key` is a Postgres `GENERATED ALWAYS AS ... STORED` column. Uniqueness of active routes is enforced at the database level by a partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` — not only in application code — so that reused tape colors after a wall reset don't collide with historical retired routes.
 - `DeviceToken` uses Expo Push under the hood; APNs is the transport for iOS in Phase 1. Android tokens land here in Phase 2.
 - `NotificationPreference` is designed to grow — Phase 2 will add columns for expanded notification types.
@@ -749,6 +785,7 @@ Block  (App Store Guideline 1.2 requirement)
 - **Video**: 60-second maximum. Client-side compression before upload. Client-generated thumbnail. Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
 - **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions), with RLS policies on every user-writable table. No custom backend server in Phase 1.
 - **Saved gyms**: The `saved_gyms` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-gyms list.
+- **Saved routes**: The `saved_routes` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-routes list. Saved routes are surfaced only in the browse flow (bookmark toggle on the route detail screen; read-only saved indicator on the gym route list) — Phase 1 provides no dedicated saved-routes list surface.
 - **Auth**: Email, Apple Sign-In, and Google Sign-In. Apple Sign-In is required by the App Store since Google Sign-In is offered.
 - **Push notifications**: APNs via Expo Push. Phase 1 fires for beta-video likes only, and only when the recipient's `NotificationPreference.beta_video_like` is true. A settings screen exposes the toggle.
 - **Offline tolerance**: Phase 1 does **not** queue sends offline. On any network failure, the user sees a clear error message and can retry. Offline queue is Phase 2.
@@ -798,8 +835,9 @@ Block  (App Store Guideline 1.2 requirement)
 
 Most previously-open questions were resolved during PRD confirmation. Remaining items:
 
+- **`ascent_style` enum migration safety**: Removing the `project` value is not a direct enum drop in PostgreSQL — it requires creating a new three-value enum, backfilling existing `project` rows to `attempt`, swapping the `ascents.style` column type, and dropping the old enum. Risk: an incorrectly sequenced migration fails on PG15 (enum create/use/drop ordering) or leaves orphaned `project` values. Mitigation: Tech Lead to specify the exact migration ordering (consistent with the project's two-file enum-migration convention) and the backfill `UPDATE` before Engineering implements; Engineer to verify with a local `supabase db reset`.
 - **Video hosting migration operational readiness**: The Supabase Storage → Cloudflare Stream migration trigger (cost > US$25/mo OR storage > 20 GB) has no documented runbook yet. Risk: hitting the trigger mid-Phase-1 without a rehearsed migration path. Mitigation: Tech Lead to specify a migration runbook (dual-write vs. batch backfill, URL rewriting strategy) during architecture review, even though the migration itself is expected in Phase 2.
-- **Tape color reuse collisions**: Two genuinely different routes at the same gym with the same grade + color could collide even after match-before-create, because the fixed 9-color enum plus common grade reuse guarantees occasional overlap. Mitigation: `section_label` disambiguator is already in the schema; may need to become a required tiebreaker in Phase 2 based on real data.
+- **Tape color reuse collisions**: Two genuinely different routes at the same gym with the same grade + color could collide even after match-before-create, because the fixed 9-color enum plus common grade reuse guarantees occasional overlap. This also affects the composed route display name (AC-045): two same-grade/same-color routes render with the same name unless disambiguated by `section_label`. Mitigation: `section_label` disambiguator is already in the schema and is appended to the display name when present; it may need to become a required tiebreaker in Phase 2 based on real data.
 - **Admin bandwidth for reports**: With Supabase Studio as the only report review surface, response time depends on operator (Leon) checking Studio. Mitigation adopted (AC-085): a scheduled Edge Function emails Leon a 6-hourly digest of open reports older than 12 hours. Residual risk: App Store may still expect a faster in-app moderation queue; a lightweight in-app admin surface is held in the Phase 2 slot if review flags it.
 - **APNs deliverability tail**: The AC-056 target of ≥95% delivery within 30 seconds depends on Expo Push + APNs latency and on device state. Needs measurement post-launch — if the tail is worse than expected, revisit push architecture in Phase 2.
 - **App Store Guideline 1.2 review outcome**: Report + Block are implemented, but App Store review is not deterministic. Risk: additional moderation requirements surface during review (e.g., faster response SLA, in-app moderation queue). Mitigation: keep Phase 2 slot available for a lightweight in-app admin surface if needed.
@@ -810,8 +848,8 @@ Most previously-open questions were resolved during PRD confirmation. Remaining 
 
 ## 13. Roadmap
 
-1. **Phase 1 (MVP, iOS, Taipei + New Taipei)** — Auth (Email + Apple + Google), curated branch-level gym directory, route submission with match-before-create + fixed color enum + V-scale, send logging with clear error on network failure, beta video (60 sec + client compression + client thumbnail) via Supabase Storage, follow + activity feed, beta-video likes with APNs push + preference toggle, profile history + basic stats, Report + Block (App Store 1.2), English + zh-TW (device-locale default, Settings toggle), Light + Dark (OS default, Settings override), PostHog analytics, Supabase Studio admin only.
-2. **Phase 2 (Community depth + Android)** — Android build, offline send queue, expanded push notifications, comments (conditional), retire/reset voting workflow, ascent pyramid visualization, "suggest an edit" gym flow, Cloudflare Stream video migration (if trigger hit in Phase 1), lightweight in-app moderation surface if needed for App Store follow-up.
+1. **Phase 1 (MVP, iOS, Taipei + New Taipei)** — Auth (Email + Apple + Google), curated branch-level gym directory, route submission with match-before-create + fixed color enum + V-scale + composed route display name, route bookmarking in the browse flow, send logging with clear error on network failure and a three-value ascent style (flash/top/attempt), beta video (60 sec + client compression + client thumbnail) via Supabase Storage, follow + activity feed, beta-video likes with APNs push + preference toggle, profile history + basic stats with per-send achievement icons, Report + Block (App Store 1.2), English + zh-TW (device-locale default, Settings toggle), Light + Dark (OS default, Settings override), PostHog analytics, Supabase Studio admin only.
+2. **Phase 2 (Community depth + Android)** — Android build, offline send queue, expanded push notifications, comments (conditional), retire/reset voting workflow, ascent pyramid visualization, "suggest an edit" gym flow, dedicated saved-routes list surface, Cloudflare Stream video migration (if trigger hit in Phase 1), lightweight in-app moderation surface if needed for App Store follow-up.
 3. **Phase 3 (Gym partnerships)** — Gym-claimed profiles, official route-setter publishing, gym-facing analytics, optional gym subscription monetization (climber app stays free).
 
 ---
