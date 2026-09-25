@@ -383,7 +383,7 @@ export default function RouteSubmitScreen({
           style={styles.textInput}
           value={sectionLabel}
           onChangeText={setSectionLabel}
-          placeholder={t('routes.submit.sectionPlaceholder')}
+          placeholder={t('routeCatalog.submit.sectionPlaceholder')}
           placeholderTextColor={theme.colors.textDisabled}
           maxLength={80}
           autoCorrect={false}

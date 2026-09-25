@@ -175,6 +175,23 @@ describe('RouteListScreen', () => {
     });
   });
 
+  it('sorts saved routes to the top of the list, preserving relative order within each group', async () => {
+    // r-002 is saved; r-001 is not — r-002 should appear first in the sorted output
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
+    mockFetchSavedRouteIds.mockResolvedValueOnce(['r-002']);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const routeNames = screen.queryAllByTestId('route-name');
+      expect(routeNames.length).toBe(2);
+      // First card should be the saved route (r-002 = V5 Blue Cave)
+      expect((routeNames[0].props.children as string)).toMatch(/V5/);
+      // Second card should be the unsaved route (r-001 = V3 Red)
+      expect((routeNames[1].props.children as string)).toMatch(/V3/);
+    });
+  });
+
   it('calls onSelectRoute with the route id when a card is pressed', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 

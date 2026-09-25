@@ -870,6 +870,48 @@ Full test suite confirms: 168 tests, 0 failures. No previously-passing test is n
 
 ---
 
+## Engineering Progress — Human QA Fixes (2026-09-25)
+
+**Issues fixed (human QA, coordinator-reported):**
+
+### Fix 1 — RouteListScreen: saved routes sort to top
+
+**Root cause**: The route list rendered routes in the order returned by `listRoutes()` (database-level order). Saved routes had a read-only bookmark indicator but no sorting advantage over unsaved routes.
+
+**Fix**: Added a `sortedRoutes` `useMemo` that partitions the `routes` array into two groups — saved first, then unsaved — preserving the relative order within each group. The `FlatList` now consumes `sortedRoutes` instead of `routes`.
+
+Pattern mirrors saved gyms in MOD-002 (GymListScreen sorted-saved-to-top behavior). The `useMemo` key on `[routes, savedRouteIds]` ensures the sort updates whenever either the route list or saved IDs change.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — `sortedRoutes` `useMemo` added; `FlatList data` prop changed from `routes` to `sortedRoutes`
+- `src/modules/mod-route-catalog/__tests__/RouteListScreen.test.tsx` — new test: "sorts saved routes to the top of the list, preserving relative order within each group"
+
+### Fix 2 — RouteSubmitScreen: area placeholder text updated via i18n
+
+**Root cause**: The 區域 (section/area) `TextInput` placeholder used the generic `routes.submit.sectionPlaceholder` key ("e.g. Cave, Slab, Overhang…"), which does not reflect the zone-based labeling convention used in Taiwan bouldering gyms (A區, B區, etc.).
+
+**Fix**:
+- Added new i18n key `routeCatalog.submit.sectionPlaceholder` to both locale files:
+  - EN: `"e.g. A Zone, B Zone..."`
+  - zh-TW: `"例如：A區、B區..."`
+- Updated `RouteSubmitScreen.tsx` `TextInput` `placeholder` prop from `t('routes.submit.sectionPlaceholder')` to `t('routeCatalog.submit.sectionPlaceholder')`. The old generic key is not removed (other potential consumers).
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — placeholder changed to `routeCatalog.submit.sectionPlaceholder`
+- `locales/en/common.json` — `routeCatalog.submit.sectionPlaceholder` added
+- `locales/zh-TW/common.json` — `routeCatalog.submit.sectionPlaceholder` added
+
+### Self-check (2026-09-25)
+
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 315 tests, 27 suites, 0 failures
+- PASS: i18n key parity — `routeCatalog.submit.sectionPlaceholder` present in both EN and zh-TW locales
+- PASS: No gold-plating — strictly confined to the two reported issues
+- PASS: No new dependencies introduced
+- PASS: `sortedRoutes` memo correctly keys on `[routes, savedRouteIds]`
+
+---
+
 ## QA Rev 9 Results
 
 **QA agent**: qa-mod-route-catalog

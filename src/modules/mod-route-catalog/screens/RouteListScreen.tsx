@@ -136,6 +136,21 @@ export default function RouteListScreen({
     }
   }, []);
 
+  // Fix 1: saved routes sort to top, preserving relative order within each group.
+  const sortedRoutes = useMemo((): RouteSummary[] => {
+    if (savedRouteIds.size === 0) return routes;
+    const saved: RouteSummary[] = [];
+    const unsaved: RouteSummary[] = [];
+    for (const route of routes) {
+      if (savedRouteIds.has(route.id)) {
+        saved.push(route);
+      } else {
+        unsaved.push(route);
+      }
+    }
+    return [...saved, ...unsaved];
+  }, [routes, savedRouteIds]);
+
   const fetchRoutes = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -354,7 +369,7 @@ export default function RouteListScreen({
       </View>
 
       <FlatList
-        data={routes}
+        data={sortedRoutes}
         keyExtractor={(item) => item.id}
         renderItem={renderRouteCard}
         ListHeaderComponent={listHeader}

@@ -142,7 +142,8 @@
     "submit": {
       "addRoute": "新增路線",
       "changePhoto": "更換照片",
-      "photoRequired": "請上傳路線照片"
+      "photoRequired": "請上傳路線照片",
+      "sectionPlaceholder": "例如：A區、B區..."
     }
   },
   "routes": {

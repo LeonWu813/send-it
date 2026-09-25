@@ -142,7 +142,8 @@
     "submit": {
       "addRoute": "Add Route",
       "changePhoto": "Change Photo",
-      "photoRequired": "A photo is required"
+      "photoRequired": "A photo is required",
+      "sectionPlaceholder": "e.g. A Zone, B Zone..."
     }
   },
   "routes": {
