@@ -217,12 +217,9 @@ export default function RouteDetailScreen({
   const routeName = formatRouteName(route.grade, route.color_tag, route.section_label, t);
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.contentContainer}
-    >
-      {/* Header row: back navigation + bookmark toggle (AC-046) */}
-      <View style={styles.headerRow}>
+    <View style={styles.root}>
+      {/* Sticky top bar — stays fixed above the scroll area (back + bookmark). */}
+      <View style={styles.topBar}>
         <Pressable
           onPress={onBack}
           style={styles.backLink}
@@ -250,6 +247,11 @@ export default function RouteDetailScreen({
           />
         </Pressable>
       </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+      >
 
       {/* Route photo — rendered only when a signed URL was successfully generated.
           The route-photos bucket is private; photo_url stores the raw storage
@@ -350,7 +352,8 @@ export default function RouteDetailScreen({
            screens/ or components/ from mod-beta-video directly. */}
       <BetaVideoSection routeId={route.id} session={session} />
 
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -361,8 +364,26 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    /**
+     * Sticky top bar — renders above the ScrollView so back/bookmark buttons
+     * remain visible as the user scrolls through route content.
+     * paddingTop = insets.top so the bar sits flush under the status bar /
+     * Dynamic Island. No paddingTop on the ScrollView below.
+     */
+    topBar: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingTop: topInset,
+      paddingHorizontal: theme.spacing.lg,
+      paddingBottom: theme.spacing.sm,
+      backgroundColor: theme.colors.background,
+    },
+    scrollView: {
+      flex: 1,
+    },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.md,
+      paddingTop: theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.xxl,
     },
@@ -375,14 +396,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.lg,
     },
-    headerRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: theme.spacing.md,
-    },
     backLink: {
-      // no extra margin — headerRow handles spacing
+      // no extra margin — topBar handles spacing
     },
     bookmarkButton: {
       padding: theme.spacing.xs,

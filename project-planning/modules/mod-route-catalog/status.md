@@ -1079,6 +1079,47 @@ Pattern mirrors saved gyms in MOD-002 (GymListScreen sorted-saved-to-top behavio
 
 ---
 
+## Engineering Progress — Sticky Top Bar Fix (2026-09-25)
+
+**Issue fixed (human QA, coordinator-reported):**
+
+### Fix — RouteDetailScreen: sticky top bar (back + bookmark remain visible on scroll)
+
+**Root cause**: The back button and bookmark button were rendered as `<View style={styles.headerRow}>` inside the `<ScrollView>`. They scrolled away with the rest of the content as the user scrolled down.
+
+**Fix**: Pulled the top bar out of the `ScrollView` so it renders as a fixed element above the scroll area. Layout is now:
+```
+<View style={{ flex: 1 }}>           // root — full screen
+  <View style={styles.topBar}>       // sticky — stays put on scroll
+    <back button />
+    <bookmark button />
+  </View>
+  <ScrollView ...>                    // scrollable content below
+    ...
+  </ScrollView>
+</View>
+```
+
+**Style changes:**
+- Added `topBar` style: `flexDirection: 'row'`, `justifyContent: 'space-between'`, `alignItems: 'center'`, `paddingTop: topInset` (safe area — sits flush under status bar / Dynamic Island), `paddingHorizontal: theme.spacing.lg`, `paddingBottom: theme.spacing.sm`, `backgroundColor: theme.colors.background` (opaque so scrolled content does not bleed through).
+- Added `scrollView` style: `flex: 1` (takes remaining space beneath the top bar).
+- `contentContainer.paddingTop` changed from `topInset + theme.spacing.md` to `theme.spacing.md` (the top-bar now handles the safe-area offset; only breathing-room padding needed at the scroll content top).
+- Removed `headerRow` style (replaced by `topBar`).
+
+**Safe area inset convention**: `paddingTop: topInset` on the `topBar`, not on the `ScrollView` — exactly matching the task specification. `topInset` is still derived via `useSafeAreaInsets()` and threaded into `makeStyles(theme, insets.top)` unchanged.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — layout restructured; `topBar` + `scrollView` styles added; `contentContainer.paddingTop` adjusted; `headerRow` style removed; no test file changes needed (tests query by role/label, not layout structure).
+
+**Self-check (2026-09-25):**
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 315 tests, 27 suites, 0 failures
+- PASS: All pre-existing tests unaffected (console warnings are pre-existing `act(...)` warnings from expo vector icons, unchanged)
+- PASS: No gold-plating — change confined strictly to `RouteDetailScreen.tsx`
+- PASS: No new dependencies introduced
+
+---
+
 ## Engineering Progress — Human QA UI Tweaks (2026-09-25)
 
 **Issues fixed (human QA, coordinator-reported):**
