@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-route-catalog
-mode: regression
-module: mod-route-catalog
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: fef01f39c6d18802c963c04536d32e82a93e4c97
-timestamp: 2026-09-24T08:00:00Z
+commit: 0c8602622443e73520ee268c0aa32995e418c3a1
+timestamp: 2026-09-24T09:00:00Z
 ```
 
 ## PM Updates
@@ -94,6 +94,145 @@ timestamp: 2026-09-24T08:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-09-24 — change (Rev 9: ascent_style enum removal, saved_routes table, achievement icons)
+
+**Context**: PRD Revision 9 [SUBSTANTIVE] makes three data/architecture-affecting changes the PM flagged for Tech Lead review: (1) remove `project` from the `ascent_style` enum (MOD-004), (2) add a `saved_routes` join table mirroring `saved_gyms` (MOD-003), and (3) add per-route achievement icons on RouteListScreen/RouteDetailScreen sourced from MOD-004 ascent data. Advisory only — no source, migration, spec, or PRD files changed here. Findings grounded in the shipped migrations (`20260920000004_mod_004_send_logging.sql`, `20260924000002_mod_012_home.sql`, `20260920000003_mod_003_route_catalog.sql`) and a repo-wide grep for `ascent_style` usage. Doc-Sync carries the Proposed Shared Conventions and decisions into the MOD-003/MOD-004/MOD-008 specs + production.md; Engineering implements in `change`-mode work.
+
+---
+
+#### Area 1 — `ascent_style` enum removal (`project` → removed; historical rows → `attempt`)
+
+Current type (migration `20260920000004`, line 24): `CREATE TYPE ascent_style AS ENUM ('flash', 'top', 'attempt', 'project');`. Column: `ascents.style ascent_style NOT NULL` (line 32). This is a **value-drop**, which PostgreSQL does not support directly (unlike ADD VALUE) — the type must be recreated and swapped.
+
+**Recommendation — the exact migration sequence (one migration file, single transaction):**
+```sql
+-- Migration: 2026XXXXXX_mod_004_ascent_style_drop_project.sql  (MOD-004-owned)
+
+-- 1. New type WITHOUT 'project'
+CREATE TYPE ascent_style_v2 AS ENUM ('flash', 'top', 'attempt');
+
+-- 2. Backfill: reclassify historical 'project' rows to 'attempt' (lossless — see below)
+UPDATE public.ascents SET style = 'attempt' WHERE style = 'project';
+
+-- 3. Swap the column type via text cast (safe now that no row holds 'project')
+ALTER TABLE public.ascents
+  ALTER COLUMN style TYPE ascent_style_v2
+  USING style::text::ascent_style_v2;
+
+-- 4. Drop the old type, then rename the new one to the canonical name
+DROP TYPE ascent_style;
+ALTER TYPE ascent_style_v2 RENAME TO ascent_style;
+```
+
+**Confirmations against the brief:**
+
+- **One file, not two — confirmed.** The project's two-file enum convention exists specifically because PG15 forbids *using* a value added via `ALTER TYPE ... ADD VALUE` in the same transaction that added it. That restriction applies **only to ADD VALUE**. This migration uses `CREATE TYPE` (a brand-new type, fully committed and usable within the same transaction) plus `ALTER TABLE ... ALTER COLUMN TYPE` and `DROP TYPE` — none of which are subject to the ADD-VALUE in-transaction restriction. So this is correctly a **single migration file, single transaction**. The two-file convention does not apply here; noting this explicitly so the engineer does not needlessly split it (splitting would leave a `_v2`-named type live between files, which is worse).
+
+- **RENAME TYPE is required — confirmed, do not skip step 4.** If the type is left named `ascent_style_v2`, everything downstream that names the type breaks or drifts: the MOD-003/MOD-004 specs, `production.md`, and — critically — any future migration, RPC signature, or generated TypeScript type that references `ascent_style` by name. The column itself would work (it points at the type by OID, not name), but the *type name* is a documented contract. Renaming `ascent_style_v2 → ascent_style` after the drop keeps the canonical name stable so no downstream code or doc changes. This is the standard PG enum-value-drop idiom and matches the "column keeps a stable identity" principle the route-status review already established.
+
+- **Data-loss risk — confirmed lossless (semantic).** `project` = "tried the route but did not send"; `attempt` = the same real-world meaning in the three-value model. Reclassifying `project → attempt` (step 2) loses no send-status information — both denote an unsuccessful/in-progress ascent. This is a *semantic merge*, not a data loss. AC-014 and AC-065 already codify this mapping (former `project`/🎯 achievement now maps to `attempt`). Note the backfill must run **before** the column type swap (step 2 before step 3): once the column type is `ascent_style_v2`, a `'project'` value can no longer exist and the cast in step 3 would fail on any surviving `project` row. Order is load-bearing.
+
+- **No RPC / RLS policy / trigger / view / generated-column references `ascent_style` anywhere except its defining migration — confirmed by grep.** Searched all migrations: `ascent_style` appears only in `20260920000004_mod_004_send_logging.sql`. The four `ascents` RLS policies (`ascents_select_own_or_public`, `ascents_insert_own`, `ascents_update_own`, `ascents_delete_own`) reference `user_id`/`is_private`/`auth.uid()` only — **none reference `style` or the enum type**, so they survive the column-type swap untouched. No view or materialized view or generated column depends on the type. This means the migration is self-contained: no dependent object must be dropped/recreated around the type swap, which is what would otherwise force a more elaborate sequence. Clean drop confirmed.
+
+- **CHECK-based fallback rejected.** An alternative (add a CHECK constraint forbidding `project` and leave the four-value enum in place) is explicitly *not* recommended — the PRD (AC-014, §9) requires `project` be removed from the *database enum*, not merely blocked. The recreate-and-swap above satisfies that literally.
+
+**Engineer verification step**: run `supabase db reset` locally and confirm the migration applies cleanly and that `SELECT enum_range(NULL::ascent_style);` returns exactly `{flash,top,attempt}`. The canary for a mis-ordered migration is `ERROR: invalid input value for enum ascent_style_v2: "project"` — that means step 2 (backfill) was omitted or placed after step 3.
+
+**Client-side impact (Engineer, MOD-004 + MOD-008)**: any TS union type / picker option list enumerating `'flash' | 'top' | 'attempt' | 'project'` must drop `'project'` (MOD-004 style selector per AC-014; MOD-008 achievement-icon mapping per AC-065). Flag for Doc-Sync to note in both specs.
+
+---
+
+#### Area 2 — `saved_routes` join table (mirror of `saved_gyms`)
+
+**Confirmed as a correct mirror of the ratified `saved_gyms` design, with the exact same shape applied to `routes`.** The shipped `saved_gyms` DDL (`20260924000002_mod_012_home.sql`) is the template; `saved_routes` differs only in the second FK target (`routes` not `gyms`).
+
+**Recommended DDL:**
+```sql
+-- Migration: 2026XXXXXX_mod_003_saved_routes.sql  (MOD-003-owned)
+-- Must run after 20260920000001 (users) and 20260920000003 (routes).
+
+CREATE TABLE public.saved_routes (
+  user_id    UUID        NOT NULL DEFAULT auth.uid() REFERENCES public.users(id)   ON DELETE CASCADE,
+  route_id   UUID        NOT NULL REFERENCES public.routes(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, route_id)
+);
+
+ALTER TABLE public.saved_routes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "saved_routes_select_own" ON public.saved_routes
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "saved_routes_insert_own" ON public.saved_routes
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "saved_routes_delete_own" ON public.saved_routes
+  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+
+GRANT SELECT, INSERT, DELETE ON public.saved_routes TO authenticated;
+```
+
+**Confirmations:**
+
+- **FK targets `routes`, not `gyms` — confirmed correct.** `route_id → public.routes(id) ON DELETE CASCADE`. `routes.id` is a UUID PK (`20260920000003` line 40), a clean FK target. `user_id → public.users(id) ON DELETE CASCADE` matches `saved_gyms`. `users.id` itself cascades from `auth.users`, so account deletion cleans up `saved_routes` transitively.
+- **`route_id ON DELETE CASCADE` — confirmed and important.** Per PRD §9 note: a withdrawn pending route is DELETEd (route-status review §7), and admin retire/reject is a status change (not a delete) so those do *not* remove saves. But because withdrawal *does* delete the row, `ON DELETE CASCADE` on `route_id` is required so a saved-route pointer never dangles at a deleted route. Confirmed.
+- **RLS pattern identical to `saved_gyms` — confirmed.** SELECT/INSERT/DELETE own rows (`auth.uid() = user_id`), no UPDATE (a save has no mutable field; unsave = DELETE). `ENABLE ROW LEVEL SECURITY` from creation. Explicit `GRANT SELECT, INSERT, DELETE ... TO authenticated` (RLS filters rows; GRANT authorizes the verb — the same gotcha caught in the route-catalog and saved-gyms reviews; do NOT omit it or the bookmark toggle silently fails). No grant to `anon`.
+- **`DEFAULT auth.uid()` on `user_id` — confirmed needed.** The shipped `saved_gyms` uses `DEFAULT auth.uid()` (line 13) precisely so the MOD-002 service can `INSERT (gym_id)` without threading the user id explicitly, relying on the DB default + the `WITH CHECK (auth.uid() = user_id)` policy as the fence. `saved_routes` follows the same pattern: MOD-003's bookmark service inserts `(route_id)` and lets the default fill `user_id`. Keep it for parity and to keep the insert path minimal. (Defence-in-depth: even if a client tried to supply a foreign `user_id`, the INSERT `WITH CHECK` rejects it.)
+- **Migration ownership: MOD-003 — confirmed.** The brief's proposal is right and consistent with the "table owned by the module that owns the entity" rule the saved_gyms review established. The `SavedRoute` entity backs US-021 / AC-046 / AC-047, all MOD-003. Name it `2026XXXXXX_mod_003_saved_routes.sql` (a new, later-timestamped file). Do **not** fold it into a MOD-004 or MOD-012 migration. Contrast with `saved_gyms`, which lives in the mod-012 migration because MOD-012 owns *that* entity — same rule, different owner.
+- **Index — PK alone is sufficient; no extra index.** The read pattern is `WHERE user_id = auth.uid()` (RouteDetail checks a single route's saved state; RouteList needs the set of saved route_ids for the visible list). `user_id` is the leading column of the composite PK, so the PK index already serves that filter. No standalone `user_id` index needed (same conclusion as the saved_gyms review). A `route_id` reverse-lookup index is unnecessary in Phase 1 (no AC reads saves by route across users). Documenting so the engineer does not add a redundant index.
+
+**Cross-module read note (RouteListScreen saved indicator, AC-047)**: RouteListScreen needs "which of these visible route_ids are saved by me." Recommend MOD-003 reads its own `saved_routes` table directly (single-table SELECT scoped by RLS to own rows: `SELECT route_id FROM saved_routes WHERE route_id = ANY($visible_ids)`) — this is MOD-003's own table, no cross-module import. The write side (bookmark toggle on RouteDetailScreen, AC-046) is also MOD-003 (`saved_routes` INSERT/DELETE). Both verbs live in MOD-003's service layer — unlike `saved_gyms`, there is **no cross-module verb split here** (MOD-003 owns both the table and both interaction points), which is simpler than the saved_gyms MOD-002-writes/MOD-012-reads split. Flag for Doc-Sync so the spec doesn't over-model it.
+
+---
+
+#### Area 3 — Achievement icons: cross-module data ownership + N+1
+
+The achievement icons on RouteListScreen/RouteDetailScreen (MOD-003 screens) are sourced from ascent data (MOD-004 domain: which style did *this user* achieve on *this route*). This is a genuine cross-module data read (MOD-003 screen consuming MOD-004 data) and must respect the "public service functions only" cross-module import convention already in production.md.
+
+**Recommendation — confirmed with one signature correction (return-value nuance):**
+
+- **The read function lives in MOD-004's public service layer** (`src/modules/mod-send-logging/send-service.ts` or equivalent), exposed as a batched call. MOD-003 screens import that function; they do **not** query the `ascents` table directly (cross-module table access for a read that MOD-004 owns would violate the boundary and duplicate the RLS-scoped query MOD-004 should own). This matches the convention: "a module may import another module's public service functions."
+
+- **Batched signature to avoid N+1 on the list** — confirmed necessary. The brief's `fetchUserAchievements(routeIds: string[])` shape is right. RouteListScreen calls it **once** after loading the visible routes, passing all visible route IDs; RouteDetailScreen calls it with a single-element array. One round-trip per screen, never one-per-route.
+  ```ts
+  // MOD-004 public service — send-service.ts
+  fetchUserAchievements(routeIds: string[]): Promise<Record<string, AscentStyle>>
+  // AscentStyle = 'flash' | 'top' | 'attempt'   (note: no 'project' after Area 1)
+  ```
+  **Signature nuance — a route can have multiple ascents by the same user with different styles; return the *best* style, not a raw last-write.** A user may have logged the same route as `attempt` then later `top` (or `flash`). The achievement icon should reflect the highest achievement, so the function must reduce multiple ascents per route to one style with a defined precedence: **`flash` > `top` > `attempt`** (flash is the strongest achievement — sent first try; top = sent; attempt = tried). Recommend the function encapsulate this reduction server-side or in the service so both screens get consistent results. Routes with no ascent by the user are simply absent from the returned map (the screen shows no icon — consistent with AC-047's "no indicator for unsaved" pattern and AC-065's three-icon set). Flag this precedence rule for Doc-Sync to write into the MOD-004 spec and MOD-008 spec (AC-065's per-send icon is 1:1 per ascent row and does not need reduction; the *per-route* aggregate on MOD-003 screens does — these are two different surfaces and must not be conflated).
+
+- **Implementation shape (recommend a single batched RPC over N client filters)**: the cleanest batched form is a `SECURITY INVOKER` Postgres RPC (`fetch_user_achievements(p_route_ids uuid[])`) that runs under the caller's RLS, groups `ascents` by `route_id` for `user_id = auth.uid()`, applies the `flash>top>attempt` precedence via an ordered aggregate, and returns `(route_id, style)` rows. SECURITY INVOKER keeps the existing `ascents` RLS as the fence (the function sees only the caller's own rows, which is exactly what "my achievements" needs). Alternatively a single client-side `SELECT route_id, style FROM ascents WHERE route_id = ANY($ids) AND user_id = auth.uid()` with client-side reduction is acceptable for Phase 1 (the `ascents_route_id_idx (route_id, logged_at DESC)` index supports the `route_id = ANY(...)` scan). Either avoids N+1; the RPC centralizes the precedence rule. Engineer's call at implementation time; document the chosen shape in the MOD-004 spec.
+
+- **RLS scope — confirmed critical.** The function must return achievements for the **calling user's own ascents only** (`user_id = auth.uid()`), never another user's. Under SECURITY INVOKER this is automatic (the `ascents_select_own_or_public` policy plus an explicit `user_id = auth.uid()` predicate scopes it to own rows). If ever implemented as SECURITY DEFINER, the `WHERE user_id = auth.uid()` predicate becomes mandatory and non-optional — a DEFINER function without it would leak other users' send styles. Recommend SECURITY INVOKER precisely so this can't be gotten wrong. Note the achievement icon is a *personal* overlay ("what have I done on this route"), so own-user scoping is correct product behavior, not just security.
+
+- **Cross-module import rule — confirmed and unchanged**: MOD-003 screens import `fetchUserAchievements` from MOD-004's public service file only; MOD-003 must not import MOD-004 internal screens/components or query `ascents` directly. This is the same rule the Rev 7 review codified.
+
+---
+
+#### Concerns (must address during the Rev 9 change work)
+
+- **Enum backfill order is load-bearing** — the `UPDATE ... SET style='attempt' WHERE style='project'` must run *before* the `ALTER COLUMN ... TYPE` swap, or the cast fails on surviving `project` rows. Single migration file, single transaction, steps in the exact order given in Area 1.
+- **RENAME TYPE must not be skipped** — leaving the type named `ascent_style_v2` silently drifts the canonical type name from every spec, production.md, and future migration/RPC that names `ascent_style`. Step 4 (`ALTER TYPE ascent_style_v2 RENAME TO ascent_style`) is mandatory.
+- **`saved_routes` needs the explicit GRANT, not just RLS policies** — the recurring RLS-vs-GRANT gotcha (caught in route-catalog and saved-gyms reviews). Without `GRANT SELECT, INSERT, DELETE ON public.saved_routes TO authenticated`, the bookmark toggle (AC-046) silently fails.
+- **Achievement read must be own-user-scoped and batched** — a per-route (N+1) fetch on RouteListScreen would violate the ≤2s feed/list render NFR at scale; an un-scoped fetch would leak other users' ascent styles. Both are correctness requirements, not preferences.
+
+#### Recommendations
+
+- Implement the enum drop as **one** MOD-004 migration (`2026XXXXXX_mod_004_ascent_style_drop_project.sql`): CREATE new type → backfill → ALTER COLUMN → DROP old → RENAME. Verify with `supabase db reset` + `enum_range` check. This is *not* a two-file enum change (that convention is ADD-VALUE-specific).
+- Create `saved_routes` in a **MOD-003** migration (`2026XXXXXX_mod_003_saved_routes.sql`) as a field-for-field mirror of `saved_gyms` with `route_id → routes(id)`; PK-only index; three own-rows RLS policies + explicit grants; `DEFAULT auth.uid()` on `user_id`; no UPDATE.
+- Expose `fetchUserAchievements(routeIds[])` from **MOD-004**'s public service (SECURITY INVOKER RPC preferred), applying `flash > top > attempt` precedence, own-user-scoped; MOD-003 screens import it and call it once per screen. Drop `'project'` from all client style unions.
+
+#### Approved (looks solid as-is)
+
+- The `saved_gyms` schema is the correct template for `saved_routes` exactly as shipped — dual `ON DELETE CASCADE`, composite PK, `DEFAULT auth.uid()`, own-rows RLS, explicit grants, no UPDATE. Only the FK target changes.
+- The `ascents` table's four RLS policies are style-agnostic and survive the enum swap with zero changes (verified by grep) — the enum migration is self-contained.
+- The `project → attempt` reclassification is lossless in the three-value model; AC-014/AC-065 already define the mapping.
+- Batched `fetchUserAchievements(routeIds[])` is the right anti-N+1 shape; the existing `ascents_route_id_idx` supports the `route_id = ANY(...)` scan.
+
+#### Proposed Shared Conventions (for Doc-Sync to carry into production.md)
+
+- **Enum value removal on PG15/Supabase**: to drop a value from an existing enum (not supported directly), use a single migration that CREATE TYPEs a new enum, backfills existing rows off the removed value (backfill BEFORE the column-type swap), `ALTER COLUMN ... TYPE ... USING col::text::newtype`, `DROP TYPE` the old, then `ALTER TYPE ... RENAME TO` the canonical name so downstream references are unbroken. This is a single-file, single-transaction change — distinct from the two-file rule for `ALTER TYPE ADD VALUE` (which is the only enum operation the two-file rule governs).
+- **Personal cross-module data overlays**: when one module's screen must display a per-item overlay derived from another module's user-scoped data (e.g. "my achievement on this route" from ascents on a route-catalog screen), the owning module exposes a **batched, own-user-scoped** public service function (`fetch...(ids[]) → Record<id, value>`), preferably a SECURITY INVOKER RPC so RLS scopes it to `auth.uid()`. The consuming screen calls it once per screen with all visible ids — never one call per item (N+1). The consuming module must not query the owning module's tables directly.
+- **Multi-row-to-one reduction with defined precedence**: when aggregating multiple user rows per key into a single display value (e.g. best ascent style per route), define an explicit precedence order (`flash > top > attempt`) in the owning module's service so all consuming surfaces render consistently; do not rely on last-write or arbitrary ordering.
 
 ### Review — 2026-09-21 — change (cross-cutting safe-area defect)
 
