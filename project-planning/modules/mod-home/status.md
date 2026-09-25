@@ -1180,3 +1180,135 @@ The outstanding AC-114 spec note (tab-switch vs. gym-detail deep-link, Phase 1 s
 | All existing HomeScreen tests pass with no changes | PASS |
 
 **Result: READY FOR QA RE-VERIFICATION**
+
+---
+
+### QA Run 8 — Regression — 2026-09-25
+
+**Workflow**: regression-test (re-verification after Engineer fix for AC-114 saved gym deep-link)
+
+**Bug being re-verified**: AC-114 — tapping a saved gym chip on the Home screen switched to the Gyms tab but landed on the gym list screen instead of the specific gym's detail screen. `AppShell.handleSelectGym` only called `setActiveTab('gyms')` with no mechanism to tell `GymNavigator` which gym to open.
+
+**Engineer fixes applied (two files):**
+- `src/modules/mod-gym-directory/GymNavigator.tsx` — added optional `initialGymId?: string` and `gymNavKey?: number` props; added `useEffect([gymNavKey])` that calls `setView({ name: 'detail', gymId: initialGymId })` when `initialGymId` is truthy; added `useEffect` import.
+- `src/modules/mod-home/AppShell.tsx` — added `selectedGymId: string | undefined` and `gymNavKey: number` state; `handleSelectGym(gymId)` now sets `selectedGymId`, increments `gymNavKey`, and switches tab; `handleViewAllGyms()` clears `selectedGymId` to `undefined`; `GymNavigator` receives `initialGymId={selectedGymId}` and `gymNavKey={gymNavKey}`.
+- `HomeScreen.tsx` and `HomeNavigator.tsx` unchanged.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npm test -- --watchAll=false`: PASS — 314 tests, 27 suites, 0 failures
+- Test count matches QA Run 7 (314 / 27). No tests newly failing. No new test cases added (behavioral fix covered by code inspection; the `onSelectGym` callback test at AC-114 already verifies the callback fires with the correct gym ID).
+
+---
+
+#### REGRESSION PASS AC-114 — saved gym chip now navigates to specific gym detail
+
+**handleSelectGym sets selectedGymId and increments gymNavKey before switching tab:**
+`AppShell.tsx` lines 96–103: `handleSelectGym` calls `setSelectedGymId(gymId)` (line 100), `setGymNavKey((k) => k + 1)` (line 101), `setActiveTab('gyms')` (line 102). Order is correct — both state updates fire before the tab switch. PASS.
+
+**GymNavigator receives initialGymId and gymNavKey:**
+`AppShell.tsx` lines 130–134: `<GymNavigator session={session} initialGymId={selectedGymId} gymNavKey={gymNavKey} />`. Both props are passed. PASS.
+
+**handleViewAllGyms clears selectedGymId:**
+`AppShell.tsx` lines 91–94: `handleViewAllGyms` calls `setSelectedGymId(undefined)` (line 92) then `setActiveTab('gyms')` (line 93). Clearing to `undefined` ensures View All taps land on the gym list, not a deep-link detail. PASS.
+
+**GymNavigator — initialGymId and gymNavKey props exist (optional, backward-compatible):**
+`GymNavigator.tsx` lines 43–44: `initialGymId?: string` and `gymNavKey?: number` — both marked optional. No existing callers pass these props, so no existing behavior is broken. TypeScript confirms all existing call sites are still valid (0 errors). PASS.
+
+**GymNavigator — useEffect([gymNavKey]) fires setView when initialGymId is truthy:**
+`GymNavigator.tsx` lines 64–69: `useEffect(() => { if (initialGymId) { setView({ name: 'detail', gymId: initialGymId }); } }, [gymNavKey])`. When AppShell increments `gymNavKey`, this effect fires; if `initialGymId` is set, the view transitions to `{ name: 'detail', gymId: initialGymId }`. When `gymNavKey` is 0 (initial render with no chip tap), `initialGymId` is `undefined` and the guard is falsy — no spurious navigation on mount. PASS.
+
+**Tapping the same gym twice after navigating back works:**
+`gymNavKey` increments on every `handleSelectGym` call regardless of whether `selectedGymId` changes. Even if `initialGymId` stays the same, a new `gymNavKey` value triggers the `useEffect` again. PASS.
+
+**Cross-module change is additive and backward-compatible:**
+Both new props are optional (`?:`). No existing GymNavigator tests or call sites pass them; TypeScript type-checks the entire codebase at 0 errors. The GymListScreen and GymDetailScreen test suites pass without modification (confirmed in the 314-test run). PASS.
+
+Input: user taps a saved gym chip on HomeScreen (gym id "gym-001").
+Actual (after fix): `onSelectGym('gym-001')` fires → `handleSelectGym('gym-001')` → `selectedGymId = 'gym-001'`, `gymNavKey` incremented → `activeTab = 'gyms'` → GymNavigator's `useEffect` fires → `setView({ name: 'detail', gymId: 'gym-001' })`.
+Expected per spec: tapping a gym navigates to that gym's detail screen.
+Status: RESOLVED.
+
+---
+
+#### Re-verification of all previously passing items
+
+**AC-110** — PASS. `AppShell.tsx` `useState<TabKey>('home')` default and three-tab structure unchanged. The new `selectedGymId` and `gymNavKey` state are additive; tab initialization unaffected. TabBar tests (5) all pass.
+
+**AC-111** — PASS. Section order in `HomeScreen.tsx` JSX unchanged: Banners → Saved Gyms → Following Climbers. No changes to HomeScreen or HomeNavigator.
+
+**AC-112** — PASS. `banners.ts` and banner rendering unchanged. Banner test passes.
+
+**AC-113** — PASS. "View All" callback behavior: `handleViewAllGyms` still switches `activeTab` to `'gyms'` (now also clears `selectedGymId` to `undefined` — this is correct, not a regression, as it ensures View All lands on the list). Tests pass.
+
+**AC-114** — REGRESSION PASS. See above.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, unchanged). Test assertion passes.
+
+**AC-123** — PASS. Climber chip `Pressable` with `onSelectClimber(user.id)` on press unchanged. `onSelectClimber` prop thread unchanged. `AppShell` overlay logic unchanged. Tests pass.
+
+**AC-124** — PASS. `home.following.empty` = "Follow climbers to see their activity" — unchanged. Empty state test passes.
+
+**isActive / focus-refetch for saved gyms** — PASS. `loadSavedGyms` useEffect pattern in `HomeScreen.tsx` unchanged. Focus-refetch test passes.
+
+**isActive / focus-refetch for following** — PASS. `loadFollowing` useEffect pattern unchanged. Focus-refetch test passes.
+
+**Keep-alive mount strategy** — PASS. `AppShell.tsx` keep-alive logic (`display: 'none'` on inactive tab views) unchanged. `selectedGymId` and `gymNavKey` are plain state — they do not affect mount/unmount behavior.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` unchanged. `paddingBottom: bottomInset + theme.spacing.sm` applied.
+
+**Top safe area — HomeScreen** — PASS. `useSafeAreaInsets()` and `makeStyles(theme, insets.top)` unchanged.
+
+**Cross-module import rule** — PASS. `AppShell.tsx` imports `GymNavigator` from `../mod-gym-directory/GymNavigator` (module root, public entry-point). No new cross-module imports introduced. `GymNavigator.tsx` is modified in-module (mod-gym-directory owns it); no cross-module import issue in the change itself. PASS.
+
+**i18n completeness** — PASS. No locale keys added or removed. `i18n.test.ts` passes (included in 314-test run). All `home.*` keys present in EN and zh-TW.
+
+**Migration correctness** — PASS. `20260924000002_mod_012_home.sql` unchanged by this fix.
+
+**No hardcoded hex colors** — PASS. No style changes introduced by this fix.
+
+**No inline string literals** — PASS. No new user-facing strings introduced.
+
+**Gold-plating check** — PASS. The `initialGymId` + `gymNavKey` mechanism is the minimal additive change needed to satisfy AC-114's deep-link requirement. No speculative features added. Note: The spec's Phase 1 carve-out note in AC-114 ("deep-link to a specific gym's detail screen is a future enhancement") was written when the implementation was tab-switch only — the Engineer has now implemented the deep-link ahead of schedule. This is an early delivery of a previously deferred feature, not gold-plating; AC-114 as written requires navigation to the gym's detail screen and the implementation now satisfies it literally. The spec note is superseded by the implementation.
+
+---
+
+#### Adjacent code check (fix proximity)
+
+Changes touch: `GymNavigator.tsx` (two optional props, one useEffect, one import), `AppShell.tsx` (two state vars, handler changes, prop passes).
+
+Adjacent items verified:
+- `GymNavigator` `navigateToDetail`, `navigateToRequest`, `navigateToList`, `navigateToRoutes` — all unchanged. PASS.
+- `GymNavigator` JSX view-switch block — unchanged; `view.name === 'list'`, `view.name === 'detail'`, etc. all present. PASS.
+- `AppShell` `handleSelectClimber` and `handleClimberProfileBack` — unchanged. PASS.
+- `AppShell` overlay render for `UserProfileScreen` — unchanged. PASS.
+- `AppShell` `HomeNavigator` prop set (`session`, `isActive`, `onViewAllGyms`, `onSelectGym`, `onSelectClimber`) — all still forwarded correctly. `onSelectGym={handleSelectGym}` receives the updated handler. PASS.
+- `GymNavigator` initial view state `useState<GymView>({ name: 'list' })` — unchanged; initial view is still the list on first render. The deep-link effect only fires when `gymNavKey` changes (i.e., when AppShell increments it on a chip tap). PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 8
+
+| AC / Check | QA Run 7 | QA Run 8 |
+|---|---|---|
+| AC-110 | PASS | PASS |
+| AC-111 | PASS | PASS |
+| AC-112 | PASS | PASS |
+| AC-113 | PASS | PASS |
+| AC-114 | PASS (spec note — tab-switch only) | REGRESSION PASS — deep-links to gym detail |
+| AC-115 | PASS | PASS |
+| AC-123 | REGRESSION PASS (behavioral + import rule) | PASS |
+| AC-124 | PASS | PASS |
+| Cross-module import rule | REGRESSION PASS | PASS |
+| `npx tsc --noEmit` | PASS — 0 errors | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 314 tests, 27 suites | PASS — 314 tests, 27 suites |
+
+**Result: ALL CLEAR — MOD-012 ready for human QA**
+
+All acceptance criteria pass. The AC-114 deep-link fix is verified: tapping a saved gym chip now navigates directly to that gym's detail screen (not just the gym list tab). The two new `GymNavigator` props are optional and backward-compatible — no mod-gym-directory tests required changes. No regressions introduced. TypeScript clean (0 errors). 314/314 tests pass.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
