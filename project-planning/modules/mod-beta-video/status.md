@@ -452,3 +452,129 @@ The confirmed library choice (`expo-image-picker` for Phase 1 selection, `expo-a
 - AC-035: PASS — MP4-only ingest validation, `.mov` rejected, HEVC rejected
 - AC-036: PASS — progress overlay 0-100%, blocks interaction during upload
 - AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
+
+---
+
+## QA Run 4 — Regression — 2026-09-25
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after expo-av → expo-video migration, iOS build fix)
+**Re-verifying**: BetaVideoPlayer.tsx uses expo-video (VideoView + useVideoPlayer); no remaining expo-av references in mod-beta-video files; mock files correct; all 314 tests pass; all ACs unaffected
+
+---
+
+### Scope
+
+Engineer migrated BetaVideoPlayer from expo-av to expo-video to fix an iOS native build failure (xcodebuild error 65: EXEventEmitter.h not found in expo-modules-core@57). This is a library-swap regression check: verify the migration is complete and correct, and that no AC is affected by the change.
+
+---
+
+### Static Verification
+
+**BetaVideoPlayer.tsx imports** — PASS
+`src/modules/mod-beta-video/components/BetaVideoPlayer.tsx` line 12 imports `{ VideoView, useVideoPlayer }` from `'expo-video'`. No import from `expo-av`. Uses `useVideoPlayer(videoUrl, (p) => { p.loop = false })` to create the player and `<VideoView player={player} contentFit="contain" nativeControls />` to render inline. Component props are unchanged (`videoUrl`, `thumbnailUrl`, `durationSeconds`, `caption`, `testID`).
+
+**No remaining expo-av references in mod-beta-video source** — PASS (with note)
+`grep -r "expo-av" src/modules/mod-beta-video/` returns two matches, both in comments only:
+- `src/modules/mod-beta-video/test-utils.tsx` line 8: stale comment "expo-av is mocked globally via moduleNameMapper" — functional code is unaffected; this comment is cosmetically stale but does not affect compilation or test execution.
+- `src/modules/mod-beta-video/components/BetaVideoPlayer.tsx` line 9: comment "SDK 57 successor to expo-av" — accurate historical context, not a functional reference.
+No production import of expo-av exists anywhere in the module.
+
+**No expo-av in package.json** — PASS
+`grep -c "expo-av" package.json` returns 0. expo-av is fully removed from dependencies.
+
+**expo-video present in package.json** — PASS
+`package.json` line 20: `"expo-video": "~57.0.5"`. Installed via `npx expo install` (SDK-compatible version per production.md Native Dependency Installation convention). `moduleNameMapper` maps `^expo-video$` → `<rootDir>/__mocks__/expo-video.js`.
+
+**Mock files** — PASS
+- `__mocks__/expo-video.js` exists. Provides `VideoView` (renders a `View`), `useVideoPlayer` (returns mock player with `play`, `pause`, `addListener`), and `createVideoPlayer`. All three exports match what BetaVideoPlayer imports and uses.
+- `__mocks__/expo-av.js` does not exist (deleted). Confirmed: `ls __mocks__/` shows only `expo-blob.js`, `expo-video.js`, `react-native-safe-area-context.js`.
+
+**BetaVideoPlayer.test.tsx comment** — PASS
+Line 7: "expo-video is mocked globally via moduleNameMapper (expo-video → __mocks__/expo-video.js)." Updated correctly.
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 314 tests, 27 suites, 0 failures (up from 277/24 in QA Run 3 — 37 tests added across all modules since QA Run 3; all MOD-005 suites pass)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+
+Console warnings about `act()` (Icon state updates) appear across multiple unrelated modules (BetaVideoUploader, RouteListScreen, RouteSubmitScreen, RequestGymScreen) — these are pre-existing and not introduced by this fix. All suites still pass.
+
+---
+
+### AC-by-AC Regression Check
+
+**AC-030** — PASS (unaffected)
+Duration validation is in `BetaVideoUploader.validateDuration()`, entirely separate from the video player. Unchanged. Tests pass.
+
+**AC-031** — PASS (unaffected)
+Upload pipeline is in `beta-video-service.ts`. No changes to the upload path. Single `storage.upload` call with `contentType: 'video/mp4'`; `thumbnail_url` set to `videoPath`. Tests pass.
+
+**AC-032** — PASS (unaffected)
+`route_id` threading from `BetaVideoSection` → `BetaVideoUploader` → `uploadBetaVideo` → DB insert is unchanged. Tests pass.
+
+**AC-033** — PASS
+`BetaVideoPlayer` renders inline via `expo-video`'s `VideoView` with `nativeControls` and `contentFit="contain"`. No external link or browser is opened. The thumbnail-to-player state transition works: pressing play hides the thumbnail/play-button overlay and shows `VideoView`. Verified in `BetaVideoPlayer.test.tsx` — play button disappears after press (line 70–77). No regression in inline playback behavior.
+
+**AC-034** — PASS (unaffected)
+`BetaVideoPlayer` is a self-contained component with the same public props (`videoUrl`, `thumbnailUrl`, `durationSeconds`, `caption`). Component shape unchanged — MOD-006 can still embed it. MOD-006 is not yet built; this remains a pre-existing dependency-ordering gap, not a MOD-005 defect.
+
+**AC-035** — PASS (unaffected)
+`validateVideoFormat()` in `BetaVideoUploader.tsx` is unchanged. `.mov` rejection and HEVC rejection paths intact. Tests pass.
+
+**AC-036** — PASS (unaffected)
+Progress overlay logic in `BetaVideoUploader` is unchanged. No interaction with the video player. Tests pass.
+
+**AC-037** — PASS (unaffected)
+`BetaVideoSection` entry point and `RouteDetailScreen` integration are unchanged. Tests pass.
+
+---
+
+### Integration Checks
+
+**Cross-module import rule** — PASS
+`RouteDetailScreen.tsx` still imports only `BetaVideoSection` from `mod-beta-video`. No internal `screens/` or `components/` imported from MOD-005 outside its directory.
+
+**Supabase client singleton** — PASS
+`beta-video-service.ts` imports from `../../lib/supabase`; no `createClient()` at call sites.
+
+**i18n** — PASS (unchanged; no locale files touched by this fix)
+
+**No hardcoded hex colors** — PASS (unchanged; no styling changes in this fix)
+
+**Safe area insets** — PASS (not applicable to MOD-005 sub-components; RouteDetailScreen unchanged)
+
+**production.md Native Dependency Installation convention** — PASS
+`expo-video ~57.0.5` was installed via `npx expo install expo-video` per the convention added in PRD Revision 11. The version string is SDK-resolver-chosen, not hand-pinned.
+
+**production.md Native Build Gate convention** — PASS
+Engineer ran `npx expo run:ios` (iPhone 17 Pro simulator) — Build Succeeded, 0 errors, 1 pre-existing `-lc++` linker warning (not introduced by this fix). App launched, JS bundle loaded (747ms, 973 modules). No xcodebuild error 65.
+
+---
+
+### Open Items (unchanged)
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker)
+The confirmed library choice (expo-video ~57.0.5 for playback, expo-image-picker for Phase 1 selection) is documented in status.md Engineering Progress but not in spec.md itself. Remains a Doc-Sync task. Not a blocker for human QA.
+
+---
+
+### Verdict
+
+**PASS** — expo-av → expo-video migration verified. No expo-av imports in production source. expo-video.js mock present; expo-av.js mock absent. package.json updated correctly. TypeScript clean (0 errors). 314/314 tests pass. All AC-030–037 unaffected — no behavioral regression from the library swap.
+
+**MOD-005 is ready for human QA.** iOS build confirmed passing by Engineer (Build Succeeded, 0 errors, app launched on iPhone 17 Pro simulator). All ACs pass:
+- AC-030: PASS — 60-second duration cap enforced before upload
+- AC-031: PASS — Phase 1 placeholder thumbnail compliant per PM ruling (PRD Revision 10); single upload, valid retrievable URL
+- AC-032: PASS — one BetaVideo row attached to exactly one route
+- AC-033: PASS — inline playback via expo-video VideoView, no external links
+- AC-034: PASS — BetaVideoPlayer component exposed for MOD-006 embedding (MOD-006 not yet built — pre-existing dependency gap)
+- AC-035: PASS — MP4-only ingest validation, .mov rejected, HEVC rejected
+- AC-036: PASS — progress overlay 0-100%, blocks interaction during upload
+- AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
