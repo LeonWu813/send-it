@@ -267,8 +267,25 @@
       "loadFailed": "Failed to load beta videos. Please try again.",
       "uploadFailed": "Failed to upload beta video. Please try again.",
       "tooLong": "Video must be 60 seconds or shorter.",
-      "invalidFormat": "Only MP4 or MOV videos are supported. Please select a different file.",
+      "invalidFormat": "Only MP4 videos are supported. Please select a different file.",
       "permissionDenied": "Photo library access is required to select a video."
+    }
+  },
+  "socialFeed": {
+    "title": "Activity Feed",
+    "empty": "Follow climbers to see their activity here.",
+    "logged": "LOGGED A SEND",
+    "like": "Like",
+    "unlike": "Unlike",
+    "follow": "Follow",
+    "unfollow": "Unfollow",
+    "followers": "Followers",
+    "following": "Following",
+    "privateProfile": "Followers Only",
+    "errors": {
+      "loadFailed": "Failed to load activity feed. Please try again.",
+      "profileLoadFailed": "Failed to load profile. Please try again.",
+      "followFailed": "Failed to update follow status. Please try again."
     }
   },
   "common": {
