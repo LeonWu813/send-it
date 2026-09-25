@@ -529,3 +529,140 @@ No new regressions in adjacent logic.
 Both human-QA bugs are resolved: zh-TW locale uses "岩館" throughout the `home.*` namespace; saved gyms refresh on every Home tab activation via the `isActive` prop and focus-refetch `useEffect`. All 157 tests pass (157 total, 17 suites). No regressions introduced. TypeScript clean (0 errors). The outstanding AC-114 spec note (tab-switch vs. deep-link) remains a PM-level clarification item, not a blocking bug.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip.
+
+---
+
+### QA Run 4 — Regression — 2026-09-24
+
+**Workflow**: regression-test (re-verification after Engineer wired `fetchFollowing` from MOD-006)
+
+**Change being re-verified**: Engineer replaced the Following Climbers placeholder with the real `fetchFollowing` call. Items being re-verified from QA Run 3 (all previously PASS) plus full AC-123 behavioral check now that MOD-006 is wired.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npm test -- --watchAll=false`: PASS — 313 tests, 27 suites, 0 failures
+- Test count increased from 157 (QA Run 3) to 313, consistent with Engineer's stated integration of MOD-006 tests into the suite. All suites pass.
+
+---
+
+#### AC-123 — Full behavioral verification (MOD-006 now wired)
+
+**fetchFollowing called on mount:**
+`HomeScreen.tsx` lines 136–139: `useEffect(() => { void loadFollowing(); }, [loadFollowing])`. `loadFollowing` calls `fetchFollowing(session.user.id)` (line 127). Fires on initial mount. PASS.
+
+**fetchFollowing called on isActive flip:**
+`HomeScreen.tsx` lines 142–147: `useEffect(() => { if (isActive) { void loadFollowing(); } }, [isActive, loadFollowing])`. Fires each time `isActive` becomes `true` — same pattern as `loadSavedGyms`. PASS.
+
+**fetchFollowing called with session.user.id:**
+Line 127: `const users = await fetchFollowing(session.user.id)`. Test `'calls fetchFollowing with the current user id (AC-123)'` asserts `mockFetchFollowing` was called with `'user-001'` (the MOCK_SESSION user ID). PASS.
+
+**Empty state uses i18n key (not raw string):**
+Line 237: `<Text style={styles.emptyText}>{t('home.following.empty')}</Text>`. No raw string literal. `locales/en/common.json` `home.following.empty` = `"Follow climbers to see their activity"`. Test asserts `screen.getByText('Follow climbers to see their activity')`. PASS.
+
+**Strip renders avatar + display name:**
+Lines 244–259: for each `user` in `followingUsers`, renders a `View` containing an `Image` (avatar) and a `Text` (display_name). `user.avatar_url` is used for the image URI; `user.display_name` is the chip label. Test `'renders followed user chips when the user follows others (AC-123)'` asserts both "Alice Chen" and "Bob Lin" are visible. PASS.
+
+**FAIL AC-123 — tap-to-navigate not implemented:**
+AC-123 spec text: "Tapping a climber shall navigate to that climber's profile."
+
+Input: user taps a climber chip in the Following strip.
+Actual: no interaction handler is attached to the climber chip. The chip renders as a plain `View` (line 245 of `HomeScreen.tsx`) — not a `Pressable`. `HomeScreenProps` interface (lines 42–51) defines no `onSelectClimber` callback. `AppShell.tsx` passes no such callback. No navigation to the climber's profile screen occurs on tap.
+Expected per spec: tapping a climber navigates to that climber's profile.
+
+The spec includes no Phase 1 deferral clause for this behavior (unlike AC-114 which explicitly documents tab-switch as the Phase 1 scope with a deep-link carve-out). AC-123 is unqualified: the tap must navigate to the profile.
+
+Route to: Engineer. Required changes:
+1. Add `onSelectClimber: (userId: string) => void` to `HomeScreenProps`.
+2. Wrap each climber chip `View` in a `Pressable` with `onPress={() => onSelectClimber(user.id)}`.
+3. Wire `onSelectClimber` through `HomeNavigator` props.
+4. Implement `handleSelectClimber` in `AppShell` (switches to Profile tab and passes the climber's user ID so `ProfileNavigator` can navigate to the correct user profile; exact implementation depends on `ProfileNavigator`'s public API for deep-linking to another user's profile).
+5. Add a test asserting that pressing a climber chip calls `onSelectClimber` with the correct user ID.
+
+**Cross-module import rule:**
+PASS — `HomeScreen.tsx` imports `fetchFollowing` from `../../mod-social-feed/social-feed-service` (public service function) and `FollowingUser` from `../../mod-social-feed/types` (public type). No imports from `mod-social-feed/screens/` or `mod-social-feed/components/`. PASS.
+
+**i18n keys — following section:**
+- EN `home.following.title`: "Following". PASS.
+- EN `home.following.empty`: "Follow climbers to see their activity" (updated from "Follow climbers to see them here"). PASS.
+- zh-TW `home.following.title`: "追蹤中". PASS.
+- zh-TW `home.following.empty`: "追蹤攀岩者以查看他們的動態" (updated from "追蹤攀岩者以在此查看"). PASS.
+- Both locales have all `home.*` keys. `i18n.test.ts` passes. PASS.
+
+**No inline string literals — following section:**
+PASS. `t('home.following.title')` and `t('home.following.empty')` used. No raw strings in the following section render path.
+
+**No hardcoded hex colors — following section:**
+PASS. `climberAvatar`, `climberAvatarPlaceholder`, `climberName` all use `theme.colors.*` and `theme.spacing.*` tokens. `borderRadius: 28` is a layout constant (circular avatar), not a color — acceptable.
+
+---
+
+#### Re-verification of all previously passing items
+
+**AC-110** — PASS. `AppShell.tsx` and `TabBar.tsx` unchanged. `useState<TabKey>('home')` default intact. TabBar tests (5) all pass.
+
+**AC-111** — PASS. Section order in `HomeScreen.tsx` JSX unchanged: Banners → Saved Gyms → Following Climbers.
+
+**AC-112** — PASS. `banners.ts` and banner rendering unchanged. Banner test passes.
+
+**AC-113** — PASS. "View All" callback and saved-gym strip unchanged. Tests pass.
+
+**AC-114** — PASS with spec note carried forward. `onSelectGym` and `AppShell.handleSelectGym` behavior unchanged.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present). Test assertion passes.
+
+**AC-124** — PASS. `followingLoading` state guards the empty state: `{!followingLoading && followingUsers.length === 0 ? <Text>{t('home.following.empty')}</Text> : <ScrollView>...}`. When `fetchFollowing` resolves to `[]`, empty state renders. Test asserts "Follow climbers to see their activity" is visible. PASS.
+
+**isActive / focus-refetch for saved gyms** — PASS. `loadSavedGyms` useEffect pattern unchanged. Focus-refetch test passes.
+
+**isActive / focus-refetch for following** — PASS. New `loadFollowing` useEffect mirrors the saved-gyms pattern exactly. New test `'refetches following list when isActive changes from false to true'` passes.
+
+**Keep-alive mount strategy** — PASS. `AppShell.tsx` keep-alive logic unchanged.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` unchanged.
+
+**Top safe area — HomeScreen** — PASS. `useSafeAreaInsets()` and `makeStyles(theme, insets.top)` unchanged.
+
+**Migration correctness** — PASS. `20260924000002_mod_012_home.sql` unchanged by this wiring.
+
+**Gold-plating check** — PASS. No features beyond spec introduced. The avatar-placeholder `View` for null `avatar_url` is within spec scope (avatar is required by AC-123; a placeholder for missing URLs is appropriate defensive rendering, not gold-plating).
+
+---
+
+#### Adjacent code check (fix proximity)
+
+Changes touch: `HomeScreen.tsx` (new state, callbacks, useEffects, JSX for following strip, new styles), `locales/en/common.json` (`home.following.empty` value), `locales/zh-TW/common.json` (`home.following.empty` value), `HomeScreen.test.tsx` (new mock, new fixtures, new tests).
+
+Adjacent items verified:
+- `home.savedGyms.*` keys in both locales — unchanged. PASS.
+- `home.banners.*` keys in both locales — unchanged. PASS.
+- Initial-mount `useEffect([loadSavedGyms])` in `HomeScreen.tsx` — preserved verbatim (lines 106–108). PASS.
+- Focus-refetch `useEffect([isActive, loadSavedGyms])` — preserved verbatim (lines 114–118). PASS.
+- Saved-gym strip JSX and styles — unchanged. PASS.
+- `HomeNavigator.tsx` and `AppShell.tsx` — unchanged by this wiring (no new props added to those files for the following section). PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 4
+
+| AC | QA Run 1 | QA Run 2 | QA Run 3 | QA Run 4 |
+|----|----------|----------|----------|----------|
+| AC-110 | PASS | PASS | PASS | PASS |
+| AC-111 | PASS | PASS | PASS | PASS |
+| AC-112 | PASS | PASS | PASS | PASS |
+| AC-113 | PASS | PASS | PASS | PASS |
+| AC-114 | PASS (spec note) | PASS (spec note) | PASS (spec note) | PASS (spec note) |
+| AC-115 | FAIL | REGRESSION PASS | PASS | PASS |
+| AC-123 | PASS | PASS | PASS | FAIL — tap-to-navigate not implemented |
+| AC-124 | PASS | PASS | PASS | PASS |
+
+**Result: BUGS FOUND — 1 failure (AC-123 tap-to-navigate)**
+
+AC-123 partially passes: `fetchFollowing` is called correctly (on mount and on `isActive` flip, with `session.user.id`); the strip renders avatar + display name for each followed user; the empty state is correctly i18n-keyed. The gap is behavioral: the climber chip is a plain `View` with no `onPress` handler. AC-123 requires tap-to-navigate to the climber's profile — this is unimplemented.
+
+Route to: Engineer. See AC-123 failure entry above for the specific changes required.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip.

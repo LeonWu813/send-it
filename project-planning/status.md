@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-notifications
-mode: verify
-module: mod-notifications
-result: success (AC-058 scope blocker pre-flagged; all other ACs pass)
-commit: e05e5c7e60fc3b739806608b9d3dbe466963fc54
-timestamp: 2026-09-24T22:00:00Z
+agent: qa-mod-home
+mode: regression
+module: mod-home
+result: bugs-found (AC-123 tap-to-navigate unimplemented; 313/313 tests pass, tsc clean)
+commit: 3bb221c302007e396b1ac9ef85ef777b9d2c127a
+timestamp: 2026-09-24T22:30:00Z
 ```
 
 ## PM Updates
