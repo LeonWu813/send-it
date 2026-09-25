@@ -194,3 +194,95 @@ The AC-035 format validation bug is the only clear implementation defect: `.mov`
 The AC-031 thumbnail issue requires PM clarification on Phase 1 scope before routing to Engineer.
 
 The library-choice doc gap is a Doc-Sync task.
+
+---
+
+## QA Run 2 — Regression — 2026-09-24
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after AC-035 bug fix)
+**Re-verifying**: AC-035 — `.mov` files with no mimeType must be rejected; error message must say MP4 only
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 277 tests, 24 suites, 0 failures (up from 225/21 — 52 tests added across all modules since QA Run 1; all MOD-005 suites pass)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (includes new `.mov` rejection test)
+
+---
+
+### AC-035 Fix Verification
+
+**REGRESSION PASS AC-035**: original failure scenario resolved.
+
+Original failure: `Input=[video with .mov extension and no mimeType], Actual=[accepted, no error surfaced], Expected=[rejected with clear error]`
+
+Fix verified in `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` line 82:
+```
+if (!asset.mimeType && !asset.uri.toLowerCase().endsWith('.mp4')) {
+  return t('betaVideo.errors.invalidFormat');
+}
+```
+- A `.mov` URI with no `mimeType` now hits the fallback branch and returns the error — no longer passes through as `null`.
+- A `.mp4` URI with no `mimeType` correctly returns `null` (accepted) — the fix is precisely scoped.
+- The `mimeType`-present branch (line 77) is unchanged: `video/mp4` passes, everything else (e.g. `video/hevc`) fails — no regression to the HEVC path.
+- Locale messages confirmed at HEAD:
+  - `en`: "Only MP4 videos are supported. Please select a different file." — correct per spec (MP4 only, no MOV mention)
+  - `zh-TW`: "僅支援 MP4 格式的影片，請選擇其他檔案。" — correct per spec
+
+New test confirmed present and passing in `BetaVideoUploader.test.tsx`:
+- Test name: "AC-035: rejects .mov files with no mimeType (MP4 container only)"
+- Input: `uri: 'file:///video.mov'`, `mimeType: undefined`
+- Asserts: error text matching `/Only MP4 videos are supported/i` appears; `uploadBetaVideo` not called
+- Result: PASS
+
+---
+
+### Re-verification of Previously Passing ACs
+
+**AC-030** — PASS (unaffected)
+`validateDuration()` is a separate function from `validateVideoFormat()` — the fix touched only the format branch. The 90-second rejection test still passes; `MAX_DURATION_SECONDS = 60` boundary unchanged.
+
+**AC-031** — PARTIAL PASS (spec issue status unchanged — pending PM ruling; not affected by this fix)
+The thumbnail-as-video-URI simplification is unchanged. The fix did not touch upload logic, only the pre-upload format gate.
+
+**AC-032** — PASS (unaffected)
+`route_id` threading from `BetaVideoSection` through `BetaVideoUploader` to `uploadBetaVideo` is unchanged. The fix is in the validation gate only, before upload begins.
+
+**AC-033** — PASS (unaffected)
+`BetaVideoPlayer` is a separate component with no dependency on `validateVideoFormat`. Inline playback behavior unchanged.
+
+**AC-034** — PASS (unaffected)
+`BetaVideoPlayer` exposure is unchanged. MOD-006 dependency ordering gap is pre-existing and unrelated to this fix.
+
+**AC-036** — PASS (unaffected)
+The progress `Modal` and `isUploading` state are controlled in `handleSelectVideo` after the validation gates pass. The fix adds an earlier return path on `.mov` rejection — `setIsUploading(true)` is never reached on rejection, which is correct. The `finally` block still clears `isUploading` on upload completion or failure.
+
+**AC-037** — PASS (unaffected)
+`BetaVideoSection` entry point and the `routeId` prop pre-attachment are unchanged. The "Add Beta Video" button renders and triggers the picker flow as before.
+
+**Integration checks** — all PASS (unchanged from QA Run 1; fix is isolated to `validateVideoFormat()` in `BetaVideoUploader.tsx` and the test file)
+
+**Adjacent-logic regression check**: the fix is in the `validateVideoFormat` function only. Both branches are self-contained: the mimeType-present branch is untouched; the fallback branch now has a single, precise condition. No shared state, no early returns that affect other ACs, no data structure changes. No new regressions found.
+
+---
+
+### Open Items (unchanged from QA Run 1 — not blocking AC-035 clearance)
+
+**SPEC ISSUE — AC-031 thumbnail generation scope** (pending PM ruling)
+Phase 1 simplification (`localThumbnailUri = asset.uri`) is still in place. Not a blocker for AC-035 clearance. Requires PM ruling on whether frame extraction is required in Phase 1.
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker)
+
+---
+
+### Verdict
+
+**PASS** — AC-035 fix verified. No regressions in AC-030/031/032/033/034/036/037.
+
+MOD-005 is ready for human QA with one standing note: the AC-031 thumbnail question (video URI used as thumbnail placeholder vs. extracted JPEG frame) is pending PM ruling and is not a blocking bug — it is a spec-scope question. All other ACs pass.
