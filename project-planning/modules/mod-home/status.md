@@ -666,3 +666,35 @@ AC-123 partially passes: `fetchFollowing` is called correctly (on mount and on `
 Route to: Engineer. See AC-123 failure entry above for the specific changes required.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip.
+
+---
+
+### Bugfix — AC-123 tap-to-navigate — 2026-09-24
+
+**Bug**: Climber chips in the Following strip were plain `View` elements with no `onPress` handler. Tapping a climber chip did nothing. `HomeScreenProps` had no `onSelectClimber` callback; the prop was not threaded through `HomeNavigator` or handled in `AppShell`.
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — added `onSelectClimber: (userId: string) => void` to `HomeScreenProps`; wrapped each climber chip `View` in a `Pressable` with `onPress={() => onSelectClimber(user.id)}`; added `accessibilityRole="button"` and `accessibilityLabel={user.display_name}` to the chip.
+- `src/modules/mod-home/HomeNavigator.tsx` — added `onSelectClimber: (userId: string) => void` to `HomeNavigatorProps`; threaded the prop through to `HomeScreen`.
+- `src/modules/mod-home/AppShell.tsx` — added `targetUserId: string | null` state (null = no overlay); added `handleSelectClimber(userId)` sets `targetUserId`; added `handleClimberProfileBack()` clears `targetUserId`; passed `onSelectClimber={handleSelectClimber}` to `HomeNavigator`; imported `UserProfileScreen` from `mod-social-feed/screens/UserProfileScreen` (permitted: public entry-point import per invocation scope); renders `UserProfileScreen` in an `absoluteFill` overlay with `zIndex: 10` when `targetUserId` is non-null; overlay dismissed via `onBack` callback.
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — added `onSelectClimber={jest.fn()}` to all existing renders (11 renders updated); added new test "calls onSelectClimber with the correct user ID when a climber chip is tapped (AC-123)" using `FOLLOWING_FIXTURES` and `fireEvent.press`.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 314 tests, 27 suites, all pass (+1 from new tap-to-navigate test) |
+| AC-123: climber chip is Pressable with onPress → onSelectClimber(user.id) | PASS |
+| AC-123: onSelectClimber threaded HomeScreen → HomeNavigator → AppShell | PASS |
+| AC-123: AppShell handleSelectClimber sets targetUserId, opens UserProfileScreen overlay | PASS |
+| AC-123: overlay dismissed via onBack → clears targetUserId | PASS |
+| New test: onSelectClimber called with correct userId on chip press | PASS |
+| All pre-existing renders pass with new required prop | PASS |
+| Cross-module import: UserProfileScreen imported as public entry-point (per invocation scope) | PASS |
+| No hardcoded hex colors (overlayContainer uses zIndex only, no color tokens) | PASS |
+| No inline string literals introduced | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| Git scope automated check: pre-existing unstaged changes outside mod-home are from session start, not this fix | NOTE |
+
+**Result: READY FOR QA RE-VERIFICATION**

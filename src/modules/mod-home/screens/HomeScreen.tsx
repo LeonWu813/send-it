@@ -48,6 +48,8 @@ interface HomeScreenProps {
   isActive: boolean;
   onViewAllGyms: () => void;
   onSelectGym: (gymId: string) => void;
+  /** Called when a climber chip is tapped. Navigates to that climber's profile (AC-123). */
+  onSelectClimber: (userId: string) => void;
 }
 
 /** Minimal gym shape needed for the saved-gyms strip. */
@@ -64,6 +66,7 @@ export default function HomeScreen({
   isActive,
   onViewAllGyms,
   onSelectGym,
+  onSelectClimber,
 }: HomeScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -242,7 +245,13 @@ export default function HomeScreen({
             contentContainerStyle={styles.climberStripRow}
           >
             {followingUsers.map((user) => (
-              <View key={user.id} style={styles.climberChip}>
+              <Pressable
+                key={user.id}
+                style={styles.climberChip}
+                onPress={() => onSelectClimber(user.id)}
+                accessibilityRole="button"
+                accessibilityLabel={user.display_name}
+              >
                 {user.avatar_url ? (
                   <Image
                     source={{ uri: user.avatar_url }}
@@ -256,7 +265,7 @@ export default function HomeScreen({
                 <Text style={styles.climberName} numberOfLines={2}>
                   {user.display_name}
                 </Text>
-              </View>
+              </Pressable>
             ))}
           </ScrollView>
         )}

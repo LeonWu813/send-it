@@ -6,11 +6,12 @@
  * be added as additional view states here without changing AppShell.
  *
  * Props forwarded from AppShell:
- *   session       — active Supabase session.
- *   onViewAllGyms — switches AppShell activeTab to 'gyms'.
- *   onSelectGym   — switches AppShell activeTab to 'gyms' (deep-link into a
- *                   specific gym is a future enhancement; GymNavigator manages
- *                   its own navigation state).
+ *   session          — active Supabase session.
+ *   onViewAllGyms    — switches AppShell activeTab to 'gyms'.
+ *   onSelectGym      — switches AppShell activeTab to 'gyms' (deep-link into a
+ *                      specific gym is a future enhancement; GymNavigator manages
+ *                      its own navigation state).
+ *   onSelectClimber  — opens the climber's UserProfileScreen overlay (AC-123).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -23,6 +24,7 @@ interface HomeNavigatorProps {
   isActive: boolean;
   onViewAllGyms: () => void;
   onSelectGym: (gymId: string) => void;
+  onSelectClimber: (userId: string) => void;
 }
 
 export default function HomeNavigator({
@@ -30,6 +32,7 @@ export default function HomeNavigator({
   isActive,
   onViewAllGyms,
   onSelectGym,
+  onSelectClimber,
 }: HomeNavigatorProps): React.JSX.Element {
   return (
     <HomeScreen
@@ -37,6 +40,7 @@ export default function HomeNavigator({
       isActive={isActive}
       onViewAllGyms={onViewAllGyms}
       onSelectGym={onSelectGym}
+      onSelectClimber={onSelectClimber}
     />
   );
 }

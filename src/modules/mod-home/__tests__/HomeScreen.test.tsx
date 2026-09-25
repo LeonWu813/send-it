@@ -101,6 +101,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -121,6 +122,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -143,6 +145,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -163,6 +166,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={onViewAllGyms}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -187,6 +191,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={onSelectGym}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -211,6 +216,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -229,6 +235,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -248,6 +255,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -268,6 +276,7 @@ describe('HomeScreen', () => {
         isActive={true}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -275,6 +284,30 @@ describe('HomeScreen', () => {
     await waitFor(() => {
       expect(mockFetchFollowing).toHaveBeenCalledWith('user-001');
     });
+  });
+
+  it('calls onSelectClimber with the correct user ID when a climber chip is tapped (AC-123)', async () => {
+    mockFetchSavedGymIds.mockResolvedValue([]);
+    mockFetchFollowing.mockResolvedValue(FOLLOWING_FIXTURES);
+    const onSelectClimber = jest.fn();
+
+    render(
+      <HomeScreen
+        session={MOCK_SESSION}
+        isActive={true}
+        onViewAllGyms={jest.fn()}
+        onSelectGym={jest.fn()}
+        onSelectClimber={onSelectClimber}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice Chen')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByText('Alice Chen'));
+    expect(onSelectClimber).toHaveBeenCalledWith('user-002');
   });
 
   // ── Focus-triggered refetch (Bug 2 fix) ─────────────────────────────────────
@@ -289,6 +322,7 @@ describe('HomeScreen', () => {
         isActive={false}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -305,6 +339,7 @@ describe('HomeScreen', () => {
           isActive={true}
           onViewAllGyms={jest.fn()}
           onSelectGym={jest.fn()}
+          onSelectClimber={jest.fn()}
         />,
       );
     });
@@ -325,6 +360,7 @@ describe('HomeScreen', () => {
         isActive={false}
         onViewAllGyms={jest.fn()}
         onSelectGym={jest.fn()}
+        onSelectClimber={jest.fn()}
       />,
       renderOptions(),
     );
@@ -339,6 +375,7 @@ describe('HomeScreen', () => {
           isActive={true}
           onViewAllGyms={jest.fn()}
           onSelectGym={jest.fn()}
+          onSelectClimber={jest.fn()}
         />,
       );
     });

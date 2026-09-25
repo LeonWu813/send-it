@@ -18,9 +18,19 @@
  *   Navigating directly into a specific gym's detail view is a future
  *   enhancement — GymNavigator manages its own internal navigation state.
  *
+ * Climber profile overlay (onSelectClimber / AC-123):
+ *   Tapping a climber chip opens UserProfileScreen from MOD-006 as a
+ *   modal-style overlay rendered on top of the current tab content.
+ *   `targetUserId` state drives visibility: non-null = overlay open.
+ *   The overlay's onBack callback clears `targetUserId` to dismiss it.
+ *   This is a Phase 1 approach; a dedicated navigator stack is Phase 2.
+ *
  * Cross-module imports:
  *   - GymNavigator from mod-gym-directory (public entry-point component).
  *   - ProfileNavigator from mod-auth-profile (public entry-point component).
+ *   - UserProfileScreen from mod-social-feed/screens (public entry point per
+ *     invocation scope: cross-module component import is permitted when it is
+ *     the module's public entry-point surface).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -30,6 +40,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
 import GymNavigator from '../mod-gym-directory/GymNavigator';
+import UserProfileScreen from '../mod-social-feed/screens/UserProfileScreen';
 import TabBar, { type TabKey } from './components/TabBar';
 import HomeNavigator from './HomeNavigator';
 
@@ -54,12 +65,20 @@ const styles = StyleSheet.create({
   hidden: {
     display: 'none',
   },
+  overlayContainer: {
+    ...StyleSheet.absoluteFill,
+    // The overlay sits on top of tab content and the tab bar. zIndex ensures
+    // it receives touches before the tab bar does.
+    zIndex: 10,
+  },
 });
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AppShell({ session }: AppShellProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  /** Non-null while a climber profile overlay is open (AC-123). */
+  const [targetUserId, setTargetUserId] = useState<string | null>(null);
   const insets = useSafeAreaInsets();
 
   function handleViewAllGyms(): void {
@@ -72,6 +91,15 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     setActiveTab('gyms');
   }
 
+  function handleSelectClimber(userId: string): void {
+    // Open the climber's profile as a modal-style overlay (AC-123).
+    setTargetUserId(userId);
+  }
+
+  function handleClimberProfileBack(): void {
+    setTargetUserId(null);
+  }
+
   return (
     <View style={styles.root}>
       <View style={styles.tabContentArea}>
@@ -82,6 +110,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             isActive={activeTab === 'home'}
             onViewAllGyms={handleViewAllGyms}
             onSelectGym={handleSelectGym}
+            onSelectClimber={handleSelectClimber}
           />
         </View>
 
@@ -101,6 +130,17 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
         onTabPress={setActiveTab}
         bottomInset={insets.bottom}
       />
+
+      {/* Climber profile overlay — rendered above tab content (AC-123) */}
+      {targetUserId !== null && (
+        <View style={styles.overlayContainer}>
+          <UserProfileScreen
+            targetUserId={targetUserId}
+            session={session}
+            onBack={handleClimberProfileBack}
+          />
+        </View>
+      )}
     </View>
   );
 }
