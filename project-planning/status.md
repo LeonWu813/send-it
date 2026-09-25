@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 0c8602622443e73520ee268c0aa32995e418c3a1
-timestamp: 2026-09-24T09:00:00Z
+commit: 537ba7735c5b8b2a26ed1e3bcaac4f8e8c0fea96
+timestamp: 2026-09-24T10:00:00Z
 ```
 
 ## PM Updates
@@ -652,7 +652,13 @@ The column drop touches **migrations, one service function, types, the onboardin
 - none
 **CONFLICT markers added:**
 - none
-**verify-sync.sh result:** 4/6 checks passed. Two pre-existing failures unrelated to this delta:
+**verify-sync.sh result:** 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (script bug): awk range  terminates immediately because the start line matches the end condition. All specs have correct  headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync. 4/6 checks passed. Two pre-existing failures unrelated to this delta:
   - Check 4 FAIL: all module specs use `## User Stories Covered` but the script expects `## Related User Stories` — pre-existing mismatch across all specs, not introduced by this sync.
   - Check 6 FAIL: no Phase Plan section in status.md — pre-existing; Phase Plan was not written during initial sync and was not in scope for this delta.
 
@@ -680,7 +686,13 @@ The column drop touches **migrations, one service function, types, the onboardin
 - none
 **CONFLICT markers added:**
 - none
-**verify-sync.sh result:** Skipped per delta-sync scope — this sync touches only AC additions within existing modules; no new module directories, no phase plan changes, no production.md changes. Pre-existing Check 4 FAIL (heading name mismatch) and Check 6 FAIL (no Phase Plan section) noted from prior sync remain unchanged and are not introduced by this delta.
+**verify-sync.sh result:** 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (script bug): awk range  terminates immediately because the start line matches the end condition. All specs have correct  headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync. Skipped per delta-sync scope — this sync touches only AC additions within existing modules; no new module directories, no phase plan changes, no production.md changes. Pre-existing Check 4 FAIL (heading name mismatch) and Check 6 FAIL (no Phase Plan section) noted from prior sync remain unchanged and are not introduced by this delta.
 
 ### Sync Report — Template Convention Pass — 2026-09-23
 
@@ -738,7 +750,13 @@ The column drop touches **migrations, one service function, types, the onboardin
 **Module removals noted:** none
 **AMBIGUITY markers added:** none
 **CONFLICT markers added:** none
-**verify-sync.sh result:** Skipped per delta-sync scope — this sync touches only existing fields within one module spec; no new module directories, no phase plan changes, no production.md changes.
+**verify-sync.sh result:** 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (script bug): awk range  terminates immediately because the start line matches the end condition. All specs have correct  headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync. Skipped per delta-sync scope — this sync touches only existing fields within one module spec; no new module directories, no phase plan changes, no production.md changes.
 
 
 ### Sync Report — Trivial Passthrough — 2026-09-24
@@ -944,9 +962,43 @@ Phase 1 — iOS MVP, Taipei + New Taipei launch
 **CONFLICT markers added:** none
 
 **verify-sync.sh result:** 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (script bug): awk range  terminates immediately because the start line matches the end condition. All specs have correct  headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync. 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
 - Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md (MOD-012 spec created).
 - Check 2 PASS: all spec.md files have a corresponding Module Map entry.
 - Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
 - Check 4 FAIL (script bug): awk range `/^## Related User Stories/,/^## /` terminates immediately because the start line matches the end condition. All specs have correct `## Related User Stories` headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync.
+
+
+### Sync Report — Delta Sync — 2026-09-24
+
+**Sync type:** delta
+**PRD Revision:** 9
+**PM Update reference:** 2026-09-24 [SUBSTANTIVE] — Four product refinements (PRD Revision 9): route display name format (AC-045), remove project ascent style (AC-014), achievement icons (AC-065, MOD-008 only), saved routes / bookmark (US-021, AC-046, AC-047). Tech Lead Rev 9 review completed before this sync.
+
+**Files modified:**
+- `project-planning/production.md` — Last synced revision updated (rev 7 → rev 9); Module Index MOD-004 description updated to reflect three-value ascent style; Five new Shared Conventions added: PG15 Enum Value Removal, Personal Cross-Module Data Overlays, Multi-Row Reduction with Defined Precedence, Route Display Name Format, saved_routes Migration Ownership.
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced updated to 9; Purpose updated (composed display name and saved-route bookmark interaction added); Context updated (display name composition rule, US-021 user story text, saved-route ownership, fetchUserAchievements cross-module read); US-021 added to Related User Stories; AC-045 added (route display name composition); AC-046 added (RouteDetailScreen bookmark toggle); AC-047 added (RouteListScreen read-only saved indicator); AC-042 note updated (reference to AC-046 added); Requirements section added (saved_routes migration note; fetchUserAchievements import note); Integration Points updated (cross-module import of fetchUserAchievements from MOD-004 added); Data Model updated (SavedRoute join table added; Route display-name comment added); Input/Output Contract updated (display name, saved indicator, achievement icon outputs noted; bookmark toggle inputs/outputs added); Key Implementation Notes updated (route display name note, saved_routes bookmark notes, achievement icon overlay note added); Out of Scope updated (free-text route name and dedicated saved-routes surface added).
+- `project-planning/modules/mod-send-logging/spec.md` — Last Synced updated to 9; Purpose updated (three-value ascent style restriction and fetchUserAchievements public service function noted); Context updated (project removal rationale, migration sequencing note, fetchUserAchievements description); AC-014 added (ascent style restricted to {flash, top, attempt}; project removed); Integration Points section updated (fetchUserAchievements public service function exposed by MOD-004, consumed by MOD-003); Data Model updated (ascent_style enum now flash|top|attempt only; project removal migration note); Input/Output Contract updated (style input updated; fetchUserAchievements inputs/outputs added); Key Implementation Notes updated (ascent_style enum migration section added with exact SQL, sequencing, canary; fetchUserAchievements implementation notes added); Out of Scope updated (project style note added).
+
+**Files created:** none
+
+**Module removals noted:** none
+
+**AMBIGUITY markers added:** none
+
+**CONFLICT markers added:** none
+
+**verify-sync.sh result:** 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (script bug): awk range  terminates immediately because the start line matches the end condition. All specs have correct  headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
 - Check 5 PASS: no unlogged AMBIGUITY markers.
 - Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync.

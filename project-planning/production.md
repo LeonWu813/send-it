@@ -2,7 +2,7 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 7 (2026-09-24)
+**Last synced from PRD**: rev 9 (2026-09-24)
 
 ---
 
@@ -56,7 +56,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 | MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD (name/avatar/bio/privacy), Profile tab surface with send history and Logout. |
 | MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form, and saved-gym bookmark toggle (add/remove from saved_gyms). |
 | MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, 4-value status lifecycle, submitter-only pending visibility, admin approve/reject/retire via Studio. |
-| MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override.                     |
+| MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override; ascent style restricted to {flash, top, attempt}.     |
 | MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection, client-side compression, thumbnail, storage upload, inline playback.             |
 | MOD-006 | mod-social-feed        | Social Graph & Feed          | Follow/unfollow, chronological activity feed via SECURITY INVOKER RPC, beta-video like reactions.        |
 | MOD-007 | mod-notifications      | Notifications                | Device token registration, notification preferences, Edge Function push fan-out, in-app inbox.            |
@@ -200,6 +200,26 @@ When two modules must touch the same table, split access by verb and enforce wit
 ### Shared Non-Module Constants
 
 Cross-cutting static data that belongs to no single module (e.g., hardcoded banner definitions) lives in `src/lib/` alongside `theme.ts` and `i18n.ts`. These files hold structure, keys, and image refs only; all user-facing strings stay in the i18n locale catalogs and are never inlined into constant files.
+
+### PG15 Enum Value Removal
+
+To drop a value from an existing Postgres enum (not supported directly), use a **single migration file, single transaction** with these steps in order: (1) `CREATE TYPE <name>_v2 AS ENUM (...)` — the new type without the removed value; (2) `UPDATE` the table to backfill any rows that held the removed value to a valid replacement (this backfill MUST run before the column-type swap); (3) `ALTER TABLE ... ALTER COLUMN ... TYPE <name>_v2 USING col::text::<name>_v2`; (4) `DROP TYPE <name>`; (5) `ALTER TYPE <name>_v2 RENAME TO <name>` — restoring the canonical type name so all downstream references remain unbroken. This is distinct from the two-file `ADD VALUE` rule: `CREATE TYPE` (a new type) is fully committed and usable within the same transaction, so no file split is required. The canary for a mis-ordered migration is `ERROR: invalid input value for enum <name>_v2: "<removed_value>"` — that means the backfill (step 2) was omitted or placed after the column swap (step 3).
+
+### Personal Cross-Module Data Overlays
+
+When one module's screen must display a per-item overlay derived from another module's user-scoped data (e.g. "my achievement on this route" from ascents on a route-catalog screen), the owning module exposes a **batched, own-user-scoped** public service function with the shape `fetch...(ids: string[]): Promise<Record<string, Value>>`, preferably a `SECURITY INVOKER` RPC so RLS scopes it automatically to `auth.uid()`. The consuming screen calls it **once per screen** with all visible ids — never one call per item (N+1). The consuming module must not query the owning module's tables directly.
+
+### Multi-Row Reduction with Defined Precedence
+
+When aggregating multiple user rows per key into a single display value (e.g. best ascent style per route), define an explicit precedence order in the owning module's service so all consuming surfaces render consistently; do not rely on last-write or arbitrary ordering. For ascent style the defined precedence is: `flash > top > attempt` (flash is the strongest achievement). Never reduce client-side without a documented precedence.
+
+### Route Display Name Format
+
+A route's display name is composed at display time from its grade and hold color in the form `"{grade} {LocalizedColor}"` (e.g. "V3 Blue"), with the section label appended in parentheses when `section_label` is non-null (e.g. "V3 Blue (Cave)"). The color segment uses the i18n `routes.colors.<color_tag>` string. The display name is not a stored, user-editable field — it is derived from `grade`, `color_tag`, and optional `section_label`. Use this format consistently wherever a route is labeled (gym route list, route detail screen header, any surfaced route reference).
+
+### saved_routes Migration Ownership
+
+MOD-003 owns the `saved_routes` migration (the same principle as MOD-002 owning `saved_gyms` writes, extended: MOD-003 owns both the `saved_routes` table and the save/unsave verbs for routes). The migration mirrors the `saved_gyms` design exactly: `user_id DEFAULT auth.uid()` FK to `users` ON DELETE CASCADE, `route_id` FK to `routes` ON DELETE CASCADE, composite PK `(user_id, route_id)`, own-rows RLS SELECT/INSERT/DELETE, `GRANT SELECT, INSERT, DELETE` to `authenticated`, no UPDATE. Migration file: `2026XXXXXX_mod_003_saved_routes.sql`.
 
 ### TypeScript Strict Mode
 
