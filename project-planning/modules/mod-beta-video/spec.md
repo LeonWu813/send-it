@@ -4,7 +4,8 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 5
+**Last Synced from PRD Revision**: 10
+**Last Updated**: 2026-09-24
 
 ---
 
@@ -38,6 +39,8 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 **AC-030**: The system shall reject beta video uploads longer than 60 seconds before upload begins.
 
 **AC-031**: The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must be standardised to H.264 baseline profile video + AAC audio in an MP4 container.
+
+> **Phase 1 simplification (Revision 10)**: In Phase 1, the thumbnail may use the video URI as a placeholder rather than a true extracted still frame; `BetaVideo.thumbnail_url` must still be a valid, retrievable URL in Phase 1. True frame extraction (e.g. a frame at 1 second, using `expo-video-thumbnails` or equivalent) is deferred to Phase 2.
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
@@ -110,7 +113,8 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - **Codec standardization (H.264/AAC/MP4)**: All client-side compression output must be H.264 (baseline profile) + AAC audio in an MP4 container (AC-031, AC-035). This is required because Supabase Storage serves the file as-uploaded with no server-side transcoding; playability on iOS AVPlayer depends entirely on the container/codec.
 - **Recommended compression library**: `ffmpeg-kit-react-native` is the recommended library because it guarantees H.264 output. Alternative (`expo-image-picker` with `videoQuality: 'medium'`) is device-dependent and may produce HEVC or other codecs on some iPhones, risking unplayable files. The final library choice must be confirmed during MOD-005 engineering and documented in this spec before coding begins.
 - **Ingest validation (AC-035)**: Before inserting the `BetaVideo` row, validate that the muxed output is H.264/AAC/MP4. If validation fails, surface a clear error and do not store the file.
-- **Thumbnail**: Generated client-side (e.g., a frame extracted at 1 second) before upload. Uploaded to Supabase Storage alongside the video. URL stored in `BetaVideo.thumbnail_url`.
+- **Thumbnail (Phase 1 simplification)**: In Phase 1, the thumbnail may use the video URI as a placeholder; `BetaVideo.thumbnail_url` must still be a valid, retrievable URL. Client-side frame extraction (e.g. a frame at 1 second using `expo-video-thumbnails`) is deferred to Phase 2. Uploaded to Supabase Storage alongside the video. URL stored in `BetaVideo.thumbnail_url`.
+- **Phase 1 simplification — client-side frame extraction deferred**: True frame extraction (extracting a still frame from the video at a given timestamp) is a Phase 2 feature. Phase 1 may populate `thumbnail_url` with the video URI as a placeholder, provided it is a valid, retrievable URL (AC-031 Phase 1 clause). Adding a native frame-extraction dependency (e.g. `expo-video-thumbnails`, `ffmpeg-kit-react-native`) is a scope/dependency decision deferred to Phase 2.
 - **Storage upload pattern**: Upload video and thumbnail to Supabase Storage using the Supabase client singleton from `src/lib/supabase.ts`. Never call `createClient()` at call sites. Storage bucket RLS must be aligned with `BetaVideo` table RLS (a user cannot fetch a private ascent's associated media).
 - **Inline playback**: Beta videos must play inline in both the route detail page (MOD-003 context) and the activity feed (MOD-006 context). No external links. No external browser.
 - **60-second playability SLA (AC-032)**: The video must be playable inline within 60 seconds of upload completion on a normal 4G/LTE connection. Since there is no server transcoding, this depends on Storage CDN delivery latency — the compression + upload pipeline must keep total time within the SLA.
@@ -127,3 +131,4 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - Server-side transcoding pipeline (no custom backend in Phase 1).
 - Like reactions on beta videos (owned by MOD-006).
 - Push notifications for likes (owned by MOD-007).
+- Client-side frame extraction for thumbnail generation (Phase 2; see Phase 1 simplification note above).

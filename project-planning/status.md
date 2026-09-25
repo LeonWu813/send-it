@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-social-feed
-mode: verify
-module: mod-social-feed
-result: bugs-found
-commit: 05c5845ff507019aa410e762bf51ec2753c21f5d
-timestamp: 2026-09-24T18:00:00Z
+agent: doc-sync
+mode: trivial
+module: n/a
+result: success
+commit: aaec6b9
+timestamp: 2026-09-24T18:30:00Z
 ```
 
 ## PM Updates
@@ -1004,3 +1004,21 @@ Phase 1 — iOS MVP, Taipei + New Taipei launch
 - Check 4 FAIL (script bug): awk range  terminates immediately because the start line matches the end condition. All specs have correct  headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
 - Check 5 PASS: no unlogged AMBIGUITY markers.
 - Check 6 FAIL (script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync.
+
+### Sync Report — Trivial Passthrough — 2026-09-24
+
+**Sync type:** trivial
+**PRD Revision:** 10
+**PM Update reference:** 2026-09-24 [TRIVIAL] — AC-031 thumbnail-scope ruling (PRD Revision 10)
+**Affected spec:** MOD-005 (mod-beta-video) only
+
+**Files modified:**
+- `project-planning/modules/mod-beta-video/spec.md` — AC-031 entry updated with Phase 1 simplification clause (thumbnail may use the video URI as a placeholder; `BetaVideo.thumbnail_url` must still be a valid retrievable URL; true frame extraction is Phase 2); Key Implementation Notes Thumbnail bullet annotated with Phase 1 placeholder allowance and frame-at-1-second deferred to Phase 2; new "Phase 1 simplification — client-side frame extraction deferred" bullet added; Out of Scope updated to include client-side frame extraction (Phase 2); Last Synced from PRD Revision updated 5 → 10; Last Updated set to 2026-09-24.
+
+**Files not touched:**
+- `project-planning/production.md` — no shared convention changes; module boundaries, dependencies, and phase plan unchanged.
+- All other module specs — change confined to MOD-005 per PM note.
+
+**AMBIGUITY markers added:** none
+**CONFLICT markers added:** none
+**verify-sync.sh:** Skipped — trivial passthrough; no new modules, no phase plan changes, no production.md changes.
