@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-home
-mode: regression
-module: mod-home
+agent: tech-lead
+mode: review
+module: mod-beta-video
 result: success
-commit: 6047f24ca281173d1a0a0605fec7cf85ca001247
-timestamp: 2026-09-24T00:00:00Z
+commit: f9fb53661aee4fa2d8ef570eaa018ada7fb9b2ea
+timestamp: 2026-09-25T00:00:00Z
 ```
 
 ## PM Updates
@@ -96,6 +96,44 @@ timestamp: 2026-09-24T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-09-25 — blocker (iOS build failure: expo-av EXEventEmitter.h not found, MOD-005)
+
+**Context**: `xcodebuild` fails with error code 65 building the iOS project. Error originates in `node_modules/expo-av/ios/EXAV/EXAV.h:10` — `#import <ExpoModulesCore/EXEventEmitter.h>` → `'ExpoModulesCore/EXEventEmitter.h' file not found`. Advisory only — no `package.json`, source, or migration edits made here. Findings grounded in installed package versions, a filesystem search of `node_modules/expo-modules-core/ios`, `node_modules/expo/bundledNativeModules.json`, and the actual `expo-av` usage in `src/modules/mod-beta-video/`.
+
+---
+
+**Root cause — version mismatch, not a missing/corrupt install.**
+
+- Installed: `expo-av@15.0.2` (pinned `~15.0.2` in `package.json` line 14; changelog dates it 2025-01-10 — this is the SDK 52-era release). Installed alongside `expo-modules-core@57.0.18` and `expo@~57.0.24` (SDK 57).
+- `expo-av@15.0.2`'s native iOS code imports the **legacy Objective-C header** `ExpoModulesCore/EXEventEmitter.h`. That header does **not exist** in `expo-modules-core@57`. Confirmed by search: `find node_modules/expo-modules-core -name "EXEventEmitter.h"` returns nothing. The legacy `EX*` headers that survive (e.g. `EXExportedModule.h`, `EXAppLifecycleListener.h`) were relocated to `ios/Legacy/`, but `EXEventEmitter.h` was **removed outright** — the event-emitter API is now Swift-only (`ios/Core/Events/EventEmitter.swift`, plus `LegacyEventEmitterCompat.swift`). So the two other headers in `EXAV.h` resolve; only `EXEventEmitter.h` cannot, which is exactly the compiler error.
+- **`expo-av` is not part of Expo SDK 57.** `node_modules/expo/bundledNativeModules.json` has no `expo-av` entry at all; it lists `expo-video ~57.0.4` as the SDK 57 video module. `expo-av` was deprecated in SDK 52 (the 15.0.1 changelog adds a deprecation warning to the `Video` component) and dropped from the SDK 57 bundle. Pinning `expo-av@~15.0.2` under SDK 57 was never a supported combination — it slipped through JS-side because Jest mocks `expo-av` (`__mocks__/expo-av.js` via `moduleNameMapper`), so unit tests pass while the native build cannot compile.
+
+**Not** a node_modules corruption issue and **not** fixable by `pod install` / clean rebuild — the header genuinely does not exist in this SDK, so no cache clear will produce it.
+
+---
+
+**Where it's used (scope of the fix):**
+
+- Only one real import: `src/modules/mod-beta-video/components/BetaVideoPlayer.tsx:17` — `import { Video, ResizeMode } from 'expo-av'`. Uses `<Video>` with `source={{uri}}`, `resizeMode={ResizeMode.CONTAIN}`, `useNativeControls`, `shouldPlay`, `onPlaybackStatusUpdate`, and a `useRef<Video>`.
+- No other production source imports `expo-av` (remaining matches are comments and the Jest mock). Playback is required — AC-032/033/034 (inline playback on route detail + activity feed), so removal is **not** an option.
+
+**Concerns** (must address before proceeding):
+- iOS build is fully blocked until the `expo-av` dependency is resolved. No amount of native-cache clearing fixes it; the package version itself is the problem.
+- The Jest `moduleNameMapper` mock for `expo-av` masked this — green unit tests do not imply a compilable native build. Whatever replacement is chosen, its mock must be updated too or the tests will assert against a package that is no longer installed.
+
+**Recommendations** (suggested improvements):
+- **Preferred fix — migrate MOD-005 playback to `expo-video`, the SDK 57 successor.** Rationale: (1) it is the SDK-57-bundled, version-aligned video module (`bundledNativeModules.json` → `expo-video ~57.0.4`), so no version-pin guesswork; (2) `expo-av`'s `Video` is deprecated upstream and will not be maintained; (3) the PRD does not name a playback library — AC-032/033/034 only require inline playback, and AC-031's note already anticipates the `expo-*` family — so switching packages is an implementation-detail change, not a PRD/spec change. API delta the engineer should expect: `expo-video` uses the `VideoView` component + `useVideoPlayer` hook (imperative player) rather than `expo-av`'s `<Video>` + `ResizeMode` enum + `onPlaybackStatusUpdate`. `resizeMode="contain"` maps to `contentFit="contain"`; `useNativeControls` → `nativeControls`; playback status is read from the player object / its events. Install with `npx expo install expo-video` (resolves the SDK-correct version and adds the config plugin). Update `__mocks__/expo-av.js` → `__mocks__/expo-video.js` and the `moduleNameMapper`/`transformIgnorePatterns` in `package.json`, plus `BetaVideoPlayer.test.tsx`.
+- **Fallback (only if a same-day unblock is needed and the migration can't be scheduled)**: pin `expo-av` to the SDK-57-compatible release via `npx expo install expo-av` (let Expo pick the version matching SDK 57 rather than keeping the hand-pinned `~15.0.2`). Caveat: since `expo-av` is not in the SDK 57 bundle, Expo may report no compatible version — in which case this fallback is void and the `expo-video` migration is the only path. Do **not** hand-bump the version string blindly; a mismatched native module is exactly what caused this.
+
+**Approved**:
+- The component-level design of `BetaVideoPlayer.tsx` (thumbnail → play overlay → inline player, buffering state, caption, safe testIDs) is sound and package-agnostic; the migration is a swap of the video primitive, not a rewrite.
+
+**Proposed Shared Conventions** (for Doc-Sync to carry into production.md):
+- Native Expo modules must be installed with `npx expo install <pkg>` (not `npm install <pkg>`) so versions match the installed Expo SDK. Hand-pinning a native module's version in `package.json` is prohibited — it is what produced the SDK-52/SDK-57 `expo-av` mismatch that broke the iOS build.
+- A Jest `moduleNameMapper` mock for a native module hides native build breakage from the unit suite. When a native package is added, changed, or removed, the module owner must also run the native iOS build (`npx expo run:ios` or `xcodebuild`) before marking the module QA-ready — passing unit tests are not sufficient evidence a native dependency compiles.
+
+---
 
 ### Review — 2026-09-24 — change (Rev 9: ascent_style enum removal, saved_routes table, achievement icons)
 
@@ -776,6 +814,10 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 - **Frontend modules: stale list after modal submission**: When a modal form submits and closes, any list rendered outside the modal (in the parent screen) will NOT re-fetch unless explicitly triggered. The standard pattern is to pass a refresh callback from the list to the success handler, or use a context/event bus. QA should check this pattern on every frontend module where a modal creates a new item that should appear in a visible list.
 
 - **Frontend modules: "success confirmation" spec language is ambiguous**: Specs that say "Success confirmation shown to user" without specifying the form (toast, banner, or implicit modal dismissal) will generate a spec issue on every frontend module. PM should standardize this language in the spec template to specify the required UX pattern (e.g., "display a toast/snackbar message" vs. "dismiss the modal").
+
+Pattern: An expo-av@15 (SDK 52) package was installed under Expo SDK 57, importing a legacy header (EXEventEmitter.h) removed from expo-modules-core@57. Unit tests passed the whole time because expo-av was mocked via Jest moduleNameMapper, so the SDK/native mismatch only surfaced at xcodebuild. Root cause was hand-pinning a native module version in package.json instead of using `npx expo install`.
+Why: Two recurring failure modes worth codifying — (1) native Expo modules must be installed with `npx expo install` to stay SDK-aligned, never hand-pinned in package.json; (2) a Jest module mock for a native package makes the unit suite green while the native build is broken, so any add/change/remove of a native dependency requires running the actual iOS build before the module is called QA-ready. Passing unit tests are not evidence a native dependency compiles.
+Agent: tech-lead
 
 ## PM Alignment Note — Route Submission Flow (2026-09-22)
 
