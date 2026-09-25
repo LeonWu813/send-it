@@ -10,9 +10,11 @@
 -- Key design decisions:
 --   • The activity feed MUST be served via a SECURITY INVOKER RPC — raw client
 --     SELECT on ascents/beta_videos is prohibited for the feed (spec hard req).
---   • The Block table is owned by MOD-009; this migration reads it as a dep.
---     A placeholder Block table is NOT created here; MOD-009 owns that migration.
---     The RPC guards against Block rows being absent by using LEFT JOIN.
+--   • The Block table is owned by MOD-009; this migration creates a minimal stub
+--     (blocker_id, blocked_id) so PostgreSQL can validate the LANGUAGE sql
+--     function body at CREATE FUNCTION time. MOD-009 will CREATE TABLE IF NOT
+--     EXISTS with the full schema (additional columns, RLS, GRANTs) — safe to
+--     layer on top. An empty stub produces correct NOT EXISTS no-op behaviour.
 --   • Reaction unique constraint (user_id, target_type, target_id) enforces
 --     idempotent single-like at the DB level (AC-052).
 --   • No comments table, no like on ascents (AC-053).
@@ -94,6 +96,24 @@ CREATE POLICY "reactions_delete_own"
   USING (auth.uid() = user_id);
 
 GRANT SELECT, INSERT, DELETE ON public.reactions TO authenticated;
+
+-- ── blocks stub table ─────────────────────────────────────────────────────────
+-- MOD-009 owns the full `blocks` table (schema, RLS, GRANTs). This stub is
+-- created here so that `get_activity_feed` (LANGUAGE sql) can reference
+-- `public.blocks` at CREATE FUNCTION time without PostgreSQL raising
+-- "relation blocks does not exist". PostgreSQL validates table references in
+-- LANGUAGE sql function bodies at creation time, not at call time.
+--
+-- The stub contains exactly the two columns referenced in the NOT EXISTS
+-- subqueries below (blocker_id, blocked_id). MOD-009 will later run
+-- CREATE TABLE IF NOT EXISTS public.blocks (...) with its full schema
+-- (additional columns, RLS, GRANTs) — the IF NOT EXISTS guard makes that safe.
+
+CREATE TABLE IF NOT EXISTS public.blocks (
+  blocker_id  UUID  NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  blocked_id  UUID  NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  PRIMARY KEY (blocker_id, blocked_id)
+);
 
 -- ── get_activity_feed RPC — SECURITY INVOKER ──────────────────────────────────
 --

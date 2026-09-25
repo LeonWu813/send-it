@@ -2,9 +2,30 @@
 
 ## Engineering Progress
 
-**Status**: Complete — all ACs implemented, tsc clean, 277/277 tests pass.
+**Status**: Complete — migration bug fixed, tsc clean, 277/277 tests pass.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
+**Bug-fix commit**: (see below)
 **Date**: 2026-09-24
+
+### Bug Fix (2026-09-24)
+
+**Bug**: `get_activity_feed` (LANGUAGE sql) referenced `public.blocks` in two NOT EXISTS subqueries. PostgreSQL validates LANGUAGE sql function bodies at CREATE FUNCTION time; since MOD-009 had not yet created `public.blocks`, any fresh `supabase db reset` failed with `ERROR: relation "blocks" does not exist`.
+
+**Fix**: Added a minimal stub table before `CREATE FUNCTION get_activity_feed`:
+```sql
+CREATE TABLE IF NOT EXISTS public.blocks (
+    blocker_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    blocked_id  UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    PRIMARY KEY (blocker_id, blocked_id)
+);
+```
+MOD-009 will `CREATE TABLE IF NOT EXISTS public.blocks (...)` with its full schema — the `IF NOT EXISTS` makes that layering safe. An empty stub produces the correct NOT EXISTS no-op behaviour for the block filter.
+
+**Self-check (bug-fix)**:
+- PASS — `npx tsc --noEmit` clean, no errors
+- PASS — `npm test -- --watchAll=false` 277/277 tests pass, exit code 0
+- PASS — Only `supabase/migrations/20260924000006_mod_006_social_feed.sql` and `project-planning/modules/mod-social-feed/status.md` modified
+- PASS — Stub table uses `CREATE TABLE IF NOT EXISTS` — forward-compatible with MOD-009
 
 ### Artifacts
 
@@ -44,7 +65,7 @@
 - AC-063: followers_only privacy badge on UserProfileScreen; feed RPC enforces privacy filter
 
 ### Notes
-- Block filter in RPC uses LEFT JOIN on `blocks` table (owned by MOD-009); gracefully no-ops if MOD-009 migration has not run yet
+- Block filter in RPC uses NOT EXISTS subqueries against `public.blocks`. A minimal stub `blocks` table (blocker_id, blocked_id) is created in this migration before the function body so PostgreSQL can validate the LANGUAGE sql reference at CREATE FUNCTION time. MOD-009 adds the full schema with IF NOT EXISTS — safe to layer on top.
 - `fetchFollowing(userId)` is the public service function MOD-012 should call for the Following Climbers strip on HomeScreen
 - Raw client SELECT on ascents/beta_videos for the feed is prohibited per spec; all feed reads go through `get_activity_feed` RPC
 
