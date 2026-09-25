@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: ba8fd18bc5f0ab60e9cc95c67f7b2f96aa9031f0
+commit: dcdd5a67e6e473c665977dbb6489270b4370eb98
 timestamp: 2026-09-25T00:00:00Z
 ```
 
@@ -1071,3 +1071,19 @@ Phase 1 — iOS MVP, Taipei + New Taipei launch
 **AMBIGUITY markers added:** none
 **CONFLICT markers added:** none
 **verify-sync.sh:** Skipped — trivial passthrough; no new modules, no phase plan changes, no production.md changes.
+### Sync Report — Trivial Passthrough — 2026-09-25
+
+**Sync type:** trivial
+**PRD Revision:** 11
+**PM Update reference:** 2026-09-25 [TRIVIAL] — Two native-dependency engineering standards added to §10 NFR (PRD Revision 11)
+
+**Files modified:**
+- `project-planning/production.md` — "Last synced from PRD" updated rev 9 → rev 11; "Last Updated" field added (2026-09-25); two new Shared Conventions added after "saved_routes Migration Ownership": "Native Dependency Installation" and "Native Build Gate Before QA Handoff". Convention text copied verbatim from PM Updates "For Doc-Sync" note, which mirrors the Tech Lead's Proposed Shared Conventions in the 2026-09-25 review.
+
+**Files not touched:**
+- All module specs — PM Updates note explicitly states no module spec changes required; these are project-wide conventions that live in production.md only.
+- `prd.md` — read-only.
+
+**AMBIGUITY markers added:** none
+**CONFLICT markers added:** none
+**verify-sync.sh:** Skipped — trivial passthrough per skill routing rules.

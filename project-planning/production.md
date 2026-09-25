@@ -2,7 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 9 (2026-09-24)
+**Last synced from PRD**: rev 11 (2026-09-25)
+**Last Updated**: 2026-09-25
 
 ---
 
@@ -220,6 +221,14 @@ A route's display name is composed at display time from its grade and hold color
 ### saved_routes Migration Ownership
 
 MOD-003 owns the `saved_routes` migration (the same principle as MOD-002 owning `saved_gyms` writes, extended: MOD-003 owns both the `saved_routes` table and the save/unsave verbs for routes). The migration mirrors the `saved_gyms` design exactly: `user_id DEFAULT auth.uid()` FK to `users` ON DELETE CASCADE, `route_id` FK to `routes` ON DELETE CASCADE, composite PK `(user_id, route_id)`, own-rows RLS SELECT/INSERT/DELETE, `GRANT SELECT, INSERT, DELETE` to `authenticated`, no UPDATE. Migration file: `2026XXXXXX_mod_003_saved_routes.sql`.
+
+### Native Dependency Installation
+
+All Expo native dependencies must be installed via `npx expo install <package>`, never `npm install <package>`. Expo resolves the SDK-compatible version automatically; `npm install` can silently install an SDK-incompatible version that passes Jest (via mocks) but fails the native iOS build. Hand-pinning a native module's version string in `package.json` is prohibited.
+
+### Native Build Gate Before QA Handoff
+
+When a module adds or changes a native dependency (a package with iOS/Android native code), the module's engineer must run the native build (`npx expo run:ios`, or the platform equivalent) and confirm it compiles before marking the module QA-ready. Unit tests alone are insufficient because Jest mocks native modules.
 
 ### TypeScript Strict Mode
 
