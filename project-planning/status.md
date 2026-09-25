@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
-mode: bugfix
+agent: qa-mod-home
+mode: regression
 module: mod-home
-result: success
-commit: c3f8b5400a827190b0ec48dca5fd9d012d21e692
-timestamp: 2026-09-24T23:00:00Z
+result: bugs-found
+commit: f4cdc92226e114c1d5743a98d7f1ba5d4bc7a92d
+timestamp: 2026-09-24T23:30:00Z
 ```
 
 ## PM Updates

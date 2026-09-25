@@ -698,3 +698,288 @@ Route to: Engineer. See AC-123 failure entry above for the specific changes requ
 | Git scope automated check: pre-existing unstaged changes outside mod-home are from session start, not this fix | NOTE |
 
 **Result: READY FOR QA RE-VERIFICATION**
+
+---
+
+### QA Run 5 — Regression — 2026-09-24
+
+**Workflow**: regression-test (re-verification after Engineer fix for AC-123 tap-to-navigate)
+
+**Bug being re-verified**: AC-123 FAIL from QA Run 4 — climber chips were plain `View` elements with no `onPress` handler; `onSelectClimber` prop did not exist; tapping a chip did nothing.
+
+**Engineer fixes applied:**
+- `HomeScreen.tsx` — `onSelectClimber: (userId: string) => void` added to props; each climber chip `View` replaced with `Pressable` with `onPress={() => onSelectClimber(user.id)}`
+- `HomeNavigator.tsx` — `onSelectClimber` prop accepted and threaded to `HomeScreen`
+- `AppShell.tsx` — `targetUserId: string | null` state; `handleSelectClimber` sets it; `handleClimberProfileBack` clears it; `UserProfileScreen` from `mod-social-feed/screens/UserProfileScreen` rendered in an `absoluteFill` overlay (zIndex: 10) when `targetUserId` is non-null; dismissed via `onBack`
+- `HomeScreen.test.tsx` — `onSelectClimber={jest.fn()}` on all existing renders; new test asserting `onSelectClimber` fires with correct user ID on chip press
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npm test -- --watchAll=false`: PASS — 314 tests, 27 suites, 0 failures
+- Test count increased from 313 (QA Run 4) to 314, consistent with the addition of one new tap-navigate test. All suites pass.
+
+---
+
+#### REGRESSION PASS AC-123 — tap-to-navigate now implemented
+
+**Climber chip is Pressable:**
+`HomeScreen.tsx` line 248: each climber chip is a `Pressable` (not a `View`). Confirmed by reading the source. PASS.
+
+**onPress calls onSelectClimber(user.id):**
+`HomeScreen.tsx` line 251: `onPress={() => onSelectClimber(user.id)}`. PASS.
+
+**New test — onSelectClimber fires with correct user ID:**
+`HomeScreen.test.tsx` lines 289–311: test `'calls onSelectClimber with the correct user ID when a climber chip is tapped (AC-123)'`. Renders with `FOLLOWING_FIXTURES` (`user-002` = "Alice Chen", `user-003` = "Bob Lin"); waits for "Alice Chen" to appear; fires press on "Alice Chen"; asserts `onSelectClimber` called with `'user-002'`. Test passes as part of the 314-test run. PASS.
+
+**onSelectClimber prop flows HomeScreen → HomeNavigator → AppShell:**
+- `HomeScreen.tsx` `HomeScreenProps` (line 52): `onSelectClimber: (userId: string) => void`. PASS.
+- `HomeNavigator.tsx` `HomeNavigatorProps` (line 27): `onSelectClimber: (userId: string) => void`; passed to `HomeScreen` (line 43). PASS.
+- `AppShell.tsx` (line 113): `onSelectClimber={handleSelectClimber}` passed to `HomeNavigator`. PASS.
+
+**AppShell renders UserProfileScreen overlay when targetUserId is set:**
+`AppShell.tsx` lines 81–82: `const [targetUserId, setTargetUserId] = useState<string | null>(null)`. Lines 94–97: `handleSelectClimber` calls `setTargetUserId(userId)`. Lines 135–143: `{targetUserId !== null && <View style={styles.overlayContainer}><UserProfileScreen targetUserId={targetUserId} session={session} onBack={handleClimberProfileBack} /></View>}`. PASS.
+
+**Overlay cleared on back:**
+`AppShell.tsx` lines 99–101: `handleClimberProfileBack` calls `setTargetUserId(null)`. Passed as `onBack` to `UserProfileScreen`. PASS.
+
+Input: user taps a climber chip ("Alice Chen", id "user-002").
+Actual: `onSelectClimber` is called with `'user-002'`; `AppShell` sets `targetUserId` to `'user-002'`; `UserProfileScreen` overlay renders.
+Expected per spec: tapping a climber navigates to that climber's profile.
+Status: RESOLVED.
+
+---
+
+#### Cross-module import check — UserProfileScreen import in AppShell
+
+`AppShell.tsx` line 43: `import UserProfileScreen from '../mod-social-feed/screens/UserProfileScreen';`
+
+The `production.md` Cross-Module Imports convention (lines 194–198) states: "A module may import another module's **public service functions** (data layer) and **navigator entry-point components** (mounting) only — never its internal `screens/` or `components/` subdirectories directly."
+
+`UserProfileScreen` is imported from `mod-social-feed/screens/` — a `screens/` subdirectory. This violates the cross-module import rule as documented in `production.md`.
+
+The Engineer's self-check entry notes this import as "permitted: public entry-point import per invocation scope." However, the "invocation scope" caveat is not a documented exception in `production.md` — the convention admits no exceptions for named public surfaces. `UserProfileScreen` is not a navigator entry-point component in the sense the convention describes (it is a screen, not a navigator that mounts as a tab); and it lives in `screens/`, which the convention explicitly prohibits importing.
+
+FAIL — Cross-module import rule violated.
+
+Input: `AppShell.tsx` importing from `../mod-social-feed/screens/UserProfileScreen`.
+Actual: import reaches into `mod-social-feed/screens/` subdirectory.
+Expected per production.md: only public service functions and navigator entry-point components may be imported cross-module; `screens/` subdirectory imports are explicitly prohibited.
+
+Route to: Engineer. Required fix: `mod-social-feed` must expose `UserProfileScreen` as a public entry-point component at a path outside `screens/` (e.g. `mod-social-feed/UserProfileScreen.tsx` or via a barrel `mod-social-feed/index.ts`), and `AppShell.tsx` must import from that public path instead of `screens/UserProfileScreen` directly.
+
+---
+
+#### Re-verification of all previously passing items
+
+**AC-110** — PASS. `AppShell.tsx` `useState<TabKey>('home')` default and three-tab structure unchanged. `targetUserId` state is additive; it does not affect tab initialization or tab-bar rendering. TabBar tests (5) all pass.
+
+**AC-111** — PASS. Section order in `HomeScreen.tsx` JSX unchanged: Banners → Saved Gyms → Following Climbers. The `onSelectClimber` prop change does not alter section ordering.
+
+**AC-112** — PASS. `banners.ts` and banner rendering unchanged. Banner test passes.
+
+**AC-113** — PASS. "View All" callback and saved-gym strip rendering unchanged. Tests pass.
+
+**AC-114** — PASS with spec note carried forward. `onSelectGym` and `AppShell.handleSelectGym` behavior unchanged.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, unchanged). Test assertion passes.
+
+**AC-124** — PASS. Following empty state (`home.following.empty` = "Follow climbers to see their activity") renders correctly when `followingUsers` is empty. `beforeEach` default mock resolves to `[]`; AC-124 test asserts the string is visible. PASS.
+
+**isActive / focus-refetch for saved gyms** — PASS. `loadSavedGyms` useEffect pattern unchanged. Focus-refetch test passes.
+
+**isActive / focus-refetch for following** — PASS. `loadFollowing` useEffect pattern unchanged. Focus-refetch test passes.
+
+**Keep-alive mount strategy** — PASS. `AppShell.tsx` keep-alive logic (`display: 'none'` on inactive tab views) unchanged. The `targetUserId` overlay is rendered outside the tab content area as an `absoluteFill` view — it does not interfere with the keep-alive strategy.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` unchanged.
+
+**Top safe area — HomeScreen** — PASS. `useSafeAreaInsets()` and `makeStyles(theme, insets.top)` unchanged.
+
+**i18n completeness** — PASS. No locale keys added or removed. `i18n.test.ts` passes (314-test run includes it). All `home.*` keys remain present in EN and zh-TW.
+
+**Migration correctness** — PASS. `20260924000002_mod_012_home.sql` unchanged by this fix.
+
+**No hardcoded hex colors** — PASS. `overlayContainer` style uses only `StyleSheet.absoluteFill` (a layout helper, no color) and `zIndex: 10` (a z-order integer, not a color). No new hex values introduced.
+
+**No inline string literals** — PASS. No new user-facing strings introduced by this fix.
+
+**Gold-plating check** — PASS. The overlay approach (absoluteFill, zIndex 10, dismissed via onBack) is the minimal implementation that satisfies AC-123's tap-to-navigate requirement. No speculative features added.
+
+---
+
+#### Adjacent code check (fix proximity)
+
+Changes touch: `HomeScreen.tsx` (prop, Pressable wrapper), `HomeNavigator.tsx` (prop thread), `AppShell.tsx` (state, handler, overlay render, new import), `HomeScreen.test.tsx` (onSelectClimber on all renders, new test).
+
+Adjacent items verified:
+- `handleSelectGym` and `handleViewAllGyms` in `AppShell.tsx` — unchanged; both still set `activeTab` correctly. PASS.
+- `HomeNavigator` prop set (`session`, `isActive`, `onViewAllGyms`, `onSelectGym`) — all still forwarded alongside the new `onSelectClimber`. PASS.
+- `HomeScreen` climber strip JSX adjacent to `Pressable`: `avatar_url` null-check (`Image` vs placeholder `View`) and `display_name` `Text` — unchanged. PASS.
+- `HomeScreen.test.tsx` existing renders now include `onSelectClimber={jest.fn()}` — required because `onSelectClimber` is now a required prop. All pre-existing tests pass (verified by 314/314 run). PASS.
+- `AppShell.tsx` keep-alive tab `View` blocks — the overlay `{targetUserId !== null && ...}` is rendered after the `TabBar` element, outside the tab content area; no interaction with the tab `display: 'none'` logic. PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 5
+
+| AC | QA Run 1 | QA Run 2 | QA Run 3 | QA Run 4 | QA Run 5 |
+|----|----------|----------|----------|----------|----------|
+| AC-110 | PASS | PASS | PASS | PASS | PASS |
+| AC-111 | PASS | PASS | PASS | PASS | PASS |
+| AC-112 | PASS | PASS | PASS | PASS | PASS |
+| AC-113 | PASS | PASS | PASS | PASS | PASS |
+| AC-114 | PASS (spec note) | PASS (spec note) | PASS (spec note) | PASS (spec note) | PASS (spec note) |
+| AC-115 | FAIL | REGRESSION PASS | PASS | PASS | PASS |
+| AC-123 | PASS | PASS | PASS | FAIL | REGRESSION PASS (behavioral) |
+| AC-124 | PASS | PASS | PASS | PASS | PASS |
+| Cross-module import rule | PASS | PASS | PASS | PASS | FAIL — AppShell imports from mod-social-feed/screens/ |
+
+**Result: BUGS FOUND — 1 failure (cross-module import violation in AppShell.tsx)**
+
+AC-123 behavioral requirement is now satisfied: climber chips are `Pressable`, `onSelectClimber` fires with the correct user ID on tap, the overlay renders `UserProfileScreen` when `targetUserId` is set, and the new test passes. The 314/314 test run is clean.
+
+The blocking issue is a cross-module import rule violation: `AppShell.tsx` imports `UserProfileScreen` directly from `../mod-social-feed/screens/UserProfileScreen`. The `production.md` convention prohibits importing from another module's `screens/` subdirectory. The fix requires `mod-social-feed` to expose `UserProfileScreen` at a public path (outside `screens/`), and `AppShell.tsx` to import from that public path.
+
+Route to: Engineer (`engineer-mod-home`). The fix may require coordination with the `mod-social-feed` module to expose `UserProfileScreen` as a public entry-point component.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip.
+
+---
+
+### QA Run 6 — Regression — 2026-09-24
+
+**Workflow**: regression-test (re-verification of AC-123 tap-to-navigate fix; prior QA agent hit session limit before completing — this run completes the verification)
+
+**Bug being re-verified**: AC-123 FAIL from QA Run 4 (tap-to-navigate not implemented) and the cross-module import violation flagged in QA Run 5 (AppShell imports UserProfileScreen from mod-social-feed/screens/).
+
+**Engineer fix applied (as described in invocation):**
+- `HomeScreen.tsx` — climber chips wrapped in `Pressable` with `onSelectClimber(user.id)` on press; `onSelectClimber: (userId: string) => void` added to `HomeScreenProps`
+- `HomeNavigator.tsx` — `onSelectClimber` prop threaded through to `HomeScreen`
+- `AppShell.tsx` — `targetUserId: string | null` state; `handleSelectClimber` sets it; renders `UserProfileScreen` from `src/modules/mod-social-feed/screens/UserProfileScreen` in an absoluteFill overlay (zIndex 10) when non-null; dismissed via `onBack`
+- New test in `HomeScreen.test.tsx` asserting `onSelectClimber` fires with correct user ID on chip press
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npm test -- --watchAll=false`: PASS — 314 tests, 27 suites, 0 failures
+- Test count matches QA Run 5 (314 / 27). All suites pass.
+
+---
+
+#### REGRESSION PASS AC-123 (behavioral) — climber chip tap-to-navigate implemented
+
+**Climber chip is Pressable:**
+`HomeScreen.tsx` line 248: each climber chip is a `Pressable`. Source confirmed. PASS.
+
+**onPress calls onSelectClimber(user.id):**
+`HomeScreen.tsx` line 251: `onPress={() => onSelectClimber(user.id)}`. PASS.
+
+**onSelectClimber prop flows HomeScreen → HomeNavigator → AppShell:**
+- `HomeScreenProps` (line 52): `onSelectClimber: (userId: string) => void`. PASS.
+- `HomeNavigatorProps` (line 27): `onSelectClimber: (userId: string) => void`; forwarded to `HomeScreen` (line 43). PASS.
+- `AppShell.tsx` (line 113): `onSelectClimber={handleSelectClimber}` passed to `HomeNavigator`. PASS.
+
+**AppShell renders UserProfileScreen overlay when targetUserId is set:**
+`AppShell.tsx` lines 81–82: `const [targetUserId, setTargetUserId] = useState<string | null>(null)`. Lines 94–97: `handleSelectClimber` calls `setTargetUserId(userId)`. Lines 135–143: conditional render of `UserProfileScreen` overlay. PASS.
+
+**Overlay cleared on back:**
+`AppShell.tsx` lines 99–101: `handleClimberProfileBack` calls `setTargetUserId(null)`. Passed as `onBack`. PASS.
+
+**New tap test passes:**
+`HomeScreen.test.tsx` test `'calls onSelectClimber with the correct user ID when a climber chip is tapped (AC-123)'`: renders with `FOLLOWING_FIXTURES`; waits for "Alice Chen"; fires press; asserts `onSelectClimber` called with `'user-002'`. Passes as part of 314-test run. PASS.
+
+Input: user taps climber chip ("Alice Chen", id "user-002").
+Actual: `onSelectClimber` called with `'user-002'`; overlay renders.
+Expected per spec: tapping a climber navigates to that climber's profile.
+Status: RESOLVED (behavioral).
+
+---
+
+#### FAIL — Cross-module import rule violation (carried forward from QA Run 5, still unresolved)
+
+`AppShell.tsx` line 43: `import UserProfileScreen from '../mod-social-feed/screens/UserProfileScreen';`
+
+The `production.md` Cross-Module Imports convention states: "A module may import another module's **public service functions** (data layer) and **navigator entry-point components** (mounting) only — never its internal `screens/` or `components/` subdirectories directly."
+
+`UserProfileScreen` is imported from `mod-social-feed/screens/` — a `screens/` subdirectory. Verified that no public re-export of `UserProfileScreen` exists at the `mod-social-feed` module root (`social-feed-service.ts`, `types.ts`, and `test-utils.tsx` are the only files at the root; no `index.ts`, no `UserProfileScreen.tsx` at root level). The engineer's comment ("public entry-point import per invocation scope") is not a documented exception in `production.md`.
+
+This is the same violation QA Run 5 flagged. It was not fixed before this QA run.
+
+Input: `AppShell.tsx` importing from `../mod-social-feed/screens/UserProfileScreen`.
+Actual: import reaches into `mod-social-feed/screens/` subdirectory directly.
+Expected per production.md: only public service functions and navigator entry-point components may be imported cross-module; `screens/` subdirectory imports are explicitly prohibited.
+
+Route to: Engineer. Required fix: `mod-social-feed` must expose `UserProfileScreen` as a public entry-point component at a path outside `screens/` (e.g. add `src/modules/mod-social-feed/UserProfileScreen.tsx` that re-exports the screen, or an `index.ts` barrel), and `AppShell.tsx` must import from that public path instead of `screens/UserProfileScreen` directly.
+
+---
+
+#### Re-verification of all previously passing items
+
+**AC-110** — PASS. `AppShell.tsx` `useState<TabKey>('home')` default and three-tab structure unchanged. `targetUserId` state additive; tab initialization unaffected. TabBar tests (5) all pass.
+
+**AC-111** — PASS. Section order in `HomeScreen.tsx` JSX unchanged: Banners → Saved Gyms → Following Climbers.
+
+**AC-112** — PASS. `banners.ts` and banner rendering unchanged. Banner test passes.
+
+**AC-113** — PASS. "View All" callback and saved-gym strip rendering unchanged. Tests pass.
+
+**AC-114** — PASS with spec note carried forward. `onSelectGym` and `AppShell.handleSelectGym` behavior unchanged.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, unchanged). Test assertion passes.
+
+**AC-123** — REGRESSION PASS (behavioral). See above. Cross-module import violation remains open.
+
+**AC-124** — PASS. Following empty state renders correctly. `home.following.empty` unchanged. Test asserts "Follow climbers to see their activity". PASS.
+
+**isActive / focus-refetch for saved gyms** — PASS. Both useEffect hooks unchanged. Focus-refetch test passes.
+
+**isActive / focus-refetch for following** — PASS. Both useEffect hooks unchanged. Focus-refetch test passes.
+
+**Keep-alive mount strategy** — PASS. AppShell keep-alive logic (`display: 'none'`) unchanged. Overlay is absoluteFill, outside tab content area.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` unchanged. `paddingBottom: bottomInset + theme.spacing.sm` applied.
+
+**Top safe area — HomeScreen** — PASS. `useSafeAreaInsets()` and `makeStyles(theme, insets.top)` unchanged.
+
+**i18n completeness** — PASS. All `home.*` keys present in EN and zh-TW. `i18n.test.ts` passes (included in 314-test run).
+
+**Migration correctness** — PASS. `20260924000002_mod_012_home.sql` unchanged by this fix.
+
+**No hardcoded hex colors** — PASS. `overlayContainer` uses `StyleSheet.absoluteFill` + `zIndex: 10` only. No new hex values.
+
+**No inline string literals** — PASS. No new user-facing strings introduced.
+
+**Gold-plating check** — PASS. No features beyond spec introduced.
+
+**Cross-module import rule** — FAIL (same as QA Run 5; see above).
+
+---
+
+### Summary — QA Run 6
+
+| AC / Check | QA Run 5 | QA Run 6 |
+|---|---|---|
+| AC-110 | PASS | PASS |
+| AC-111 | PASS | PASS |
+| AC-112 | PASS | PASS |
+| AC-113 | PASS | PASS |
+| AC-114 | PASS (spec note) | PASS (spec note) |
+| AC-115 | PASS | PASS |
+| AC-123 | REGRESSION PASS (behavioral) | REGRESSION PASS (behavioral) |
+| AC-124 | PASS | PASS |
+| Cross-module import rule | FAIL — AppShell imports from mod-social-feed/screens/ | FAIL — unchanged, still importing from mod-social-feed/screens/ |
+| `npx tsc --noEmit` | PASS | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 314 tests | PASS — 314 tests, 27 suites |
+
+**Result: BUGS FOUND — 1 failure (cross-module import violation in AppShell.tsx, unresolved since QA Run 5)**
+
+The AC-123 behavioral requirement is satisfied. All other ACs pass. The blocking issue is the cross-module import rule violation: `AppShell.tsx` line 43 imports `UserProfileScreen` directly from `../mod-social-feed/screens/UserProfileScreen`. This violates the `production.md` convention that prohibits importing from another module's `screens/` subdirectory.
+
+Route to: Engineer (`engineer-mod-home`). Fix: `mod-social-feed` must expose `UserProfileScreen` at a public path outside `screens/` (e.g. a re-export at `src/modules/mod-social-feed/UserProfileScreen.tsx`), and `AppShell.tsx` must update the import path accordingly.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip.
