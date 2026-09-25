@@ -14,7 +14,7 @@ jest.mock('../../../lib/supabase', () => ({
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
-import { deleteAscent, loadAscentsForRoute, logAscent } from '../send-service';
+import { deleteAscent, fetchUserAchievements, loadAscentsForRoute, logAscent } from '../send-service';
 import type { Ascent, AscentWithProfile } from '../types';
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
@@ -33,6 +33,7 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }) {
     insert: jest.fn().mockReturnThis(),
     delete: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    in: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
     single: jest.fn().mockResolvedValue(result),
     then: resolvedPromise.then.bind(resolvedPromise),
@@ -229,6 +230,82 @@ describe('loadAscentsForRoute', () => {
     const result = await loadAscentsForRoute('route-001');
 
     expect(result[0].display_name).toBe('Unknown');
+  });
+});
+
+// ── fetchUserAchievements ─────────────────────────────────────────────────────
+
+describe('fetchUserAchievements', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns an empty object immediately when routeIds is empty (no Supabase call)', async () => {
+    const result = await fetchUserAchievements([]);
+
+    expect(result).toEqual({});
+    // Supabase must NOT be called — no network round-trip for zero IDs
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('returns the best style per route using flash > top > attempt precedence', async () => {
+    const rows = [
+      { route_id: 'route-A', style: 'attempt' },
+      { route_id: 'route-A', style: 'top' },    // top beats attempt
+      { route_id: 'route-A', style: 'flash' },   // flash beats top
+      { route_id: 'route-B', style: 'top' },
+      { route_id: 'route-B', style: 'attempt' }, // top still wins
+    ];
+    const qb = makeQueryBuilder({ data: rows, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchUserAchievements(['route-A', 'route-B']);
+
+    expect(result).toEqual({
+      'route-A': 'flash',
+      'route-B': 'top',
+    });
+    expect(mockFrom).toHaveBeenCalledWith('ascents');
+    expect(qb.select).toHaveBeenCalledWith('route_id, style');
+    expect(qb.in).toHaveBeenCalledWith('route_id', ['route-A', 'route-B']);
+  });
+
+  it('omits routes that have no ascents from the result map', async () => {
+    // Only route-A has an ascent; route-B has none (not returned by RLS-scoped select)
+    const rows = [{ route_id: 'route-A', style: 'top' }];
+    const qb = makeQueryBuilder({ data: rows, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchUserAchievements(['route-A', 'route-B']);
+
+    expect(result).toEqual({ 'route-A': 'top' });
+    expect(result['route-B']).toBeUndefined();
+  });
+
+  it('returns an empty object when the user has no ascents on any of the given routes', async () => {
+    const qb = makeQueryBuilder({ data: [], error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchUserAchievements(['route-X', 'route-Y']);
+
+    expect(result).toEqual({});
+  });
+
+  it('returns an empty object when Supabase returns null data', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchUserAchievements(['route-X']);
+
+    expect(result).toEqual({});
+  });
+
+  it('throws the Supabase error object on DB failure (RLS-scoped select)', async () => {
+    const supabaseError = { code: 'PGRST301', message: 'permission denied' };
+    const qb = makeQueryBuilder({ data: null, error: supabaseError });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(fetchUserAchievements(['route-A'])).rejects.toEqual(supabaseError);
   });
 });
 

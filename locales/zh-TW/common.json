@@ -224,8 +224,7 @@
     "styles": {
       "flash": "閃攀",
       "top": "完攀",
-      "attempt": "嘗試",
-      "project": "項目"
+      "attempt": "嘗試"
     },
     "errors": {
       "saveFailed": "儲存完攀紀錄失敗，請確認網路連線後重試。",

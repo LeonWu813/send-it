@@ -7,7 +7,7 @@
  */
 
 /** Send style options — matches the `ascent_style` DB enum. */
-export const ASCENT_STYLES = ['flash', 'top', 'attempt', 'project'] as const;
+export const ASCENT_STYLES = ['flash', 'top', 'attempt'] as const;
 export type AscentStyle = (typeof ASCENT_STYLES)[number];
 
 /**

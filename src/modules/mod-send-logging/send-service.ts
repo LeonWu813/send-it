@@ -74,6 +74,46 @@ export async function logAscent(
 }
 
 /**
+ * Returns the best ascent style per route for the current user.
+ * Precedence: flash > top > attempt.
+ * Routes with no ascent by the current user are omitted from the result.
+ *
+ * Implementation: client-side SELECT with RLS scoping the result to
+ * auth.uid() automatically — no explicit user_id filter needed.
+ * One call per screen with all visible routeIds (never N+1).
+ *
+ * @param routeIds  Array of route UUIDs to check.
+ * @returns         Map of route_id → best ascent style for the calling user.
+ * @throws {Error}  with a user-facing message on failure.
+ */
+export async function fetchUserAchievements(
+  routeIds: string[],
+): Promise<Record<string, 'flash' | 'top' | 'attempt'>> {
+  if (routeIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from('ascents')
+    .select('route_id, style')
+    .in('route_id', routeIds);
+  // RLS ensures auth.uid() = user_id — no explicit filter needed
+
+  if (error) throw error;
+
+  const PRECEDENCE: Record<string, number> = { flash: 3, top: 2, attempt: 1 };
+  const result: Record<string, 'flash' | 'top' | 'attempt'> = {};
+
+  for (const row of data ?? []) {
+    const current = result[row.route_id as string];
+    const rowStyle = row.style as string;
+    if (!current || PRECEDENCE[rowStyle] > PRECEDENCE[current]) {
+      result[row.route_id as string] = rowStyle as 'flash' | 'top' | 'attempt';
+    }
+  }
+
+  return result;
+}
+
+/**
  * Load all visible ascents for a route, most recent first.
  *
  * Returns the current user's own ascents (including private) plus all public

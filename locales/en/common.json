@@ -224,8 +224,7 @@
     "styles": {
       "flash": "Flash",
       "top": "Top",
-      "attempt": "Attempt",
-      "project": "Project"
+      "attempt": "Attempt"
     },
     "errors": {
       "saveFailed": "Failed to save your send. Please check your connection and try again.",

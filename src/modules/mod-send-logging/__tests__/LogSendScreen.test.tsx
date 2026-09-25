@@ -47,14 +47,15 @@ describe('LogSendScreen', () => {
     expect(screen.getByText('V5')).toBeTruthy();
   });
 
-  it('renders all four style chips (flash, top, attempt, project)', () => {
+  it('renders exactly three style chips (flash, top, attempt) — project is removed (AC-014)', () => {
     render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    // All style options must be present — query by text since i18n renders them
+    // All three valid style options must be present — query by text since i18n renders them
     expect(screen.getByText(/Flash|閃攀/)).toBeTruthy();
     expect(screen.getByText(/^Top$|^完攀$/)).toBeTruthy();
     expect(screen.getByText(/^Attempt$|^嘗試$/)).toBeTruthy();
-    expect(screen.getByText(/^Project$|^項目$/)).toBeTruthy();
+    // 'project' must NOT appear in the UI (AC-014)
+    expect(screen.queryByText(/^Project$|^項目$/)).toBeNull();
   });
 
   it('calls onCancel when the cancel button is pressed', () => {

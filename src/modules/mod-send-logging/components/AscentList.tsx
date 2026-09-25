@@ -50,8 +50,6 @@ function getStyleBadgeColor(
       return theme.colors.success;
     case 'attempt':
       return theme.colors.textSecondary;
-    case 'project':
-      return theme.colors.primary;
   }
 }
 
