@@ -6,7 +6,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "platforms": ["ios"],
+    "platforms": [
+      "ios"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.sendit.twbouldering"
@@ -19,7 +21,8 @@
           "photosPermission": "Allow Send It to access your photos to set a profile avatar."
         }
       ],
-      "./app.plugin"
+      "./app.plugin",
+      "expo-video"
     ],
     "extra": {
       "eas": {

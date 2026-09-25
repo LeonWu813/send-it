@@ -5,18 +5,13 @@
  * AC-034: same component is used in the activity feed (MOD-006 embeds it).
  *
  * The component receives a signed video URL and signed thumbnail URL (callers
- * must sign storage paths before passing them in). It uses expo-av's Video
- * component for inline playback.
- *
- * Note on expo-av Video component (Expo SDK 57 / expo-av 15.x):
- * The legacy Video component from expo-av is used here (not expo-video) because
- * expo-av is the installed package. The Video component renders inline via
- * useNativeControls and resizeMode="contain".
+ * must sign storage paths before passing them in). It uses expo-video's VideoView
+ * component for inline playback (SDK 57 successor to expo-av).
  */
 
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -60,23 +55,24 @@ export default function BetaVideoPlayer({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const styles = makeStyles(theme);
-  const videoRef = useRef<Video>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(false);
+
+  const player = useVideoPlayer(videoUrl, (p) => {
+    p.loop = false;
+  });
 
   const handlePlayPress = useCallback((): void => {
     setIsPlaying(true);
     setIsBuffering(true);
-  }, []);
-
-  const handlePlaybackStatusUpdate = useCallback(
-    (status: { isLoaded?: boolean; isPlaying?: boolean; isBuffering?: boolean }): void => {
-      if (status.isLoaded) {
-        setIsBuffering(status.isBuffering ?? false);
-      }
-    },
-    [],
-  );
+    // expo-video's player starts loading on mount; we track buffering via status
+    // and clear it when playback begins.
+    const subscription = player.addListener('playingChange', () => {
+      setIsBuffering(false);
+      subscription.remove();
+    });
+    player.play();
+  }, [player]);
 
   return (
     <View style={styles.container} testID={testID}>
@@ -112,14 +108,11 @@ export default function BetaVideoPlayer({
       ) : (
         /* Active video player */
         <View style={styles.videoContainer}>
-          <Video
-            ref={videoRef}
-            source={{ uri: videoUrl }}
+          <VideoView
+            player={player}
             style={styles.video}
-            resizeMode={ResizeMode.CONTAIN}
-            useNativeControls
-            shouldPlay
-            onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+            contentFit="contain"
+            nativeControls
           />
           {isBuffering ? (
             <View style={styles.bufferingOverlay}>

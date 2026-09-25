@@ -4,7 +4,7 @@
  * AC-033: inline video playback without leaving the app.
  * AC-034: same component used in activity feed.
  *
- * expo-av is mocked globally via moduleNameMapper (expo-av → __mocks__/expo-av.js).
+ * expo-video is mocked globally via moduleNameMapper (expo-video → __mocks__/expo-video.js).
  * Tests behaviour — not implementation.
  */
 

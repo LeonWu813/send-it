@@ -11,13 +11,13 @@
     "expo": "~57.0.24",
     "expo-apple-authentication": "~7.2.4",
     "expo-auth-session": "~6.1.5",
-    "expo-av": "~15.0.2",
     "expo-blob": "^57.0.2",
     "expo-crypto": "~14.1.5",
     "expo-image-picker": "~57.0.19",
     "expo-localization": "~16.1.6",
     "expo-secure-store": "~14.2.3",
     "expo-status-bar": "~57.0.1",
+    "expo-video": "~57.0.5",
     "expo-web-browser": "~14.1.6",
     "i18next": "^24.2.3",
     "react": "19.2.3",
@@ -52,7 +52,7 @@
     "moduleNameMapper": {
       "^react-native-safe-area-context$": "<rootDir>/__mocks__/react-native-safe-area-context.js",
       "^expo-blob$": "<rootDir>/__mocks__/expo-blob.js",
-      "^expo-av$": "<rootDir>/__mocks__/expo-av.js"
+      "^expo-video$": "<rootDir>/__mocks__/expo-video.js"
     }
   },
   "private": true

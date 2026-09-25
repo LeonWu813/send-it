@@ -2,7 +2,33 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-24 (Phase 1 thumbnail content-type mismatch)
+**Status**: Bug fix applied — 2026-09-25 (expo-av → expo-video migration, iOS build fix)
+
+### Bug Fix — expo-av → expo-video (SDK 57 compatibility) — 2026-09-25
+
+**Root cause**: `expo-av@~15.0.2` is SDK 52-era. `expo-modules-core@57.0.18` (SDK 57) removed `EXEventEmitter.h`, which `expo-av` still imports. This caused a native xcodebuild compile failure (error 65) when building on SDK 57. `expo-video ~57.0.5` is the SDK-57 successor.
+
+**Fix**:
+- `npx expo install expo-video` — installed `expo-video@~57.0.5` (SDK-compatible version).
+- `npm uninstall expo-av` — removed `expo-av@~15.0.2` from dependencies.
+- `src/modules/mod-beta-video/components/BetaVideoPlayer.tsx` — migrated from `expo-av` API (`Video`, `ResizeMode`) to `expo-video` API (`VideoView`, `useVideoPlayer`). Component shape and props are unchanged. `useVideoPlayer(uri, p => { p.loop = false })` creates the player; `<VideoView player={player} contentFit="contain" nativeControls />` renders inline. Buffering state managed via `player.addListener('playingChange', ...)`.
+- `__mocks__/expo-av.js` — deleted.
+- `__mocks__/expo-video.js` — created. Stubs `VideoView` (renders a `View`), `useVideoPlayer` (returns mock player with `play`, `pause`, `addListener`), and `createVideoPlayer`.
+- `package.json` Jest `moduleNameMapper` — replaced `^expo-av$` entry with `^expo-video$` → `__mocks__/expo-video.js`.
+- `src/modules/mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — updated comment from expo-av mock reference to expo-video mock reference (imports/assertions unchanged — tests are behaviour-based and pass without structural change).
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 314 tests, 27 suites, 0 failures
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+- `npx expo run:ios` (simulator): PASS — Build Succeeded, 0 errors, 1 pre-existing `-lc++` linker warning. App launched on iPhone 17 Pro simulator, JS bundle loaded (747ms, 973 modules). No xcodebuild error 65.
+- Git scope check: FAIL (expected — package.json, package-lock.json, __mocks__, app.json, ios/pbxproj are legitimate targets for a dependency-swap bugfix; pre-existing dirty files from other modules not touched by this fix)
+- All judgment-based checklist items: PASS — all ACs still pass; no new dependencies outside production.md tech stack; no hardcoded values; no gold-plating; cross-module import rule unaffected.
+
+**Status before implementation complete — 2026-09-24 (Phase 1 thumbnail content-type mismatch)**
 
 ### Bug Fix — Phase 1 thumbnail content-type mismatch (2026-09-24)
 
