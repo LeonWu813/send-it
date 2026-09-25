@@ -826,3 +826,170 @@ Full test suite confirms: 168 tests, 0 failures. No previously-passing test is n
 | All other previously passing ACs | PASS | PASS |
 
 **Overall verdict: PASS. Signed-URL fix verified correct. No regressions. Module ready for human QA re-check.**
+
+---
+
+## QA Rev 9 Results
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-24
+**Workflow**: regression-test (re-verification after Rev 9 implementation — AC-045, AC-046 achievement icons + bookmark, AC-047 saved indicator)
+**Overall verdict**: PASS — all Rev 9 ACs verified; one pre-existing spec documentation inconsistency noted (not a new bug); no regressions on previously passing ACs or test suite
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false`
+- Result: 191 tests passed, 0 failed across 17 suites
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+- Count vs. prior run (168 tests): +23 tests — new tests for fetchSavedRouteIds/saveRoute/unsaveRoute (route-service.test.ts), AC-045/046/047 behavior tests (RouteListScreen.test.tsx, RouteDetailScreen.test.tsx), and pre-existing tests from other modules. No mod-route-catalog tests removed.
+
+---
+
+### AC-045 — Route display name format
+
+**RouteListScreen.tsx**
+
+- PASS: `formatRouteName(grade, colorTag, sectionLabel, t)` defined locally at line 57–66. Format: `` `${grade} ${color}` `` with `` `${base} (${sectionLabel})` `` appended when `sectionLabel` is truthy.
+- PASS: Color uses i18n key `routeCatalog.colors.${colorTag}` (line 63). Both EN and zh-TW locales contain `routeCatalog.colors.*` for all 9 colors.
+- PASS: `routeName` computed via `formatRouteName` in `renderRouteCard` (line 195) and rendered in `testID="route-name"` Text at line 211.
+- PASS: Tests verify grade appears in route-name text (RouteListScreen.test.tsx AC-045 test); section label "Cave" appears in parentheses in the formatted name (line 131–142 of test file).
+- PASS: Format is display-only — `formatRouteName` takes runtime values and produces a string; no stored display name field exists.
+
+**RouteDetailScreen.tsx**
+
+- PASS: Same `formatRouteName` helper defined at line 49–58 with identical logic.
+- PASS: `routeName` computed at line 217 and rendered in `routeNameRow` at line 278: `<Text style={styles.routeNameText}>{routeName}</Text>`.
+- PASS: Test "AC-045: shows formatted route name in header" verifies `/V5.*Main Wall/` appears in rendered output.
+
+**Spec note — i18n key path**: Spec says `routes.colors.<color_tag>` in three places (Context, AC-045, Key Implementation Notes). The implementation correctly uses `routeCatalog.colors.<color_tag>` (matching the actual locale file structure). The `routes` namespace has no `colors` sub-object — the colors live under `routeCatalog.colors.*` and this is what the code uses. This is a spec documentation inconsistency (three spec lines say `routes.colors` but the working implementation uses `routeCatalog.colors`), not an implementation bug. The locale keys are correctly populated and functioning. Classified as a spec issue — route to PM for spec wording correction, not to Engineer.
+
+---
+
+### AC-046 (achievement icons) — MOD-003 side
+
+**Import source**
+
+- PASS: Both `RouteListScreen.tsx` (line 33) and `RouteDetailScreen.tsx` (line 39) import `fetchUserAchievements` exclusively from `../../mod-send-logging/send-service`. No import from any MOD-004 internal screens, components, or direct `ascents` table query exists in either file.
+- PASS: `fetchUserAchievements` in `send-service.ts` is exported at line 89 with signature `(routeIds: string[]): Promise<Record<string, 'flash' | 'top' | 'attempt'>>` — matches the spec requirement exactly.
+
+**RouteListScreen — batched call and icon display**
+
+- PASS: `fetchUserAchievements(data.map((r) => r.id))` called once after routes load (lines 150) — one call with all visible route IDs, not per-row. Called only when `data.length > 0`.
+- PASS: Icon mapping — `flash` → Ionicons `"flash"` (warning/amber, line 79); `top` → `"checkmark-circle"` (success/green, line 81); `attempt` → `"ellipse-outline"` (textSecondary/gray, line 83).
+- PASS: `{achievement ? <AchievementIcon style={achievement} theme={theme} /> : null}` at line 216–218 — no icon rendered when route not in achievements map.
+- PASS: Test "AC-046: calls fetchUserAchievements once after routes load" verifies `mockFetchUserAchievements` called with `['r-001', 'r-002']`.
+
+**RouteDetailScreen — single-route call and icon display**
+
+- PASS: `fetchUserAchievements([routeId])` called at line 129 after route loads — single-element array, not batched list.
+- PASS: Icon rendered inline in `routeNameRow` (lines 279–285) using ternary chain: flash → `"flash"` (warning), top → `"checkmark-circle"` (success), attempt → `"ellipse-outline"` (textSecondary), null → nothing.
+- PASS: Test "AC-046: calls fetchUserAchievements for this route" verifies call with `['route-001']`.
+
+---
+
+### AC-046 (bookmark toggle) and AC-047 (list indicator)
+
+**Migration — 20260924000003_mod_003_saved_routes.sql**
+
+- PASS: Composite PK `(user_id, route_id)` declared at line 17.
+- PASS: `user_id UUID NOT NULL DEFAULT auth.uid() REFERENCES public.users(id) ON DELETE CASCADE` at line 14 — dual cascade FK with `DEFAULT auth.uid()` for insert-without-explicit-user_id pattern.
+- PASS: `route_id UUID NOT NULL REFERENCES public.routes(id) ON DELETE CASCADE` at line 15 — ON DELETE CASCADE required because withdrawn pending routes are DELETEd.
+- PASS: `ALTER TABLE public.saved_routes ENABLE ROW LEVEL SECURITY` at line 20.
+- PASS: SELECT policy with `USING (auth.uid() = user_id)` at line 24 — own rows only.
+- PASS: INSERT policy with `WITH CHECK (auth.uid() = user_id)` at line 28 — own rows only.
+- PASS: DELETE policy with `USING (auth.uid() = user_id)` at line 32 — own rows only.
+- PASS: `GRANT SELECT, INSERT, DELETE ON public.saved_routes TO authenticated` at line 35 — no UPDATE grant.
+- PASS: No UPDATE policy exists — a save has no mutable fields; unsave = DELETE.
+- Migration matches the Tech Lead approved DDL from status.md Tech Lead Review (Rev 9, Area 2) exactly.
+
+**route-service.ts — exported functions**
+
+- PASS: `fetchSavedRouteIds(): Promise<string[]>` exported at line 301. Queries `saved_routes` selecting `route_id`, returns array of route ID strings. RLS scopes to auth.uid() automatically.
+- PASS: `saveRoute(routeId: string): Promise<void>` exported at line 322. Inserts `{ route_id: routeId }` into `saved_routes` — `user_id` populated by DB default.
+- PASS: `unsaveRoute(routeId: string): Promise<void>` exported at line 341. Calls `.delete().eq('route_id', routeId)` — RLS restricts delete to own rows by user_id.
+
+**RouteDetailScreen — bookmark toggle (AC-046)**
+
+- PASS: `isSaved` state with optimistic update at lines 151–164: `setIsSaved(!wasSaved)` fires before the network call; on error `setIsSaved(wasSaved)` reverts.
+- PASS: `saveRoute(routeId)` called when toggling to saved, `unsaveRoute(routeId)` when toggling to unsaved.
+- PASS: Icon: `isSaved ? 'bookmark' : 'bookmark-outline'` at line 247; color: `isSaved ? theme.colors.warning : theme.colors.textSecondary` at line 249 — filled yellow when saved, outline gray when unsaved.
+- PASS: `accessibilityLabel`: `isSaved ? t('routeCatalog.bookmark.unsave') : t('routeCatalog.bookmark.save')` at lines 241–243.
+- PASS: This is the only save/unsave interaction point in the module — RouteListScreen has no bookmark tap action.
+- PASS: Tests verify: outline bookmark shown when not saved; filled bookmark (unsave label) shown when saved; `saveRoute` called on save-press; `fetchUserAchievements` called on load.
+
+**RouteListScreen — read-only indicator (AC-047)**
+
+- PASS: `fetchSavedRouteIds()` called on mount (line 133) and on AppState foreground event (lines 173–184) — same pattern as GymListScreen.
+- PASS: `savedRouteIds.has(item.id)` checked per card (line 197). When `isSaved`, renders `<Ionicons name="bookmark" ... accessibilityLabel={t('routeCatalog.bookmark.saved')} />` (lines 220–227). When not saved, nothing rendered for that card.
+- PASS: No tap action on the bookmark indicator — the card's `onPress` calls `onSelectRoute(item.id)` only (line 205). No second pressable for the bookmark.
+- PASS: Test "AC-047: shows filled bookmark on saved route cards" verifies an element with accessibilityLabel matching `/saved/i` or `'已收藏'` appears when `r-001` is in the saved IDs list.
+
+**i18n — bookmark keys**
+
+- PASS: EN `routeCatalog.bookmark.save` = `"Save route"`, `routeCatalog.bookmark.unsave` = `"Unsave route"`, `routeCatalog.bookmark.saved` = `"Saved"` — all present in `locales/en/common.json` lines 137–141.
+- PASS: zh-TW equivalents `"收藏路線"`, `"取消收藏"`, `"已收藏"` — all present in `locales/zh-TW/common.json` lines 137–141.
+- PASS: Key parity between EN and zh-TW confirmed for all three keys.
+
+---
+
+### Regression — Previously Passing ACs
+
+**AC-020 (single-page submit)**: `RouteSubmitScreen.tsx` unmodified by Rev 9. Single-page render, no findMatchingActiveRoutes, no step state machine. PASS.
+
+**AC-021 (photo required)**: Button `disabled={!photoUri || isSubmitting}` and inline hint unchanged. `handleAddRoute` validation guard unchanged. PASS.
+
+**AC-043 (pre-fill from filter state)**: `initialGrade` and `initialColorTag` props on `RouteSubmitScreen` and their `useState` initializers unchanged. PASS.
+
+**AC-040 (grade + color filter chips, no status filter)**: `RouteListScreen` grade and color chip rendering unchanged. No status tabs added. Test "does NOT show status filter tabs" still passes. PASS.
+
+**AC-041 (active routes only)**: `listRoutes()` always applies `.eq('status', 'active')`. No `status` field in `RouteListFilters`. PASS.
+
+**AC-042 (tap route → detail)**: `RouteNavigator` unmodified. `renderRouteCard.onPress → onSelectRoute` unchanged. PASS.
+
+**AC-024b (no retire button)**: No retire button, no `retireRoute` call in `RouteDetailScreen`. Test "does NOT show a retire button" still passes. PASS.
+
+**AC-025/026/027/028/029 (RLS/migration — approval gate)**: Migrations unmodified by Rev 9. All policies and RPC unchanged. PASS.
+
+**Safe area insets — all three screens**: `useSafeAreaInsets()` + `makeStyles(theme, insets.top)` + `paddingTop: topInset + theme.spacing.md` confirmed on all three screens. PASS.
+
+**Signed URL (photo display)**: `getPhotoSignedUrl` + `photoUri` state in `RouteDetailScreen` unchanged. PASS.
+
+---
+
+### Spec Issue
+
+| ID | Severity | Type | Description |
+|----|----------|------|-------------|
+| AC-045 i18n key path | Low | Spec documentation issue | Spec says `routes.colors.<color_tag>` in three places (Context paragraph, AC-045 definition, Key Implementation Notes). The `routes` namespace in both locale files has no `colors` sub-object. Colors live under `routeCatalog.colors.*` — which is what the implementation correctly uses and what the locale files contain. The implementation is correct and functioning; the spec text has a stale path reference. Route to: PM for spec wording correction (s/routes.colors/routeCatalog.colors/ in three spec lines). Not an engineering bug. |
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| AC-045: formatRouteName on RouteListScreen cards (grade + localized color + section) | PASS |
+| AC-045: formatRouteName on RouteDetailScreen title area | PASS |
+| AC-045: format is display-only, not stored | PASS |
+| AC-046: fetchUserAchievements imported from send-service only (no MOD-004 internals) | PASS |
+| AC-046: RouteListScreen batched call after routes load; flash/top/attempt icons shown; no icon when absent | PASS |
+| AC-046: RouteDetailScreen single-route call; icon next to route name | PASS |
+| AC-046: icon mapping (flash→"flash", top→"checkmark-circle" green, attempt→"ellipse-outline" gray) | PASS |
+| AC-046: bookmark toggle optimistic update; revert on error | PASS |
+| AC-046: RouteDetailScreen is only save/unsave action point | PASS |
+| AC-047: read-only filled bookmark on saved cards; nothing on unsaved; no tap action on indicator | PASS |
+| Migration 20260924000003_mod_003_saved_routes.sql: composite PK, dual CASCADE FK, DEFAULT auth.uid(), RLS SELECT/INSERT/DELETE, GRANT | PASS |
+| route-service.ts: fetchSavedRouteIds, saveRoute, unsaveRoute exported and correct | PASS |
+| i18n: routeCatalog.bookmark.save/unsave/saved in EN + zh-TW | PASS |
+| npx tsc --noEmit — 0 errors | PASS |
+| npm test -- --watchAll=false — 191 tests, 0 failures | PASS |
+| AC-020/021/043 regression | PASS |
+| AC-040/041/042 regression | PASS |
+| Photo signed URL regression | PASS |
+| Safe area insets regression (all 3 screens) | PASS |
+| AC-045 i18n key path (spec says routes.colors, code uses routeCatalog.colors) | SPEC ISSUE — route to PM |
+
+**Overall verdict: PASS. All Rev 9 ACs verified. One spec documentation inconsistency found (i18n key path in spec text — not an engineering bug). No regressions. Module ready for human QA re-check.**
