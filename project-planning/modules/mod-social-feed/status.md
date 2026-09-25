@@ -5,7 +5,18 @@
 **Status**: Complete — migration bug fixed, tsc clean, 277/277 tests pass.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
+**Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
 **Date**: 2026-09-24
+
+### Public Entry-Point Addition (2026-09-24)
+
+**Change**: Created `src/modules/mod-social-feed/UserProfileNavigator.tsx` — a one-line re-export of `UserProfileScreen` as the module's public entry point.
+
+**Why**: `production.md` Cross-Module Imports convention prohibits importing from another module's `screens/` subdirectory directly. `AppShell.tsx` (MOD-012) needs to mount `UserProfileScreen`; this file exposes it at the module root as the canonical public surface.
+
+**Self-check**:
+- PASS — `npx tsc --noEmit` clean, no errors
+- PASS — Only `src/modules/mod-social-feed/UserProfileNavigator.tsx` added; no other files touched
 
 ### Bug Fix (2026-09-24)
 
