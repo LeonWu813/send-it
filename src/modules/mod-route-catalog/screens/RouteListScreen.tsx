@@ -75,7 +75,7 @@ interface AchievementIconProps {
 function AchievementIcon({ style, theme }: AchievementIconProps): React.JSX.Element {
   switch (style) {
     case 'flash':
-      return <Ionicons name="flash" size={16} color={theme.colors.warning} />;
+      return <Ionicons name="flash" size={16} color="#FFD700" />;
     case 'top':
       return <Ionicons name="checkmark-circle" size={16} color={theme.colors.success} />;
     case 'attempt':
@@ -206,25 +206,24 @@ export default function RouteListScreen({
         accessibilityLabel={routeName}
       >
         <View style={styles.cardHeader}>
-          {/* AC-045: formatted route name as card title */}
-          <Text style={styles.routeName} numberOfLines={1} testID="route-name">
-            {routeName}
-          </Text>
-          <View style={styles.cardHeaderRight}>
-            {/* AC-046: achievement icon inline next to route name */}
+          {/* AC-045: formatted route name + AC-046: achievement icon directly beside name */}
+          <View style={styles.routeNameRow}>
+            <Text style={styles.routeName} numberOfLines={1} testID="route-name">
+              {routeName}
+            </Text>
             {achievement ? (
               <AchievementIcon style={achievement} theme={theme} />
             ) : null}
-            {/* AC-047: read-only saved bookmark indicator (no tap action) */}
-            {isSaved ? (
-              <Ionicons
-                name="bookmark"
-                size={16}
-                color={theme.colors.warning}
-                accessibilityLabel={t('routeCatalog.bookmark.saved')}
-              />
-            ) : null}
           </View>
+          {/* AC-047: read-only saved bookmark indicator (no tap action) */}
+          {isSaved ? (
+            <Ionicons
+              name="bookmark"
+              size={16}
+              color={theme.colors.warning}
+              accessibilityLabel={t('routeCatalog.bookmark.saved')}
+            />
+          ) : null}
         </View>
         <Text style={styles.dateText}>
           {new Date(item.created_at).toLocaleDateString()}
@@ -474,16 +473,17 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       gap: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
-    routeName: {
+    routeNameRow: {
       flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    routeName: {
+      flexShrink: 1,
       fontSize: theme.fontSize.md,
       fontWeight: theme.fontWeight.semibold,
       color: theme.colors.textPrimary,
-    },
-    cardHeaderRight: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.xs,
     },
     dateText: {
       fontSize: theme.fontSize.xs,

@@ -277,7 +277,7 @@ export default function RouteDetailScreen({
       <View style={styles.routeNameRow}>
         <Text style={styles.routeNameText}>{routeName}</Text>
         {achievement === 'flash' ? (
-          <Ionicons name="flash" size={22} color={theme.colors.warning} />
+          <Ionicons name="flash" size={22} color="#FFD700" />
         ) : achievement === 'top' ? (
           <Ionicons name="checkmark-circle" size={22} color={theme.colors.success} />
         ) : achievement === 'attempt' ? (

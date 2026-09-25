@@ -1037,6 +1037,46 @@ Full test suite confirms: 168 tests, 0 failures. No previously-passing test is n
 
 ---
 
+## Engineering Progress — Human QA UI Tweaks (2026-09-25)
+
+**Issues fixed (human QA, coordinator-reported):**
+
+### Fix 1 — Achievement icon placement (RouteListScreen card)
+
+**Root cause**: The achievement icon was placed inside `cardHeaderRight`, a sibling `View` that sits on the far-right side of the card header row (`justifyContent: 'space-between'`). This separated the icon visually from the route name text.
+
+**Fix**:
+- Added a new `routeNameRow` inner `View` with `flexDirection: 'row'`, `alignItems: 'center'`, `flex: 1`, and `gap: 4` (4 px — within the 4 px max required).
+- The route name `<Text>` and `<AchievementIcon>` are now siblings inside `routeNameRow`, so the icon sits immediately to the right of the name text.
+- The saved bookmark indicator (`isSaved` check) remains as a direct child of `cardHeader` alongside `routeNameRow`, still right-aligned via `justifyContent: 'space-between'`.
+- Removed `cardHeaderRight` style (no longer used). Changed `routeName` style from `flex: 1` to `flexShrink: 1` (the parent `routeNameRow` holds `flex: 1` now).
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — restructured `renderRouteCard` card header JSX; updated `makeStyles` (`routeNameRow` added, `cardHeaderRight` removed, `routeName.flex` changed to `flexShrink`).
+
+### Fix 2 — Flash icon color (gold #FFD700)
+
+**Root cause**: The flash achievement icon used `theme.colors.warning` (`#F9A825` light / `#FFB300` dark) instead of gold.
+
+**Fix**: Changed the flash icon color to the literal `'#FFD700'` (gold) in both screens where achievement icons are rendered:
+- `RouteListScreen.tsx` — `AchievementIcon` component, `case 'flash'` branch.
+- `RouteDetailScreen.tsx` — inline ternary for `achievement === 'flash'`.
+
+Top (`checkmark-circle`) and attempt (`ellipse-outline`) icon colors are unchanged.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — flash color `theme.colors.warning` → `'#FFD700'`
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — flash color `theme.colors.warning` → `'#FFD700'`
+
+### Self-check (2026-09-25)
+
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 314 tests, 27 suites, 0 failures
+- PASS: No gold-plating — strictly confined to the two reported UI tweaks
+- PASS: No new dependencies introduced
+
+---
+
 ## QA UI-Fix Regression — 2026-09-25
 
 **QA agent**: qa-mod-route-catalog
