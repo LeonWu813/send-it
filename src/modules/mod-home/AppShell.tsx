@@ -13,10 +13,11 @@
  *   Never use conditional unmount — loses state.
  *   Never use `flex: 0` — still lays out and leaks touch targets.
  *
- * Deep-link note (onSelectGym):
- *   Tapping a saved gym on HomeScreen switches to the Gyms tab.
- *   Navigating directly into a specific gym's detail view is a future
- *   enhancement — GymNavigator manages its own internal navigation state.
+ * Deep-link note (onSelectGym / AC-114):
+ *   Tapping a saved gym on HomeScreen switches to the Gyms tab AND passes the
+ *   gymId to GymNavigator via the `initialGymId` prop so it opens the gym
+ *   detail screen directly. `selectedGymId` is cleared after a short delay so
+ *   that subsequent tab switches (without a gym selection) land on the list.
  *
  * Climber profile overlay (onSelectClimber / AC-123):
  *   Tapping a climber chip opens UserProfileScreen from MOD-006 as a
@@ -78,15 +79,26 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   /** Non-null while a climber profile overlay is open (AC-123). */
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
+  /** When the user taps a saved gym chip on the Home screen, this is set to
+   *  the gym ID so GymNavigator can open that gym's detail screen directly
+   *  (AC-114 deep-link). The `gymNavKey` counter ensures every tap triggers
+   *  a fresh useEffect in GymNavigator even if the same gym is tapped twice
+   *  in a row after navigating back to the list. */
+  const [selectedGymId, setSelectedGymId] = useState<string | undefined>(undefined);
+  const [gymNavKey, setGymNavKey] = useState(0);
   const insets = useSafeAreaInsets();
 
   function handleViewAllGyms(): void {
+    setSelectedGymId(undefined);
     setActiveTab('gyms');
   }
 
-  function handleSelectGym(_gymId: string): void {
-    // Switch to the Gyms tab. Deep-linking into a specific gym detail is a
-    // future enhancement — GymNavigator manages its own internal state.
+  function handleSelectGym(gymId: string): void {
+    // Increment gymNavKey so GymNavigator's useEffect fires on every tap,
+    // even if the same gym is tapped twice after the user navigated back to
+    // the list. The gymId tells GymNavigator which detail screen to open.
+    setSelectedGymId(gymId);
+    setGymNavKey((k) => k + 1);
     setActiveTab('gyms');
   }
 
@@ -115,7 +127,11 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
 
         {/* Tab 2 — Gyms */}
         <View style={[styles.tabContent, activeTab !== 'gyms' && styles.hidden]}>
-          <GymNavigator session={session} />
+          <GymNavigator
+            session={session}
+            initialGymId={selectedGymId}
+            gymNavKey={gymNavKey}
+          />
         </View>
 
         {/* Tab 3 — Profile */}

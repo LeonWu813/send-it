@@ -1135,6 +1135,48 @@ No new regressions in adjacent logic.
 
 All acceptance criteria pass. The cross-module import violation that blocked QA Runs 5 and 6 is resolved: `src/modules/mod-social-feed/UserProfileNavigator.tsx` now exposes `UserProfileScreen` at the `mod-social-feed` module root, and `AppShell.tsx` imports from that public path. No regressions introduced. TypeScript clean (0 errors). 314/314 tests pass.
 
-The outstanding AC-114 spec note (tab-switch vs. gym-detail deep-link, Phase 1 scoping) remains a PM-level clarification item and is not a blocking implementation bug.
+The outstanding AC-114 spec note (tab-switch vs. gym-detail deep-link, Phase 1 scoping) has now been resolved as a full deep-link implementation — see Engineering Progress Bugfix below.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
+
+---
+
+### Bugfix — AC-114 saved gym deep-link — 2026-09-25
+
+**Bug (human QA):** Tapping a saved gym chip on the Home screen navigated to the Gyms tab but landed on the gym list screen instead of the specific gym's detail screen. `AppShell.handleSelectGym` only called `setActiveTab('gyms')` — it had no mechanism to tell `GymNavigator` which gym to open.
+
+**Root cause:** `GymNavigator`'s public props interface only accepted `session: Session`. It had no prop to receive a target gym ID from the outside. All internal navigation was managed by its own local `view` state, with no entry point for AppShell to set the initial view.
+
+**Fix (two files changed):**
+
+1. **`src/modules/mod-gym-directory/GymNavigator.tsx`** — added two new optional props:
+   - `initialGymId?: string` — the gym ID AppShell wants to deep-link to.
+   - `gymNavKey?: number` — a counter that AppShell increments on every Home chip tap; used as the `useEffect` dependency so the effect fires on every tap, even when the same `initialGymId` value is tapped twice after the user has navigated back to the list (without `gymNavKey`, the same `initialGymId` dep would not trigger a re-run).
+   - Added `useEffect([gymNavKey])` that calls `setView({ name: 'detail', gymId: initialGymId })` when `initialGymId` is truthy. Dep array intentionally contains only `gymNavKey` (not `initialGymId`) with ESLint disable comment explaining the intentional omission.
+   - Added `useEffect` import alongside `useState`.
+
+2. **`src/modules/mod-home/AppShell.tsx`** — wired the deep-link:
+   - Added `selectedGymId: string | undefined` state (tracks which gym ID to open).
+   - Added `gymNavKey: number` state (increments on every tap to ensure GymNavigator's useEffect fires).
+   - `handleSelectGym(gymId)` now sets `selectedGymId(gymId)`, increments `gymNavKey`, and switches tab — instead of just switching tab.
+   - `handleViewAllGyms()` clears `selectedGymId` to `undefined` (normal "View All" taps should land on the list, not a deep-link detail).
+   - `GymNavigator` now receives `initialGymId={selectedGymId}` and `gymNavKey={gymNavKey}`.
+
+**No changes to `HomeScreen.tsx` or `HomeNavigator.tsx`** — `onSelectGym(gym.id)` was already correctly calling the callback with the gym ID. The bug was entirely in how AppShell handled that callback.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors (exit 0) |
+| `npm test -- --watchAll=false` | PASS — 314 tests, 27 suites, all pass (exit 0) |
+| AC-114: tap gym chip → switches to Gyms tab AND opens that gym's detail screen | PASS (by code inspection) |
+| "View All" button still switches to Gyms tab at list (no unintended deep-link) | PASS — `handleViewAllGyms` clears `selectedGymId` |
+| Tapping same gym twice after navigating back works | PASS — `gymNavKey` increments on every tap |
+| GymNavigator existing tests (GymListScreen, GymDetailScreen) all pass | PASS — 314/314 |
+| No inline string literals introduced | PASS |
+| No hardcoded hex colors introduced | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| All existing HomeScreen tests pass with no changes | PASS |
+
+**Result: READY FOR QA RE-VERIFICATION**

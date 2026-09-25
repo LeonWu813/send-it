@@ -18,7 +18,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
@@ -35,15 +35,38 @@ type GymView =
 
 interface GymNavigatorProps {
   session: Session;
+  /** When provided, the navigator opens directly on the detail view for this
+   *  gym rather than the list. Used by AppShell when the user taps a saved
+   *  gym chip on the Home screen (AC-114 deep-link).
+   *  `gymNavKey` is incremented by AppShell on every tap so the useEffect
+   *  fires even when the same gym is tapped twice after navigating back. */
+  initialGymId?: string;
+  gymNavKey?: number;
 }
 
 export default function GymNavigator({
   session,
+  initialGymId,
+  gymNavKey,
 }: GymNavigatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
 
   const [view, setView] = useState<GymView>({ name: 'list' });
+
+  // When AppShell passes a new gymNavKey (incremented each time the user taps
+  // a saved gym chip on the Home screen), navigate directly to that gym's
+  // detail screen. gymNavKey ensures the effect fires even when the same gym
+  // is tapped again after navigating back to the list, because gymNavKey
+  // always changes while initialGymId might stay the same.
+  // initialGymId is read inside the effect but intentionally omitted from
+  // deps — gymNavKey is the trigger; initialGymId is just the payload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialGymId) {
+      setView({ name: 'detail', gymId: initialGymId });
+    }
+  }, [gymNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function navigateToDetail(gymId: string): void {
     setView({ name: 'detail', gymId });
