@@ -288,6 +288,23 @@
       "followFailed": "Failed to update follow status. Please try again."
     }
   },
+  "notifications": {
+    "title": "Notifications",
+    "empty": "No notifications yet. Like activity from others will appear here.",
+    "badgeBetaVideoLike": "♥ Like",
+    "betaVideoLikedBody": "liked your beta video.",
+    "betaVideoLikeA11y": "Beta video like notification",
+    "unknownActor": "Someone",
+    "preferencesTitle": "Push Notifications",
+    "betaVideoLikeLabel": "Beta Video Likes",
+    "betaVideoLikeDescription": "Receive a push notification when someone likes your beta video.",
+    "pushOffNote": "Even with push off, likes still appear in your notification inbox.",
+    "errors": {
+      "loadFailed": "Failed to load notifications. Please try again.",
+      "loadPreferenceFailed": "Failed to load notification preferences. Please try again.",
+      "updatePreferenceFailed": "Failed to update notification preferences. Please try again."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",

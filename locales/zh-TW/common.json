@@ -288,6 +288,23 @@
       "followFailed": "更新追蹤狀態失敗，請再試一次。"
     }
   },
+  "notifications": {
+    "title": "通知",
+    "empty": "目前沒有通知，別人對你的 Beta 影片按讚後會顯示在這裡。",
+    "badgeBetaVideoLike": "♥ 按讚",
+    "betaVideoLikedBody": "對你的 Beta 影片按讚了。",
+    "betaVideoLikeA11y": "Beta 影片按讚通知",
+    "unknownActor": "某位攀岩者",
+    "preferencesTitle": "推播通知",
+    "betaVideoLikeLabel": "Beta 影片按讚",
+    "betaVideoLikeDescription": "當有人對你的 Beta 影片按讚時，傳送推播通知。",
+    "pushOffNote": "即使關閉推播，按讚仍會顯示在通知收件匣中。",
+    "errors": {
+      "loadFailed": "載入通知失敗，請再試一次。",
+      "loadPreferenceFailed": "載入通知偏好設定失敗，請再試一次。",
+      "updatePreferenceFailed": "更新通知偏好設定失敗，請再試一次。"
+    }
+  },
   "common": {
     "loading": "載入中…",
     "retry": "重試",
