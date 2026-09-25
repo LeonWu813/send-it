@@ -2,7 +2,20 @@
 
 ## Engineering Progress
 
-**Status**: Implementation complete — 2026-09-24
+**Status**: Bug fix applied — 2026-09-24 (AC-035 .mov rejection)
+
+### Bug Fix — AC-035 (2026-09-24)
+
+**Commit**: `bdccdabc2247ea2dc18adc3c3ef748636b8e5b5d`
+
+- `validateVideoFormat()` fallback branch (no `mimeType`): changed condition from `!uri.endsWith('.mp4') && !uri.endsWith('.mov')` to `!uri.toLowerCase().endsWith('.mp4')`. `.mov` URIs with no mimeType now return the validation error instead of `null`.
+- `locales/en/common.json` `betaVideo.errors.invalidFormat`: already correct at HEAD ("Only MP4 videos are supported. Please select a different file.").
+- `locales/zh-TW/common.json` `betaVideo.errors.invalidFormat`: already correct at HEAD ("僅支援 MP4 格式的影片，請選擇其他檔案。").
+- Tests updated: HEVC test regex updated to `/Only MP4 videos are supported/i`; new test `"AC-035: rejects .mov files with no mimeType (MP4 container only)"` added.
+- `npx tsc --noEmit`: PASS (0 errors)
+- `npm test -- --watchAll=false`: PASS (277 tests, 24 suites, 0 failures)
+
+**Status before implementation complete — 2026-09-24**
 
 **Engineer**: engineer-mod-beta-video
 

@@ -65,27 +65,22 @@ export default function BetaVideoUploader({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /**
-   * AC-035: Validate the selected video conforms to MP4.
+   * AC-035: Validate the selected video conforms to MP4 container only.
    * expo-image-picker returns a MIME type when available. If the MIME type is
    * not video/mp4, reject with a clear error before upload begins.
-   * On iOS, device-native compression typically outputs MP4; this guard ensures
-   * we do not store an unplayable HEVC file.
+   * On iOS, device-native compression may output .mov (QuickTime container) —
+   * this is rejected because the spec requires an MP4 container for guaranteed
+   * AVPlayer cross-device playback after Cloudflare Stream migration.
    */
   function validateVideoFormat(asset: ImagePicker.ImagePickerAsset): string | null {
     // expo-image-picker does not always return mimeType; when available, check it
     if (asset.mimeType && asset.mimeType !== 'video/mp4') {
       return t('betaVideo.errors.invalidFormat');
     }
-    // Check URI extension as a secondary signal
-    const uri = asset.uri.toLowerCase();
-    if (!uri.endsWith('.mp4') && !uri.endsWith('.mov')) {
-      // .mov is also generally playable on iOS AVPlayer (H.264 in QuickTime container)
-      // but per AC-035 we prefer MP4; for Phase 1 we accept both since iOS camera
-      // typically outputs .mov with H.264 which AVPlayer handles natively.
-      // If mimeType was not provided and extension is neither mp4 nor mov, reject.
-      if (!asset.mimeType) {
-        return t('betaVideo.errors.invalidFormat');
-      }
+    // Check URI extension as a secondary signal when mimeType is absent.
+    // Only .mp4 is accepted — .mov is a QuickTime container, not MP4 (AC-035).
+    if (!asset.mimeType && !asset.uri.toLowerCase().endsWith('.mp4')) {
+      return t('betaVideo.errors.invalidFormat');
     }
     return null;
   }

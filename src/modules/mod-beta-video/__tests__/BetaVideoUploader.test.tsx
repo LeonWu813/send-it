@@ -169,7 +169,7 @@ describe('BetaVideoUploader', () => {
     expect(mockUploadBetaVideo).not.toHaveBeenCalled();
   });
 
-  it('AC-035: shows error and does not upload for unsupported video format', async () => {
+  it('AC-035: shows error and does not upload for unsupported video format (HEVC mimeType)', async () => {
     const hevcAsset: ImagePicker.ImagePickerSuccessResult = {
       canceled: false,
       assets: [
@@ -204,8 +204,52 @@ describe('BetaVideoUploader', () => {
 
     await waitFor(() => {
       const errorTexts = screen
-        .queryAllByText(/Only MP4 or MOV videos are supported/i)
-        .concat(screen.queryAllByText(/僅支援 MP4 或 MOV 格式/));
+        .queryAllByText(/Only MP4 videos are supported/i)
+        .concat(screen.queryAllByText(/僅支援 MP4 格式的影片/));
+      expect(errorTexts.length).toBeGreaterThan(0);
+    });
+
+    expect(mockUploadBetaVideo).not.toHaveBeenCalled();
+  });
+
+  it('AC-035: rejects .mov files with no mimeType (MP4 container only)', async () => {
+    // A .mov URI with no mimeType must be rejected — spec requires MP4 container only.
+    const movAsset: ImagePicker.ImagePickerSuccessResult = {
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///video.mov',
+          mimeType: undefined,
+          duration: 30_000,
+          type: 'video',
+          width: 1920,
+          height: 1080,
+          fileName: 'video.mov',
+          fileSize: 10_000_000,
+          assetId: null,
+          base64: null,
+          exif: null,
+          pairedVideoAsset: null,
+        },
+      ],
+    };
+    mockLaunchImageLibrary.mockResolvedValue(movAsset);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      const errorTexts = screen
+        .queryAllByText(/Only MP4 videos are supported/i)
+        .concat(screen.queryAllByText(/僅支援 MP4 格式的影片/));
       expect(errorTexts.length).toBeGreaterThan(0);
     });
 
