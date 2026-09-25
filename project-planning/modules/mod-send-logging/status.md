@@ -2,6 +2,47 @@
 
 ## Engineering Progress
 
+### Rev 9 — Remove project style, expose fetchUserAchievements (2026-09-24)
+
+**Mode:** feature (AC-014 + fetchUserAchievements public service function)
+**Date:** 2026-09-24
+**Engineer:** engineer-mod-send-logging
+
+#### Files Created
+
+- `supabase/migrations/20260924000004_mod_004_drop_project_style.sql` — PG15-safe single-file, single-transaction migration: CREATE ascent_style_v2 without 'project', UPDATE backfill 'project' → 'attempt' rows, ALTER COLUMN TYPE swap via text cast, DROP old type, RENAME to canonical ascent_style
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/types.ts` — `ASCENT_STYLES` narrows from 4 to 3 values (`['flash', 'top', 'attempt']`); `AscentStyle` type drops `'project'`
+- `src/modules/mod-send-logging/components/AscentList.tsx` — removed `case 'project':` from `getStyleBadgeColor` switch (would have been a TypeScript exhaustiveness error after the type narrowed)
+- `src/modules/mod-send-logging/send-service.ts` — added exported `fetchUserAchievements(routeIds: string[]): Promise<Record<string, 'flash' | 'top' | 'attempt'>>`: batched RLS-scoped SELECT on `ascents`, client-side reduction with `flash:3 > top:2 > attempt:1` precedence, early-return for empty input
+- `src/modules/mod-send-logging/__tests__/send-service.test.ts` — updated import to include `fetchUserAchievements`; added `.in()` to `makeQueryBuilder`; added 6 new tests in `describe('fetchUserAchievements')`: empty input (no Supabase call), precedence ordering (flash beats top beats attempt), omitted routes (no ascent → absent from result), empty data array, null data, RLS error thrown
+- `src/modules/mod-send-logging/__tests__/LogSendScreen.test.tsx` — renamed 4-chip test to "renders exactly three style chips (flash, top, attempt) — project is removed (AC-014)"; added assertion that `/^Project$|^項目$/` is absent from rendered output
+- `locales/en/common.json` — removed `sends.styles.project` key
+- `locales/zh-TW/common.json` — removed `sends.styles.project` key
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test --watchAll=false) | PASS | 174/174 tests pass, 17 suites — 6 new send-service tests + 1 updated LogSendScreen test |
+| i18n parity (EN/zh-TW) | PASS | Both locales have matching key sets after removing sends.styles.project |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| AC-014 implemented | PASS — ascent_style enum drops 'project'; ASCENT_STYLES array is 3 values; LogSendScreen renders only flash/top/attempt chips; locale keys removed from both catalogs |
+| fetchUserAchievements public service | PASS — exported from send-service.ts; batched; RLS-scoped; flash > top > attempt precedence; empty-input early-return; error thrown on failure |
+| Migration ordering correct | PASS — backfill (UPDATE) at step 2 precedes ALTER COLUMN at step 3; single-file single-transaction per spec |
+| No hardcoded values | PASS |
+| Conventions followed | PASS — Supabase singleton; no createClient() at call site; no any without comment |
+| No new dependencies | PASS |
+
+---
+
 ### Delete Ascent Feature (2026-09-24)
 
 **Mode:** bugfix (delete send — human QA request)
