@@ -130,6 +130,36 @@
 
 ---
 
+### Wiring — fetchFollowing integration — 2026-09-24
+
+**Task**: Replace the Following Climbers placeholder with the real `fetchFollowing` call from MOD-006.
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — imported `fetchFollowing` from `mod-social-feed/social-feed-service` and `FollowingUser` from `mod-social-feed/types`; added `followingUsers` + `followingLoading` state; added `loadFollowing` callback using `session.user.id`; added initial-mount `useEffect` and `isActive`-triggered `useEffect` (same pattern as `loadSavedGyms`); rendered horizontal scroll strip with avatar + display name per user, or AC-124 empty state when list is empty. Fixed `session: _session` → `session` (was unused; now consumed for `session.user.id`). Added climber strip styles to `makeStyles`.
+- `locales/en/common.json` — updated `home.following.empty` from `"Follow climbers to see them here"` to `"Follow climbers to see their activity"`.
+- `locales/zh-TW/common.json` — updated `home.following.empty` from `"追蹤攀岩者以在此查看"` to `"追蹤攀岩者以查看他們的動態"`.
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — added `jest.mock('../../mod-social-feed/social-feed-service')`; added `mockFetchFollowing` typed helper and `FOLLOWING_FIXTURES`; `beforeEach` default sets `mockFetchFollowing.mockResolvedValue([])` to prevent unresolved promises in tests that don't need following data; updated AC-124 empty state assertion string; added 3 new tests: following strip renders user chips (AC-123), `fetchFollowing` called with correct user ID (AC-123), focus-triggered refetch of following list.
+
+**Self-Check Results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 313 tests, 27 suites, all pass (+4 new HomeScreen tests) |
+| AC-123: Following strip renders avatar + display name for each followed user | PASS |
+| AC-124: Empty state renders "Follow climbers to see their activity" when list empty | PASS |
+| `fetchFollowing` called on mount + on `isActive` flip to true (same pattern as `loadSavedGyms`) | PASS |
+| `fetchFollowing` called with `session.user.id` | PASS |
+| i18n: `home.following.empty` updated in EN and zh-TW; all keys remain complete | PASS |
+| Cross-module import: only `fetchFollowing` (public service) and `FollowingUser` type imported from mod-social-feed | PASS |
+| No inline string literals — all user-facing strings use i18n keys | PASS |
+| No hardcoded hex colors | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24

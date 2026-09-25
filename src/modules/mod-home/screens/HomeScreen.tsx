@@ -4,7 +4,7 @@
  * Three sections in order:
  *   1. Banners — horizontal scroll of static banner cards (AC-112).
  *   2. Saved Gyms — horizontal scroll strip; "View All" + per-gym tap (AC-113, AC-114, AC-115).
- *   3. Following Climbers — empty state placeholder until MOD-006 ships (AC-123, AC-124).
+ *   3. Following Climbers — horizontal scroll strip of followed users; avatar + display name (AC-123, AC-124).
  *
  * Safe area:
  *   - Top inset applied to the scroll content container via makeStyles(theme, topInset).
@@ -14,6 +14,7 @@
  *   - fetchSavedGymIds() from mod-gym-directory public service (gym IDs only).
  *   - Gym details fetched inline via Supabase singleton (SELECT scoped to the
  *     saved IDs only — a read, acceptable per the cross-module import rule).
+ *   - fetchFollowing() from mod-social-feed public service (block-filtered follow list).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -33,6 +34,8 @@ import { BANNERS } from '../../../lib/banners';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds } from '../../mod-gym-directory/gym-service';
+import { fetchFollowing } from '../../mod-social-feed/social-feed-service';
+import type { FollowingUser } from '../../mod-social-feed/types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -57,7 +60,7 @@ interface SavedGymItem {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function HomeScreen({
-  session: _session,
+  session,
   isActive,
   onViewAllGyms,
   onSelectGym,
@@ -113,6 +116,35 @@ export default function HomeScreen({
       void loadSavedGyms();
     }
   }, [isActive, loadSavedGyms]);
+
+  // ── Following Climbers state ─────────────────────────────────────────────────
+  const [followingUsers, setFollowingUsers] = useState<FollowingUser[]>([]);
+  const [followingLoading, setFollowingLoading] = useState(true);
+
+  const loadFollowing = useCallback(async () => {
+    setFollowingLoading(true);
+    try {
+      const users = await fetchFollowing(session.user.id);
+      setFollowingUsers(users);
+    } catch {
+      setFollowingUsers([]);
+    } finally {
+      setFollowingLoading(false);
+    }
+  }, [session.user.id]);
+
+  // Initial load on mount.
+  useEffect(() => {
+    void loadFollowing();
+  }, [loadFollowing]);
+
+  // Re-fetch when the Home tab becomes active (same pattern as saved gyms —
+  // keep-alive mount means the component never unmounts on tab switch).
+  useEffect(() => {
+    if (isActive) {
+      void loadFollowing();
+    }
+  }, [isActive, loadFollowing]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -200,8 +232,34 @@ export default function HomeScreen({
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>{t('home.following.title')}</Text>
         </View>
-        {/* TODO: replace with MOD-006 public service call when MOD-006 is implemented */}
-        <Text style={styles.emptyText}>{t('home.following.empty')}</Text>
+
+        {!followingLoading && followingUsers.length === 0 ? (
+          <Text style={styles.emptyText}>{t('home.following.empty')}</Text>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.climberStripRow}
+          >
+            {followingUsers.map((user) => (
+              <View key={user.id} style={styles.climberChip}>
+                {user.avatar_url ? (
+                  <Image
+                    source={{ uri: user.avatar_url }}
+                    style={styles.climberAvatar}
+                    resizeMode="cover"
+                    accessibilityLabel={user.display_name}
+                  />
+                ) : (
+                  <View style={styles.climberAvatarPlaceholder} />
+                )}
+                <Text style={styles.climberName} numberOfLines={2}>
+                  {user.display_name}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
       </View>
     </ScrollView>
   );
@@ -300,6 +358,33 @@ function makeStyles(
       marginBottom: theme.spacing.xs,
     },
     gymChipName: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+    },
+    // Following climbers strip styles
+    climberStripRow: {
+      paddingHorizontal: theme.spacing.md,
+      gap: theme.spacing.sm,
+    },
+    climberChip: {
+      width: 72,
+      alignItems: 'center',
+    },
+    climberAvatar: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      marginBottom: theme.spacing.xs,
+    },
+    climberAvatarPlaceholder: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      backgroundColor: theme.colors.surface,
+      marginBottom: theme.spacing.xs,
+    },
+    climberName: {
       fontSize: theme.fontSize.xs,
       color: theme.colors.textPrimary,
       textAlign: 'center',

@@ -2,13 +2,15 @@
  * Tests for HomeScreen (MOD-012).
  *
  * Tests behaviour: banner section, saved gyms strip, following climbers
- * empty state, and navigation callbacks.
+ * strip and empty state, and navigation callbacks.
  *
- * gym-service and supabase are mocked to avoid real network calls.
+ * gym-service, social-feed-service, and supabase are mocked to avoid real
+ * network calls.
  */
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 jest.mock('../../mod-gym-directory/gym-service');
+jest.mock('../../mod-social-feed/social-feed-service');
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
     from: jest.fn(),
@@ -34,12 +36,16 @@ import type { Session } from '@supabase/supabase-js';
 
 import HomeScreen from '../screens/HomeScreen';
 import * as gymService from '../../mod-gym-directory/gym-service';
+import * as socialFeedService from '../../mod-social-feed/social-feed-service';
 import { supabase } from '../../../lib/supabase';
 import { renderOptions } from '../test-utils';
 
 // ── Typed helpers ─────────────────────────────────────────────────────────────
 const mockFetchSavedGymIds = gymService.fetchSavedGymIds as jest.MockedFunction<
   typeof gymService.fetchSavedGymIds
+>;
+const mockFetchFollowing = socialFeedService.fetchFollowing as jest.MockedFunction<
+  typeof socialFeedService.fetchFollowing
 >;
 const mockFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
 
@@ -51,6 +57,11 @@ const MOCK_SESSION = {
 const GYM_FIXTURES = [
   { id: 'gym-001', name: 'MegaSTONE Climbing Gym', photo_url: null },
   { id: 'gym-002', name: 'T-UP Wanhua', photo_url: 'https://example.com/photo.jpg' },
+];
+
+const FOLLOWING_FIXTURES = [
+  { id: 'user-002', display_name: 'Alice Chen', avatar_url: null },
+  { id: 'user-003', display_name: 'Bob Lin', avatar_url: 'https://example.com/bob.jpg' },
 ];
 
 /**
@@ -74,6 +85,9 @@ function makeSelectInBuilder(result: { data: unknown; error: unknown }) {
 describe('HomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default: no followed users — prevents tests that don't care about the
+    // following strip from hanging on an unresolved promise.
+    mockFetchFollowing.mockResolvedValue([]);
   });
 
   // ── Banner section (AC-112) ──────────────────────────────────────────────────
@@ -187,8 +201,9 @@ describe('HomeScreen', () => {
 
   // ── Following Climbers section (AC-123, AC-124) ──────────────────────────────
 
-  it('renders the Following section empty state (AC-124)', async () => {
+  it('renders the Following section empty state when user follows no one (AC-124)', async () => {
     mockFetchSavedGymIds.mockResolvedValue([]);
+    // mockFetchFollowing already returns [] via beforeEach default
 
     render(
       <HomeScreen
@@ -201,7 +216,7 @@ describe('HomeScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Follow climbers to see them here')).toBeTruthy();
+      expect(screen.getByText('Follow climbers to see their activity')).toBeTruthy();
     });
   });
 
@@ -220,6 +235,45 @@ describe('HomeScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Following')).toBeTruthy();
+    });
+  });
+
+  it('renders followed user chips when the user follows others (AC-123)', async () => {
+    mockFetchSavedGymIds.mockResolvedValue([]);
+    mockFetchFollowing.mockResolvedValue(FOLLOWING_FIXTURES);
+
+    render(
+      <HomeScreen
+        session={MOCK_SESSION}
+        isActive={true}
+        onViewAllGyms={jest.fn()}
+        onSelectGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice Chen')).toBeTruthy();
+      expect(screen.getByText('Bob Lin')).toBeTruthy();
+    });
+  });
+
+  it('calls fetchFollowing with the current user id (AC-123)', async () => {
+    mockFetchSavedGymIds.mockResolvedValue([]);
+    mockFetchFollowing.mockResolvedValue([]);
+
+    render(
+      <HomeScreen
+        session={MOCK_SESSION}
+        isActive={true}
+        onViewAllGyms={jest.fn()}
+        onSelectGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(mockFetchFollowing).toHaveBeenCalledWith('user-001');
     });
   });
 
@@ -257,6 +311,40 @@ describe('HomeScreen', () => {
 
     await waitFor(() => {
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy();
+    });
+  });
+
+  it('refetches following list when isActive changes from false to true', async () => {
+    mockFetchSavedGymIds.mockResolvedValue([]);
+    // Initially inactive with no following
+    mockFetchFollowing.mockResolvedValue([]);
+
+    const { rerender } = render(
+      <HomeScreen
+        session={MOCK_SESSION}
+        isActive={false}
+        onViewAllGyms={jest.fn()}
+        onSelectGym={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    // Simulate following a user on a different screen, then returning to Home
+    mockFetchFollowing.mockResolvedValue(FOLLOWING_FIXTURES);
+
+    await act(async () => {
+      rerender(
+        <HomeScreen
+          session={MOCK_SESSION}
+          isActive={true}
+          onViewAllGyms={jest.fn()}
+          onSelectGym={jest.fn()}
+        />,
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice Chen')).toBeTruthy();
     });
   });
 });

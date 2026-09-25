@@ -250,7 +250,7 @@
     },
     "following": {
       "title": "Following",
-      "empty": "Follow climbers to see them here"
+      "empty": "Follow climbers to see their activity"
     }
   },
   "betaVideo": {
