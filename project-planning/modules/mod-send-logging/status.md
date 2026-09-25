@@ -2,6 +2,38 @@
 
 ## Engineering Progress
 
+### Flash badge gold color fix (2026-09-25)
+
+**Mode:** bugfix (styling — flash ascent style badge color)
+**Date:** 2026-09-25
+**Engineer:** engineer-mod-send-logging
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/components/AscentList.tsx` — changed `getStyleBadgeColor` flash case from `theme.colors.warning` to `FLASH_BADGE_COLOR = '#FFD700'` (named module-level constant); added JSDoc explaining it matches MOD-003 flash achievement icon color. `top` and `attempt` cases unchanged.
+- `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — replaced existing "shows the flash badge for a flash ascent" test with "renders the flash badge with gold background (#FFD700) for a flash ascent"; verifies `#FFD700` appears in the serialized component tree when a flash ascent row is rendered.
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test --watchAll=false) | PASS | 314/314 tests pass, 27 suites — 1 updated AscentList test (flash badge color assertion) |
+| Git scope — module boundary | PASS | Only `src/modules/mod-send-logging/` files and this status.md touched |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| Change is correct and complete | PASS — flash case returns `#FFD700` via named constant; top and attempt cases use theme tokens unchanged |
+| Consistent with MOD-003 | PASS — MOD-003 uses `color="#FFD700"` for flash achievement icon; this change matches that value in MOD-004's flash badge |
+| No hardcoded string literal inline | PASS — value assigned to `FLASH_BADGE_COLOR` constant at module scope with explanatory JSDoc |
+| No new dependencies | PASS |
+| No other files modified | PASS — scope is `src/modules/mod-send-logging/` only |
+| Test covers the change | PASS — `JSON.stringify(toJSON())` approach reliably captures the backgroundColor in the rendered tree |
+
+---
+
 ### Rev 9 — Remove project style, expose fetchUserAchievements (2026-09-24)
 
 **Mode:** feature (AC-014 + fetchUserAchievements public service function)

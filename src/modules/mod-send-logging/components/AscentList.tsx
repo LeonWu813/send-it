@@ -38,14 +38,20 @@ interface AscentListProps {
   refreshKey?: number;
 }
 
-/** Style badge label to token color mapping — uses theme tokens only. */
+/**
+ * Gold color for the flash ascent style badge — matches the flash achievement
+ * icon color used in MOD-003 (RouteListScreen, RouteDetailScreen).
+ */
+const FLASH_BADGE_COLOR = '#FFD700';
+
+/** Style badge color mapping. Flash uses gold (#FFD700) to match MOD-003's flash achievement icon. */
 function getStyleBadgeColor(
   style: AscentStyle,
   theme: ReturnType<typeof useTheme>['theme'],
 ): string {
   switch (style) {
     case 'flash':
-      return theme.colors.warning;
+      return FLASH_BADGE_COLOR;
     case 'top':
       return theme.colors.success;
     case 'attempt':

@@ -148,14 +148,19 @@ describe('AscentList', () => {
     });
   });
 
-  it('shows the flash badge for a flash ascent', async () => {
+  it('renders the flash badge with gold background (#FFD700) for a flash ascent', async () => {
     mockLoadAscents.mockResolvedValueOnce([MOCK_OTHER_ASCENT]);
 
-    render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
+    const { toJSON } = render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
       expect(screen.getByText('OtherClimber')).toBeTruthy();
     });
+
+    // Serialize the rendered tree and confirm #FFD700 appears as a backgroundColor.
+    // This verifies the FLASH_BADGE_COLOR constant is applied to the style badge view.
+    const treeStr = JSON.stringify(toJSON());
+    expect(treeStr).toContain('#FFD700');
   });
 
   it('re-fetches ascents when refreshKey increments (AC-013)', async () => {
