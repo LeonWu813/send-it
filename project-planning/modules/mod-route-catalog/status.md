@@ -2,6 +2,61 @@
 
 ## Engineering Progress
 
+### Rev 9 Implementation (2026-09-24)
+
+**Features implemented:**
+
+**AC-045 — Route display name format**
+- `formatRouteName(grade, colorTag, sectionLabel, t)` helper defined locally in both `RouteListScreen.tsx` and `RouteDetailScreen.tsx` (per spec — inline or small util).
+- Format: `"{grade} {LocalizedColor}"` with `" ({section_label})"` appended when `section_label` is non-null.
+- Color uses i18n key `routeCatalog.colors.<color_tag>` (already present in both locales from prior revision).
+- Applied to RouteListScreen route card titles (`testID="route-name"`) and RouteDetailScreen header row.
+- Color badge kept alongside the formatted name on both screens for visual clarity.
+
+**AC-046 — Achievement icons + bookmark toggle**
+- `RouteListScreen`: imports `fetchUserAchievements` from `../../mod-send-logging/send-service` (cross-module public service read per spec). Called once after routes load with all visible route IDs (batch, no N+1). Icons: `flash` → Ionicons `flash` (warning/amber), `top` → `checkmark-circle` (success/green), `attempt` → `ellipse-outline` (textSecondary/gray). No icon if not in the map.
+- `RouteDetailScreen`: calls `fetchUserAchievements([routeId])` after route loads; renders icon inline in `routeNameRow`.
+- Bookmark toggle in `RouteDetailScreen` header (same pattern as GymDetailScreen): filled yellow `bookmark` = saved, outline gray `bookmark-outline` = unsaved. Optimistic update with revert on error. `fetchSavedRouteIds` called in parallel with `loadRoute` on mount.
+- i18n keys added: `routeCatalog.bookmark.save`, `routeCatalog.bookmark.unsave`, `routeCatalog.bookmark.saved` in both `locales/en/common.json` and `locales/zh-TW/common.json`.
+
+**AC-047 — Saved routes read-only indicator on RouteListScreen**
+- `fetchSavedRouteIds()` called on mount and on `AppState` foreground event (same pattern as GymListScreen).
+- Filled yellow `bookmark` icon shown on saved route cards; nothing on unsaved cards. No tap action on list indicator.
+
+**Service functions (route-service.ts):**
+- `fetchSavedRouteIds(): Promise<string[]>` — SELECT from `saved_routes`, RLS-scoped to auth.uid().
+- `saveRoute(routeId: string): Promise<void>` — INSERT into `saved_routes`.
+- `unsaveRoute(routeId: string): Promise<void>` — DELETE from `saved_routes` WHERE route_id = routeId.
+
+**Migration:**
+- `supabase/migrations/20260924000003_mod_003_saved_routes.sql` — `saved_routes` join table with `user_id DEFAULT auth.uid()` FK to `users` ON DELETE CASCADE, `route_id` FK to `routes` ON DELETE CASCADE (cascade required: withdrawn pending routes are DELETEd, not status-changed), composite PK `(user_id, route_id)`, own-rows RLS SELECT/INSERT/DELETE, `GRANT SELECT, INSERT, DELETE TO authenticated`, no UPDATE.
+
+**AscentList.tsx check (MOD-004):**
+- Inspected `/Users/tsan/Desktop/MacBookPro/send-it/src/modules/mod-send-logging/components/AscentList.tsx`. AscentList receives `routeId`, `session`, `onLogSend`, `refreshKey` as props — it does NOT receive a formatted route name string. AscentList renders ascent rows (style, attempts, date, note, username) and does not display the route name on individual rows. No TODO comment needed — AscentList has no route-name display to update.
+
+**Self-check (2026-09-24):**
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 191 tests, 17 suites, 0 failures
+- PASS: i18n key parity — `routeCatalog.bookmark.save/unsave/saved` present in both EN and zh-TW locales
+- PASS: No MOD-004 files edited (cross-module import only via public service function per production.md convention)
+- PASS: migration mirrors saved_gyms design exactly per spec requirements
+- PASS: No gold-plating — strictly confined to AC-045, AC-046, AC-047
+
+**Files changed:**
+- `src/modules/mod-route-catalog/route-service.ts` — added `fetchSavedRouteIds`, `saveRoute`, `unsaveRoute`
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — `formatRouteName`, achievement icons, saved indicator, new imports
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — `formatRouteName`, achievement icon, bookmark toggle, parallel fetch
+- `src/modules/mod-route-catalog/__tests__/route-service.test.ts` — new `fetchSavedRouteIds`, `saveRoute`, `unsaveRoute` test suites
+- `src/modules/mod-route-catalog/__tests__/RouteListScreen.test.tsx` — mocks for new services; AC-045/046/047 behaviour tests
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — mocks for new services; AC-045/046 behaviour tests
+- `supabase/migrations/20260924000003_mod_003_saved_routes.sql` — new migration
+- `locales/en/common.json` — `routeCatalog.bookmark.*` keys added
+- `locales/zh-TW/common.json` — `routeCatalog.bookmark.*` keys added
+
+**Commit:** `feat(mod-route-catalog): rev9 — route name format, achievement icons, saved routes`
+
+---
+
 ### Self-Check Results (2026-09-20)
 
 **Automated checks (self-check.sh):**
