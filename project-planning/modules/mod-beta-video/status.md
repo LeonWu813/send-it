@@ -304,3 +304,125 @@ Phase 1 simplification (`localThumbnailUri = asset.uri`) is still in place. Not 
 **PASS** — AC-035 fix verified. No regressions in AC-030/031/032/033/034/036/037.
 
 MOD-005 is ready for human QA with one standing note: the AC-031 thumbnail question (video URI used as thumbnail placeholder vs. extracted JPEG frame) is pending PM ruling and is not a blocking bug — it is a spec-scope question. All other ACs pass.
+
+---
+
+## QA Run 3 — Regression — 2026-09-24
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after Phase 1 thumbnail content-type bug fix)
+**Re-verifying**: AC-031 — separate thumbnail Storage upload removed; `thumbnail_url` set to `videoPath`; `storage.upload` called exactly once; cleanup logic updated
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 277 tests, 24 suites, 0 failures (count unchanged from QA Run 2 — this fix updated existing tests, did not add new suites)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+
+---
+
+### Fix Verification — Thumbnail content-type mismatch
+
+The previous QA Run 1 spec issue flagged that `beta-video-service.ts` uploaded the video URI as the thumbnail with `contentType: 'image/jpeg'`, causing a content-type mismatch. This was a quality defect, not a spec-scope issue. The PM ruling (PRD Revision 10, AC-031 Phase 1 clause) confirmed that a placeholder thumbnail is acceptable, but it must still be a valid retrievable URL. The engineer has since fixed the implementation.
+
+**REGRESSION PASS AC-031 (Phase 1 placeholder, content-type fix)**: original content-type mismatch resolved.
+
+Verified in `src/modules/mod-beta-video/beta-video-service.ts`:
+
+1. No separate thumbnail Storage upload exists. The function has a single `supabase.storage.from(BETA_VIDEO_BUCKET).upload(videoPath, videoBlob, { contentType: 'video/mp4', upsert: false })` call (lines 77–82). There is no second `upload` call anywhere in the function.
+
+2. `thumbnail_url` is set to `videoPath` (line 101):
+   `thumbnail_url: videoPath` — the video's own storage path is used as the placeholder. This is a valid, retrievable path per AC-031 Phase 1 clause.
+
+3. Cleanup on row-insert failure (lines 109–111) removes only `videoPath` — no separate thumbnail path is referenced, consistent with there being only one stored artifact.
+
+4. Progress phases: `onProgress` is called with `{ percent: 10, phase: 'video' }` before upload and `{ percent: 80, phase: 'video' }` after upload, then `{ percent: 90, phase: 'saving' }` and `{ percent: 100, phase: 'saving' }`. No thumbnail phase exists. Progress still reaches 100% on success — AC-036 unaffected.
+
+Verified in `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`:
+
+5. Happy-path test (line 193, "AC-032: uploads video then inserts row with route_id (Phase 1 — no separate thumbnail upload)"):
+   - Asserts `storageBucket.upload` called exactly once: `expect(storageBucket.upload).toHaveBeenCalledTimes(1)` (line 224)
+   - Asserts that one call used `contentType: 'video/mp4'`: `expect.objectContaining({ contentType: 'video/mp4' })` (line 229)
+   - Result: PASS
+
+6. Video-upload-failure test (line 232, "throws (no cleanup needed) when video upload fails"):
+   - Comment confirms the intent: "Phase 1: only one upload — if it fails, nothing was stored, no cleanup needed."
+   - Asserts `storageBucket.remove` NOT called: `expect(storageBucket.remove).not.toHaveBeenCalled()` (line 258)
+   - Result: PASS
+
+7. Row-insert-failure test (line 261, "throws and cleans up video artifact when row insert fails"):
+   - Asserts `storageBucket.remove` IS called: `expect(storageBucket.remove).toHaveBeenCalled()` (line 289)
+   - Removes only the video artifact (no separate thumbnail path) — consistent with single-upload design
+   - Result: PASS
+
+All three test assertions match the engineer's described fix exactly.
+
+---
+
+### AC-031 Status — PASS (Phase 1 compliant per PM ruling)
+
+The AC-031 spec issue from QA Run 1 (pending PM ruling) is now resolved. PM ruled in PRD Revision 10 that the Phase 1 placeholder thumbnail is acceptable, provided `BetaVideo.thumbnail_url` is a valid retrievable URL. The fix satisfies this: `thumbnail_url` stores `videoPath`, a Supabase Storage path that is retrievable via `getThumbnailSignedUrl`. No content-type mismatch exists. No double-upload of the video file.
+
+AC-031 is now a full PASS for Phase 1.
+
+---
+
+### Re-verification of All Other ACs
+
+**AC-030** — PASS (unaffected)
+`validateDuration()` is a separate function in `BetaVideoUploader.tsx` untouched by this fix. The 90-second rejection logic and `MAX_DURATION_SECONDS = 60` boundary are unchanged. Tests pass.
+
+**AC-032** — PASS (unaffected)
+`route_id` threading is in the DB insert payload, not in the upload phase. The fix removes the thumbnail upload only — the insert's `route_id` field is unchanged. Tests pass.
+
+**AC-033** — PASS (unaffected)
+`BetaVideoPlayer.tsx` has no dependency on the upload service. Inline playback behavior unchanged. Tests pass.
+
+**AC-034** — PASS (unaffected)
+`BetaVideoPlayer` component exposure is unchanged. MOD-006 integration is a pre-existing dependency-ordering gap, not affected by this fix.
+
+**AC-035** — PASS (verified in QA Run 2, unaffected by this fix)
+`validateVideoFormat()` in `BetaVideoUploader.tsx` is a pre-upload gate that does not interact with the storage upload logic. The AC-035 fix from QA Run 2 is intact.
+
+**AC-036** — PASS (unaffected)
+The progress overlay is driven by `onProgress` callbacks. This fix changed the progress phase sequence (removed a thumbnail phase, adjusted percentages) but the overlay still reaches 100% on success and `setIsUploading(false)` is still in the `finally` block. The Modal's non-dismissable behavior and `disabled={isUploading}` guard are unchanged.
+
+**AC-037** — PASS (unaffected)
+`BetaVideoSection` and `RouteDetailScreen` integration are unchanged. The fix is isolated to `beta-video-service.ts` and `beta-video-service.test.ts`.
+
+**Integration checks** — all PASS (unchanged from QA Run 2)
+- Supabase client singleton: `beta-video-service.ts` still imports from `../../lib/supabase` — no `createClient()` call.
+- Cross-module import rule: `RouteDetailScreen.tsx` still imports only `BetaVideoSection` from `mod-beta-video`.
+- i18n: no locale files were changed by this fix; all keys remain present and correct.
+- No hardcoded hex colors: no styling changes in this fix.
+- Safe area insets: not applicable to MOD-005 sub-components; `RouteDetailScreen.tsx` unchanged.
+
+**Adjacent-logic regression check**: the fix is entirely within `uploadBetaVideo()` in `beta-video-service.ts` and the corresponding test file. The change removes a code path (thumbnail upload) and updates one field in the DB insert payload (`thumbnail_url: videoPath` instead of a separate path). No shared state with validation functions, player components, or section components. No new regressions introduced.
+
+---
+
+### Open Items
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker)
+The confirmed library choice (`expo-image-picker` for Phase 1 selection, `expo-av` for playback) is documented in `status.md` Engineering Progress but not in `spec.md` itself. This remains a Doc-Sync task and is not a blocker for human QA.
+
+---
+
+### Verdict
+
+**PASS** — AC-031 content-type fix verified. `storage.upload` called exactly once with `contentType: 'video/mp4'`. No separate thumbnail artifact. `thumbnail_url` stores `videoPath` (valid retrievable URL per PM ruling). Video-upload-failure test correctly asserts no `storage.remove` call. Row-insert-failure test correctly asserts `storage.remove` for the video artifact only. No regressions in AC-030/032/033/034/035/036/037.
+
+**MOD-005 is ready for human QA.** All ACs pass:
+- AC-030: PASS — 60-second duration cap enforced before upload
+- AC-031: PASS — Phase 1 placeholder thumbnail compliant per PM ruling (PRD Revision 10); single upload, valid retrievable URL
+- AC-032: PASS — one BetaVideo row attached to exactly one route
+- AC-033: PASS — inline playback via expo-av, no external links
+- AC-034: PASS — BetaVideoPlayer component exposed for MOD-006 embedding (MOD-006 not yet built — pre-existing dependency gap)
+- AC-035: PASS — MP4-only ingest validation, `.mov` rejected, HEVC rejected
+- AC-036: PASS — progress overlay 0-100%, blocks interaction during upload
+- AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
