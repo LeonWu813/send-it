@@ -506,6 +506,27 @@ Verification points:
 
 ---
 
+## Bugfix (2026-09-24) — Private bucket signed URL for route photo display
+
+**Issue reported**: Route photo not appearing on RouteDetailScreen after previous fix.
+
+**Root cause**: The `route-photos` Supabase Storage bucket was created with `public: false` (private). `uploadRoutePhoto()` called `getPublicUrl(storagePath)` after upload and stored the result in `routes.photo_url`. For a private bucket, `getPublicUrl` produces a URL with the `/object/public/` path prefix — but Supabase Storage denies access to that URL for private buckets, causing the `<Image>` component to silently fail with a 400/403.
+
+**Fix (Option A — signed URL on load)**:
+- Added `getPhotoSignedUrl(photoUrl: string): Promise<string>` to `route-service.ts`. It extracts the storage path from the stored URL (strips the `/object/public/route-photos/` prefix) and calls `supabase.storage.from('route-photos').createSignedUrl(storagePath, 3600)` to generate a 1-hour signed URL.
+- Updated `RouteDetailScreen.tsx`: after `loadRoute()` resolves with a route that has a `photo_url`, `fetchRoute` calls `getPhotoSignedUrl` and stores the result in a `photoUri` state variable. The `<Image>` now receives `photoUri` (the signed URL) instead of `route.photo_url`. Signing failure is non-fatal — `photoUri` remains `null` and the image simply is not rendered; the rest of the screen loads normally.
+- No changes to `uploadRoutePhoto()` — the upload pipeline is correct; the fix is on the read side.
+
+**Files changed**:
+- `src/modules/mod-route-catalog/route-service.ts` — added `getPhotoSignedUrl(photoUrl: string): Promise<string>`
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — added `photoUri` state; `fetchRoute` calls `getPhotoSignedUrl` after loading; `<Image>` uses `photoUri`
+- `src/modules/mod-route-catalog/__tests__/route-service.test.ts` — added `makeStorageBuilder` helper; added `getPhotoSignedUrl` describe block (4 tests: happy path, bad URL prefix, createSignedUrl error, empty signedUrl)
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — added `getPhotoSignedUrl` to mock; added 2 tests: signed URL used for `<Image>`, photo omitted when signing fails
+
+**Self-check**:
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 168 tests, 17 suites, 0 failures
+
 ## QA Human-QA Fix Regression — 2026-09-24
 
 **QA agent**: qa-mod-route-catalog
