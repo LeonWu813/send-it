@@ -3,15 +3,22 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
-module: mod-beta-video
+agent: pm
+mode: change
+module: n/a
 result: success
-commit: f9fb53661aee4fa2d8ef570eaa018ada7fb9b2ea
+commit: bcda5924f75548681c3a9a84cb912ca2394f4a8a
 timestamp: 2026-09-25T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-25 [TRIVIAL]** — Two project-wide native-dependency engineering conventions added (PRD Revision 11). Proposed by Tech Lead in the 2026-09-25 build-failure review (iOS build blocker: `expo-av@15.0.2` (SDK 52-era) was installed with `npm install` under Expo SDK 57, so `ExpoModulesCore/EXEventEmitter.h` was not found; the mismatch passed Jest via the `expo-av` mock but failed the native build, and MOD-005 had been marked QA-ready without a native build ever being run). Two conventions logged as project-wide engineering standards in §10 NFR:
+  1. **Native dependency installation** — all Expo native dependencies must be installed via `npx expo install <package>`, never `npm install <package>`; Expo resolves the SDK-compatible version automatically, whereas `npm install` can silently install an SDK-incompatible version that passes Jest (via mocks) but fails the native build. Hand-pinning a native module's version string in `package.json` is prohibited.
+  2. **Native build gate before QA handoff** — when a module adds or changes a native dependency (a package with iOS/Android native code), the engineer must run the native build (`npx expo run:ios`, or the platform equivalent) and confirm it compiles before marking the module QA-ready; passing unit tests alone are insufficient because Jest mocks native modules.
+  - **PRD edits**: §10 Non-Functional Requirements — two new bullets inserted after the Security bullet, before Soft-launch timeframe. Status line `[TRIVIAL] — Revision 11`; `**Revision**` bumped 10 → 11.
+  - **Tagged [TRIVIAL]**: process/tooling engineering standards only — no user story, module, or acceptance criterion added; no data-model change; module boundaries, dependencies, and the phase plan are all unchanged; no new modules.
+  - **For Doc-Sync**: carry both conventions into `production.md` Shared Conventions (these mirror the Tech Lead's "Proposed Shared Conventions" in the 2026-09-25 review under `## Tech Lead Reviews`). PM did not edit `production.md` — this PM Updates tag is the trigger for Doc-Sync to sync them in. No module spec changes required (project-wide conventions live in production.md, not a single module spec).
 
 - **2026-09-24 [TRIVIAL]** — AC-031 thumbnail-scope ruling (PRD Revision 10). QA (qa-mod-beta-video, commit bcf7082) flagged AC-031 as a spec issue, not a bug: the MOD-005 engineer shipped a Phase 1 simplification (`localThumbnailUri = asset.uri` in `BetaVideoUploader.tsx` line 157) that uploads the video URI as the thumbnail placeholder rather than an extracted still frame, and asked PM to rule whether client-side frame extraction is required in Phase 1 or deferrable. **PM ruling: acceptable Phase 1 simplification — frame extraction deferred to Phase 2.** Rationale: (1) true client-side frame extraction requires a new native dependency (`expo-video-thumbnails` / `ffmpeg-kit-react-native`), neither installed — adding a native module is a scope/dependency decision, and AC-031 never named a specific extraction library; (2) the Phase 1 loop is not blocked — upload/playback (AC-032/033/034) works and `thumbnail_url` is populated with a valid, retrievable URL; the harm is a heavier preview and no still frame, a quality issue not a broken loop; (3) it fits the established Phase 1 simplification pattern (auto-approve default, Studio-only admin, no offline queue, Cloudflare deferred). PRD edits: AC-031 (§8) marked (revised) with an explicit "Phase 1 simplification" clause (thumbnail may use the video URI as a placeholder; true frame extraction e.g. a frame at 1 second is Phase 2; `BetaVideo.thumbnail_url` must still be a valid retrievable URL in Phase 1); §10 NFR Video line clarified with the same placeholder note; §7 Phase 2 module TBD list and §13 roadmap Phase 2 both += "beta-video thumbnail frame extraction (Phase 1 uses a placeholder thumbnail)." PRD Status line `[TRIVIAL] — Revision 10`; `**Revision**` bumped 9 → 10. **Tagged [TRIVIAL]**: scoping/wording only — module boundaries (MOD-005 still owns capture/compression/thumbnail/upload/playback), dependencies, and the phase plan are unchanged; no new modules; no AC removed; the AC still requires a client-generated thumbnail. **Affected spec for Doc-Sync passthrough**: MOD-005 (mod-beta-video) — carry the revised AC-031 Phase 1 clause into the spec's Acceptance Criteria Covered and Key Implementation Notes (the spec's line 113 "frame extracted at 1 second" note should be annotated as Phase 2). **Note for Engineer/Tech Lead (not part of this spec ruling)**: QA also observed the placeholder upload uses `contentType: 'image/jpeg'` while the stored bytes are a video file (`beta-video-service.ts`). Fixing the content-type/URI of the placeholder is an implementation-quality decision for engineer-mod-beta-video (with Tech Lead input if a dependency is added), independent of this scope ruling; this ruling only settles that a placeholder is acceptable for Phase 1. The separately-flagged AC-035 `.mov` bug was already fixed by Engineer in commit c014a14 and is out of scope for this ruling.
 

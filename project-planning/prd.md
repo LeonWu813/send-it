@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 10
+**Status**: [TRIVIAL] — Revision 11
 **Date**: 2026-09-24
-**Revision**: 10
+**Revision**: 11
 
 ---
 
@@ -798,6 +798,8 @@ Block  (App Store Guideline 1.2 requirement)
 - **Analytics**: PostHog free tier. Ship the core funnel events listed in AC-100. No PII beyond `user_id` sent to PostHog.
 - **Performance targets**: App cold start ≤3 seconds on iPhone 12 or newer. Feed initial render ≤2 seconds on a normal 4G/LTE connection with a warm cache.
 - **Security**: All Storage buckets have RLS policies aligned with the corresponding table policies (e.g., a user cannot fetch a private ascent's associated media). All Edge Functions validate the JWT and re-check authorization against Postgres. Edge Functions read the service-role key from the secret named `SERVICE_ROLE_KEY` (Supabase reserves the `SUPABASE_` prefix); the service-role key is never inlined into the client bundle.
+- **Native dependency installation**: All Expo native dependencies shall be installed via `npx expo install <package>`, never `npm install <package>`. Expo resolves the SDK-compatible version automatically; a plain `npm install` can silently install an SDK-incompatible version that passes the Jest suite (via mocks) but fails the native iOS/Android build. Hand-pinning a native module's version string in `package.json` is prohibited.
+- **Native build gate before QA handoff**: When a module adds or changes a native dependency (a package with iOS/Android native code), the module's engineer shall run the native build (`npx expo run:ios`, or the platform equivalent) and confirm it compiles before marking the module QA-ready. Passing unit tests alone are insufficient evidence that a native dependency compiles, because Jest mocks native modules.
 - **Soft-launch timeframe**: No date target set. Phase 1 ships when Phase 1 acceptance criteria pass and the App Store submission is approved.
 
 ---
