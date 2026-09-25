@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 9
+**Status**: [TRIVIAL] — Revision 10
 **Date**: 2026-09-24
-**Revision**: 9
+**Revision**: 10
 
 ---
 
@@ -430,7 +430,7 @@ The data flow for the two most important loops:
 
 ### Phase 2: Community depth + Android
 
-**Modules**: (new modules TBD in a later PRD revision — Android build config, offline send queue, expanded notifications, comments, retire/reset voting, ascent pyramid, gym-info edit suggestions, Cloudflare Stream migration if trigger has fired, dedicated saved-routes list surface)
+**Modules**: (new modules TBD in a later PRD revision — Android build config, offline send queue, expanded notifications, comments, retire/reset voting, ascent pyramid, gym-info edit suggestions, Cloudflare Stream migration if trigger has fired, dedicated saved-routes list surface, beta-video thumbnail frame extraction)
 
 **Scope summary**: Android build (Expo config extension). Offline send queue with local persistence + sync-on-reconnect. Expanded push notifications (new routes at followed gyms, someone flashed your project, new follower). Comments (if community demand and moderation bandwidth exist). Community-driven route retire/reset workflow with light voting. Ascent pyramid visualization. "Suggest an edit" flow for gym metadata. A dedicated saved-routes list surface (Phase 1 only surfaces saved routes in the browse flow). Cloudflare Stream video migration executed if Phase 1 crossed the cost/storage trigger.
 
@@ -542,7 +542,7 @@ The data flow for the two most important loops:
 
 **AC-030**: The system shall reject beta video uploads longer than 60 seconds before upload begins.
 
-**AC-031**: The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must be standardised to H.264 baseline profile video + AAC audio in an MP4 container.
+**AC-031** (revised): The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must be standardised to H.264 baseline profile video + AAC audio in an MP4 container. **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
@@ -782,7 +782,7 @@ Block  (App Store Guideline 1.2 requirement)
 ## 10. Non-Functional Requirements
 
 - **Platform**: iOS 16+ (Phase 1). Android is Phase 2.
-- **Video**: 60-second maximum. Client-side compression before upload. Client-generated thumbnail. Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
+- **Video**: 60-second maximum. Client-side compression before upload. Client-generated thumbnail (Phase 1: may use the video URI as a placeholder; true still-frame extraction is deferred to Phase 2 per AC-031). Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
 - **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions), with RLS policies on every user-writable table. No custom backend server in Phase 1.
 - **Saved gyms**: The `saved_gyms` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-gyms list.
 - **Saved routes**: The `saved_routes` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-routes list. Saved routes are surfaced only in the browse flow (bookmark toggle on the route detail screen; read-only saved indicator on the gym route list) — Phase 1 provides no dedicated saved-routes list surface.
@@ -849,7 +849,7 @@ Most previously-open questions were resolved during PRD confirmation. Remaining 
 ## 13. Roadmap
 
 1. **Phase 1 (MVP, iOS, Taipei + New Taipei)** — Auth (Email + Apple + Google), curated branch-level gym directory, route submission with match-before-create + fixed color enum + V-scale + composed route display name, route bookmarking in the browse flow, send logging with clear error on network failure and a three-value ascent style (flash/top/attempt), beta video (60 sec + client compression + client thumbnail) via Supabase Storage, follow + activity feed, beta-video likes with APNs push + preference toggle, profile history + basic stats with per-send achievement icons, Report + Block (App Store 1.2), English + zh-TW (device-locale default, Settings toggle), Light + Dark (OS default, Settings override), PostHog analytics, Supabase Studio admin only.
-2. **Phase 2 (Community depth + Android)** — Android build, offline send queue, expanded push notifications, comments (conditional), retire/reset voting workflow, ascent pyramid visualization, "suggest an edit" gym flow, dedicated saved-routes list surface, Cloudflare Stream video migration (if trigger hit in Phase 1), lightweight in-app moderation surface if needed for App Store follow-up.
+2. **Phase 2 (Community depth + Android)** — Android build, offline send queue, expanded push notifications, comments (conditional), retire/reset voting workflow, ascent pyramid visualization, "suggest an edit" gym flow, dedicated saved-routes list surface, Cloudflare Stream video migration (if trigger hit in Phase 1), beta-video thumbnail frame extraction (Phase 1 uses a placeholder thumbnail), lightweight in-app moderation surface if needed for App Store follow-up.
 3. **Phase 3 (Gym partnerships)** — Gym-claimed profiles, official route-setter publishing, gym-facing analytics, optional gym subscription monetization (climber app stays free).
 
 ---

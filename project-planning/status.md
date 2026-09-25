@@ -3,15 +3,17 @@
 ## Last Action
 
 ```
-agent: engineer-mod-beta-video
-mode: bugfix
-module: mod-beta-video
+agent: pm
+mode: change
+module: n/a
 result: success
-commit: bdccdabc2247ea2dc18adc3c3ef748636b8e5b5d
-timestamp: 2026-09-24T17:00:00Z
+commit: 94c499cd6689dbdf3f72e4f1fde59e4cec1a6c6c
+timestamp: 2026-09-24T17:30:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-24 [TRIVIAL]** — AC-031 thumbnail-scope ruling (PRD Revision 10). QA (qa-mod-beta-video, commit bcf7082) flagged AC-031 as a spec issue, not a bug: the MOD-005 engineer shipped a Phase 1 simplification (`localThumbnailUri = asset.uri` in `BetaVideoUploader.tsx` line 157) that uploads the video URI as the thumbnail placeholder rather than an extracted still frame, and asked PM to rule whether client-side frame extraction is required in Phase 1 or deferrable. **PM ruling: acceptable Phase 1 simplification — frame extraction deferred to Phase 2.** Rationale: (1) true client-side frame extraction requires a new native dependency (`expo-video-thumbnails` / `ffmpeg-kit-react-native`), neither installed — adding a native module is a scope/dependency decision, and AC-031 never named a specific extraction library; (2) the Phase 1 loop is not blocked — upload/playback (AC-032/033/034) works and `thumbnail_url` is populated with a valid, retrievable URL; the harm is a heavier preview and no still frame, a quality issue not a broken loop; (3) it fits the established Phase 1 simplification pattern (auto-approve default, Studio-only admin, no offline queue, Cloudflare deferred). PRD edits: AC-031 (§8) marked (revised) with an explicit "Phase 1 simplification" clause (thumbnail may use the video URI as a placeholder; true frame extraction e.g. a frame at 1 second is Phase 2; `BetaVideo.thumbnail_url` must still be a valid retrievable URL in Phase 1); §10 NFR Video line clarified with the same placeholder note; §7 Phase 2 module TBD list and §13 roadmap Phase 2 both += "beta-video thumbnail frame extraction (Phase 1 uses a placeholder thumbnail)." PRD Status line `[TRIVIAL] — Revision 10`; `**Revision**` bumped 9 → 10. **Tagged [TRIVIAL]**: scoping/wording only — module boundaries (MOD-005 still owns capture/compression/thumbnail/upload/playback), dependencies, and the phase plan are unchanged; no new modules; no AC removed; the AC still requires a client-generated thumbnail. **Affected spec for Doc-Sync passthrough**: MOD-005 (mod-beta-video) — carry the revised AC-031 Phase 1 clause into the spec's Acceptance Criteria Covered and Key Implementation Notes (the spec's line 113 "frame extracted at 1 second" note should be annotated as Phase 2). **Note for Engineer/Tech Lead (not part of this spec ruling)**: QA also observed the placeholder upload uses `contentType: 'image/jpeg'` while the stored bytes are a video file (`beta-video-service.ts`). Fixing the content-type/URI of the placeholder is an implementation-quality decision for engineer-mod-beta-video (with Tech Lead input if a dependency is added), independent of this scope ruling; this ruling only settles that a placeholder is acceptable for Phase 1. The separately-flagged AC-035 `.mov` bug was already fixed by Engineer in commit c014a14 and is out of scope for this ruling.
 
 - **2026-09-24 [SUBSTANTIVE]** — Four product refinements (PRD Revision 9). Leon (via coordinator) approved proceeding directly; both open questions answered (Q1: remove `project` ascent style from both UI and DB enum, historical `project` maps to `attempt`; Q2 option (c): saved routes surface only in the browse flow — bookmark on RouteDetailScreen + read-only indicator on RouteListScreen, no dedicated Profile/Home surface). PRD Status line `[SUBSTANTIVE] — Revision 9`; `**Revision**` bumped 8 → 9. Changes:
   - **Item 1 — Route name format (AC-045, new, MOD-003).** A route's display name is composed automatically from grade + hold color as "`<grade> <Color>`" (e.g. "V3 Blue"), with the section label appended in parentheses when present (e.g. "V3 Blue (Cave)"). Not a stored/user-editable field — derived at display time from `grade` + `color_tag` (+ `section_label`); no free-text route-name input. Used consistently on the gym route list, route detail header, and any surfaced route reference. Non-goal added ("user-editable free-text route name out of scope"); §9 Data Model note added (display name not a stored column); §12 risk (tape-color reuse) extended to note same-name collisions disambiguated by `section_label`. US-003 and US-006 AC lists += AC-045. AC-042 updated to reference AC-046 (save from detail).
