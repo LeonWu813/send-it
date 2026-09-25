@@ -34,6 +34,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
+import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import AscentList from '../../mod-send-logging/components/AscentList';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
@@ -354,15 +355,11 @@ export default function RouteDetailScreen({
         />
       </Modal>
 
-      {/* ── Placeholder: Beta Videos (MOD-005) ────────────────────────────── */}
-      <View style={styles.placeholderSection}>
-        <Text style={styles.placeholderTitle}>
-          {t('routes.detail.betaVideosPlaceholder')}
-        </Text>
-        <Text style={styles.placeholderSubtitle}>
-          {t('routes.detail.betaVideosPlaceholderSub')}
-        </Text>
-      </View>
+      {/* ── Beta Videos (MOD-005) — AC-033, AC-037 ───────────────────────────
+           BetaVideoSection is the public entry point imported from mod-beta-video.
+           Cross-module import rule: only this component is imported, never internal
+           screens/ or components/ from mod-beta-video directly. */}
+      <BetaVideoSection routeId={route.id} session={session} />
 
     </ScrollView>
   );
@@ -457,25 +454,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     infoText: {
       fontSize: theme.fontSize.md,
       color: theme.colors.textPrimary,
-    },
-    placeholderSection: {
-      marginTop: theme.spacing.xl,
-      padding: theme.spacing.lg,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderStyle: 'dashed',
-    },
-    placeholderTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textDisabled,
-      marginBottom: 4,
-    },
-    placeholderSubtitle: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textDisabled,
     },
     errorText: {
       fontSize: theme.fontSize.md,

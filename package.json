@@ -11,6 +11,7 @@
     "expo": "~57.0.24",
     "expo-apple-authentication": "~7.2.4",
     "expo-auth-session": "~6.1.5",
+    "expo-av": "~15.0.2",
     "expo-blob": "^57.0.2",
     "expo-crypto": "~14.1.5",
     "expo-image-picker": "~57.0.19",
@@ -50,7 +51,8 @@
     ],
     "moduleNameMapper": {
       "^react-native-safe-area-context$": "<rootDir>/__mocks__/react-native-safe-area-context.js",
-      "^expo-blob$": "<rootDir>/__mocks__/expo-blob.js"
+      "^expo-blob$": "<rootDir>/__mocks__/expo-blob.js",
+      "^expo-av$": "<rootDir>/__mocks__/expo-av.js"
     }
   },
   "private": true

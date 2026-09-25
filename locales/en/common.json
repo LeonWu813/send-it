@@ -253,6 +253,24 @@
       "empty": "Follow climbers to see them here"
     }
   },
+  "betaVideo": {
+    "sectionTitle": "BETA VIDEOS",
+    "addVideo": "Add Beta Video",
+    "noVideos": "No beta videos yet — be the first to share your technique!",
+    "uploading": "Uploading…",
+    "uploadProgress": "{{percent}}% complete",
+    "player": {
+      "play": "Play beta video",
+      "thumbnailAlt": "Beta video thumbnail"
+    },
+    "errors": {
+      "loadFailed": "Failed to load beta videos. Please try again.",
+      "uploadFailed": "Failed to upload beta video. Please try again.",
+      "tooLong": "Video must be 60 seconds or shorter.",
+      "invalidFormat": "Only MP4 or MOV videos are supported. Please select a different file.",
+      "permissionDenied": "Photo library access is required to select a video."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",

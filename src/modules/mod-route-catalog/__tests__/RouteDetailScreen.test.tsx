@@ -25,6 +25,21 @@ jest.mock('../../mod-send-logging/send-service', () => ({
   fetchUserAchievements: jest.fn(),
 }));
 
+// Mock the BetaVideoSection entry point from MOD-005 so RouteDetailScreen tests
+// are not affected by MOD-005 internals (cross-module boundary).
+jest.mock('../../mod-beta-video/components/BetaVideoSection', () => {
+  const React = require('react');
+  const { View, Text } = require('react-native');
+  return {
+    __esModule: true,
+    default: function MockBetaVideoSection() {
+      return React.createElement(View, { testID: 'beta-video-section' },
+        React.createElement(Text, null, 'BetaVideoSection')
+      );
+    },
+  };
+});
+
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
