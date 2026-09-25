@@ -46,11 +46,14 @@ function makeStorageBuilder(opts: {
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
 import {
+  fetchSavedRouteIds,
   findMatchingActiveRoutes,
   getPhotoSignedUrl,
   listRoutes,
   loadRoute,
+  saveRoute,
   submitRoute,
+  unsaveRoute,
   withdrawRoute,
 } from '../route-service';
 import type { Route, RouteSummary } from '../types';
@@ -459,3 +462,116 @@ describe('getPhotoSignedUrl', () => {
 // ── Storage mock declared to prevent unused-var lint errors ──────────────────
 // (uploadRoutePhoto is tested separately as it requires fetch + storage mocks)
 void mockStorageFrom;
+
+// ── fetchSavedRouteIds ────────────────────────────────────────────────────────
+
+describe('fetchSavedRouteIds', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns an array of route_id strings when saved routes exist', async () => {
+    const qb = makeQueryBuilder({
+      data: [{ route_id: 'r-001' }, { route_id: 'r-002' }],
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchSavedRouteIds();
+
+    expect(result).toEqual(['r-001', 'r-002']);
+    expect(mockFrom).toHaveBeenCalledWith('saved_routes');
+    expect(qb.select).toHaveBeenCalledWith('route_id');
+  });
+
+  it('returns an empty array when no saved routes exist', async () => {
+    const qb = makeQueryBuilder({ data: [], error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchSavedRouteIds();
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns an empty array when data is null', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchSavedRouteIds();
+
+    expect(result).toEqual([]);
+  });
+
+  it('throws a user-friendly error on DB failure', async () => {
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'DB error' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(fetchSavedRouteIds()).rejects.toThrow(
+      'Failed to load saved routes. Please try again.',
+    );
+  });
+});
+
+// ── saveRoute ─────────────────────────────────────────────────────────────────
+
+describe('saveRoute', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('inserts a row into saved_routes for the given routeId', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await saveRoute('r-001');
+
+    expect(mockFrom).toHaveBeenCalledWith('saved_routes');
+    expect(qb.insert).toHaveBeenCalledWith({ route_id: 'r-001' });
+  });
+
+  it('throws a user-friendly error when insert fails', async () => {
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'DB error' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(saveRoute('r-001')).rejects.toThrow(
+      'Failed to save route. Please try again.',
+    );
+  });
+});
+
+// ── unsaveRoute ───────────────────────────────────────────────────────────────
+
+describe('unsaveRoute', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('deletes the saved_routes row for the given routeId', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await unsaveRoute('r-001');
+
+    expect(mockFrom).toHaveBeenCalledWith('saved_routes');
+    expect(qb.delete).toHaveBeenCalled();
+    expect(qb.eq).toHaveBeenCalledWith('route_id', 'r-001');
+  });
+
+  it('throws a user-friendly error when delete fails', async () => {
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'DB error' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(unsaveRoute('r-001')).rejects.toThrow(
+      'Failed to unsave route. Please try again.',
+    );
+  });
+});

@@ -134,6 +134,11 @@
       "white": "White",
       "black": "Black"
     },
+    "bookmark": {
+      "save": "Save route",
+      "unsave": "Unsave route",
+      "saved": "Saved"
+    },
     "submit": {
       "addRoute": "Add Route",
       "changePhoto": "Change Photo",

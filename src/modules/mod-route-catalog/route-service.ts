@@ -286,3 +286,65 @@ export async function listRoutes(
 // retireRoute has been removed. Route retirement is now admin-only via
 // Supabase Studio (Phase 1). See RouteDetailScreen — the retire button
 // has been removed accordingly (AC-024b).
+
+// ── Saved Routes (AC-046, AC-047) ────────────────────────────────────────────
+
+/**
+ * Returns the set of route IDs the current user has saved.
+ *
+ * Uses RLS — only rows where user_id = auth.uid() are returned.
+ * Called once per screen load; never called per row (no N+1).
+ *
+ * @returns Array of route ID strings (may be empty).
+ * @throws {Error} with a user-facing message on unexpected failure.
+ */
+export async function fetchSavedRouteIds(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('saved_routes')
+    .select('route_id');
+
+  if (error) {
+    throw new Error('Failed to load saved routes. Please try again.');
+  }
+
+  return ((data as { route_id: string }[]) ?? []).map((row) => row.route_id);
+}
+
+/**
+ * Adds a route to the current user's saved list.
+ *
+ * Inserts a row into `saved_routes` for (auth.uid(), routeId).
+ * RLS enforces that the user can only insert rows for their own user_id.
+ *
+ * @param routeId UUID of the route to save.
+ * @throws {Error} so that the UI can revert the optimistic update on failure.
+ */
+export async function saveRoute(routeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('saved_routes')
+    .insert({ route_id: routeId });
+
+  if (error) {
+    throw new Error('Failed to save route. Please try again.');
+  }
+}
+
+/**
+ * Removes a route from the current user's saved list.
+ *
+ * Deletes the (auth.uid(), routeId) row from `saved_routes`.
+ * RLS enforces that the user can only delete their own rows.
+ *
+ * @param routeId UUID of the route to unsave.
+ * @throws {Error} so that the UI can revert the optimistic update on failure.
+ */
+export async function unsaveRoute(routeId: string): Promise<void> {
+  const { error } = await supabase
+    .from('saved_routes')
+    .delete()
+    .eq('route_id', routeId);
+
+  if (error) {
+    throw new Error('Failed to unsave route. Please try again.');
+  }
+}

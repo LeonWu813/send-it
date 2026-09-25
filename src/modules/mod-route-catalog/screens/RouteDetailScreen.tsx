@@ -7,6 +7,10 @@
  *   - Ascent list (MOD-004) — wired via AscentList component
  *   - Placeholder slot for beta videos (MOD-005)
  *
+ * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
+ * AC-046: bookmark toggle (filled yellow = saved; outline gray = unsaved) in header;
+ *         optimistic update; achievement icon next to route name.
+ *
  * Note: Route retirement is now admin-only via Supabase Studio (AC-024b).
  * The retire button and retireRoute() call have been removed.
  */
@@ -15,6 +19,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   ActivityIndicator,
   Image,
@@ -31,9 +36,28 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
 import AscentList from '../../mod-send-logging/components/AscentList';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
+import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import RouteColorBadge from '../components/RouteColorBadge';
-import { loadRoute, getPhotoSignedUrl } from '../route-service';
-import type { Route } from '../types';
+import { fetchSavedRouteIds, getPhotoSignedUrl, loadRoute, saveRoute, unsaveRoute } from '../route-service';
+import type { Route, RouteColor } from '../types';
+
+/**
+ * AC-045: Compose the display name for a route at render time.
+ * Format: "{grade} {LocalizedColor}" or "{grade} {LocalizedColor} ({section_label})".
+ * The color string uses the i18n routeCatalog.colors.<color_tag> key.
+ */
+function formatRouteName(
+  grade: string,
+  colorTag: RouteColor,
+  sectionLabel: string | null,
+  t: TFunction,
+): string {
+  const color = t(`routeCatalog.colors.${colorTag}`);
+  const base = `${grade} ${color}`;
+  return sectionLabel ? `${base} (${sectionLabel})` : base;
+}
+
+type AchievementStyle = 'flash' | 'top' | 'attempt';
 
 interface RouteDetailScreenProps {
   routeId: string;
@@ -65,19 +89,29 @@ export default function RouteDetailScreen({
    */
   const [ascentRefreshKey, setAscentRefreshKey] = useState(0);
 
+  // AC-046: bookmark state
+  const [isSaved, setIsSaved] = useState(false);
+
+  // AC-046: achievement icon for this route
+  const [achievement, setAchievement] = useState<AchievementStyle | null>(null);
+
   const fetchRoute = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data = await loadRoute(routeId);
+      // Fetch route detail and saved status in parallel
+      const [data, savedIds] = await Promise.all([
+        loadRoute(routeId),
+        fetchSavedRouteIds(),
+      ]);
+
       if (!data) {
         setErrorMessage(t('routes.errors.notFound'));
       } else {
         setRoute(data);
+        setIsSaved(savedIds.includes(routeId));
+
         // Generate a signed URL for the private route-photos bucket.
-        // photo_url stores the storage path (from getPublicUrl) which is
-        // inaccessible for a private bucket; createSignedUrl produces a
-        // time-limited URL that the Image component can actually load.
         if (data.photo_url) {
           try {
             const signed = await getPhotoSignedUrl(data.photo_url);
@@ -88,6 +122,15 @@ export default function RouteDetailScreen({
           }
         } else {
           setPhotoUri(null);
+        }
+
+        // AC-046: fetch achievement icon for this route
+        try {
+          const ach = await fetchUserAchievements([routeId]);
+          const style = ach[routeId] as AchievementStyle | undefined;
+          setAchievement(style ?? null);
+        } catch {
+          // Achievement overlay is best-effort — silently ignore failures
         }
       }
     } catch {
@@ -100,6 +143,25 @@ export default function RouteDetailScreen({
   useEffect(() => {
     void fetchRoute();
   }, [fetchRoute]);
+
+  /**
+   * AC-046: Optimistic bookmark toggle.
+   * Flips the icon immediately, fires the DB write async, reverts on error.
+   */
+  const handleBookmarkToggle = useCallback(async (): Promise<void> => {
+    const wasSaved = isSaved;
+    setIsSaved(!wasSaved);
+    try {
+      if (wasSaved) {
+        await unsaveRoute(routeId);
+      } else {
+        await saveRoute(routeId);
+      }
+    } catch {
+      // Revert optimistic update on failure
+      setIsSaved(wasSaved);
+    }
+  }, [routeId, isSaved]);
 
   function handleLogSendPress(): void {
     setIsLogSendVisible(true);
@@ -151,21 +213,43 @@ export default function RouteDetailScreen({
   }
 
   const isRetired = route.status === 'retired';
+  // AC-045: composed route display name
+  const routeName = formatRouteName(route.grade, route.color_tag, route.section_label, t);
 
   return (
     <ScrollView
       style={styles.root}
       contentContainerStyle={styles.contentContainer}
     >
-      {/* Back navigation */}
-      <Pressable
-        onPress={onBack}
-        style={styles.backLink}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.back')}
-      >
-        <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-      </Pressable>
+      {/* Header row: back navigation + bookmark toggle (AC-046) */}
+      <View style={styles.headerRow}>
+        <Pressable
+          onPress={onBack}
+          style={styles.backLink}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+        >
+          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+        </Pressable>
+        {/* AC-046: bookmark toggle — filled yellow = saved, outline gray = unsaved */}
+        <Pressable
+          onPress={() => { void handleBookmarkToggle(); }}
+          style={styles.bookmarkButton}
+          accessibilityRole="button"
+          accessibilityLabel={
+            isSaved
+              ? t('routeCatalog.bookmark.unsave')
+              : t('routeCatalog.bookmark.save')
+          }
+          accessibilityState={{ selected: isSaved }}
+        >
+          <Ionicons
+            name={isSaved ? 'bookmark' : 'bookmark-outline'}
+            size={28}
+            color={isSaved ? theme.colors.warning : theme.colors.textSecondary}
+          />
+        </Pressable>
+      </View>
 
       {/* Route photo — rendered only when a signed URL was successfully generated.
           The route-photos bucket is private; photo_url stores the raw storage
@@ -189,7 +273,19 @@ export default function RouteDetailScreen({
         </View>
       )}
 
-      {/* Grade + color */}
+      {/* AC-045: route name + AC-046: achievement icon in header area */}
+      <View style={styles.routeNameRow}>
+        <Text style={styles.routeNameText}>{routeName}</Text>
+        {achievement === 'flash' ? (
+          <Ionicons name="flash" size={22} color={theme.colors.warning} />
+        ) : achievement === 'top' ? (
+          <Ionicons name="checkmark-circle" size={22} color={theme.colors.success} />
+        ) : achievement === 'attempt' ? (
+          <Ionicons name="ellipse-outline" size={22} color={theme.colors.textSecondary} />
+        ) : null}
+      </View>
+
+      {/* Grade + color badge kept for visual clarity */}
       <View style={styles.gradeRow}>
         <Text style={styles.gradeText}>{route.grade}</Text>
         <RouteColorBadge color={route.color_tag} size="md" />
@@ -293,8 +389,17 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.lg,
     },
-    backLink: {
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
       marginBottom: theme.spacing.md,
+    },
+    backLink: {
+      // no extra margin — headerRow handles spacing
+    },
+    bookmarkButton: {
+      padding: theme.spacing.xs,
     },
     photo: {
       width: '100%',
@@ -316,6 +421,18 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontWeight: theme.fontWeight.semibold,
       color: theme.colors.textInverse,
       textTransform: 'uppercase',
+    },
+    routeNameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+      marginBottom: theme.spacing.xs,
+    },
+    routeNameText: {
+      fontSize: theme.fontSize.xl,
+      fontWeight: theme.fontWeight.bold,
+      color: theme.colors.textPrimary,
+      flexShrink: 1,
     },
     gradeRow: {
       flexDirection: 'row',

@@ -6,14 +6,19 @@
  * AC-040: filterable by grade and hold color chip selectors.
  *         No free-text search. No status filter for normal users.
  * AC-041: shows active routes only for normal users.
+ * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
+ * AC-046: achievement icons from MOD-004's fetchUserAchievements (cross-module read).
+ * AC-047: read-only filled bookmark indicator on saved route cards.
  * US-006: browse currently active routes at a gym.
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   ActivityIndicator,
+  AppState,
   FlatList,
   Pressable,
   ScrollView,
@@ -25,8 +30,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
+import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import RouteColorBadge from '../components/RouteColorBadge';
-import { listRoutes } from '../route-service';
+import { fetchSavedRouteIds, listRoutes } from '../route-service';
 import type { RouteColor, RouteGrade, RouteListFilters, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
 
@@ -42,6 +48,41 @@ const COLOR_SWATCH: Record<RouteColor, string> = {
   white: 'white',
   black: 'black',
 };
+
+/**
+ * AC-045: Compose the display name for a route at render time.
+ * Format: "{grade} {LocalizedColor}" or "{grade} {LocalizedColor} ({section_label})".
+ * The color string uses the i18n routeCatalog.colors.<color_tag> key.
+ */
+function formatRouteName(
+  grade: string,
+  colorTag: RouteColor,
+  sectionLabel: string | null,
+  t: TFunction,
+): string {
+  const color = t(`routeCatalog.colors.${colorTag}`);
+  const base = `${grade} ${color}`;
+  return sectionLabel ? `${base} (${sectionLabel})` : base;
+}
+
+/** Achievement icon config per ascent style. */
+type AchievementStyle = 'flash' | 'top' | 'attempt';
+
+interface AchievementIconProps {
+  style: AchievementStyle;
+  theme: ReturnType<typeof useTheme>['theme'];
+}
+
+function AchievementIcon({ style, theme }: AchievementIconProps): React.JSX.Element {
+  switch (style) {
+    case 'flash':
+      return <Ionicons name="flash" size={16} color={theme.colors.warning} />;
+    case 'top':
+      return <Ionicons name="checkmark-circle" size={16} color={theme.colors.success} />;
+    case 'attempt':
+      return <Ionicons name="ellipse-outline" size={16} color={theme.colors.textSecondary} />;
+  }
+}
 
 interface RouteListScreenProps {
   gymId: string;
@@ -76,10 +117,25 @@ export default function RouteListScreen({
   const [gradeFilter, setGradeFilter] = useState<RouteGrade | null>(null);
   const [colorFilter, setColorFilter] = useState<RouteColor | null>(null);
 
+  // AC-046: achievement icon map (route_id → best style)
+  const [achievements, setAchievements] = useState<Record<string, AchievementStyle>>({});
+
+  // AC-047: set of saved route IDs (read-only filled bookmark indicator)
+  const [savedRouteIds, setSavedRouteIds] = useState<Set<string>>(new Set());
+
   const filters: RouteListFilters = useMemo(
     () => ({ grade: gradeFilter, colorTag: colorFilter }),
     [gradeFilter, colorFilter],
   );
+
+  const fetchSaved = useCallback(async (): Promise<void> => {
+    try {
+      const ids = await fetchSavedRouteIds();
+      setSavedRouteIds(new Set(ids));
+    } catch {
+      // Saved indicator is best-effort — silently ignore failures
+    }
+  }, []);
 
   const fetchRoutes = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -87,6 +143,18 @@ export default function RouteListScreen({
     try {
       const data = await listRoutes(gymId, filters);
       setRoutes(data);
+
+      // AC-046: fetch achievements once after routes load; one call with all ids
+      if (data.length > 0) {
+        try {
+          const ach = await fetchUserAchievements(data.map((r) => r.id));
+          setAchievements(ach);
+        } catch {
+          // Achievement overlay is best-effort — silently ignore failures
+        }
+      } else {
+        setAchievements({});
+      }
     } catch {
       setErrorMessage(t('routes.errors.loadFailed'));
     } finally {
@@ -96,7 +164,24 @@ export default function RouteListScreen({
 
   useEffect(() => {
     void fetchRoutes();
-  }, [fetchRoutes]);
+    void fetchSaved();
+  }, [fetchRoutes, fetchSaved]);
+
+  // AC-047: re-fetch saved IDs when the app returns to the foreground
+  // (e.g. after the user saves/unsaves on RouteDetailScreen and returns).
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (
+        appState.current.match(/inactive|background/) &&
+        nextState === 'active'
+      ) {
+        void fetchSaved();
+      }
+      appState.current = nextState;
+    });
+    return () => subscription.remove();
+  }, [fetchSaved]);
 
   function toggleGradeFilter(grade: RouteGrade): void {
     setGradeFilter((prev) => (prev === grade ? null : grade));
@@ -106,8 +191,11 @@ export default function RouteListScreen({
     setColorFilter((prev) => (prev === color ? null : color));
   }
 
-
   function renderRouteCard({ item }: { item: RouteSummary }): React.JSX.Element {
+    const routeName = formatRouteName(item.grade, item.color_tag, item.section_label, t);
+    const achievement = achievements[item.id] as AchievementStyle | undefined;
+    const isSaved = savedRouteIds.has(item.id);
+
     return (
       <Pressable
         style={({ pressed }) => [
@@ -116,15 +204,31 @@ export default function RouteListScreen({
         ]}
         onPress={() => onSelectRoute(item.id)}
         accessibilityRole="button"
-        accessibilityLabel={`${item.grade} ${item.color_tag} route`}
+        accessibilityLabel={routeName}
       >
         <View style={styles.cardHeader}>
-          <Text style={styles.gradeBadge}>{item.grade}</Text>
-          <RouteColorBadge color={item.color_tag} size="sm" />
+          {/* AC-045: formatted route name as card title */}
+          <Text style={styles.routeName} numberOfLines={1} testID="route-name">
+            {routeName}
+          </Text>
+          <View style={styles.cardHeaderRight}>
+            {/* AC-046: achievement icon inline next to route name */}
+            {achievement ? (
+              <AchievementIcon style={achievement} theme={theme} />
+            ) : null}
+            {/* AC-047: read-only saved bookmark indicator (no tap action) */}
+            {isSaved ? (
+              <Ionicons
+                name="bookmark"
+                size={16}
+                color={theme.colors.warning}
+                accessibilityLabel={t('routeCatalog.bookmark.saved')}
+              />
+            ) : null}
+            {/* Color badge kept alongside the formatted name */}
+            <RouteColorBadge color={item.color_tag} size="sm" />
+          </View>
         </View>
-        {item.section_label ? (
-          <Text style={styles.sectionLabel}>{item.section_label}</Text>
-        ) : null}
         <Text style={styles.dateText}>
           {new Date(item.created_at).toLocaleDateString()}
         </Text>
@@ -369,19 +473,20 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     cardHeader: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       gap: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
-    gradeBadge: {
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.bold,
+    routeName: {
+      flex: 1,
+      fontSize: theme.fontSize.md,
+      fontWeight: theme.fontWeight.semibold,
       color: theme.colors.textPrimary,
-      minWidth: 36,
     },
-    sectionLabel: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      marginBottom: 2,
+    cardHeaderRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.xs,
     },
     dateText: {
       fontSize: theme.fontSize.xs,

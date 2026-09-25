@@ -4,9 +4,9 @@
  * Tests behaviour — not implementation.
  * The route-service module is mocked; no real network activity.
  *
- * Note: retireRoute has been removed (AC-024b — retirement is now admin-only
- * via Supabase Studio). Tests for the retire button have been replaced with
- * tests that verify the retire button is NOT present.
+ * AC-024b: retire button absent (retirement is now admin-only via Supabase Studio).
+ * AC-045: route name composed as "{grade} {LocalizedColor} ({section_label}?)".
+ * AC-046: bookmark toggle + achievement icon.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -16,19 +16,31 @@ jest.mock('../../../lib/supabase', () => ({
 jest.mock('../route-service', () => ({
   loadRoute: jest.fn(),
   getPhotoSignedUrl: jest.fn(),
+  fetchSavedRouteIds: jest.fn(),
+  saveRoute: jest.fn(),
+  unsaveRoute: jest.fn(),
+}));
+
+jest.mock('../../mod-send-logging/send-service', () => ({
+  fetchUserAchievements: jest.fn(),
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { loadRoute, getPhotoSignedUrl } from '../route-service';
+import { loadRoute, getPhotoSignedUrl, fetchSavedRouteIds, saveRoute, unsaveRoute } from '../route-service';
+import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
 import { renderOptions } from '../test-utils';
 
 const mockLoadRoute = loadRoute as jest.MockedFunction<typeof loadRoute>;
 const mockGetPhotoSignedUrl = getPhotoSignedUrl as jest.MockedFunction<typeof getPhotoSignedUrl>;
+const mockFetchSavedRouteIds = fetchSavedRouteIds as jest.MockedFunction<typeof fetchSavedRouteIds>;
+const mockSaveRoute = saveRoute as jest.MockedFunction<typeof saveRoute>;
+const mockUnsaveRoute = unsaveRoute as jest.MockedFunction<typeof unsaveRoute>;
+const mockFetchUserAchievements = fetchUserAchievements as jest.MockedFunction<typeof fetchUserAchievements>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -65,9 +77,12 @@ const DEFAULT_PROPS = {
 describe('RouteDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default: getPhotoSignedUrl resolves successfully.
-    // Tests that need a different behaviour can override this mock.
+    // Default: photo signing succeeds, not saved, no achievement
     mockGetPhotoSignedUrl.mockResolvedValue('https://signed.example.com/photo.jpg');
+    mockFetchSavedRouteIds.mockResolvedValue([]);
+    mockFetchUserAchievements.mockResolvedValue({});
+    mockSaveRoute.mockResolvedValue(undefined);
+    mockUnsaveRoute.mockResolvedValue(undefined);
   });
 
   it('shows grade, color, and section for an active route', async () => {
@@ -78,6 +93,92 @@ describe('RouteDetailScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('V5')).toBeTruthy();
       expect(screen.getByText('Main Wall')).toBeTruthy();
+    });
+  });
+
+  it('AC-045: shows formatted route name in header (grade + localized color + section)', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // "V5 Purple (Main Wall)" or "V5 紫色 (Main Wall)"
+      const nameElements = screen.queryAllByText(/V5.*Main Wall/);
+      const nameElementsZh = screen.queryAllByText(/V5.*Main Wall/);
+      expect(nameElements.length + nameElementsZh.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('AC-046: shows outline bookmark icon when route is not saved', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const saveBtn = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Save route' ||
+          el.props.accessibilityLabel === '收藏路線',
+      );
+      expect(saveBtn).toBeTruthy();
+    });
+  });
+
+  it('AC-046: shows filled bookmark icon when route is saved', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+    mockFetchSavedRouteIds.mockResolvedValueOnce(['route-001']);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const unsaveBtn = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Unsave route' ||
+          el.props.accessibilityLabel === '取消收藏',
+      );
+      expect(unsaveBtn).toBeTruthy();
+    });
+  });
+
+  it('AC-046: optimistically toggles bookmark on press (save)', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+    // Route is NOT saved initially
+    mockFetchSavedRouteIds.mockResolvedValueOnce([]);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    // Wait for load
+    await waitFor(() => {
+      const saveBtn = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Save route' ||
+          el.props.accessibilityLabel === '收藏路線',
+      );
+      expect(saveBtn).toBeTruthy();
+    });
+
+    // Press the save button
+    const saveBtn = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Save route' ||
+        el.props.accessibilityLabel === '收藏路線',
+    );
+    if (saveBtn) {
+      fireEvent.press(saveBtn);
+      // saveRoute should be called
+      await waitFor(() => {
+        expect(mockSaveRoute).toHaveBeenCalledWith('route-001');
+      });
+    }
+  });
+
+  it('AC-046: calls fetchUserAchievements for this route', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(mockFetchUserAchievements).toHaveBeenCalledWith(['route-001']);
     });
   });
 

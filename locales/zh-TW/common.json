@@ -134,6 +134,11 @@
       "white": "白色",
       "black": "黑色"
     },
+    "bookmark": {
+      "save": "收藏路線",
+      "unsave": "取消收藏",
+      "saved": "已收藏"
+    },
     "submit": {
       "addRoute": "新增路線",
       "changePhoto": "更換照片",
