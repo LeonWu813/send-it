@@ -2,7 +2,41 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-25 (expo-av → expo-video migration, iOS build fix)
+**Status**: Bug fix applied — 2026-09-27 (AC-035 .mov acceptance, PRD Revision 12)
+
+### Bug Fix — AC-035 .mov acceptance (PRD Revision 12) — 2026-09-27
+
+**Root cause**: PRD Revision 12 revised AC-035 to accept both `.mp4` and `.mov` containers (QuickTime). The prior fix (commit `c014a14`, QA-verified in QA Run 2) had correctly rejected `.mov` per the then-current spec (MP4-only). With PRD Rev 12 the spec now requires `.mov` acceptance so iPhone-camera footage can upload without conversion.
+
+**Fix**:
+
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — `validateVideoFormat()`:
+  - Replaced the single `mimeType !== 'video/mp4'` mimeType check with a `Set`-based check accepting `video/mp4`, `video/quicktime` (`.mov` standard MIME), and `video/mov` (alternate MIME some pickers emit).
+  - Replaced the fallback branch (no mimeType) from MP4-only URI check to accept both `.mp4` and `.mov` URI extensions; all other extensions (`.avi`, `.mkv`, `.webm`, etc.) continue to be rejected.
+  - Updated file-level AC-035 comment to reflect PRD Rev 12 two-container rule.
+
+- `locales/en/common.json` — `betaVideo.errors.invalidFormat`: updated from "Only MP4 videos are supported." to "Only MP4 and MOV videos are supported."
+
+- `locales/zh-TW/common.json` — `betaVideo.errors.invalidFormat`: updated from "僅支援 MP4 格式的影片" to "僅支援 MP4 和 MOV 格式的影片".
+
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx`:
+  - "rejects .mov files with no mimeType (MP4 container only)" → renamed and flipped to "accepts .mov files with no mimeType (QuickTime container allowed per PRD Rev 12)"; asserts `uploadBetaVideo` IS called and `onUploadSuccess` fires.
+  - Added "accepts .mov files with mimeType video/quicktime" — asserts upload proceeds to success.
+  - Added "rejects .avi files (unsupported container)" — `mimeType: 'video/x-msvideo'`, asserts error message and no upload.
+  - Added "rejects .mkv files (unsupported container, no mimeType)" — `.mkv` URI, no mimeType, asserts error message and no upload.
+  - Updated all error-message regex matchers from `/Only MP4 videos are supported/i` and `僅支援 MP4 格式的影片` to `/Only MP4 and MOV videos are supported/i` and `僅支援 MP4 和 MOV 格式的影片`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: pre-existing error in `mod-send-logging/__tests__/send-service.test.ts` (TS2352 — present before this fix, confirmed by git stash verification); 0 errors in mod-beta-video files. PASS for this module.
+- `npm test -- --watchAll=false`: PASS — 319 tests, 27 suites, 0 failures (up from 314/27 — 5 new tests added in BetaVideoUploader.test.tsx by this fix).
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (all new and existing tests pass)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+- Git scope check: only `src/modules/mod-beta-video/` and `locales/` files modified. PASS.
+- All judgment-based checklist items: PASS — AC-035 now correctly accepts both `.mp4` and `.mov` per PRD Rev 12; no hardcoded values; no new dependencies; error messages updated in both locale files; test coverage complete for the new acceptance paths and rejection cases.
+
+**Status before implementation complete — 2026-09-25 (expo-av → expo-video migration, iOS build fix)**
 
 ### Bug Fix — expo-av → expo-video (SDK 57 compatibility) — 2026-09-25
 

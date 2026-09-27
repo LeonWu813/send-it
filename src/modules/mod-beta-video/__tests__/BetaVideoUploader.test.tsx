@@ -204,16 +204,16 @@ describe('BetaVideoUploader', () => {
 
     await waitFor(() => {
       const errorTexts = screen
-        .queryAllByText(/Only MP4 videos are supported/i)
-        .concat(screen.queryAllByText(/僅支援 MP4 格式的影片/));
+        .queryAllByText(/Only MP4 and MOV videos are supported/i)
+        .concat(screen.queryAllByText(/僅支援 MP4 和 MOV 格式的影片/));
       expect(errorTexts.length).toBeGreaterThan(0);
     });
 
     expect(mockUploadBetaVideo).not.toHaveBeenCalled();
   });
 
-  it('AC-035: rejects .mov files with no mimeType (MP4 container only)', async () => {
-    // A .mov URI with no mimeType must be rejected — spec requires MP4 container only.
+  it('AC-035: accepts .mov files with no mimeType (QuickTime container allowed per PRD Rev 12)', async () => {
+    // A .mov URI with no mimeType must now be accepted — spec accepts both .mp4 and .mov.
     const movAsset: ImagePicker.ImagePickerSuccessResult = {
       canceled: false,
       assets: [
@@ -234,6 +234,89 @@ describe('BetaVideoUploader', () => {
       ],
     };
     mockLaunchImageLibrary.mockResolvedValue(movAsset);
+    mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      expect(mockUploadBetaVideo).toHaveBeenCalled();
+    });
+
+    expect(DEFAULT_PROPS.onUploadSuccess).toHaveBeenCalledWith(MOCK_VIDEO);
+  });
+
+  it('AC-035: accepts .mov files with mimeType video/quicktime', async () => {
+    // video/quicktime is the standard MIME type for iPhone-camera .mov files.
+    const movQuicktimeAsset: ImagePicker.ImagePickerSuccessResult = {
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///iphone_clip.mov',
+          mimeType: 'video/quicktime',
+          duration: 30_000,
+          type: 'video',
+          width: 1920,
+          height: 1080,
+          fileName: 'iphone_clip.mov',
+          fileSize: 10_000_000,
+          assetId: null,
+          base64: null,
+          exif: null,
+          pairedVideoAsset: null,
+        },
+      ],
+    };
+    mockLaunchImageLibrary.mockResolvedValue(movQuicktimeAsset);
+    mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      expect(mockUploadBetaVideo).toHaveBeenCalled();
+    });
+
+    expect(DEFAULT_PROPS.onUploadSuccess).toHaveBeenCalledWith(MOCK_VIDEO);
+  });
+
+  it('AC-035: rejects .avi files (unsupported container)', async () => {
+    const aviAsset: ImagePicker.ImagePickerSuccessResult = {
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///video.avi',
+          mimeType: 'video/x-msvideo',
+          duration: 30_000,
+          type: 'video',
+          width: 1920,
+          height: 1080,
+          fileName: 'video.avi',
+          fileSize: 10_000_000,
+          assetId: null,
+          base64: null,
+          exif: null,
+          pairedVideoAsset: null,
+        },
+      ],
+    };
+    mockLaunchImageLibrary.mockResolvedValue(aviAsset);
 
     render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
 
@@ -248,8 +331,51 @@ describe('BetaVideoUploader', () => {
 
     await waitFor(() => {
       const errorTexts = screen
-        .queryAllByText(/Only MP4 videos are supported/i)
-        .concat(screen.queryAllByText(/僅支援 MP4 格式的影片/));
+        .queryAllByText(/Only MP4 and MOV videos are supported/i)
+        .concat(screen.queryAllByText(/僅支援 MP4 和 MOV 格式的影片/));
+      expect(errorTexts.length).toBeGreaterThan(0);
+    });
+
+    expect(mockUploadBetaVideo).not.toHaveBeenCalled();
+  });
+
+  it('AC-035: rejects .mkv files (unsupported container, no mimeType)', async () => {
+    const mkvAsset: ImagePicker.ImagePickerSuccessResult = {
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///video.mkv',
+          mimeType: undefined,
+          duration: 30_000,
+          type: 'video',
+          width: 1920,
+          height: 1080,
+          fileName: 'video.mkv',
+          fileSize: 10_000_000,
+          assetId: null,
+          base64: null,
+          exif: null,
+          pairedVideoAsset: null,
+        },
+      ],
+    };
+    mockLaunchImageLibrary.mockResolvedValue(mkvAsset);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      const errorTexts = screen
+        .queryAllByText(/Only MP4 and MOV videos are supported/i)
+        .concat(screen.queryAllByText(/僅支援 MP4 和 MOV 格式的影片/));
       expect(errorTexts.length).toBeGreaterThan(0);
     });
 

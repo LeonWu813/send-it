@@ -268,7 +268,7 @@
       "loadFailed": "載入 Beta 影片失敗，請再試一次。",
       "uploadFailed": "上傳 Beta 影片失敗，請再試一次。",
       "tooLong": "影片長度必須在 60 秒以內。",
-      "invalidFormat": "僅支援 MP4 格式的影片，請選擇其他檔案。",
+      "invalidFormat": "僅支援 MP4 和 MOV 格式的影片，請選擇其他檔案。",
       "permissionDenied": "需要相簿存取權限才能選擇影片。"
     }
   },

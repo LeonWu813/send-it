@@ -268,7 +268,7 @@
       "loadFailed": "Failed to load beta videos. Please try again.",
       "uploadFailed": "Failed to upload beta video. Please try again.",
       "tooLong": "Video must be 60 seconds or shorter.",
-      "invalidFormat": "Only MP4 videos are supported. Please select a different file.",
+      "invalidFormat": "Only MP4 and MOV videos are supported. Please select a different file.",
       "permissionDenied": "Photo library access is required to select a video."
     }
   },

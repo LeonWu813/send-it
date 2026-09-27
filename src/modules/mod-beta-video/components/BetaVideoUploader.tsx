@@ -9,8 +9,10 @@
  *         ffmpeg-kit-react-native for guaranteed H.264/AAC/MP4 output (spec
  *         note: final library confirmed as expo-image-picker for Phase 1 POC;
  *         upgrade path documented in spec).
- * AC-035: validates that the selected video file is an MP4 before upload.
- *         If validation fails, surfaces a clear error and does not upload.
+ * AC-035: validates that the selected video file is an MP4 or MOV container
+ *         before upload (PRD Revision 12 — .mov accepted for iPhone-camera
+ *         footage). If validation fails, surfaces a clear error and does not
+ *         upload.
  * AC-036: progress overlay is displayed during upload (0–100%), blocking
  *         further interaction until the upload completes or fails.
  * AC-037: receives route_id so the upload is bound to the correct route.
@@ -65,23 +67,40 @@ export default function BetaVideoUploader({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   /**
-   * AC-035: Validate the selected video conforms to MP4 container only.
-   * expo-image-picker returns a MIME type when available. If the MIME type is
-   * not video/mp4, reject with a clear error before upload begins.
-   * On iOS, device-native compression may output .mov (QuickTime container) —
-   * this is rejected because the spec requires an MP4 container for guaranteed
-   * AVPlayer cross-device playback after Cloudflare Stream migration.
+   * AC-035: Validate the selected video is in an accepted container.
+   * Accepted containers: MP4 (.mp4) and QuickTime (.mov, video/quicktime).
+   * Rejection is container-based (since codec cannot be inspected client-side);
+   * everything else (.avi, .mkv, .webm, etc.) is rejected with a clear error.
+   * expo-image-picker returns a MIME type when available; URI extension is used
+   * as a secondary signal when mimeType is absent.
+   *
+   * Per AC-035 (PRD Revision 12): both .mp4 and .mov containers are accepted
+   * so that iPhone-camera footage (.mov/QuickTime) can be uploaded without
+   * conversion. Rejection is on non-MP4/MOV containers only.
    */
   function validateVideoFormat(asset: ImagePicker.ImagePickerAsset): string | null {
+    const ACCEPTED_MIME_TYPES = new Set([
+      'video/mp4',
+      'video/quicktime', // .mov — iPhone camera default
+      'video/mov',       // alternate MIME string some pickers emit for .mov
+    ]);
+
     // expo-image-picker does not always return mimeType; when available, check it
-    if (asset.mimeType && asset.mimeType !== 'video/mp4') {
+    if (asset.mimeType && !ACCEPTED_MIME_TYPES.has(asset.mimeType)) {
       return t('betaVideo.errors.invalidFormat');
     }
+
     // Check URI extension as a secondary signal when mimeType is absent.
-    // Only .mp4 is accepted — .mov is a QuickTime container, not MP4 (AC-035).
-    if (!asset.mimeType && !asset.uri.toLowerCase().endsWith('.mp4')) {
+    // Accept .mp4 and .mov; reject everything else (.avi, .mkv, .webm, …).
+    const lowerUri = asset.uri.toLowerCase();
+    if (
+      !asset.mimeType &&
+      !lowerUri.endsWith('.mp4') &&
+      !lowerUri.endsWith('.mov')
+    ) {
       return t('betaVideo.errors.invalidFormat');
     }
+
     return null;
   }
 
