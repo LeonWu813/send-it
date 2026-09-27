@@ -926,3 +926,166 @@ None found. All 174/174 tests pass. Zero TypeScript errors. No previously passin
 | New regressions | None |
 
 **Overall status: PENDING HUMAN SIGN-OFF — ready for human QA re-check.** All automated checks pass (174/174 tests, zero TypeScript errors). All Rev 9 items verified by code inspection and unit tests. No regressions found in AC-010/AC-011/AC-012/AC-013. Human must complete the manual test script (Tests A–M, with corrected steps in Test A, Test D, and Test H as noted above) before marking MOD-004 as QA PASS.
+
+---
+
+## QA Run 5 — Regression — 2026-09-27
+
+**QA Agent:** qa-mod-send-logging
+**Workflow:** regression-test (re-verification after security fix: fetchUserAchievements cross-user data leak)
+**Re-verifying:** Security fix items — `supabase.auth.getUser()` call added, `.eq('user_id', user.id)` filter added, auth-failure early-exit, user-friendly error message, new auth-failure test; plus all previously passing items for regression.
+
+---
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npm test -- --watchAll=false` (full suite) | PASS | 316/316 tests, 27 suites, exit 0 |
+| `npx tsc --noEmit` | FAIL | Exit code 2 — 1 TypeScript error in `send-service.test.ts` line 33 |
+
+**TypeScript error detail:**
+
+```
+src/modules/mod-send-logging/__tests__/send-service.test.ts(33,19):
+error TS2352: Conversion of type '{ id: string; }' to type 'string' may be
+a mistake because neither type sufficiently overlaps with the other.
+If this was intentional, convert the expression to 'unknown' first.
+```
+
+The error is in `mockGetUserSuccess()` at line 33:
+```ts
+data: { user: { id: userId } as Parameters<typeof mockGetUser>[never] },
+```
+`Parameters<typeof mockGetUser>` is an empty tuple `[]` (because `getUser()` takes no parameters). Indexing an empty tuple with `never` resolves to a type that TypeScript resolves as `string` in this context (the return type of an element lookup on an empty Supabase response tuple). The cast `{ id: userId }` (an object) `as string` fails strict type checking. The engineer's self-check recorded "PASS — Zero TypeScript errors, strict mode on" — this was incorrect; the error exists in the current working tree.
+
+NOTE: All 316 tests pass. The TypeScript error is in a test file cast only; it does not affect the production `send-service.ts` which is error-free. However, production.md requires "TypeScript Strict Mode" across all code including test files, and `tsc --noEmit` is required to exit clean.
+
+---
+
+### Security Fix Verification
+
+**Item 1 — send-service.ts: supabase.auth.getUser() called before query**
+- REGRESSION PASS (inspected): `send-service.ts` line 103: `const { data: { user }, error: userError } = await supabase.auth.getUser();` — call is made before `supabase.from()` is invoked. This is the correct position: auth resolution happens first.
+- REGRESSION PASS (inspected): Line 104: `if (userError || !user) { throw new Error('Failed to load your achievements. Please sign in and try again.'); }` — throws immediately if no session, before calling `supabase.from()`. The production code never reaches the DB call with a missing user.
+
+**Item 2 — send-service.ts: .eq('user_id', user.id) present in query chain**
+- REGRESSION PASS (inspected): `send-service.ts` line 112: `.eq('user_id', user.id)` — the explicit user_id filter is present as the last chain call after `.in('route_id', routeIds)`. This scopes the query to only the calling user's rows, preventing other users' public ascents from being included in the result.
+- REGRESSION PASS: The comment at lines 99–102 correctly explains why this explicit filter is required: the `ascents_select_own_or_public` RLS SELECT policy uses `auth.uid() = user_id OR is_private = FALSE`, which also passes other users' public rows. Relying on RLS alone would return cross-user data. The `.eq('user_id', ...)` predicate is the defense-in-depth filter that makes the query own-user-only.
+
+**Item 3 — RLS SELECT policy on ascents is unchanged (correct per spec)**
+- REGRESSION PASS (inspected): `supabase/migrations/20260920000004_mod_004_send_logging.sql` line 53–62: `ascents_select_own_or_public` policy — `auth.uid() = user_id OR is_private = FALSE` — is unchanged. This policy is correct for social features: `loadAscentsForRoute` correctly uses it to show all visible ascents for a route detail feed. The fix is in the client layer (`fetchUserAchievements`), not in this policy. No RLS migration was changed.
+
+**Item 4 — No raw from('ascents') without user filter in fetchUserAchievements**
+- REGRESSION PASS (inspected): The full `fetchUserAchievements` function has two guard paths before reaching `supabase.from()`: (1) empty input early-return at line 97, (2) auth failure throw at lines 104–106. Every code path that reaches `supabase.from('ascents')` at line 108 is preceded by a resolved `user.id`. There is no path through `fetchUserAchievements` that reaches the DB without both a valid `user.id` and the `.eq('user_id', user.id)` predicate on line 112.
+
+**Item 5 — loadAscentsForRoute unchanged (no user_id filter — correct)**
+- REGRESSION PASS (inspected): `loadAscentsForRoute` at lines 143–178 has no `user_id` filter — intentional. It shows all visible ascents for a route (own rows + other users' public rows) for the social feed display on RouteDetailScreen. This behavior is correct per spec and unchanged by the fix.
+
+**Item 6 — deleteAscent unchanged**
+- REGRESSION PASS (inspected): `deleteAscent` at lines 25–33 is unchanged. The function uses `.delete().eq('id', ascentId)` with RLS (`ascents_delete_own`) enforcing own-row deletion. No auth.getUser() call is needed here because deletion is gated by `ascents_delete_own: USING (auth.uid() = user_id)` — the server enforces the scope. Not affected by this change.
+
+**Item 7 — logAscent unchanged**
+- REGRESSION PASS (inspected): `logAscent` at lines 51–74 is unchanged. The function receives `userId` as an explicit parameter (passed from the authenticated session at the call site) and inserts with `user_id: userId`. Not affected by this change.
+
+**Item 8 — Test mock: auth.getUser mock added to supabase mock**
+- REGRESSION PASS (inspected): `send-service.test.ts` line 13: `auth: { getUser: jest.fn() }` added to the `jest.mock('../../../lib/supabase', ...)` factory. This correctly extends the mock to support the new `supabase.auth.getUser()` call in the production code.
+
+**Item 9 — mockGetUser typed helper and mockGetUserSuccess utility**
+- REGRESSION PASS (inspected): Line 25: `const mockGetUser = supabase.auth.getUser as jest.MockedFunction<typeof supabase.auth.getUser>;` — typed cast of the mock function. Line 31–37: `mockGetUserSuccess(userId?)` resolves `getUser` with `{ data: { user: { id: userId } }, error: null }` as `any` (required because the full `User` type is not needed in tests; the `any` cast is documented with an eslint-disable comment).
+- NOTE: The `as Parameters<typeof mockGetUser>[never]` cast on line 33 is the source of the TypeScript error described in Item 2 above. The intent was to type the mock return shape, but the chosen pattern resolves to an incorrect type under TS 5.8.3 strict mode. The surrounding `as any` on line 36 means this does not affect test runtime behavior — Jest uses the resolved value, not the TypeScript type.
+
+**Item 10 — All fetchUserAchievements tests call mockGetUserSuccess() where needed**
+- REGRESSION PASS (inspected): The 5 tests that reach `supabase.from()` (precedence, omitted routes, empty data, null data, error path) all call `mockGetUserSuccess()` before the test body. The "empty input" test correctly does NOT call `mockGetUserSuccess()` — and asserts that `mockFrom` is never called, which means `getUser` is also never reached (the early-return at line 97 fires first). The "auth failure" test at lines 338–350 deliberately does NOT call `mockGetUserSuccess()` and instead mocks `getUser` to return `{ data: { user: null }, error: null }`, verifying the throw and that `mockFrom` is never called.
+
+**Item 11 — .eq('user_id', MOCK_USER_ID) assertion in precedence test**
+- REGRESSION PASS (inspected): `send-service.test.ts` line 289: `expect(qb.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);` — the precedence test verifies that the query builder receives the user_id filter with the correct user ID. This assertion directly verifies the security fix.
+
+**Item 12 — Auth failure test: from() never called**
+- REGRESSION PASS (inspected): `send-service.test.ts` lines 338–350: "throws a sign-in error when auth.getUser returns no user" — mocks `getUser` to return `null` user, asserts `fetchUserAchievements(['route-A'])` rejects with `'Failed to load your achievements. Please sign in and try again.'`, and asserts `expect(mockFrom).not.toHaveBeenCalled()`. This verifies that the auth guard prevents any DB access when the session is missing.
+
+**Item 13 — User-friendly error message on DB failure (updated from raw throw)**
+- REGRESSION PASS (inspected): `send-service.ts` line 114: `if (error) throw new Error('Failed to load your achievements. Please try again.');` — throws a `new Error(...)` with a user-facing message. This replaces the prior `throw error` (raw Supabase error object). The DB-failure test at lines 325–336 now asserts `.rejects.toThrow('Failed to load your achievements. Please try again.')` — consistent with the updated behavior.
+
+---
+
+### Previously Passing Items — Regression Verification
+
+**AC-010 (≤4 taps):**
+- REGRESSION PASS: No changes to `LogSendScreen.tsx`, `AscentList.tsx` log-send entry point, or modal open/close flow. 6/6 LogSendScreen tests pass. PENDING HUMAN SIGN-OFF unchanged.
+
+**AC-011 (grade not stored):**
+- REGRESSION PASS: `logAscent()` insert payload unchanged. `Ascent` schema in `types.ts` has no `grade` field. `fetchUserAchievements` selects only `route_id, style` — no `grade`. Tests pass.
+
+**AC-012 (clear error on failure):**
+- REGRESSION PASS: `LogSendScreen.tsx` error handling path unchanged. 6/6 LogSendScreen tests pass.
+
+**AC-013 (list refreshes after log):**
+- REGRESSION PASS: `AscentList.tsx` `refreshKey` prop and `useEffect` dependency unchanged. The security fix touches only `fetchUserAchievements` in `send-service.ts` and its tests — no change to `AscentList` or `RouteDetailScreen`. AC-013 unit test passes.
+
+**AC-014 (project style removed):**
+- REGRESSION PASS: No changes to `types.ts` `ASCENT_STYLES`, `AscentStyle` union, `LogSendScreen` chip rendering, `AscentList` switch, or locale files. All AC-014 tests pass in the 316/316 run.
+
+**deleteAscent() — correct DELETE + error:**
+- REGRESSION PASS: `deleteAscent` function body unchanged. 2 deleteAscent tests pass.
+
+**i18n parity (EN/zh-TW):**
+- REGRESSION PASS: No new i18n keys added in this fix. Key counts unchanged from QA Run 4.
+
+**No hardcoded hex colors:**
+- REGRESSION PASS: No new style blocks in this fix. `fetchUserAchievements` has no UI code.
+
+**Supabase singleton convention:**
+- REGRESSION PASS: `send-service.ts` imports unchanged — `{ supabase } from '../../lib/supabase'`. `supabase.auth.getUser()` is called on the singleton. No `createClient()` at call site.
+
+**Gold-plating check:**
+- REGRESSION PASS: The fix adds only what is required by the spec ("WHERE user_id = auth.uid() is mandatory and non-optional" for `fetchUserAchievements`). No new features beyond the security scope.
+
+---
+
+### New Regressions
+
+**FAIL: TypeScript strict mode — tsc --noEmit exits with error code 2**
+
+```
+FAIL TypeScript: send-service.test.ts:33:19 — TS2352: Conversion of type '{ id: string; }' to type 'string' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+Input: `{ id: userId } as Parameters<typeof mockGetUser>[never]` in mockGetUserSuccess()
+Actual: tsc --noEmit exits with code 2, one error
+Expected per spec/production.md: tsc --noEmit exits with code 0, zero errors
+```
+
+Classification: implementation bug in `send-service.test.ts` — the `as Parameters<typeof mockGetUser>[never]` type cast is incorrect. `Parameters<typeof mockGetUser>` is `[]` (empty tuple — `getUser` takes no parameters). Indexing `[][never]` resolves to a type that TypeScript evaluates as `string` in this context, making the cast of `{ id: string }` to `string` an invalid overlap. The fix is to replace the cast with `as any` (which the outer `} as any` on line 36 already applies, making line 33's inner cast redundant and removable), or to simply omit the inner cast entirely. This does not affect test runtime behavior but violates the TypeScript strict-mode convention required by production.md. Route to Engineer to fix the cast in `mockGetUserSuccess()`.
+
+---
+
+### Summary — QA Run 5
+
+| Category | Result |
+|----------|--------|
+| Automated tests | PASS — 316/316 tests, 27 suites |
+| TypeScript strict mode | FAIL — 1 error in send-service.test.ts:33 (TS2352 invalid cast in mockGetUserSuccess) |
+| Security fix: auth.getUser() called before DB query | REGRESSION PASS — inspected |
+| Security fix: .eq('user_id', user.id) in query chain | REGRESSION PASS — inspected |
+| Security fix: auth failure throws before from() | REGRESSION PASS — inspected + test verified |
+| Security fix: no raw from('ascents') without user filter | REGRESSION PASS — inspected |
+| RLS SELECT policy on ascents unchanged (correct) | REGRESSION PASS — migration SQL inspected |
+| loadAscentsForRoute unchanged (intentionally no user filter) | REGRESSION PASS — inspected |
+| deleteAscent unchanged | REGRESSION PASS — inspected |
+| logAscent unchanged | REGRESSION PASS — inspected |
+| supabase.auth.getUser mock added | REGRESSION PASS — inspected |
+| All fetchUserAchievements tests call mockGetUserSuccess where needed | REGRESSION PASS — inspected |
+| .eq('user_id', MOCK_USER_ID) assertion in precedence test | REGRESSION PASS — inspected |
+| Auth failure test: from() never called | REGRESSION PASS — inspected |
+| User-friendly error message on DB failure | REGRESSION PASS — inspected |
+| AC-010 (≤4 taps) | REGRESSION PASS (code) / PENDING HUMAN SIGN-OFF (UI) |
+| AC-011 (grade not stored) | REGRESSION PASS |
+| AC-012 (error on failure) | REGRESSION PASS |
+| AC-013 (list refreshes after log) | REGRESSION PASS |
+| AC-014 (project style removed) | REGRESSION PASS |
+| deleteAscent — correct DELETE + error | REGRESSION PASS |
+| i18n parity (EN/zh-TW) | REGRESSION PASS |
+| No hardcoded hex colors | REGRESSION PASS |
+| Supabase singleton convention | REGRESSION PASS |
+| Gold-plating check | REGRESSION PASS |
+
+**Overall status: BUGS FOUND — send back to Engineer.** The security fix logic in `send-service.ts` is correct and all 316 tests pass. One implementation bug found: `send-service.test.ts` line 33 has an invalid TypeScript cast (`{ id: string }` as `Parameters<typeof mockGetUser>[never]`) that causes `tsc --noEmit` to exit with code 2. This violates the TypeScript strict-mode convention required by production.md. The fix is to remove or correct the inner cast in `mockGetUserSuccess()` — the surrounding `as any` on line 36 already suppresses the type, making line 33's cast redundant. Engineer must fix this before MOD-004 can be marked ready for re-test.
