@@ -30,7 +30,7 @@ const MOCK_USER_ID = 'user-001';
 /** Returns a resolved getUser result for the given user ID. */
 function mockGetUserSuccess(userId: string = MOCK_USER_ID) {
   mockGetUser.mockResolvedValueOnce({
-    data: { user: { id: userId } as Parameters<typeof mockGetUser>[never] },
+    data: { user: { id: userId } },
     error: null,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper cast
   } as any);

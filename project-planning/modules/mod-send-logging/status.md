@@ -2,6 +2,47 @@
 
 ## Engineering Progress
 
+### TS2352 cast fix in send-service.test.ts (2026-09-27)
+
+**Mode:** bugfix (TypeScript test file — invalid type cast in mockGetUserSuccess)
+**Date:** 2026-09-27
+**Engineer:** engineer-mod-send-logging
+
+#### Root Cause
+
+`mockGetUserSuccess()` in `send-service.test.ts` contained an inner type cast:
+```ts
+data: { user: { id: userId } as Parameters<typeof mockGetUser>[never] },
+```
+`Parameters<typeof mockGetUser>` is `[]` (empty tuple — `getUser()` takes no parameters). Indexing an empty tuple with `never` resolves to a type TypeScript evaluates as `string` in this context, so the cast of `{ id: string }` to `string` fails with TS2352 (non-overlapping types). The outer `} as any` on the next line already suppresses the type for the whole mock object, making the inner cast both incorrect and redundant.
+
+#### Fix
+
+Removed the inner `as Parameters<typeof mockGetUser>[never]` cast. The user object is now passed as a plain object literal `{ id: userId }`, and the outer `as any` cast on the `mockResolvedValueOnce` argument continues to handle the full mock shape.
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/__tests__/send-service.test.ts` — removed `as Parameters<typeof mockGetUser>[never]` cast from the `user` property in `mockGetUserSuccess()`; the plain `{ id: userId }` object literal is sufficient since the whole return value is already cast `as any`.
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test --watchAll=false) | PASS | 319/319 tests pass, 27 suites — all prior tests continue to pass |
+| Git scope — module boundary | PASS | Only `src/modules/mod-send-logging/__tests__/send-service.test.ts` and this status.md touched |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| Root cause correctly identified | PASS — `Parameters<T>[never]` on an empty tuple gives a string-like type; the cast was invalid and redundant |
+| Fix is correct and complete | PASS — inner cast removed; outer `as any` continues to satisfy the mock shape |
+| No runtime behavior changed | PASS — the inner cast had no effect at runtime (Jest uses the resolved value); removing it changes only the TypeScript type layer |
+| No production source files changed | PASS — only the test helper was touched |
+
+---
+
 ### Security fix — fetchUserAchievements cross-user data leak (2026-09-27)
 
 **Mode:** security bugfix (RLS SELECT policy mismatch in fetchUserAchievements)
