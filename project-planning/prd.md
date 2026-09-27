@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 11
+**Status**: [TRIVIAL] — Revision 12
 **Date**: 2026-09-24
-**Revision**: 11
+**Revision**: 12
 
 ---
 
@@ -542,7 +542,7 @@ The data flow for the two most important loops:
 
 **AC-030**: The system shall reject beta video uploads longer than 60 seconds before upload begins.
 
-**AC-031** (revised): The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must be standardised to H.264 baseline profile video + AAC audio in an MP4 container. **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
+**AC-031** (revised): The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must use H.264 or HEVC video + AAC audio in an MP4 (`.mp4`) or QuickTime (`.mov`) container (see AC-035 for the accepted container/codec set). **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
@@ -550,7 +550,7 @@ The data flow for the two most important loops:
 
 **AC-034**: The system shall play beta videos inline in the activity feed for videos posted by followed users.
 
-**AC-035**: The system shall reject, on ingest, any beta video upload whose muxed output is not H.264 (baseline profile) video + AAC audio in an MP4 container, and shall surface a clear error to the user rather than storing an unplayable file.
+**AC-035** (revised): The system shall accept beta video uploads in either an MP4 (`.mp4`) or QuickTime (`.mov`) container — `.mov` is included so users can upload iPhone-camera footage without converting it first — and shall reject, on ingest, any upload whose video codec is not H.264 or HEVC or whose audio codec is not AAC, surfacing a clear error to the user rather than storing an unplayable file. Both containers are stored as-is (no server-side transcoding); the ≤60-second duration cap (AC-030) and size constraints apply regardless of container.
 
 **AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
 
@@ -782,7 +782,7 @@ Block  (App Store Guideline 1.2 requirement)
 ## 10. Non-Functional Requirements
 
 - **Platform**: iOS 16+ (Phase 1). Android is Phase 2.
-- **Video**: 60-second maximum. Client-side compression before upload. Client-generated thumbnail (Phase 1: may use the video URI as a placeholder; true still-frame extraction is deferred to Phase 2 per AC-031). Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
+- **Video**: 60-second maximum. Client-side compression before upload. Client-generated thumbnail (Phase 1: may use the video URI as a placeholder; true still-frame extraction is deferred to Phase 2 per AC-031). Accepted containers are MP4 (`.mp4`) and QuickTime (`.mov`) with H.264/HEVC video + AAC audio; both are stored as-is with no server-side transcoding (per AC-035), so iPhone-camera `.mov` footage uploads without conversion. Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
 - **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions), with RLS policies on every user-writable table. No custom backend server in Phase 1.
 - **Saved gyms**: The `saved_gyms` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-gyms list.
 - **Saved routes**: The `saved_routes` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-routes list. Saved routes are surfaced only in the browse flow (bookmark toggle on the route detail screen; read-only saved indicator on the gym route list) — Phase 1 provides no dedicated saved-routes list surface.

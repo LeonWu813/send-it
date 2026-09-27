@@ -3,15 +3,17 @@
 ## Last Action
 
 ```
-agent: engineer-mod-route-catalog
-mode: bugfix
-module: mod-route-catalog
+agent: pm
+mode: change
+module: n/a
 result: success
-commit: c68408b
-timestamp: 2026-09-25T00:00:00Z
+commit: 0361ff4
+timestamp: 2026-09-27T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-27 [TRIVIAL]** — AC-035 `.mov` container ruling: accept `.mov` alongside `.mp4` (PRD Revision 12). QA raised a valid UX concern — iOS camera records natively in `.mov` (QuickTime), and the prior MP4-only rule (engineer rejected `.mov` in commit bdccdab) forced users to convert iPhone-camera climbing footage before upload, blocking the primary MOD-005 capture loop. **PM ruling: ALLOW both `.mov` and `.mp4`.** Rationale: (1) iOS `.mov` is H.264/HEVC — the same codec family already accepted for `.mp4`; Supabase Storage stores both and `expo-video` plays both on iOS, so no transcoding is needed; (2) accepting `.mov` removes friction for the primary use case (iPhone camera footage of routes); (3) the original MP4-only choice was standardization, which does not outweigh blocking the core capture path on an iOS-only Phase 1; (4) all safety constraints stay — ≤60s duration (AC-030), codec = H.264/HEVC video + AAC audio, and size limits are container-independent and remain enforced. **PRD edits**: AC-035 (§8) marked (revised) — now accepts MP4 (`.mp4`) or QuickTime (`.mov`) containers, rejects on ingest only when video codec is not H.264/HEVC or audio codec is not AAC, stores both as-is (no server-side transcoding), duration/size caps apply regardless of container; AC-031 (§8) compression-output sentence updated to H.264/HEVC + AAC in `.mp4` or `.mov` (cross-refs AC-035); §10 NFR Video line updated with the accepted-container clause (both stored as-is, iPhone `.mov` uploads without conversion). Status line `[TRIVIAL] — Revision 12`; `**Revision**` bumped 11 → 12. **Tagged [TRIVIAL]**: constraint relaxation on existing ACs only — no new user story, module, or AC; no data-model change; module boundaries, dependencies, and the phase plan are all unchanged; no new modules. **Affected spec for Doc-Sync**: MOD-005 (mod-beta-video) — carry the revised AC-035 (both containers, codec-based rejection) and the updated AC-031 compression clause into the spec's Acceptance Criteria Covered and Key Implementation Notes; the spec's MP4-only / `.mov`-rejection wording must be updated to the two-container rule. PM did not edit `production.md` or any module spec — this tag is the Doc-Sync trigger. **Note for Engineer (not part of this spec ruling, for the coordinator to route after Doc-Sync)**: this reverses the prior `.mov` rejection — `validateVideoFormat()` in `BetaVideoUploader` must accept `.mov` again, and the error copy ("Only MP4 videos are supported" in `en` + zh-TW catalogs) must be updated to reflect MP4/MOV acceptance. Doc-Sync NOT invoked here.
 
 - **2026-09-25 [TRIVIAL]** — Two project-wide native-dependency engineering conventions added (PRD Revision 11). Proposed by Tech Lead in the 2026-09-25 build-failure review (iOS build blocker: `expo-av@15.0.2` (SDK 52-era) was installed with `npm install` under Expo SDK 57, so `ExpoModulesCore/EXEventEmitter.h` was not found; the mismatch passed Jest via the `expo-av` mock but failed the native build, and MOD-005 had been marked QA-ready without a native build ever being run). Two conventions logged as project-wide engineering standards in §10 NFR:
   1. **Native dependency installation** — all Expo native dependencies must be installed via `npx expo install <package>`, never `npm install <package>`; Expo resolves the SDK-compatible version automatically, whereas `npm install` can silently install an SDK-incompatible version that passes Jest (via mocks) but fails the native build. Hand-pinning a native module's version string in `package.json` is prohibited.
