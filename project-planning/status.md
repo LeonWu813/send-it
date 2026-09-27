@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: 0361ff4
+commit: bedc105
 timestamp: 2026-09-27T00:00:00Z
 ```
 
@@ -1085,6 +1085,24 @@ Phase 1 — iOS MVP, Taipei + New Taipei launch
 **Files not touched:**
 - All module specs — PM Updates note explicitly states no module spec changes required; these are project-wide conventions that live in production.md only.
 - `prd.md` — read-only.
+
+**AMBIGUITY markers added:** none
+**CONFLICT markers added:** none
+**verify-sync.sh:** Skipped — trivial passthrough per skill routing rules.
+
+### Sync Report — Trivial Passthrough — 2026-09-27
+
+**Sync type:** trivial
+**PRD Revision:** 12
+**PM Update reference:** 2026-09-27 [TRIVIAL] — AC-035 .mov container ruling: accept .mov alongside .mp4 (PRD Revision 12)
+**Affected spec:** MOD-005 (mod-beta-video) only
+
+**Files modified:**
+- `project-planning/modules/mod-beta-video/spec.md` — AC-035 entry updated: both .mp4 and .mov containers are now accepted; rejection is codec-based (video must be H.264 or HEVC, audio must be AAC), not container-based; both containers stored as-is with no server-side transcoding; duration/size caps apply regardless of container. AC-031 entry updated: compression-output clause now references H.264 or HEVC + AAC in .mp4 or .mov (cross-refs AC-035). Context paragraph updated: removed MP4-only / .mov-rejected framing; updated codec standardization sentence to reflect both containers accepted; rejection-on-ingest now stated as codec-based. Input/Output Contract updated: compression output references H.264/HEVC + AAC in .mp4 or .mov. Key Implementation Notes updated: "Codec standardization" bullet updated to H.264 or HEVC + AAC in MP4 or MOV; "Ingest validation" bullet updated to state rejection is codec-based, not container-based. Last Synced from PRD Revision updated 10 → 12; Last Updated set to 2026-09-27.
+
+**Files not touched:**
+- `project-planning/production.md` — no shared convention changes; module boundaries, dependencies, and phase plan unchanged.
+- All other module specs — change confined to MOD-005 per PM note.
 
 **AMBIGUITY markers added:** none
 **CONFLICT markers added:** none

@@ -4,8 +4,8 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 10
-**Last Updated**: 2026-09-24
+**Last Synced from PRD Revision**: 12
+**Last Updated**: 2026-09-27
 
 ---
 
@@ -17,7 +17,7 @@ Handle video capture/selection, client-side compression (≤60 sec cap), client-
 
 ## Context
 
-Sharing technique clips ("beta") tied to specific routes is one of Send It's core differentiators. A climber who figures out a tricky sequence can record a short clip, attach it to the relevant route, and publish it for others projecting that route to study. Videos are capped at 60 seconds and compressed client-side before upload — there is no server-side transcoding pipeline in Phase 1. Supabase Storage serves the file as-uploaded; playability depends entirely on iOS AVPlayer accepting the container/codec. To guarantee cross-device playback, all client-side compression output must be standardized to H.264 (baseline profile) + AAC audio in an MP4 container. Any upload that does not conform must be rejected on ingest with a clear error. The thumbnail is also generated on the client and uploaded alongside the video. In Phase 1, video is stored in Supabase Storage. The migration trigger to Cloudflare Stream fires when monthly cost exceeds US$25 OR total video storage exceeds 20 GB, whichever comes first. Beta videos are attached to exactly one Route and are playable inline both on the route detail page and in the activity feed.
+Sharing technique clips ("beta") tied to specific routes is one of Send It's core differentiators. A climber who figures out a tricky sequence can record a short clip, attach it to the relevant route, and publish it for others projecting that route to study. Videos are capped at 60 seconds and compressed client-side before upload — there is no server-side transcoding pipeline in Phase 1. Supabase Storage serves the file as-uploaded; playability depends entirely on iOS AVPlayer accepting the container/codec. To guarantee cross-device playback, all client-side compression output must be standardized to H.264 or HEVC video + AAC audio in an MP4 (`.mp4`) or QuickTime (`.mov`) container. Any upload whose video codec is not H.264 or HEVC, or whose audio codec is not AAC, must be rejected on ingest with a clear error — rejection is codec-based, not container-based. Both containers are stored as-is with no server-side transcoding, so iPhone-camera `.mov` footage uploads without conversion. The thumbnail is also generated on the client and uploaded alongside the video. In Phase 1, video is stored in Supabase Storage. The migration trigger to Cloudflare Stream fires when monthly cost exceeds US$25 OR total video storage exceeds 20 GB, whichever comes first. Beta videos are attached to exactly one Route and are playable inline both on the route detail page and in the activity feed.
 
 **Non-goals for this module:**
 - Comments on beta videos (out of scope for Phase 1).
@@ -38,9 +38,7 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 
 **AC-030**: The system shall reject beta video uploads longer than 60 seconds before upload begins.
 
-**AC-031**: The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must be standardised to H.264 baseline profile video + AAC audio in an MP4 container.
-
-> **Phase 1 simplification (Revision 10)**: In Phase 1, the thumbnail may use the video URI as a placeholder rather than a true extracted still frame; `BetaVideo.thumbnail_url` must still be a valid, retrievable URL in Phase 1. True frame extraction (e.g. a frame at 1 second, using `expo-video-thumbnails` or equivalent) is deferred to Phase 2.
+**AC-031**: The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must use H.264 or HEVC video + AAC audio in an MP4 (`.mp4`) or QuickTime (`.mov`) container (see AC-035 for the accepted container/codec set). **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
@@ -48,7 +46,7 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 
 **AC-034**: The system shall play beta videos inline in the activity feed for videos posted by followed users.
 
-**AC-035**: The system shall reject, on ingest, any beta video upload whose muxed output is not H.264 (baseline profile) video + AAC audio in an MP4 container, and shall surface a clear error to the user rather than storing an unplayable file.
+**AC-035**: The system shall accept beta video uploads in either an MP4 (`.mp4`) or QuickTime (`.mov`) container — `.mov` is included so users can upload iPhone-camera footage without converting it first — and shall reject, on ingest, any upload whose video codec is not H.264 or HEVC or whose audio codec is not AAC, surfacing a clear error to the user rather than storing an unplayable file. Both containers are stored as-is (no server-side transcoding); the ≤60-second duration cap (AC-030) and size constraints apply regardless of container.
 
 **AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
 
@@ -93,7 +91,7 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - Authenticated user session (MOD-001)
 
 **Outputs (upload):**
-- Client-side: video compressed to H.264/baseline + AAC in MP4; thumbnail generated; both validated for codec conformance before upload
+- Client-side: video compressed to H.264/HEVC + AAC in `.mp4` or `.mov`; thumbnail generated; both validated for codec conformance before upload
 - Video artifact and thumbnail uploaded to Supabase Storage
 - `BetaVideo` row inserted in Postgres with `video_url`, `thumbnail_url`, `duration_seconds`, `caption`, `route_id`, `user_id`
 - On ingest validation failure: clear error message displayed to user; no file stored
@@ -110,9 +108,9 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 ## Key Implementation Notes
 
 - **60-second cap**: Check video duration client-side before compression begins. Reject (with clear error) any video longer than 60 seconds (AC-030). Do not begin compression or upload for over-limit videos.
-- **Codec standardization (H.264/AAC/MP4)**: All client-side compression output must be H.264 (baseline profile) + AAC audio in an MP4 container (AC-031, AC-035). This is required because Supabase Storage serves the file as-uploaded with no server-side transcoding; playability on iOS AVPlayer depends entirely on the container/codec.
+- **Codec standardization (H.264/HEVC + AAC in MP4 or MOV)**: All client-side compression output must use H.264 or HEVC video + AAC audio in an MP4 (`.mp4`) or QuickTime (`.mov`) container (AC-031, AC-035). This is required because Supabase Storage serves the file as-uploaded with no server-side transcoding; playability on iOS AVPlayer depends entirely on the container/codec.
 - **Recommended compression library**: `ffmpeg-kit-react-native` is the recommended library because it guarantees H.264 output. Alternative (`expo-image-picker` with `videoQuality: 'medium'`) is device-dependent and may produce HEVC or other codecs on some iPhones, risking unplayable files. The final library choice must be confirmed during MOD-005 engineering and documented in this spec before coding begins.
-- **Ingest validation (AC-035)**: Before inserting the `BetaVideo` row, validate that the muxed output is H.264/AAC/MP4. If validation fails, surface a clear error and do not store the file.
+- **Ingest validation (AC-035)**: Before inserting the `BetaVideo` row, validate that the muxed output uses H.264 or HEVC video + AAC audio. Rejection is codec-based, not container-based — both `.mp4` and `.mov` are accepted containers; an upload is rejected only when the video codec is not H.264/HEVC or the audio codec is not AAC. If validation fails, surface a clear error and do not store the file.
 - **Thumbnail (Phase 1 simplification)**: In Phase 1, the thumbnail may use the video URI as a placeholder; `BetaVideo.thumbnail_url` must still be a valid, retrievable URL. Client-side frame extraction (e.g. a frame at 1 second using `expo-video-thumbnails`) is deferred to Phase 2. Uploaded to Supabase Storage alongside the video. URL stored in `BetaVideo.thumbnail_url`.
 - **Phase 1 simplification — client-side frame extraction deferred**: True frame extraction (extracting a still frame from the video at a given timestamp) is a Phase 2 feature. Phase 1 may populate `thumbnail_url` with the video URI as a placeholder, provided it is a valid, retrievable URL (AC-031 Phase 1 clause). Adding a native frame-extraction dependency (e.g. `expo-video-thumbnails`, `ffmpeg-kit-react-native`) is a scope/dependency decision deferred to Phase 2.
 - **Storage upload pattern**: Upload video and thumbnail to Supabase Storage using the Supabase client singleton from `src/lib/supabase.ts`. Never call `createClient()` at call sites. Storage bucket RLS must be aligned with `BetaVideo` table RLS (a user cannot fetch a private ascent's associated media).
