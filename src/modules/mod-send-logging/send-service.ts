@@ -78,8 +78,13 @@ export async function logAscent(
  * Precedence: flash > top > attempt.
  * Routes with no ascent by the current user are omitted from the result.
  *
- * Implementation: client-side SELECT with RLS scoping the result to
- * auth.uid() automatically — no explicit user_id filter needed.
+ * Implementation: client-side SELECT with an explicit user_id = auth.uid()
+ * predicate added as a defense-in-depth filter. The RLS SELECT policy
+ * (ascents_select_own_or_public) allows reading other users' public rows
+ * (auth.uid() = user_id OR is_private = FALSE), so relying on RLS alone
+ * would return other users' public sends and incorrectly attribute their
+ * best style to the calling user. The explicit .eq('user_id', ...) filter
+ * scopes the result to only the calling user's own rows.
  * One call per screen with all visible routeIds (never N+1).
  *
  * @param routeIds  Array of route UUIDs to check.
@@ -91,13 +96,22 @@ export async function fetchUserAchievements(
 ): Promise<Record<string, 'flash' | 'top' | 'attempt'>> {
   if (routeIds.length === 0) return {};
 
+  // Resolve the authenticated user's ID explicitly so we can add a
+  // WHERE user_id = <uid> predicate below. This prevents other users'
+  // public ascents (which also pass the RLS SELECT policy) from being
+  // attributed as achievements of the calling user.
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    throw new Error('Failed to load your achievements. Please sign in and try again.');
+  }
+
   const { data, error } = await supabase
     .from('ascents')
     .select('route_id, style')
-    .in('route_id', routeIds);
-  // RLS ensures auth.uid() = user_id — no explicit filter needed
+    .in('route_id', routeIds)
+    .eq('user_id', user.id);  // defense-in-depth: scope to calling user only
 
-  if (error) throw error;
+  if (error) throw new Error('Failed to load your achievements. Please try again.');
 
   const PRECEDENCE: Record<string, number> = { flash: 3, top: 2, attempt: 1 };
   const result: Record<string, 'flash' | 'top' | 'attempt'> = {};

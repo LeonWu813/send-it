@@ -9,6 +9,9 @@
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
     from: jest.fn(),
+    auth: {
+      getUser: jest.fn(),
+    },
   },
 }));
 
@@ -19,6 +22,19 @@ import type { Ascent, AscentWithProfile } from '../types';
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
 const mockFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
+const mockGetUser = supabase.auth.getUser as jest.MockedFunction<typeof supabase.auth.getUser>;
+
+/** Default user ID used in fetchUserAchievements tests. */
+const MOCK_USER_ID = 'user-001';
+
+/** Returns a resolved getUser result for the given user ID. */
+function mockGetUserSuccess(userId: string = MOCK_USER_ID) {
+  mockGetUser.mockResolvedValueOnce({
+    data: { user: { id: userId } as Parameters<typeof mockGetUser>[never] },
+    error: null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper cast
+  } as any);
+}
 
 /**
  * Builds a chainable query builder that resolves to `result`.
@@ -249,6 +265,7 @@ describe('fetchUserAchievements', () => {
   });
 
   it('returns the best style per route using flash > top > attempt precedence', async () => {
+    mockGetUserSuccess();
     const rows = [
       { route_id: 'route-A', style: 'attempt' },
       { route_id: 'route-A', style: 'top' },    // top beats attempt
@@ -268,10 +285,13 @@ describe('fetchUserAchievements', () => {
     expect(mockFrom).toHaveBeenCalledWith('ascents');
     expect(qb.select).toHaveBeenCalledWith('route_id, style');
     expect(qb.in).toHaveBeenCalledWith('route_id', ['route-A', 'route-B']);
+    // Security: must filter by the calling user's ID to avoid cross-user data leak
+    expect(qb.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);
   });
 
   it('omits routes that have no ascents from the result map', async () => {
-    // Only route-A has an ascent; route-B has none (not returned by RLS-scoped select)
+    mockGetUserSuccess();
+    // Only route-A has an ascent; route-B has none (not returned by user-scoped select)
     const rows = [{ route_id: 'route-A', style: 'top' }];
     const qb = makeQueryBuilder({ data: rows, error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
@@ -283,6 +303,7 @@ describe('fetchUserAchievements', () => {
   });
 
   it('returns an empty object when the user has no ascents on any of the given routes', async () => {
+    mockGetUserSuccess();
     const qb = makeQueryBuilder({ data: [], error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
@@ -292,6 +313,7 @@ describe('fetchUserAchievements', () => {
   });
 
   it('returns an empty object when Supabase returns null data', async () => {
+    mockGetUserSuccess();
     const qb = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
@@ -300,12 +322,31 @@ describe('fetchUserAchievements', () => {
     expect(result).toEqual({});
   });
 
-  it('throws the Supabase error object on DB failure (RLS-scoped select)', async () => {
-    const supabaseError = { code: 'PGRST301', message: 'permission denied' };
-    const qb = makeQueryBuilder({ data: null, error: supabaseError });
+  it('throws a user-friendly error on DB failure', async () => {
+    mockGetUserSuccess();
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'permission denied' },
+    });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
-    await expect(fetchUserAchievements(['route-A'])).rejects.toEqual(supabaseError);
+    await expect(fetchUserAchievements(['route-A'])).rejects.toThrow(
+      'Failed to load your achievements. Please try again.',
+    );
+  });
+
+  it('throws a sign-in error when auth.getUser returns no user', async () => {
+    mockGetUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper cast
+    } as any);
+
+    await expect(fetchUserAchievements(['route-A'])).rejects.toThrow(
+      'Failed to load your achievements. Please sign in and try again.',
+    );
+    // Must not call from() when auth fails
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
 

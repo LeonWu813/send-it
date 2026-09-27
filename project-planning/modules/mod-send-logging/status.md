@@ -2,6 +2,64 @@
 
 ## Engineering Progress
 
+### Security fix — fetchUserAchievements cross-user data leak (2026-09-27)
+
+**Mode:** security bugfix (RLS SELECT policy mismatch in fetchUserAchievements)
+**Date:** 2026-09-27
+**Engineer:** engineer-mod-send-logging
+
+#### Root Cause
+
+`fetchUserAchievements` in `send-service.ts` queried `ascents` with only `.in('route_id', routeIds)` and no `user_id` filter, relying on a comment that said "RLS ensures auth.uid() = user_id — no explicit filter needed." This was incorrect.
+
+The RLS SELECT policy `ascents_select_own_or_public` uses:
+```sql
+auth.uid() = user_id OR is_private = FALSE
+```
+This passes rows for the calling user AND all other users' public sends. So the query returned public ascents from every user who had climbed those routes. The client-side precedence reduction (`flash > top > attempt`) then picked the best style across all users — potentially attributing another user's flash to the calling user as their own achievement icon.
+
+The result: a new account with zero ascents could see flash achievement icons on routes where other users had flashed, making it appear they had completed routes they had never climbed.
+
+The `loadAscentsForRoute` function is not affected — it intentionally shows all visible ascents for a route (social feed), which is correct per spec. The bug is isolated to `fetchUserAchievements`.
+
+The RLS INSERT policy (`ascents_insert_own`) correctly enforces `auth.uid() = user_id`, so the insert path is unaffected.
+
+#### Fix
+
+Added an explicit `.eq('user_id', user.id)` predicate to the `fetchUserAchievements` query. The user ID is obtained from `supabase.auth.getUser()` before the query. If `getUser()` returns no user, the function throws immediately before calling `supabase.from()`.
+
+The erroneous comment was replaced with a correct explanation of why the explicit filter is necessary.
+
+The `if (error) throw error` line was updated to throw a `new Error(...)` with a user-facing message, consistent with the rest of the service.
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/send-service.ts` — `fetchUserAchievements`: added `supabase.auth.getUser()` call; added `.eq('user_id', user.id)` to the Supabase query chain; replaced stale "RLS scopes automatically" comment with accurate explanation; changed `throw error` to `throw new Error('Failed to load your achievements. Please try again.')`.
+- `src/modules/mod-send-logging/__tests__/send-service.test.ts` — updated supabase mock to include `auth: { getUser: jest.fn() }`; added `mockGetUser` typed helper and `mockGetUserSuccess()` utility; updated all `fetchUserAchievements` tests to call `mockGetUserSuccess()` before each test; added `expect(qb.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID)` assertion to the precedence test; renamed "throws the Supabase error object on DB failure" to "throws a user-friendly error on DB failure" (expectation updated to match new message); added new test "throws a sign-in error when auth.getUser returns no user" that verifies `supabase.from()` is never called when auth fails.
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test --watchAll=false) | PASS | 316/316 tests pass, 27 suites — 1 new test added (auth failure path); all prior tests updated and passing |
+| Git scope — module boundary | PASS | Only `src/modules/mod-send-logging/` files and this status.md touched |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| Root cause correctly identified | PASS — RLS SELECT allows own OR public; fetchUserAchievements must add explicit user_id filter |
+| Fix is correct and complete | PASS — `.eq('user_id', user.id)` added; auth.getUser() used to resolve UID before query |
+| Defense-in-depth satisfied | PASS — explicit client-side filter now matches spec requirement ("WHERE user_id = auth.uid() is mandatory and non-optional") |
+| submit_route RPC not changed | PASS — not touched; user_id is still set via auth.uid() server-side in the RPC |
+| loadAscentsForRoute not changed | PASS — intentionally shows all visible ascents (social); not the source of the bug |
+| RLS migration not changed | PASS — existing RLS policies are correct for their intended purpose; the fix is in the client layer |
+| No new dependencies | PASS |
+| Tests cover the fix | PASS — user_id filter assertion added; auth failure path now tested |
+
+---
+
 ### Flash badge gold color fix (2026-09-25)
 
 **Mode:** bugfix (styling — flash ascent style badge color)
