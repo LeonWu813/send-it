@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 13
-**Date**: 2026-09-24
-**Revision**: 13
+**Status**: [SUBSTANTIVE] — Revision 14
+**Date**: 2026-09-28
+**Revision**: 14
 
 ---
 
@@ -73,7 +73,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 **I want** to log a send (route + style + attempts + optional note) in under 30 seconds and ≤4 taps from a known route page,
 **so that** logging doesn't interrupt my climbing rhythm.
 
-**Acceptance Criteria**: AC-010, AC-011, AC-012, AC-014
+**Acceptance Criteria**: AC-010, AC-011, AC-012, AC-014, AC-127, AC-128, AC-129, AC-130
 
 ---
 
@@ -95,7 +95,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to record or select a short video (≤60 sec), attach it to a specific route, and publish it,
 **so that** others attempting the route can learn from my beta.
 
-**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037
+**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130
 
 ---
 
@@ -115,7 +115,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to open my gym's page and filter its route list by grade and active status,
 **so that** I know what's currently set before I show up.
 
-**Acceptance Criteria**: AC-005, AC-006, AC-040, AC-041, AC-042, AC-045
+**Acceptance Criteria**: AC-005, AC-006, AC-040, AC-041, AC-042, AC-045, AC-125, AC-126
 
 ---
 
@@ -522,13 +522,25 @@ The data flow for the two most important loops:
 
 **AC-047** (new): The gym route list (RouteListScreen) shall display a read-only saved indicator on route entries that are in the current user's saved routes list; no indicator is shown for unsaved routes. The list indicator is read-only — tapping it performs no save/unsave action (tapping the route entry navigates to its detail screen per AC-042). No saved-routes list surface is provided on the Profile or Home tab in Phase 1.
 
+**AC-125** (new): The route detail screen shall display the gym's name as a subtitle directly beneath the route display-name title. The route detail screen shall not render a separate "岩館" (gym) section label or header; the gym name appears only as the subtitle.
+
+**AC-126** (new): The route detail screen shall display the route's added date (`Route.created_at`) as a footer at the bottom of the screen, below all other route detail content.
+
+**AC-127** (new): The route detail screen shall display a two-column send-summary section scoped to the logged-in user: a left "Sends" card showing the count of the user's ascents on this route where `style` is `flash` or `top`, and a right "Attempts" card showing the sum of the `attempts` column across all of the user's ascents on this route. Both values are sourced from MOD-004's public service (`fetchMyAscentsForRoute`).
+
+**AC-128** (new): Tapping either summary card (Sends or Attempts, AC-127) on the route detail screen shall navigate the user to a Send History Detail screen for that route, passing the route identifier.
+
+**AC-129** (new): The Send History Detail screen shall list all of the logged-in user's individual ascent records for the route (each showing at minimum style and attempts count), and shall provide a back control that returns the user to the route detail screen. Records are sourced from MOD-004's public service.
+
+**AC-130** (new): The route detail screen shall present two action controls positioned below the send-summary section: a "Record Send History" control that launches the log-send flow (AC-010), and an "Upload Beta Video" control that launches the beta-video upload flow (AC-037). These replace any prior placement of the log-send and add-beta-video entry points on the screen.
+
 ---
 
 ### MOD-004 (Send Logging) Acceptance Criteria
 
 **AC-010**: The system shall allow a user to log a send from an existing route detail page in ≤4 taps (route → log → style → confirm).
 
-**AC-011**: The system shall save the log with `grade` derived from `Route.grade` at display time; no per-log grade value is stored.
+**AC-011**: The system shall save the log with `grade` derived from `Route.grade` at display time; no per-log grade value is stored. The log-send form shall not present a V-grade (or any grade) input field; grade is inherited from `Route.grade` at display time and is not selectable or editable when logging a send.
 
 **AC-012**: The system shall, when the network request to save a send fails, display a clear error message to the user (Phase 1 does not queue sends offline).
 
