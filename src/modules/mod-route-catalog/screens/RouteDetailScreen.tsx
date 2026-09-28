@@ -2,29 +2,35 @@
  * RouteDetailScreen.
  *
  * Shows the full detail of a single route:
- *   - Grade, gym/section, color badge, photo, status (active/retired)
- *   - Submitted by, created_at, retired_at (when applicable)
+ *   - Route name (large font) with gym name as subtitle beneath it (AC-125)
+ *   - Grade, color badge, photo, status (active/retired)
+ *   - Two-column send-summary section: Sends + Attempts (AC-127)
+ *   - Two action buttons: Record Send / Upload Beta Video (AC-130)
  *   - My sends list — fetched via fetchMyAscentsForRoute (MOD-004 service)
- *     so that only the current user's own sends are shown (not all users').
- *   - Placeholder slot for beta videos (MOD-005)
+ *   - Beta video section (MOD-005)
+ *   - Added date as footer at the bottom (AC-126)
  *
  * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
  * AC-046: bookmark toggle (filled yellow = saved; outline gray = unsaved) in header;
  *         optimistic update; achievement icon next to route name.
+ * AC-125: gym name as subtitle directly beneath the route name; no "岩館" section label.
+ * AC-126: added date as footer at the very bottom of the ScrollView.
+ * AC-127: two-column send summary (Sends / Attempts) from summarizeAscents.
+ * AC-128: tapping either summary card navigates to SendHistoryDetailScreen.
+ * AC-130: two action buttons (Record Send, Upload Beta Video) below the summary section;
+ *         old entry points ("Log Send" button in ascent header, BetaVideoUploader button
+ *         inside BetaVideoSection) have been removed.
  *
  * Note: Route retirement is now admin-only via Supabase Studio (AC-024b).
  * The retire button and retireRoute() call have been removed.
  *
  * Ascent fetch: uses fetchMyAscentsForRoute instead of loadAscentsForRoute so the
- * list is scoped to the current user's own sends. The RLS SELECT policy on ascents
- * allows reading other users' public rows (auth.uid() = user_id OR is_private =
- * FALSE), so loadAscentsForRoute would return other users' sends too — this screen
- * intentionally shows only the current user's history.
+ * list is scoped to the current user's own sends.
  */
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -48,6 +54,7 @@ import {
   deleteAscent,
   fetchMyAscentsForRoute,
   fetchUserAchievements,
+  summarizeAscents,
 } from '../../mod-send-logging/send-service';
 import type { AscentStyle, AscentWithProfile } from '../../mod-send-logging/types';
 import { fetchSavedRouteIds, getPhotoSignedUrl, loadRoute, saveRoute, unsaveRoute } from '../route-service';
@@ -93,6 +100,8 @@ interface RouteDetailScreenProps {
   gymName: string;
   session: Session;
   onBack: () => void;
+  /** AC-128: navigates to the Send History Detail screen for this route. */
+  onViewSendHistory: (routeId: string) => void;
 }
 
 export default function RouteDetailScreen({
@@ -100,6 +109,7 @@ export default function RouteDetailScreen({
   gymName,
   session,
   onBack,
+  onViewSendHistory,
 }: RouteDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -122,6 +132,17 @@ export default function RouteDetailScreen({
   const [myAscents, setMyAscents] = useState<AscentWithProfile[]>([]);
   const [ascentsLoading, setAscentsLoading] = useState(false);
   const [ascentsError, setAscentsError] = useState<string | null>(null);
+
+  /**
+   * AC-130: ref to the BetaVideoSection's upload launcher.
+   * BetaVideoSection registers its launch handler here via onRegisterUploadLauncher.
+   * The "Upload Beta Video" action button calls this ref when pressed.
+   */
+  const uploadLauncherRef = useRef<(() => void) | null>(null);
+
+  const handleRegisterUploadLauncher = useCallback((launcher: () => void): void => {
+    uploadLauncherRef.current = launcher;
+  }, []);
 
   /**
    * Fetch the current user's ascents for this route.
@@ -224,6 +245,10 @@ export default function RouteDetailScreen({
     setIsLogSendVisible(false);
   }
 
+  function handleUploadBetaPress(): void {
+    uploadLauncherRef.current?.();
+  }
+
   /**
    * Optimistically remove an ascent, then call deleteAscent.
    * On failure, re-fetch to restore accurate state.
@@ -294,6 +319,13 @@ export default function RouteDetailScreen({
   // AC-045: composed route display name
   const routeName = formatRouteName(route.grade, route.color_tag, route.section_label, t);
 
+  // AC-127: derive send summary client-side from already-fetched ascents
+  const summary = summarizeAscents(myAscents);
+
+  // AC-126: format the added date
+  const addedDateStr = new Date(route.created_at).toISOString().slice(0, 10); // YYYY-MM-DD
+  const addedDateLabel = t('routeCatalog.detail.addedDate', { date: addedDateStr });
+
   return (
     <View style={styles.root}>
       {/* Sticky top bar — stays fixed above the scroll area (back + bookmark). */}
@@ -331,10 +363,7 @@ export default function RouteDetailScreen({
         contentContainerStyle={styles.contentContainer}
       >
 
-      {/* Route photo — rendered only when a signed URL was successfully generated.
-          The route-photos bucket is private; photo_url stores the raw storage
-          path (returned by getPublicUrl) which is not directly accessible.
-          getPhotoSignedUrl() converts it to a 1-hour signed URL (AC-021). */}
+      {/* Route photo — rendered only when a signed URL was successfully generated. */}
       {photoUri ? (
         <Image
           source={{ uri: photoUri }}
@@ -353,7 +382,7 @@ export default function RouteDetailScreen({
         </View>
       )}
 
-      {/* AC-045: route name + AC-046: achievement icon in header area */}
+      {/* AC-125 / AC-045: route name (large) + AC-046: achievement icon */}
       <View style={styles.routeNameRow}>
         <Text style={styles.routeNameText}>{routeName}</Text>
         {achievement === 'flash' ? (
@@ -365,11 +394,10 @@ export default function RouteDetailScreen({
         ) : null}
       </View>
 
-      {/* Gym / section */}
-      <Text style={styles.sectionLabel}>
-        {t('routes.detail.gym')}
-      </Text>
-      <Text style={styles.infoText}>{gymName}</Text>
+      {/* AC-125: gym name as subtitle directly beneath the route name */}
+      <Text style={styles.gymSubtitle}>{gymName}</Text>
+
+      {/* Section label (if present) — keep as informational detail */}
       {route.section_label ? (
         <>
           <Text style={styles.sectionLabel}>
@@ -378,14 +406,6 @@ export default function RouteDetailScreen({
           <Text style={styles.infoText}>{route.section_label}</Text>
         </>
       ) : null}
-
-      {/* Added on date */}
-      <Text style={styles.sectionLabel}>
-        {t('routes.detail.addedOn')}
-      </Text>
-      <Text style={styles.infoText}>
-        {new Date(route.created_at).toLocaleDateString()}
-      </Text>
 
       {/* Retired info */}
       {isRetired && route.retired_at ? (
@@ -399,21 +419,61 @@ export default function RouteDetailScreen({
         </>
       ) : null}
 
+      {/* ── AC-127: Two-column send summary ──────────────────────────────────── */}
+      <View style={styles.summaryRow}>
+        {/* Sends card */}
+        <Pressable
+          style={styles.summaryCard}
+          onPress={() => { onViewSendHistory(route.id); }}
+          accessibilityRole="button"
+          accessibilityLabel={t('routeCatalog.detail.sends')}
+          testID="sends-summary-card"
+        >
+          <Text style={styles.summaryValue}>{summary.sends}</Text>
+          <Text style={styles.summaryLabel}>{t('routeCatalog.detail.sends')}</Text>
+        </Pressable>
+        {/* Attempts card */}
+        <Pressable
+          style={styles.summaryCard}
+          onPress={() => { onViewSendHistory(route.id); }}
+          accessibilityRole="button"
+          accessibilityLabel={t('routeCatalog.detail.attempts')}
+          testID="attempts-summary-card"
+        >
+          <Text style={styles.summaryValue}>{summary.attempts}</Text>
+          <Text style={styles.summaryLabel}>{t('routeCatalog.detail.attempts')}</Text>
+        </Pressable>
+      </View>
+
+      {/* ── AC-130: Action buttons row ───────────────────────────────────────── */}
+      <View style={styles.actionRow}>
+        <Pressable
+          style={styles.actionButton}
+          onPress={handleLogSendPress}
+          accessibilityRole="button"
+          accessibilityLabel={t('routeCatalog.detail.recordSend')}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={theme.colors.textInverse} />
+          <Text style={styles.actionButtonText}>{t('routeCatalog.detail.recordSend')}</Text>
+        </Pressable>
+        <Pressable
+          style={[styles.actionButton, styles.actionButtonSecondary]}
+          onPress={handleUploadBetaPress}
+          accessibilityRole="button"
+          accessibilityLabel={t('routeCatalog.detail.uploadBeta')}
+        >
+          <Ionicons name="videocam-outline" size={18} color={theme.colors.primary} />
+          <Text style={styles.actionButtonSecondaryText}>{t('routeCatalog.detail.uploadBeta')}</Text>
+        </Pressable>
+      </View>
+
       {/* ── My Sends (MOD-004 service, current user only) ─────────────────── */}
       {/* Uses fetchMyAscentsForRoute so only the logged-in user's sends appear.
           loadAscentsForRoute would include other users' public sends via RLS. */}
       <View style={styles.ascentSectionRoot}>
-        <View style={styles.ascentSectionHeader}>
-          <Text style={styles.ascentSectionTitle}>{t('sends.ascentsSectionTitle')}</Text>
-          <Pressable
-            onPress={handleLogSendPress}
-            accessibilityRole="button"
-            accessibilityLabel={t('sends.logSend')}
-            style={styles.logButton}
-          >
-            <Text style={styles.logButtonText}>{t('sends.logSend')}</Text>
-          </Pressable>
-        </View>
+        {/* AC-130: Log Send button removed from ascent section header.
+            It now lives in the AC-130 action row above. */}
+        <Text style={styles.ascentSectionTitle}>{t('sends.ascentsSectionTitle')}</Text>
 
         {ascentsLoading && (
           <ActivityIndicator color={theme.colors.primary} style={styles.ascentsLoader} />
@@ -487,7 +547,7 @@ export default function RouteDetailScreen({
           })}
       </View>
 
-      {/* Log Send modal — opens on tap 1, route pre-selected (AC-010) */}
+      {/* Log Send modal — opens on tap of the AC-130 "Record Send" button */}
       <Modal
         visible={isLogSendVisible}
         animationType="slide"
@@ -505,9 +565,17 @@ export default function RouteDetailScreen({
 
       {/* ── Beta Videos (MOD-005) — AC-033, AC-037 ───────────────────────────
            BetaVideoSection is the public entry point imported from mod-beta-video.
-           Cross-module import rule: only this component is imported, never internal
-           screens/ or components/ from mod-beta-video directly. */}
-      <BetaVideoSection routeId={route.id} session={session} />
+           AC-130: onRegisterUploadLauncher wires the AC-130 "Upload Beta Video"
+           button to BetaVideoSection's upload flow, so no upload button is
+           rendered inside the section itself. */}
+      <BetaVideoSection
+        routeId={route.id}
+        session={session}
+        onRegisterUploadLauncher={handleRegisterUploadLauncher}
+      />
+
+      {/* ── AC-126: Added date footer ─────────────────────────────────────── */}
+      <Text style={styles.addedDateFooter}>{addedDateLabel}</Text>
 
       </ScrollView>
     </View>
@@ -586,11 +654,18 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       gap: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
+    // AC-125: large font for the route name title
     routeNameText: {
-      fontSize: theme.fontSize.xl,
+      fontSize: 26,
       fontWeight: theme.fontWeight.bold,
       color: theme.colors.textPrimary,
       flexShrink: 1,
+    },
+    // AC-125: gym name as subtitle beneath the route name; no "岩館" label
+    gymSubtitle: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.md,
     },
     sectionLabel: {
       fontSize: theme.fontSize.xs,
@@ -604,6 +679,66 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     infoText: {
       fontSize: theme.fontSize.md,
       color: theme.colors.textPrimary,
+    },
+    // ── AC-127: send summary ──────────────────────────────────────────────────
+    summaryRow: {
+      flexDirection: 'row',
+      gap: theme.spacing.md,
+      marginTop: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+    },
+    summaryCard: {
+      flex: 1,
+      paddingVertical: theme.spacing.md,
+      paddingHorizontal: theme.spacing.sm,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.surface,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      alignItems: 'center',
+    },
+    summaryValue: {
+      fontSize: 28,
+      fontWeight: theme.fontWeight.bold,
+      color: theme.colors.textPrimary,
+    },
+    summaryLabel: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginTop: 2,
+    },
+    // ── AC-130: action row ────────────────────────────────────────────────────
+    actionRow: {
+      flexDirection: 'row',
+      gap: theme.spacing.sm,
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.lg,
+    },
+    actionButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: theme.spacing.xs,
+      paddingVertical: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.borderRadius.md,
+      backgroundColor: theme.colors.primary,
+    },
+    actionButtonText: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.textInverse,
+    },
+    actionButtonSecondary: {
+      backgroundColor: theme.colors.background,
+      borderWidth: 1,
+      borderColor: theme.colors.primary,
+    },
+    actionButtonSecondaryText: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.primary,
     },
     errorText: {
       fontSize: theme.fontSize.md,
@@ -626,27 +761,11 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     ascentSectionRoot: {
       marginTop: theme.spacing.xl,
     },
-    ascentSectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: theme.spacing.md,
-    },
     ascentSectionTitle: {
       fontSize: theme.fontSize.md,
       fontWeight: theme.fontWeight.semibold,
       color: theme.colors.textPrimary,
-    },
-    logButton: {
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.primary,
-    },
-    logButtonText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textInverse,
+      marginBottom: theme.spacing.md,
     },
     ascentsLoader: {
       marginVertical: theme.spacing.md,
@@ -743,6 +862,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       marginTop: theme.spacing.xs,
       fontSize: theme.fontSize.xs,
       color: theme.colors.textDisabled,
+    },
+    // ── AC-126: added date footer ─────────────────────────────────────────────
+    addedDateFooter: {
+      marginTop: theme.spacing.xl,
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textDisabled,
+      textAlign: 'center',
     },
   });
 }

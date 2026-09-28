@@ -144,6 +144,15 @@
       "changePhoto": "Change Photo",
       "photoRequired": "A photo is required",
       "sectionPlaceholder": "e.g. A Zone, B Zone..."
+    },
+    "detail": {
+      "addedDate": "Added {{date}}",
+      "sends": "Sends",
+      "attempts": "Attempts",
+      "recordSend": "Record Send",
+      "uploadBeta": "Upload Beta Video",
+      "sendHistoryTitle": "Send History",
+      "noSends": "No sends recorded yet"
     }
   },
   "routes": {

@@ -7,6 +7,11 @@
  * AC-024b: retire button absent (retirement is now admin-only via Supabase Studio).
  * AC-045: route name composed as "{grade} {LocalizedColor} ({section_label}?)".
  * AC-046: bookmark toggle + achievement icon.
+ * AC-125: gym name subtitle beneath route name; no "岩館" label.
+ * AC-126: added date footer at the bottom.
+ * AC-127: two-column send summary (Sends / Attempts).
+ * AC-128: tapping summary card calls onViewSendHistory.
+ * AC-130: Record Send and Upload Beta Video action buttons present.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -25,6 +30,7 @@ jest.mock('../../mod-send-logging/send-service', () => ({
   fetchUserAchievements: jest.fn(),
   fetchMyAscentsForRoute: jest.fn(),
   deleteAscent: jest.fn(),
+  summarizeAscents: jest.fn(),
 }));
 
 // Mock the BetaVideoSection entry point from MOD-005 so RouteDetailScreen tests
@@ -34,7 +40,11 @@ jest.mock('../../mod-beta-video/components/BetaVideoSection', () => {
   const { View, Text } = require('react-native');
   return {
     __esModule: true,
-    default: function MockBetaVideoSection() {
+    default: function MockBetaVideoSection(props: { onRegisterUploadLauncher?: (fn: () => void) => void }) {
+      // Register a no-op launcher so the ref is populated in tests
+      React.useEffect(() => {
+        props.onRegisterUploadLauncher?.(() => { /* no-op in tests */ });
+      }, [props.onRegisterUploadLauncher]);
       return React.createElement(View, { testID: 'beta-video-section' },
         React.createElement(Text, null, 'BetaVideoSection')
       );
@@ -47,7 +57,7 @@ import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
 import { loadRoute, getPhotoSignedUrl, fetchSavedRouteIds, saveRoute, unsaveRoute } from '../route-service';
-import { fetchUserAchievements, fetchMyAscentsForRoute, deleteAscent } from '../../mod-send-logging/send-service';
+import { fetchUserAchievements, fetchMyAscentsForRoute, deleteAscent, summarizeAscents } from '../../mod-send-logging/send-service';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
 import { renderOptions } from '../test-utils';
@@ -60,6 +70,7 @@ const mockUnsaveRoute = unsaveRoute as jest.MockedFunction<typeof unsaveRoute>;
 const mockFetchUserAchievements = fetchUserAchievements as jest.MockedFunction<typeof fetchUserAchievements>;
 const mockFetchMyAscentsForRoute = fetchMyAscentsForRoute as jest.MockedFunction<typeof fetchMyAscentsForRoute>;
 const mockDeleteAscent = deleteAscent as jest.MockedFunction<typeof deleteAscent>;
+const mockSummarizeAscents = summarizeAscents as jest.MockedFunction<typeof summarizeAscents>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -86,11 +97,14 @@ const MOCK_RETIRED_ROUTE: Route = {
   retired_by_user_id: 'user-002',
 };
 
+const mockOnViewSendHistory = jest.fn();
+
 const DEFAULT_PROPS = {
   routeId: 'route-001',
   gymName: 'Test Gym',
   session: MOCK_SESSION,
   onBack: jest.fn(),
+  onViewSendHistory: mockOnViewSendHistory,
 };
 
 describe('RouteDetailScreen', () => {
@@ -104,6 +118,7 @@ describe('RouteDetailScreen', () => {
     mockDeleteAscent.mockResolvedValue(undefined);
     mockSaveRoute.mockResolvedValue(undefined);
     mockUnsaveRoute.mockResolvedValue(undefined);
+    mockSummarizeAscents.mockReturnValue({ sends: 0, attempts: 0 });
   });
 
   it('shows grade, color, and section for an active route', async () => {
@@ -130,6 +145,102 @@ describe('RouteDetailScreen', () => {
       const nameElements = screen.queryAllByText(/V5.*Main Wall/);
       const nameElementsZh = screen.queryAllByText(/V5.*Main Wall/);
       expect(nameElements.length + nameElementsZh.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('AC-125: shows gym name as subtitle beneath the route name', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // gymName prop ("Test Gym") should appear as subtitle
+      expect(screen.getByText('Test Gym')).toBeTruthy();
+    });
+  });
+
+  it('AC-126: shows the added date footer at the bottom', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // "Added 2026-09-20" or "新增於 2026-09-20"
+      const addedTexts = screen.queryAllByText(/2026-09-20/).concat(
+        screen.queryAllByText(/Added/),
+        screen.queryAllByText(/新增於/),
+      );
+      expect(addedTexts.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('AC-127: shows two summary cards (Sends and Attempts)', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+    mockSummarizeAscents.mockReturnValue({ sends: 3, attempts: 7 });
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const sendCards = screen.queryAllByTestId('sends-summary-card');
+      const attemptCards = screen.queryAllByTestId('attempts-summary-card');
+      expect(sendCards.length).toBeGreaterThan(0);
+      expect(attemptCards.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('AC-128: tapping the Sends card calls onViewSendHistory with route id', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('sends-summary-card')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('sends-summary-card'));
+    expect(mockOnViewSendHistory).toHaveBeenCalledWith('route-001');
+  });
+
+  it('AC-128: tapping the Attempts card calls onViewSendHistory with route id', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('attempts-summary-card')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getByTestId('attempts-summary-card'));
+    expect(mockOnViewSendHistory).toHaveBeenCalledWith('route-001');
+  });
+
+  it('AC-130: shows Record Send action button', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const recordBtn = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Record Send' ||
+          el.props.accessibilityLabel === '記錄攀登',
+      );
+      expect(recordBtn).toBeTruthy();
+    });
+  });
+
+  it('AC-130: shows Upload Beta Video action button', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const uploadBtn = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Upload Beta Video' ||
+          el.props.accessibilityLabel === '上傳 Beta 影片',
+      );
+      expect(uploadBtn).toBeTruthy();
     });
   });
 
@@ -213,6 +324,30 @@ describe('RouteDetailScreen', () => {
 
     await waitFor(() => {
       expect(mockFetchMyAscentsForRoute).toHaveBeenCalledWith('route-001');
+    });
+  });
+
+  it('calls summarizeAscents with the fetched ascents', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+    const mockAscents = [
+      {
+        id: 'a1',
+        user_id: 'user-001',
+        route_id: 'route-001',
+        style: 'flash' as const,
+        attempts: 1,
+        note: null,
+        logged_at: '2026-09-20T10:00:00Z',
+        is_private: false,
+        display_name: 'Leon',
+      },
+    ];
+    mockFetchMyAscentsForRoute.mockResolvedValueOnce(mockAscents);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(mockSummarizeAscents).toHaveBeenCalledWith(mockAscents);
     });
   });
 

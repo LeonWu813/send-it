@@ -2,10 +2,11 @@
  * RouteNavigator.
  *
  * Root navigator for the route catalog module (MOD-003).
- * Manages local navigation state across three views:
- *   - list   → RouteListScreen (filterable route list for a gym)
- *   - detail → RouteDetailScreen (single route)
- *   - submit → RouteSubmitScreen (single-page submit flow, AC-020/021/043)
+ * Manages local navigation state across four views:
+ *   - list         → RouteListScreen (filterable route list for a gym)
+ *   - detail       → RouteDetailScreen (single route)
+ *   - submit       → RouteSubmitScreen (single-page submit flow, AC-020/021/043)
+ *   - send-history → SendHistoryDetailScreen (AC-128/129: user's ascent history)
  *
  * This navigator is rendered from within the gym detail context (e.g. a tab
  * or section within GymDetailScreen in MOD-002). It receives gymId + gymName
@@ -24,12 +25,14 @@ import { useTheme } from '../../lib/theme';
 import RouteDetailScreen from './screens/RouteDetailScreen';
 import RouteListScreen from './screens/RouteListScreen';
 import RouteSubmitScreen from './screens/RouteSubmitScreen';
+import SendHistoryDetailScreen from './screens/SendHistoryDetailScreen';
 import type { RouteColor, RouteGrade } from './types';
 
 type RouteView =
   | { name: 'list' }
   | { name: 'detail'; routeId: string }
-  | { name: 'submit'; initialGrade?: RouteGrade; initialColorTag?: RouteColor };
+  | { name: 'submit'; initialGrade?: RouteGrade; initialColorTag?: RouteColor }
+  | { name: 'send-history'; routeId: string };
 
 interface RouteNavigatorProps {
   gymId: string;
@@ -65,6 +68,15 @@ export default function RouteNavigator({
     setView({ name: 'list' });
   }
 
+  /**
+   * AC-128/129: navigate to the Send History Detail screen.
+   * onBack from SendHistoryDetailScreen must return to the route detail screen,
+   * not to the list — the user came from detail and expects to return there.
+   */
+  function navigateToSendHistory(routeId: string): void {
+    setView({ name: 'send-history', routeId });
+  }
+
   function handleSubmitSuccess(routeId: string): void {
     // After successful submission, navigate to the new route's detail page
     setView({ name: 'detail', routeId });
@@ -87,6 +99,7 @@ export default function RouteNavigator({
           gymName={gymName}
           session={session}
           onBack={navigateToList}
+          onViewSendHistory={navigateToSendHistory}
         />
       )}
       {view.name === 'submit' && (
@@ -98,6 +111,13 @@ export default function RouteNavigator({
           onSuccess={handleSubmitSuccess}
           initialGrade={view.initialGrade}
           initialColorTag={view.initialColorTag}
+        />
+      )}
+      {view.name === 'send-history' && (
+        <SendHistoryDetailScreen
+          routeId={view.routeId}
+          session={session}
+          onBack={() => { setView({ name: 'detail', routeId: view.routeId }); }}
         />
       )}
     </View>

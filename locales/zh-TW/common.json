@@ -144,6 +144,15 @@
       "changePhoto": "更換照片",
       "photoRequired": "請上傳路線照片",
       "sectionPlaceholder": "例如：A區、B區..."
+    },
+    "detail": {
+      "addedDate": "新增於 {{date}}",
+      "sends": "完攀",
+      "attempts": "嘗試次數",
+      "recordSend": "記錄攀登",
+      "uploadBeta": "上傳 Beta 影片",
+      "sendHistoryTitle": "攀登紀錄",
+      "noSends": "尚無紀錄"
     }
   },
   "routes": {
