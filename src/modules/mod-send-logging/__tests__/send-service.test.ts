@@ -17,7 +17,7 @@ jest.mock('../../../lib/supabase', () => ({
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
-import { deleteAscent, fetchUserAchievements, loadAscentsForRoute, logAscent } from '../send-service';
+import { deleteAscent, fetchMyAscentsForRoute, fetchUserAchievements, loadAscentsForRoute, logAscent } from '../send-service';
 import type { Ascent, AscentWithProfile } from '../types';
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
@@ -347,6 +347,79 @@ describe('fetchUserAchievements', () => {
     );
     // Must not call from() when auth fails
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+});
+
+// ── fetchMyAscentsForRoute ────────────────────────────────────────────────────
+
+describe('fetchMyAscentsForRoute', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('queries ascents filtered by both route_id and user_id', async () => {
+    mockGetUserSuccess();
+    const rawRow = { ...MOCK_ASCENT, users: { display_name: 'Leon' } };
+    const qb = makeQueryBuilder({ data: [rawRow], error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchMyAscentsForRoute('route-001');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].display_name).toBe('Leon');
+    expect(mockFrom).toHaveBeenCalledWith('ascents');
+    // Must filter by route_id to scope to the route
+    expect(qb.eq).toHaveBeenCalledWith('route_id', 'route-001');
+    // Must filter by user_id to scope to the calling user only
+    expect(qb.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);
+    expect(qb.order).toHaveBeenCalledWith('created_at', { ascending: false });
+  });
+
+  it('returns an empty array when the user has no ascents on the route', async () => {
+    mockGetUserSuccess();
+    const qb = makeQueryBuilder({ data: [], error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchMyAscentsForRoute('route-001');
+
+    expect(result).toEqual([]);
+  });
+
+  it('returns an empty array when Supabase returns null data', async () => {
+    mockGetUserSuccess();
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchMyAscentsForRoute('route-001');
+
+    expect(result).toEqual([]);
+  });
+
+  it('throws a sign-in error when auth.getUser returns no user', async () => {
+    mockGetUser.mockResolvedValueOnce({
+      data: { user: null },
+      error: null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper cast
+    } as any);
+
+    await expect(fetchMyAscentsForRoute('route-001')).rejects.toThrow(
+      'Failed to load your sends. Please sign in and try again.',
+    );
+    // Must not call from() when auth fails
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('throws a user-friendly error on DB failure', async () => {
+    mockGetUserSuccess();
+    const qb = makeQueryBuilder({
+      data: null,
+      error: { code: 'PGRST301', message: 'DB error' },
+    });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(fetchMyAscentsForRoute('route-001')).rejects.toThrow(
+      'Failed to load your sends for this route. Please try again.',
+    );
   });
 });
 

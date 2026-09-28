@@ -128,6 +128,64 @@ export async function fetchUserAchievements(
 }
 
 /**
+ * Returns the current user's own ascents for a specific route, most recent first.
+ *
+ * Unlike `loadAscentsForRoute`, which returns all visible ascents for social
+ * display, this function is scoped exclusively to the calling user's own rows.
+ * The `ascents_select_own_or_public` RLS SELECT policy allows reading other
+ * users' public rows (auth.uid() = user_id OR is_private = FALSE), so an
+ * explicit `.eq('user_id', user.id)` predicate is required to prevent other
+ * users' public sends from appearing in the result.
+ *
+ * Intended for the route detail screen's "my sends" view.
+ *
+ * @param routeId  UUID of the route.
+ * @returns        Array of AscentWithProfile rows for the calling user, ordered by created_at descending.
+ * @throws {Error} with a user-facing message if not signed in or on DB failure.
+ */
+export async function fetchMyAscentsForRoute(
+  routeId: string,
+): Promise<AscentWithProfile[]> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    throw new Error('Failed to load your sends. Please sign in and try again.');
+  }
+
+  const { data, error } = await supabase
+    .from('ascents')
+    .select(ASCENT_LIST_SELECT)
+    .eq('route_id', routeId)
+    .eq('user_id', user.id)  // scope to calling user only — defense-in-depth against RLS OR clause
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error('Failed to load your sends for this route. Please try again.');
+  }
+
+  if (!data) {
+    return [];
+  }
+
+  return data.map((row) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase join shape is untyped at runtime
+    const usersJoin = (row as any).users;
+    const displayName: string =
+      usersJoin?.display_name ?? usersJoin?.[0]?.display_name ?? 'Unknown';
+    return {
+      id: row.id as string,
+      user_id: row.user_id as string,
+      route_id: row.route_id as string,
+      style: row.style as AscentWithProfile['style'],
+      attempts: row.attempts as number,
+      note: row.note as string | null,
+      logged_at: row.logged_at as string,
+      is_private: row.is_private as boolean,
+      display_name: displayName,
+    };
+  });
+}
+
+/**
  * Load all visible ascents for a route, most recent first.
  *
  * Returns the current user's own ascents (including private) plus all public

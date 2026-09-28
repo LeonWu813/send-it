@@ -2,6 +2,53 @@
 
 ## Engineering Progress
 
+### fetchMyAscentsForRoute — own-user route ascents (2026-09-27)
+
+**Mode:** bugfix (route detail screen showed all users' sends — should show only the logged-in user's sends)
+**Date:** 2026-09-27
+**Engineer:** engineer-mod-send-logging
+
+#### Root Cause
+
+The route detail screen called `loadAscentsForRoute`, which returns all visible ascents for a route (own rows plus other users' public rows, via the `ascents_select_own_or_public` RLS policy: `auth.uid() = user_id OR is_private = FALSE`). No function existed that scoped the result to the calling user's own ascents only.
+
+#### Fix
+
+Added `fetchMyAscentsForRoute(routeId: string): Promise<AscentWithProfile[]>` to `send-service.ts`:
+- Calls `supabase.auth.getUser()` to resolve the calling user's ID. Throws immediately if no session (same pattern as `fetchUserAchievements`).
+- Queries `ascents` with `.eq('route_id', routeId)` AND `.eq('user_id', user.id)` — both predicates required. The explicit `user_id` filter is the defense-in-depth guard: the RLS SELECT policy passes rows for the calling user AND other users' public sends, so relying on RLS alone returns cross-user data.
+- Orders by `created_at DESC` (most recent first).
+- Returns the full `AscentWithProfile` shape (including `display_name` via the `users` join), consistent with `loadAscentsForRoute`.
+- `loadAscentsForRoute` is left unchanged — it is intentionally used by social/feed features that display all public ascents.
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/send-service.ts` — added exported `fetchMyAscentsForRoute(routeId: string): Promise<AscentWithProfile[]>`.
+- `src/modules/mod-send-logging/__tests__/send-service.test.ts` — added import of `fetchMyAscentsForRoute`; added `describe('fetchMyAscentsForRoute')` block with 5 tests: (1) queries with both `.eq('route_id', ...)` and `.eq('user_id', MOCK_USER_ID)` and returns mapped `AscentWithProfile`; (2) returns empty array when user has no ascents on route; (3) returns empty array when Supabase returns null data; (4) throws sign-in error when `auth.getUser` returns no user and does not call `supabase.from()`; (5) throws user-friendly error on DB failure.
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test --watchAll=false) | PASS | 324/324 tests pass, 27 suites — 5 new tests added; all prior tests continue to pass |
+| Git scope — module boundary | PASS | Only `src/modules/mod-send-logging/` files and this status.md touched |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| Root cause correctly identified | PASS — `loadAscentsForRoute` is intentionally all-users (social feed); a new own-user-scoped function was the correct fix |
+| Both eq predicates present | PASS — `.eq('route_id', routeId)` and `.eq('user_id', user.id)` both required in the query chain |
+| Auth-failure path throws before any DB call | PASS — `getUser()` checked before `supabase.from()`; test verifies `mockFrom` not called on auth failure |
+| `loadAscentsForRoute` untouched | PASS — social/feed use case preserved |
+| No hardcoded values | PASS |
+| Conventions followed | PASS — Supabase singleton; same error message pattern as existing functions; `as any` with documented reason for Supabase join shape |
+| No new dependencies | PASS |
+| Tests cover both eq predicates | PASS — test 1 asserts both `toHaveBeenCalledWith('route_id', 'route-001')` and `toHaveBeenCalledWith('user_id', MOCK_USER_ID)` |
+
+---
+
 ### TS2352 cast fix in send-service.test.ts (2026-09-27)
 
 **Mode:** bugfix (TypeScript test file — invalid type cast in mockGetUserSuccess)
