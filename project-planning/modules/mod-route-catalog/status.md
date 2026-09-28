@@ -1469,3 +1469,112 @@ No remaining `getByText('V5')` call exists in the test file. The regex `/V5/` co
 | No gold-plating | PASS | PASS |
 
 **Overall verdict: PASS. Ascent-scope fix verified correct. All previously passing ACs unaffected. MOD-003 ready for human QA.**
+
+---
+
+## QA fetchMyAscentsForRoute Bug-Fix Regression — 2026-09-27
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-27
+**Workflow**: regression-test (re-verification after two fixes in `fetchMyAscentsForRoute` in `src/modules/mod-send-logging/send-service.ts` — wrong order column + auth-failure path returning `[]`)
+**Overall verdict**: PASS — both fixes verified by source inspection and test assertions; 325/325 tests pass; no regressions on any previously passing AC
+
+---
+
+### Fixes Being Re-Verified
+
+**Fix 1 — Order column (`logged_at` not `created_at`)**
+
+Prior behavior: `.order('created_at', { ascending: false })` was called inside `fetchMyAscentsForRoute`. The `ascents` table has no `created_at` column — the send timestamp is `logged_at` (present in `ASCENT_LIST_SELECT` and the `Ascent` type). Every real-device query returned a Supabase error, triggering the `ascentsError` state and blanking the send history section.
+
+Fix applied: `.order('logged_at', { ascending: false })` — matching `loadAscentsForRoute` (line 210) and the `Ascent` type.
+
+**Fix 2 — Auth failure returns `[]` instead of throwing**
+
+Prior behavior: when `supabase.auth.getUser()` returned no user (e.g. during token refresh on a live device), `fetchMyAscentsForRoute` threw `'Failed to load your sends. Please sign in and try again.'`. The inline ascent section on `RouteDetailScreen` caught this as an error and showed an error state rather than an empty state during momentary auth gaps.
+
+Fix applied: the `if (userError || !user)` branch now executes `return []` — auth hiccups produce an empty state on the screen, not a crash or error banner.
+
+---
+
+### Source Verification — `send-service.ts`
+
+**File**: `src/modules/mod-send-logging/send-service.ts`
+
+**Fix 1 — `.order('logged_at')` at line 161**
+
+- `fetchMyAscentsForRoute` at line 146. The order call at line 161 reads: `.order('logged_at', { ascending: false })`. PASS.
+- The reference implementation `loadAscentsForRoute` (line 210) uses the same column. Consistent. PASS.
+- The `ASCENT_LIST_SELECT` constant (line 38) includes `logged_at` as a selected field — verifying the column exists on the queried table. PASS.
+- No `created_at` anywhere in the query chain for `fetchMyAscentsForRoute`. PASS.
+
+**Fix 2 — Auth failure returns `[]` at lines 150–153**
+
+- Lines 149–153:
+  ```
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) {
+    return [];
+  }
+  ```
+- The branch returns `[]`; no `throw` statement exists in this path. PASS.
+- The `supabase.from('ascents')` call at line 156 is only reached when `user` is non-null — no DB round-trip on auth failure. PASS.
+
+---
+
+### Test Verification — `send-service.test.ts`
+
+**Fix 1 — Order assertion (`logged_at`)**
+
+`src/modules/mod-send-logging/__tests__/send-service.test.ts` line 375:
+```
+expect(qb.order).toHaveBeenCalledWith('logged_at', { ascending: false });
+```
+This assertion is inside the `fetchMyAscentsForRoute` describe block and passes in the 325-test suite. PASS.
+
+**Fix 2 — Auth-hiccup empty-array assertion**
+
+Lines 398–411 — test: `'returns an empty array when auth.getUser returns no user (auth hiccup resilience)'`:
+- `mockGetUser` returns `{ data: { user: null }, error: null }`.
+- Asserts `result` equals `[]`. PASS.
+- Asserts `mockFrom` was not called (no DB round-trip on auth failure). PASS.
+
+Both test assertions are new (replacing the prior "throws a sign-in error" assertion) and pass cleanly.
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false`
+- Result: **325 tests passed, 0 failed across 27 suites**
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+- Console warnings: pre-existing `act(...)` warnings from expo vector-icons async font load — not new failures; identical to all prior runs
+
+---
+
+### Regression — Previously Passing Items
+
+No source files other than `send-service.ts` and its test were modified by these fixes. All MOD-003 screens (`RouteDetailScreen.tsx`, `RouteListScreen.tsx`, `RouteSubmitScreen.tsx`), the navigator, services, migrations, and locale files are untouched.
+
+- `fetchMyAscentsForRoute` is called in `RouteDetailScreen.tsx` via the `fetchMyAscents` callback (line 135). The interface — same function signature, same return type `Promise<AscentWithProfile[]>` — is unchanged. PASS.
+- All 325 tests pass. No previously-passing test now fails. PASS.
+- All ACs verified in prior QA runs (AC-020 through AC-047, all migration/RLS/RPC checks, safe area insets, photo signed URL, bookmark toggle, achievement icons, saved sort, sticky top bar) carry forward unchanged. PASS.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| Fix 1: `fetchMyAscentsForRoute` orders by `logged_at` (source line 161) | PASS |
+| Fix 1: No `created_at` in the query chain | PASS |
+| Fix 1: Test asserts `.order('logged_at', { ascending: false })` (line 375) | PASS |
+| Fix 2: Auth-fail branch returns `[]` not `throw` (source lines 150–153) | PASS |
+| Fix 2: No DB call on auth failure (mockFrom not called) | PASS |
+| Fix 2: Test asserts `result === []` on `user: null` (line 407) | PASS |
+| `npx tsc --noEmit` — 0 errors | PASS |
+| `npm test -- --watchAll=false` — 325 tests, 27 suites, 0 failures | PASS |
+| All previously passing ACs and checks | PASS |
+
+**Overall verdict: PASS. Both fixes verified correct. No regressions. MOD-003 ready for human QA.**
