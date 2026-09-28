@@ -9,13 +9,14 @@
  *   at render time via getVideoSignedUrl / getThumbnailSignedUrl.
  * - AC-032: one BetaVideo row attached to exactly one Route (route_id FK).
  * - AC-035: codec validation is caller-side; this service inserts only after
- *   the caller has verified H.264/AAC/MP4 conformance.
- * - Storage upload: uses the Supabase-recommended React Native pattern —
- *   fetch(localUri) → .arrayBuffer() → upload(ArrayBuffer). This reads the
- *   local file as raw binary (no base64 encoding, no Blob conversion) and
- *   passes the ArrayBuffer directly to the Supabase JS Storage client, which
- *   is the officially recommended upload path for React Native.
+ *   the caller has verified H.264/AAC/MP4 or MOV conformance.
+ * - Storage upload: reads the local video file as base64 via expo-file-system,
+ *   then decodes to Uint8Array before uploading. This is the reliable binary-read
+ *   path in React Native — fetch() on file:// URIs can silently corrupt large
+ *   binary files on iOS (AVFoundationErrorDomain Code=-11829).
  */
+
+import * as FileSystem from 'expo-file-system';
 
 import { supabase } from '../../lib/supabase';
 import type { BetaVideo, BetaVideoUploadInput, UploadProgress } from './types';
@@ -48,16 +49,20 @@ export async function fetchBetaVideosForRoute(routeId: string): Promise<BetaVide
 }
 
 /**
- * Upload a beta video (compressed MP4) and its thumbnail to Supabase Storage,
+ * Upload a beta video (compressed MP4 or MOV) and its thumbnail to Supabase Storage,
  * then insert a BetaVideo row linking them to the given route.
  *
  * Progress is reported via the onProgress callback for each phase:
- *   thumbnail → video → saving row
+ *   video → saving row
+ *
+ * Upload strategy: expo-file-system reads the local file as base64, which is then
+ * decoded to a Uint8Array and uploaded directly. This avoids the iOS binary-corruption
+ * bug triggered by fetch() on file:// URIs (AVFoundationErrorDomain Code=-11829).
  *
  * AC-032: the returned BetaVideo row is attached to exactly one route.
  * AC-036: progress overlay percentage is driven by onProgress.
  *
- * @param input       Upload payload (validated by caller: duration ≤ 60, codec H.264/AAC/MP4).
+ * @param input       Upload payload (validated by caller: duration ≤ 60, codec H.264/AAC/MP4 or MOV).
  * @param userId      Authenticated user UUID.
  * @param onProgress  Called with UploadProgress as each phase completes.
  * @returns           The inserted BetaVideo row.
@@ -75,11 +80,13 @@ export async function uploadBetaVideo(
     // thumbnail Storage upload is performed — thumbnail_url is set to the video's
     // storage path so it remains a valid retrievable URL.
     //
-    // Upload strategy (Supabase-recommended React Native pattern):
-    //   1. fetch(localUri) — React Native's fetch reads the local file correctly.
-    //   2. .arrayBuffer()  — gives raw binary bytes; no base64 encoding, no Blob.
-    //   3. upload(ArrayBuffer) — Supabase JS Storage client accepts ArrayBuffer
-    //      directly; this is the officially documented RN upload path.
+    // Upload strategy: expo-file-system base64 → Uint8Array.
+    //   1. FileSystem.readAsStringAsync(localUri, { encoding: Base64 }) — reads
+    //      the local file as a base64 string. This is the reliable binary-read path
+    //      in React Native; fetch() on file:// URIs silently corrupts large files
+    //      on iOS (AVFoundationErrorDomain Code=-11829 "此媒體可能已損毀").
+    //   2. atob(base64Data) → char codes → Uint8Array — decodes base64 to raw bytes.
+    //   3. upload(Uint8Array) — Supabase JS Storage client accepts Uint8Array directly.
     onProgress?.({ percent: 10, phase: 'video' });
 
     const ext = input.localVideoUri.split('.').pop() ?? 'mp4';
@@ -88,12 +95,23 @@ export async function uploadBetaVideo(
       ? 'video/quicktime'
       : 'video/mp4';
 
-    const response = await fetch(input.localVideoUri);
-    const arrayBuffer = await response.arrayBuffer();
+    // Read the local video file as base64 using expo-file-system.
+    // This is the reliable binary-read path in React Native — fetch() on
+    // file:// URIs can silently corrupt large binary files on iOS.
+    const base64Data = await FileSystem.readAsStringAsync(input.localVideoUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+
+    // Decode base64 string → Uint8Array for binary upload.
+    const binaryString = atob(base64Data);
+    const uint8Array = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      uint8Array[i] = binaryString.charCodeAt(i);
+    }
 
     const { error: storageError } = await supabase.storage
       .from(BETA_VIDEO_BUCKET)
-      .upload(fileName, arrayBuffer, {
+      .upload(fileName, uint8Array, {
         contentType,
         upsert: false,
       });

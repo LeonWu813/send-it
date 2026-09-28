@@ -2,7 +2,52 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-27 (fetch → arrayBuffer upload pattern)
+**Status**: Bug fix applied — 2026-09-27 (expo-file-system base64 → Uint8Array upload, iOS corruption fix)
+
+### Bug Fix — expo-file-system base64 → Uint8Array upload (iOS corruption fix) — 2026-09-27
+
+**Root cause**: `fetch(localUri).arrayBuffer()` on iOS does not reliably return raw binary data for large `file://` URIs. The resulting artifact is uploaded successfully (no RLS or storage error), but the video bytes are corrupted and unplayable (AVFoundationErrorDomain Code=-11829 "此媒體可能已損毀"). This is a known React Native limitation with `fetch()` on local file URIs.
+
+**Fix**:
+
+- `src/modules/mod-beta-video/beta-video-service.ts`:
+  - Added `import * as FileSystem from 'expo-file-system'` at the top alongside existing imports. `expo-file-system` is a bundled Expo SDK 57 dependency — no new package install required.
+  - Replaced the `fetch(localUri) → .arrayBuffer() → upload(ArrayBuffer)` upload path with:
+    1. `FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 })` — reads the local video file as a base64 string via native binary I/O (no fetch, no corruption risk).
+    2. `atob(base64Data)` → charCode loop → `Uint8Array` — decodes base64 to raw bytes in JS. `atob` is globally available in React Native (added in RN 0.71+) and in Node.js 16+ (Jest env).
+    3. `supabase.storage.from(BETA_VIDEO_BUCKET).upload(fileName, uint8Array, { contentType, upsert: false })` — uploads the Uint8Array directly. Supabase JS Storage client accepts Uint8Array.
+  - Updated file-level doc comment block: replaced "Storage upload" rule description with the new expo-file-system base64 → Uint8Array strategy and the iOS corruption rationale.
+  - Updated `uploadBetaVideo` JSDoc to reflect the new upload strategy.
+
+- `__mocks__/expo-file-system.js`:
+  - Created (did not exist). Provides `readAsStringAsync` (jest.fn resolving `''`), `EncodingType` (`{ Base64: 'base64', UTF8: 'utf8' }`), and full-surface mocks for `writeAsStringAsync`, `deleteAsync`, `getInfoAsync`, `makeDirectoryAsync`, `copyAsync`, `moveAsync`, `documentDirectory`, `cacheDirectory`.
+
+- `package.json` Jest `moduleNameMapper`:
+  - Added `"^expo-file-system$": "<rootDir>/__mocks__/expo-file-system.js"` so Jest routes the import to the mock.
+
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`:
+  - Removed global `fetch` mock (`mockFetch` variable and `(globalThis as Record<string, unknown>).fetch = mockFetch`) — fetch is no longer called in the upload path.
+  - Added `import * as FileSystem from 'expo-file-system'` at the top.
+  - In `uploadBetaVideo` `beforeEach`: replaced `mockFetch.mockResolvedValue({ arrayBuffer: ... })` with `(FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue('dGVzdA==')` — a known base64 string that decodes cleanly via `atob`.
+  - Updated happy-path `storageBucket.upload` assertion: second arg changed from `expect.any(ArrayBuffer)` to `expect.any(Uint8Array)`; third arg `expect.objectContaining({ contentType: 'video/mp4' })` unchanged.
+  - Updated comments in all three `uploadBetaVideo` test cases to reflect the new upload approach.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors (pre-existing TS2352 in `mod-send-logging/__tests__/send-service.test.ts` unaffected; 0 errors in any mod-beta-video file)
+- `npm test -- --testPathPattern=beta-video --watchAll=false`: PASS — 38 tests, 4 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- `npm test -- --watchAll=false`: PASS — 325 tests, 27 suites, 0 failures (no regression across any module)
+- Git scope check: only `src/modules/mod-beta-video/beta-video-service.ts`, `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`, `__mocks__/expo-file-system.js`, and `package.json` (moduleNameMapper entry) modified. Pre-existing dirty files not touched. PASS.
+- Judgment-based checklist items:
+  - No AC logic changed — this is a pure upload mechanism fix for iOS binary corruption: PASS
+  - `expo-file-system` is a bundled Expo SDK 57 transitive dependency — no new package install; production.md does not prohibit using bundled Expo SDK packages: PASS
+  - `atob` is globally available in React Native (RN 0.71+) and Node.js 16+ (Jest env); no polyfill needed: PASS
+  - `contentType` derivation unchanged; no new hardcoded values: PASS
+  - TypeScript strict mode satisfied — `Uint8Array` is accepted by Supabase Storage upload types: PASS
+  - No gold-plating: PASS
 
 ### Bug Fix — Switch to fetch → arrayBuffer upload pattern (Supabase-recommended RN pattern) — 2026-09-27
 
