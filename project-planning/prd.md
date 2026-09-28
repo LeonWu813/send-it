@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 12
+**Status**: [SUBSTANTIVE] — Revision 13
 **Date**: 2026-09-24
-**Revision**: 12
+**Revision**: 13
 
 ---
 
@@ -105,7 +105,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to open the route detail page and watch all beta videos inline without leaving the app,
 **so that** I can study sequences on the wall.
 
-**Acceptance Criteria**: AC-033, AC-034
+**Acceptance Criteria**: AC-033, AC-034, AC-038, AC-039
 
 ---
 
@@ -546,7 +546,7 @@ The data flow for the two most important loops:
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
-**AC-033**: The system shall play beta videos inline on the route detail page without requiring the user to leave the app or open an external link.
+**AC-033** (revised): The system shall display a route's beta videos on the route detail page and shall play a selected beta video without requiring the user to leave the app or open an external link. Videos are presented as a grid of thumbnails (AC-038) and played in an in-app fullscreen viewer launched on thumbnail tap (AC-039); no external link or browser is used.
 
 **AC-034**: The system shall play beta videos inline in the activity feed for videos posted by followed users.
 
@@ -555,6 +555,10 @@ The data flow for the two most important loops:
 **AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
 
 **AC-037** (new): The system shall present an "Add beta video" entry point on the route detail screen that launches the beta video capture/selection flow with the route context (route ID) pre-attached, so the resulting upload is bound to that route (AC-032). The entry point must be visible without leaving the route detail screen.
+
+**AC-038** (new): The route detail screen shall display the route's beta videos as a three-column grid. Each grid cell shall show only the video's thumbnail image with a small video-camera icon overlaid in the top-left corner, and no other metadata. Tapping a cell opens the fullscreen beta-video viewer (AC-039) for that video.
+
+**AC-039** (new): Tapping a beta-video thumbnail on the route detail screen shall open a fullscreen, portrait-orientation video viewer that auto-plays the tapped video. Within the viewer, swiping up shall advance to the next beta video for that route when one exists; swiping down or tapping a back control shall dismiss the viewer and return to the route detail screen. The viewer navigates only within the set of beta videos for the current route.
 
 ---
 
