@@ -2,6 +2,54 @@
 
 ## Engineering Progress
 
+### Rev 15 — Remove grade display and always-private (AC-131, AC-132) (2026-09-28)
+
+**Mode:** feature (presentational removal + hardcoded is_private)
+**Date:** 2026-09-28
+**Engineer:** engineer-mod-send-logging
+
+#### Changes
+
+**AC-131 — Grade display block removed**
+
+Removed the read-only grade display View/Text block (labeled "難度") from `LogSendScreen.tsx`. This block rendered `routeGrade` prop with a `sends.grade` label and a `sends.gradeNote` caption. The block served no form purpose — grade is visible on the route detail screen before the form opens, per spec AC-131. Removed the associated styles: `gradeDisplay`, `gradeValue`, `gradeNote`. The `routeGrade` prop remains in `LogSendScreenProps` — it is still passed by the caller (grade may be needed in future or by the parent) and removing it from the interface is out of scope.
+
+**AC-132 — is_private toggle removed; hardcoded true**
+
+Removed the `isPrivate` state variable (`useState<boolean>(false)`) and the entire `Switch`-based toggle row JSX block (label "設為私人" via `sends.private`/`sends.privateDescription` i18n keys). In `handleSubmit`, changed `is_private: isPrivate` to `is_private: true` in the `AscentLogInput` payload passed to `logAscent`. Removed the associated styles: `privateRow`, `privateTextGroup`, `privateLabel`, `privateDescription`. Removed `Switch` from the React Native import list (no longer used). The `is_private` column remains in the DB schema, the `Ascent` type, and `AscentWithProfile` — no migration required. The i18n keys `sends.private` and `sends.privateDescription` remain in both locale JSON files (not deleted per spec instruction).
+
+**Doc-comment updated**
+
+Updated the JSDoc at the top of `LogSendScreen.tsx` to remove the stale `is_private toggle` entry from the form fields list and to document AC-131 and AC-132 directly.
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/screens/LogSendScreen.tsx` — removed grade display block + 3 grade styles; removed is_private state, Switch import, toggle JSX + 4 private styles; hardcoded `is_private: true` in handleSubmit; updated doc-comment.
+- `src/modules/mod-send-logging/__tests__/LogSendScreen.test.tsx` — replaced "renders the grade read-only" test with "does not render the grade display section in the log form (AC-131)" asserting `queryByText('V5')` is null; updated "does not include a grade field" test to also assert `is_private === true` in the call payload (AC-132); updated mock return value `is_private: false` → `true` for consistency.
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test -- --watchAll=false) | PASS | 366/366 tests pass, 29 suites — 0 regressions; 1 test replaced (AC-131 grade absence), 1 test updated (AC-132 payload assertion) |
+| Git scope — module boundary | PASS | Only `src/modules/mod-send-logging/` files and this status.md touched |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| AC-131: grade display block fully removed | PASS — JSX block, 3 styles removed; routeGrade prop retained |
+| AC-132: isPrivate state removed | PASS — no useState for isPrivate; no Switch component |
+| AC-132: is_private hardcoded true in payload | PASS — `is_private: true` in AscentLogInput passed to logAscent |
+| AC-132: is_private column retained in schema/types | PASS — no migration, Ascent type and AscentWithProfile unchanged |
+| i18n keys sends.private/privateDescription not deleted from JSON | PASS — locale files not touched |
+| Switch removed from React Native import | PASS — import list updated |
+| No production.md conventions violated | PASS — no hardcoded colors, no new deps, no createClient() |
+| No files outside mod-send-logging touched | PASS |
+
+---
+
 ### Rev 14 — summarizeAscents helper + index barrel + LogSendScreen comment fix (2026-09-28)
 
 **Mode:** feature (AC-127 helper) + doc-comment fix (AC-011 revised)
