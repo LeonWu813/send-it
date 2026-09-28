@@ -2,6 +2,58 @@
 
 ## Engineering Progress
 
+### Rev 14 — summarizeAscents helper + index barrel + LogSendScreen comment fix (2026-09-28)
+
+**Mode:** feature (AC-127 helper) + doc-comment fix (AC-011 revised)
+**Date:** 2026-09-28
+**Engineer:** engineer-mod-send-logging
+
+#### Changes
+
+**Change 1 — summarizeAscents public helper added to send-service.ts**
+
+Added `export function summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number }` immediately before `loadAscentsForRoute`. Pure synchronous client-side aggregation — no RPC. Sends = count of ascents where `style === 'flash' || style === 'top'`; attempts = sum of `a.attempts ?? 0` across all rows. The `?? 0` guard handles null/undefined attempts fields gracefully. Keeps the "flash|top = a send" business rule owned by MOD-004 per spec §Integration Points #3.
+
+**Change 2 — LogSendScreen.tsx doc-comment fix (AC-011 revised)**
+
+Fixed the stale JSDoc comment at line 9: removed `/ project` from the style selector description. Before: `- style selector (flash / top / attempt / project)`. After: `- style selector (flash / top / attempt)`. The runtime code was already correct (`ASCENT_STYLES = ['flash', 'top', 'attempt']`); only the comment was stale.
+
+**Change 3 — src/modules/mod-send-logging/index.ts created (public barrel export)**
+
+Created `src/modules/mod-send-logging/index.ts` to expose the module's public API. Exports: `Ascent`, `AscentLogInput`, `AscentStyle`, `AscentWithProfile` (types); `ASCENT_STYLES` (const); `deleteAscent`, `fetchMyAscentsForRoute`, `fetchUserAchievements`, `loadAscentsForRoute`, `logAscent`, `summarizeAscents` (service functions). MOD-003 can now import `summarizeAscents` and `AscentWithProfile` from `src/modules/mod-send-logging` without reaching into internal files.
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/send-service.ts` — added exported `summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number }` (20 lines, pure function, no Supabase call).
+- `src/modules/mod-send-logging/screens/LogSendScreen.tsx` — removed `/ project` from JSDoc style selector list (1-line comment edit; no runtime change).
+- `src/modules/mod-send-logging/__tests__/send-service.test.ts` — added `summarizeAscents` to import; added `describe('summarizeAscents')` block with 5 tests: empty array, mixed styles (flash+top as sends, attempt not), attempts sum across styles, null/undefined attempts treated as 0, all-attempt input gives sends:0.
+
+#### Files Created
+
+- `src/modules/mod-send-logging/index.ts` — public barrel export for the module.
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Build (npx tsc --noEmit) | PASS | Zero TypeScript errors, strict mode on |
+| Tests (npm test -- --watchAll=false) | PASS | 346/346 tests pass, 28 suites — 5 new tests added; all prior tests continue to pass |
+| Git scope — module boundary | PASS | Only `src/modules/mod-send-logging/` files and this status.md touched |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| summarizeAscents logic matches spec exactly | PASS — `flash|top` = send; `attempts ?? 0` sums all rows; pure function, no RPC |
+| AscentWithProfile exported via index.ts | PASS — MOD-003 can import it from the public barrel |
+| summarizeAscents exported via index.ts | PASS — confirmed in barrel |
+| LogSendScreen comment fix is comment-only | PASS — no runtime change; `ASCENT_STYLES` array unchanged; all LogSendScreen tests pass |
+| No production.md conventions violated | PASS — no hardcoded colors, no new deps, no createClient() |
+| Tests cover null/undefined attempts | PASS — test 4 passes null and undefined and asserts attempts = 4 (only the non-null row contributes) |
+| No files outside mod-send-logging touched | PASS |
+
+---
+
 ### fetchMyAscentsForRoute — own-user route ascents (2026-09-27)
 
 **Mode:** bugfix (route detail screen showed all users' sends — should show only the logged-in user's sends)
