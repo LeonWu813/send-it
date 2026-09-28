@@ -6,7 +6,6 @@
  *   - Grade, color badge, photo, status (active/retired)
  *   - Two-column send-summary section: Sends + Attempts (AC-127)
  *   - Two action buttons: Record Send / Upload Beta Video (AC-130)
- *   - My sends list — fetched via fetchMyAscentsForRoute (MOD-004 service)
  *   - Beta video section (MOD-005)
  *   - Added date as footer at the bottom (AC-126)
  *
@@ -35,7 +34,6 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   Pressable,
@@ -51,12 +49,11 @@ import { useTheme } from '../../../lib/theme';
 import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
 import {
-  deleteAscent,
   fetchMyAscentsForRoute,
   fetchUserAchievements,
   summarizeAscents,
 } from '../../mod-send-logging/send-service';
-import type { AscentStyle, AscentWithProfile } from '../../mod-send-logging/types';
+import type { AscentWithProfile } from '../../mod-send-logging/types';
 import { fetchSavedRouteIds, getPhotoSignedUrl, loadRoute, saveRoute, unsaveRoute } from '../route-service';
 import type { Route, RouteColor } from '../types';
 
@@ -77,23 +74,6 @@ function formatRouteName(
 }
 
 type AchievementStyle = 'flash' | 'top' | 'attempt';
-
-/** Gold color for the flash ascent style badge — matches the flash achievement icon. */
-const FLASH_BADGE_COLOR = '#FFD700';
-
-function getStyleBadgeColor(
-  style: AscentStyle,
-  theme: ReturnType<typeof useTheme>['theme'],
-): string {
-  switch (style) {
-    case 'flash':
-      return FLASH_BADGE_COLOR;
-    case 'top':
-      return theme.colors.success;
-    case 'attempt':
-      return theme.colors.textSecondary;
-  }
-}
 
 interface RouteDetailScreenProps {
   routeId: string;
@@ -129,9 +109,8 @@ export default function RouteDetailScreen({
   const [achievement, setAchievement] = useState<AchievementStyle | null>(null);
 
   // My sends — scoped to the current user only (fetchMyAscentsForRoute).
+  // Used to compute the AC-127 summary cards via summarizeAscents.
   const [myAscents, setMyAscents] = useState<AscentWithProfile[]>([]);
-  const [ascentsLoading, setAscentsLoading] = useState(false);
-  const [ascentsError, setAscentsError] = useState<string | null>(null);
 
   /**
    * AC-130: ref to the BetaVideoSection's upload launcher.
@@ -148,19 +127,16 @@ export default function RouteDetailScreen({
    * Fetch the current user's ascents for this route.
    * Separated from fetchRoute so it can be re-called independently after
    * a successful log (AC-013) without reloading the full route detail.
+   * Result is used to compute the AC-127 summary cards via summarizeAscents.
    */
   const fetchMyAscents = useCallback(async (): Promise<void> => {
-    setAscentsLoading(true);
-    setAscentsError(null);
     try {
       const data = await fetchMyAscentsForRoute(routeId);
       setMyAscents(data);
     } catch {
-      setAscentsError(t('sends.errors.loadFailed'));
-    } finally {
-      setAscentsLoading(false);
+      // Non-fatal: summary cards will show 0 if fetch fails.
     }
-  }, [routeId, t]);
+  }, [routeId]);
 
   const fetchRoute = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -248,38 +224,6 @@ export default function RouteDetailScreen({
   function handleUploadBetaPress(): void {
     uploadLauncherRef.current?.();
   }
-
-  /**
-   * Optimistically remove an ascent, then call deleteAscent.
-   * On failure, re-fetch to restore accurate state.
-   */
-  const handleDeleteAscent = useCallback(
-    (ascentId: string): void => {
-      Alert.alert(
-        t('sendLogging.delete.confirm'),
-        undefined,
-        [
-          {
-            text: t('sendLogging.delete.cancel'),
-            style: 'cancel',
-          },
-          {
-            text: t('sendLogging.delete.delete'),
-            style: 'destructive',
-            onPress: () => {
-              // Optimistic remove
-              setMyAscents((prev) => prev.filter((a) => a.id !== ascentId));
-              void deleteAscent(ascentId).catch(() => {
-                // Revert optimistic update on failure by re-fetching
-                void fetchMyAscents();
-              });
-            },
-          },
-        ],
-      );
-    },
-    [t, fetchMyAscents],
-  );
 
   if (isLoading) {
     return (
@@ -465,86 +409,6 @@ export default function RouteDetailScreen({
           <Ionicons name="videocam-outline" size={18} color={theme.colors.primary} />
           <Text style={styles.actionButtonSecondaryText}>{t('routeCatalog.detail.uploadBeta')}</Text>
         </Pressable>
-      </View>
-
-      {/* ── My Sends (MOD-004 service, current user only) ─────────────────── */}
-      {/* Uses fetchMyAscentsForRoute so only the logged-in user's sends appear.
-          loadAscentsForRoute would include other users' public sends via RLS. */}
-      <View style={styles.ascentSectionRoot}>
-        {/* AC-130: Log Send button removed from ascent section header.
-            It now lives in the AC-130 action row above. */}
-        <Text style={styles.ascentSectionTitle}>{t('sends.ascentsSectionTitle')}</Text>
-
-        {ascentsLoading && (
-          <ActivityIndicator color={theme.colors.primary} style={styles.ascentsLoader} />
-        )}
-
-        {ascentsError !== null && !ascentsLoading && (
-          <View style={styles.ascentsErrorContainer}>
-            <Text style={styles.ascentsErrorText}>{ascentsError}</Text>
-            <Pressable
-              onPress={() => void fetchMyAscents()}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.retry')}
-              style={styles.ascentsRetryButton}
-            >
-              <Text style={styles.ascentsRetryButtonText}>{t('common.retry')}</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {!ascentsLoading && ascentsError === null && myAscents.length === 0 && (
-          <Text style={styles.ascentsEmptyText}>{t('sends.noAscents')}</Text>
-        )}
-
-        {!ascentsLoading &&
-          ascentsError === null &&
-          myAscents.map((ascent) => {
-            const badgeColor = getStyleBadgeColor(ascent.style, theme);
-            const displayDate = new Date(ascent.logged_at).toLocaleDateString();
-            const isOwn = ascent.user_id === session.user.id;
-            return (
-              <View key={ascent.id} style={styles.ascentRow}>
-                <View style={styles.ascentRowHeader}>
-                  <View style={[styles.styleBadge, { backgroundColor: badgeColor }]}>
-                    <Text style={styles.styleBadgeText}>
-                      {t(`sends.styles.${ascent.style}`)}
-                    </Text>
-                  </View>
-                  {isOwn && (
-                    <Pressable
-                      onPress={() => handleDeleteAscent(ascent.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={t('sendLogging.delete.delete')}
-                      style={styles.deleteButton}
-                      hitSlop={8}
-                    >
-                      <Ionicons
-                        name="trash-outline"
-                        size={16}
-                        color={theme.colors.textSecondary}
-                      />
-                    </Pressable>
-                  )}
-                </View>
-                <View style={styles.ascentMeta}>
-                  <Text style={styles.attemptsText}>
-                    {t('sends.attemptsCount', { count: ascent.attempts })}
-                  </Text>
-                  <Text style={styles.dateText}>{displayDate}</Text>
-                  <Text style={styles.usernameText}>{ascent.display_name}</Text>
-                </View>
-                {isOwn && ascent.note !== null && (
-                  <View style={styles.noteContainer}>
-                    <Text style={styles.noteText}>{ascent.note}</Text>
-                  </View>
-                )}
-                {ascent.is_private && (
-                  <Text style={styles.privateIndicator}>{t('sends.privateLabel')}</Text>
-                )}
-              </View>
-            );
-          })}
       </View>
 
       {/* Log Send modal — opens on tap of the AC-130 "Record Send" button */}
@@ -756,112 +620,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     retryButtonText: {
       fontSize: theme.fontSize.md,
       color: theme.colors.primary,
-    },
-    // ── Ascent section styles ─────────────────────────────────────────────────
-    ascentSectionRoot: {
-      marginTop: theme.spacing.xl,
-    },
-    ascentSectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.md,
-    },
-    ascentsLoader: {
-      marginVertical: theme.spacing.md,
-    },
-    ascentsErrorContainer: {
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
-      marginBottom: theme.spacing.md,
-    },
-    ascentsErrorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      marginBottom: theme.spacing.sm,
-    },
-    ascentsRetryButton: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: theme.spacing.xs,
-      borderRadius: theme.borderRadius.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    ascentsRetryButtonText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-    },
-    ascentsEmptyText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-      paddingVertical: theme.spacing.md,
-    },
-    ascentRow: {
-      padding: theme.spacing.md,
-      marginBottom: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    ascentRowHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: theme.spacing.xs,
-    },
-    styleBadge: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
-      borderRadius: theme.borderRadius.sm,
-    },
-    deleteButton: {
-      padding: theme.spacing.xs,
-    },
-    styleBadgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-      textTransform: 'uppercase',
-    },
-    ascentMeta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.md,
-      flexWrap: 'wrap',
-    },
-    attemptsText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-    },
-    dateText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    usernameText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    noteContainer: {
-      marginTop: theme.spacing.sm,
-      padding: theme.spacing.sm,
-      borderRadius: theme.borderRadius.sm,
-      backgroundColor: theme.colors.divider,
-    },
-    noteText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-      fontStyle: 'italic',
-    },
-    privateIndicator: {
-      marginTop: theme.spacing.xs,
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textDisabled,
     },
     // ── AC-126: added date footer ─────────────────────────────────────────────
     addedDateFooter: {
