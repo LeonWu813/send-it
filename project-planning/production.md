@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 12 (2026-09-27)
-**Last Updated**: 2026-09-27
+**Last synced from PRD**: rev 13 (2026-09-28)
+**Last Updated**: 2026-09-28
 
 ---
 
@@ -229,6 +229,22 @@ All Expo native dependencies must be installed via `npx expo install <package>`,
 ### Native Build Gate Before QA Handoff
 
 When a module adds or changes a native dependency (a package with iOS/Android native code), the module's engineer must run the native build (`npx expo run:ios`, or the platform equivalent) and confirm it compiles before marking the module QA-ready. Unit tests alone are insufficient because Jest mocks native modules.
+
+### Custom Fullscreen Media Viewers
+
+When a fullscreen viewer needs custom in-viewer gestures or navigation (e.g. swipe-to-next), size the player/image to fill an RN `<Modal>` (`presentationStyle="overFullScreen"`) rather than calling the media library's `enterFullscreen()`, which imposes non-overridable native controls/dismiss chrome and (on some platforms) pauses the JS runtime. Native OS fullscreen is only appropriate for a plain single-clip player with no custom in-viewer interaction.
+
+### Prefer RN PanResponder for Simple Swipe Gestures
+
+Do not add `react-native-gesture-handler` (a native dependency requiring a rebuild + root provider) for gestures expressible with core `PanResponder` (single-axis swipe, threshold-based dismiss/advance). Reserve gesture-handler for genuinely complex multi-touch/reanimated interactions. Always pair a dismiss gesture with an explicit on-screen control as the accessible fallback.
+
+### Orientation Owned by App Manifest
+
+Phase 1 is globally portrait-locked via `app.json` `"orientation": "portrait"`; components must not programmatically lock/unlock orientation and must not rely on a media library's per-view fullscreen orientation option to enforce portrait. Any future per-screen orientation need is an explicit, separately-reviewed change.
+
+### Thumbnail Grids Never Mount Video Players Per Cell
+
+A grid or list of videos renders `<Image>`/placeholder cells (with an affordance icon), never one `VideoView` per cell; instantiate at most one active video player at a time (in the opened viewer). This protects the cold-start / scroll-performance NFRs and battery.
 
 ### TypeScript Strict Mode
 

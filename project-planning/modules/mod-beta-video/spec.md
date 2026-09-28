@@ -4,8 +4,8 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 12
-**Last Updated**: 2026-09-27
+**Last Synced from PRD Revision**: 13
+**Last Updated**: 2026-09-28
 
 ---
 
@@ -32,6 +32,10 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 - **US-004**: Upload a beta video for a route
 - **US-005**: Watch beta inline on a route
 
+**US-004 Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037
+
+**US-005 Acceptance Criteria**: AC-033, AC-034, AC-038, AC-039
+
 ---
 
 ## Acceptance Criteria Covered
@@ -42,17 +46,21 @@ Sharing technique clips ("beta") tied to specific routes is one of Send It's cor
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
-**AC-033**: The system shall play beta videos inline on the route detail page without requiring the user to leave the app or open an external link.
+**AC-033** (revised): The system shall display a route's beta videos on the route detail page and shall play a selected beta video without requiring the user to leave the app or open an external link. Videos are presented as a grid of thumbnails (AC-038) and played in an in-app fullscreen viewer launched on thumbnail tap (AC-039); no external link or browser is used.
 
 **AC-034**: The system shall play beta videos inline in the activity feed for videos posted by followed users.
 
-**AC-035**: The system shall accept beta video uploads in either an MP4 (`.mp4`) or QuickTime (`.mov`) container — `.mov` is included so users can upload iPhone-camera footage without converting it first — and shall reject, on ingest, any upload whose video codec is not H.264 or HEVC or whose audio codec is not AAC, surfacing a clear error to the user rather than storing an unplayable file. Both containers are stored as-is (no server-side transcoding); the ≤60-second duration cap (AC-030) and size constraints apply regardless of container.
+**AC-035** (revised): The system shall accept beta video uploads in either an MP4 (`.mp4`) or QuickTime (`.mov`) container — `.mov` is included so users can upload iPhone-camera footage without converting it first — and shall reject, on ingest, any upload whose video codec is not H.264 or HEVC or whose audio codec is not AAC, surfacing a clear error to the user rather than storing an unplayable file. Both containers are stored as-is (no server-side transcoding); the ≤60-second duration cap (AC-030) and size constraints apply regardless of container.
 
 **AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
 
 **AC-037** (new — code gap, future module): The system shall present an "Add beta video" entry point on the route detail screen that launches the beta video capture/selection flow with the route context (route ID) pre-attached, so the resulting upload is bound to that route (AC-032). The entry point must be visible without leaving the route detail screen.
 
 > **Boundary note on AC-037**: The entry point renders in MOD-003's `RouteDetailScreen.tsx` as a hosting slot; the capture/upload flow itself is owned by MOD-005. MOD-005's engineer owns this AC: `RouteDetailScreen` exposes a slot/prop (`onAddBetaVideo` or a MOD-005-provided component); MOD-005 fills it with the route-context-aware upload launcher.
+
+**AC-038** (new): The route detail screen shall display the route's beta videos as a three-column grid. Each grid cell shall show only the video's thumbnail image with a small video-camera icon overlaid in the top-left corner, and no other metadata. Tapping a cell opens the fullscreen beta-video viewer (AC-039) for that video.
+
+**AC-039** (new): Tapping a beta-video thumbnail on the route detail screen shall open a fullscreen, portrait-orientation video viewer that auto-plays the tapped video. Within the viewer, swiping up shall advance to the next beta video for that route when one exists; swiping down or tapping a back control shall dismiss the viewer and return to the route detail screen. The viewer navigates only within the set of beta videos for the current route.
 
 ---
 
@@ -98,10 +106,11 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 
 **Inputs (playback):**
 - `BetaVideo.video_url` and `BetaVideo.thumbnail_url` from Postgres
-- Render context: route detail page (AC-033) or activity feed (AC-034)
+- Render context: route detail page (AC-033/AC-038/AC-039) or activity feed (AC-034)
 
 **Outputs (playback):**
-- Inline video playback within the app — no external link or browser required
+- Route detail page: three-column thumbnail grid (AC-038); tapping a cell opens the fullscreen reel viewer (AC-039)
+- Activity feed: inline video playback within the app — no external link or browser required (AC-034)
 
 ---
 
@@ -118,6 +127,22 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - **60-second playability SLA (AC-032)**: The video must be playable inline within 60 seconds of upload completion on a normal 4G/LTE connection. Since there is no server transcoding, this depends on Storage CDN delivery latency — the compression + upload pipeline must keep total time within the SLA.
 - **Phase 1 Storage**: All video stored in Supabase Storage. Migration to Cloudflare Stream is triggered by monthly cost > US$25 OR total storage > 20 GB. At ~10 MB per compressed 60-sec clip, 20 GB ≈ 2,000 videos. A migration runbook should be drafted before Phase 1 GA (even though migration itself is expected in Phase 2).
 - **Attachment constraint**: Each `BetaVideo` row has exactly one `route_id`. A video cannot be attached to multiple routes.
+
+### Grid and Fullscreen Reel Viewer (AC-038 / AC-039) — Tech Lead Decisions (Rev 13)
+
+The following six decisions were recorded by Tech Lead in the 2026-09-28 review and are pinned here so the engineer does not need to consult `status.md`.
+
+1. **Portrait lock — no new dependency.** `app.json` already sets `"orientation": "portrait"` globally — the entire app is portrait-locked at the native manifest level. AC-039's "portrait-orientation viewer" is satisfied for free. Do NOT add `expo-screen-orientation`. The viewer must not attempt to programmatically lock/unlock orientation; it inherits portrait from the app config.
+
+2. **Modal architecture — `BetaVideoReelViewer.tsx` is an RN `<Modal>`.** The fullscreen viewer is a new MOD-005 component `BetaVideoReelViewer.tsx` rendered as a React Native `<Modal>` (`animationType="fade"` or `"slide"`, `presentationStyle="overFullScreen"`, `statusBarTranslucent`), mounted from within `BetaVideoSection` (or the new grid component). It is NOT a new navigator screen and NOT a global AppShell overlay. Precedent: `BetaVideoUploader.tsx` already uses RN `<Modal>` — the pattern is proven in MOD-005. The currently-open video index is a `useState<number | null>` in the grid/section component (`null` = closed, `N` = viewer open at index N); `<Modal visible={openIndex !== null}>`.
+
+3. **Playlist order — reuse `fetchBetaVideosForRoute`; tap index maps 1:1 to viewer start index; no wrap.** `fetchBetaVideosForRoute(routeId)` already returns the full set ordered `created_at DESC` (newest-first). The viewer reuses this exact in-memory array — no new fetch, no new query. Grid renders newest-first (the array as fetched); the viewer swipes in that same array order — tapping grid cell *i* opens the viewer at index *i*, swipe-up → *i+1*. Grid order == viewer swipe order == `fetchBetaVideosForRoute` order (`created_at DESC`). Swipe-up at the last index is a no-op (AC-039: "next video ... when one exists"); do not wrap. Swipe-down at any index dismisses.
+
+4. **`expo-video` fullscreen — do NOT use `enterFullscreen()`.** Do not call `VideoView.enterFullscreen()`. Native OS fullscreen forces native controls and its own dismiss chrome and cannot host the custom swipe-up-to-next-video gesture AC-039 requires. Achieve the fullscreen effect by sizing a plain `VideoView` to fill the modal: inside `BetaVideoReelViewer`'s `<Modal>`, a full-screen `View` (`flex: 1`, dark/black background, safe area insets) containing a `VideoView` sized `{ width: '100%', height: '100%' }` with `contentFit="contain"`. Auto-play (AC-039): create the player with `useVideoPlayer` and call `player.play()` on mount / on index change (`loop = false`). Recommend one `useVideoPlayer` whose source is replaced (`player.replace()` or remount) when `openIndex` changes — one active player at a time avoids N simultaneous decoders.
+
+5. **Swipe gesture — RN built-in `PanResponder`; do NOT add `react-native-gesture-handler`.** `react-native-gesture-handler` is not installed and adding it requires a native dependency install + rebuild + a root `GestureHandlerRootView` wrap. Use RN core `PanResponder` (vertical-only): `onMoveShouldSetPanResponder` returns true when `|dy| > |dx|` and `|dy|` exceeds a threshold; on release, `dy < -SWIPE_THRESHOLD` → advance to next (if exists); `dy > +SWIPE_THRESHOLD` → dismiss. Also provide an explicit back/close button (e.g. `Ionicons` "chevron-down"/"close" pinned top-left within `insets.top`) as the accessible fallback — do not ship swipe as the only dismiss path. `<Modal onRequestClose>` should also route to dismiss (Android back; harmless on iOS-only Phase 1). If `nativeControls` is on in the viewer, keep the `PanResponder` on a region outside the control bar's hit area to avoid gesture conflicts; or disable `nativeControls` in the viewer and rely on auto-play + swipe + back button. Document the chosen approach.
+
+6. **Thumbnails — Phase 1 placeholder; do NOT mount `VideoView` per grid cell; do NOT add a frame-extraction library.** `thumbnail_url` is a video storage path, not an image (confirmed by PM Rev 10 ruling / AC-031 Phase 1 simplification). Each AC-038 grid cell renders the mandatory camera-icon overlay (top-left, AC-038) over a neutral themed placeholder fill (e.g. `styles.thumbnailPlaceholder`, `theme.colors.textDisabled`), attempting `<Image>` but expecting it to fall back. Do NOT mount a `VideoView` per grid cell — N live decoders on one screen risks the ≤3s cold-start / smooth-scroll NFR and battery. Do NOT add a frame-extraction library (`expo-video-thumbnails`, `ffmpeg-kit-react-native`) for this change — that reopens the settled Phase 2 scope decision (AC-031 Phase 1 clause). The camera-icon overlay is the "this is a video" affordance; the placeholder-thumbnail limitation is cosmetically absorbed by the AC-038 design.
 
 ---
 

@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 3b048fcf731d0c52de0af4e62f34c298bf2102a4
+commit: 856967cd32eb14f742d476f59008a95948fc19dc
 timestamp: 2026-09-28T00:00:00Z
 ```
 
@@ -1212,3 +1212,27 @@ Phase 1 — iOS MVP, Taipei + New Taipei launch
 **AMBIGUITY markers added:** none
 **CONFLICT markers added:** none
 **verify-sync.sh:** Skipped — trivial passthrough per skill routing rules.
+
+### Sync Report — Delta Sync — 2026-09-28
+
+**Sync type:** delta
+**PRD Revision:** 13
+**PM Update reference:** 2026-09-28 [SUBSTANTIVE] — MOD-005 beta-video viewer UX: 3-column thumbnail grid + fullscreen portrait reel viewer + swipe-to-next (PRD Revision 13)
+
+**Files modified:**
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision updated 12 → 13; Last Updated updated to 2026-09-28; AC-033 entry replaced with revised (Revision 13) text (grid + fullscreen viewer + no external link); AC-038 (new) added after AC-037; AC-039 (new) added after AC-038; Related User Stories section updated to include US-004 and US-005 acceptance-criteria sub-lists (AC-038 and AC-039 now appear under US-005); Input/Output Contract Outputs (playback) section updated to reflect grid and fullscreen viewer; new "Grid and Fullscreen Reel Viewer (AC-038 / AC-039) — Tech Lead Decisions (Rev 13)" subsection added to Key Implementation Notes with all six pinned decisions.
+- `project-planning/production.md` — Last synced from PRD updated rev 12 → rev 13; Last Updated updated to 2026-09-28; four new Shared Conventions added (copied verbatim from Tech Lead Review 2026-09-28 Proposed Shared Conventions): "Custom Fullscreen Media Viewers", "Prefer RN PanResponder for Simple Swipe Gestures", "Orientation Owned by App Manifest", "Thumbnail Grids Never Mount Video Players Per Cell".
+
+**Files created:** none
+
+**Module removals noted:** none
+
+**AMBIGUITY markers added:** none
+
+**AMBIGUITY markers resolved:** none
+
+**CONFLICT markers added:** none
+
+**Agent wrappers checked:** `.claude/agents/engineer-mod-beta-video.md` and `.claude/agents/qa-mod-beta-video.md` — both are generic templated wrappers that do not enumerate specific ACs; no update required.
+
+**verify-sync.sh result:** 4/6 — same result as pre-sync baseline (Checks 4 and 6 are pre-existing script bugs unrelated to this sync; confirmed by running the script against the stashed/unmodified state and observing the same 4/6 pass count). Checks 1, 2, 3, and 5 all pass.
