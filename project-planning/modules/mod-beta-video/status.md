@@ -612,3 +612,174 @@ The confirmed library choice (expo-video ~57.0.5 for playback, expo-image-picker
 - AC-035: PASS — MP4-only ingest validation, .mov rejected, HEVC rejected
 - AC-036: PASS — progress overlay 0-100%, blocks interaction during upload
 - AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
+
+---
+
+## QA Run 5 — Regression — 2026-09-27
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after AC-035 .mov acceptance fix, PRD Revision 12)
+**Re-verifying**: AC-035 revised — `.mov` with no mimeType now accepted; `video/quicktime` mimeType accepted; `.avi`/`.mkv` still rejected; error message updated to "MP4 and MOV" in both locales
+
+---
+
+### Scope
+
+PRD Revision 12 (PM ruling 2026-09-27 [TRIVIAL]) expanded the accepted container set from MP4-only to MP4 + MOV, so iPhone-camera footage can upload without conversion. The QA Run 2 fix that correctly rejected `.mov` per the prior spec is now itself a bug under the revised spec. This run verifies the engineer's reversal is correct and that no previously passing items regressed.
+
+---
+
+### Static Verification — validateVideoFormat()
+
+Verified `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` lines 81–105.
+
+`validateVideoFormat()` uses a `Set`-based ACCEPTED_MIME_TYPES containing `video/mp4`, `video/quicktime`, and `video/mov`. Two branches:
+
+1. mimeType-present branch (line 89): if `asset.mimeType` is set and is NOT in the Set, return the error. Accepted: `video/mp4`, `video/quicktime`, `video/mov`. Rejected: `video/hevc`, `video/x-msvideo`, all others.
+2. Fallback branch (lines 96–102): when `asset.mimeType` is absent, return the error only when the URI does NOT end with `.mp4` AND does NOT end with `.mov`. Accepted: `.mp4` URIs, `.mov` URIs. Rejected: `.avi`, `.mkv`, `.webm`, all others.
+
+Scenario tracing against spec (AC-035, PRD Rev 12):
+
+- `.mov` URI, no mimeType: mimeType branch skipped (no mimeType), fallback check: `lowerUri.endsWith('.mov')` is true, so the combined `&&` condition is false, no error returned — returns `null`. ACCEPTED. Correct per spec.
+- `.mov` URI, mimeType `video/quicktime`: mimeType branch: `video/quicktime` is in ACCEPTED_MIME_TYPES, condition is false, no error — returns `null`. ACCEPTED. Correct per spec.
+- `.mp4` URI, mimeType `video/mp4`: mimeType branch: `video/mp4` in Set, no error. ACCEPTED. Correct (unchanged).
+- `.avi` URI, mimeType `video/x-msvideo`: mimeType branch: not in Set, returns error. REJECTED. Correct per spec.
+- `.mkv` URI, no mimeType: fallback branch: not `.mp4`, not `.mov`, returns error. REJECTED. Correct per spec.
+- HEVC URI, mimeType `video/hevc`: mimeType branch: not in Set, returns error. REJECTED. Correct per spec.
+
+All six scenarios produce the correct outcome. No off-by-one or logic error detected.
+
+**validateVideoFormat() logic** — PASS
+
+---
+
+### Static Verification — Locale Strings
+
+**en locale** (`locales/en/common.json` line 271):
+`"invalidFormat": "Only MP4 and MOV videos are supported. Please select a different file."`
+Matches engineer's described change. Consistent with AC-035 revised (two containers accepted). PASS.
+
+**zh-TW locale** (`locales/zh-TW/common.json` line 271):
+`"invalidFormat": "僅支援 MP4 和 MOV 格式的影片，請選擇其他檔案。"`
+Matches engineer's described change. All EN betaVideo keys have zh-TW counterparts — no missing key. PASS.
+
+**Locale strings** — PASS
+
+---
+
+### Static Verification — Test Coverage
+
+Verified `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx`:
+
+- "accepts .mov files with no mimeType (QuickTime container allowed per PRD Rev 12)" — Input: `uri: 'file:///video.mov'`, `mimeType: undefined`. Asserts `mockUploadBetaVideo` called and `onUploadSuccess` called with MOCK_VIDEO. Correctly verifies the former bug scenario is now accepted. PASS.
+- "accepts .mov files with mimeType video/quicktime" — Input: `uri: 'file:///iphone_clip.mov'`, `mimeType: 'video/quicktime'`. Asserts upload called, success called. Covers the primary iPhone-camera MIME path. PASS.
+- "rejects .avi files (unsupported container)" — Input: `mimeType: 'video/x-msvideo'`. Asserts error `/Only MP4 and MOV videos are supported/i` and no upload. PASS.
+- "rejects .mkv files (unsupported container, no mimeType)" — Input: `uri: 'file:///video.mkv'`, `mimeType: undefined`. Asserts error and no upload. PASS.
+- "AC-035: shows error and does not upload for unsupported video format (HEVC mimeType)" — Input: `mimeType: 'video/hevc'`. Error regex now `/Only MP4 and MOV videos are supported/i`. PASS.
+- Error message matchers throughout use `/Only MP4 and MOV videos are supported/i` and `僅支援 MP4 和 MOV 格式的影片`. Consistent with updated locale strings. PASS.
+
+**Test coverage** — PASS (4 new tests for PRD Rev 12 scenarios; all existing tests updated with new error string)
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: pre-existing error in `mod-send-logging/__tests__/send-service.test.ts` (TS2352 — present since before this fix, not introduced by mod-beta-video changes); 0 errors in any mod-beta-video file. PASS for this module.
+- `npm test -- --watchAll=false`: PASS — 319 tests, 27 suites, 0 failures (up from 314/27 in QA Run 4 — 5 new tests added by this fix in BetaVideoUploader.test.tsx)
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+
+Pre-existing `act()` console warnings (Icon state updates in BetaVideoUploader, RouteListScreen, RouteSubmitScreen, RequestGymScreen) — unchanged from QA Run 4; not introduced by this fix; all suites still pass.
+
+---
+
+### AC-035 Fix Verification
+
+**REGRESSION PASS AC-035 (PRD Revision 12)**: the QA Run 2 fix that rejected `.mov` (correct under the prior spec) is now correctly reversed per the updated spec.
+
+Previous state (QA Run 2): `validateVideoFormat()` fallback branch: `!asset.mimeType && !lowerUri.endsWith('.mp4')` — `.mov` with no mimeType returned error.
+
+Current state: fallback branch is `!asset.mimeType && !lowerUri.endsWith('.mp4') && !lowerUri.endsWith('.mov')` — `.mov` with no mimeType returns `null` (accepted). Additionally, mimeType branch now accepts `video/quicktime` and `video/mov` via Set lookup.
+
+The original QA Run 1 failure scenario is now inverted: `Input=[video with .mov extension and no mimeType], Actual=[accepted, no error surfaced]` — this is now the CORRECT behavior per PRD Rev 12 and the revised spec.
+
+---
+
+### Re-verification of All Previously Passing ACs
+
+**AC-030** — PASS (unaffected)
+`validateDuration()` is a separate function in `BetaVideoUploader.tsx`. `MAX_DURATION_SECONDS = 60` boundary unchanged. 90-second rejection test passes. Upload still never starts on rejection.
+
+**AC-031** — PASS (unaffected)
+Upload pipeline in `beta-video-service.ts` is unchanged. Single `storage.upload` call with `contentType: 'video/mp4'`. `thumbnail_url` set to `videoPath`. Tests pass.
+
+**AC-032** — PASS (unaffected)
+`route_id` threading from `BetaVideoSection` → `BetaVideoUploader` → `uploadBetaVideo` → DB insert is unchanged. The format validation gate is the only changed code path; it runs before upload begins. Tests pass.
+
+**AC-033** — PASS (unaffected)
+`BetaVideoPlayer.tsx` (expo-video `VideoView` + `useVideoPlayer`) has no dependency on `validateVideoFormat`. Inline playback behavior unchanged. Tests pass.
+
+**AC-034** — PASS (unaffected)
+`BetaVideoPlayer` component exposure is unchanged. MOD-006 is not yet built — pre-existing dependency-ordering gap, not a MOD-005 defect.
+
+**AC-036** — PASS (unaffected)
+The `isUploading` / `progress` Modal overlay is triggered after both validation gates pass. The fix adds a wider acceptance path (`.mov` now accepted rather than rejected), so `setIsUploading(true)` is reached for `.mov` files that previously returned early. This is correct — the upload now proceeds for `.mov`. The `finally` block still clears `isUploading` on completion or failure. Tests pass.
+
+**AC-037** — PASS (unaffected)
+`BetaVideoSection` entry point and `RouteDetailScreen` integration unchanged. "Add Beta Video" button visible without leaving route detail. Route context pre-attached. Tests pass.
+
+---
+
+### Integration Checks
+
+**Cross-module import rule** — PASS (unchanged)
+`RouteDetailScreen.tsx` imports only `BetaVideoSection` from `mod-beta-video`.
+
+**Supabase client singleton** — PASS (unchanged)
+`beta-video-service.ts` imports from `../../lib/supabase`; no `createClient()` at call sites.
+
+**i18n — en locale** — PASS
+All `betaVideo.*` keys present. `errors.invalidFormat` updated to "Only MP4 and MOV videos are supported. Please select a different file." No inline string literals in component JSX.
+
+**i18n — zh-TW locale** — PASS
+All EN betaVideo keys have zh-TW counterparts. `errors.invalidFormat` updated to "僅支援 MP4 和 MOV 格式的影片，請選擇其他檔案。" No missing keys.
+
+**No hardcoded hex colors** — PASS (unchanged; no styling changes)
+
+**Safe area insets** — PASS (not applicable to MOD-005 sub-components; `RouteDetailScreen.tsx` unchanged)
+
+**No HTML template comments in spec** — PASS (spec unchanged)
+
+**Gold-plating check** — PASS
+Fix is confined to `validateVideoFormat()` in `BetaVideoUploader.tsx`, the two locale files, and `BetaVideoUploader.test.tsx`. No new features or components. No new dependencies.
+
+**production.md Video Pipeline Convention note**: production.md was last synced from PRD Revision 11 and still reads "H.264 (baseline profile) + AAC audio in an MP4 container." The spec (last synced from PRD Revision 12) now accepts both MP4 and MOV containers. This is a pre-existing doc-sync gap in production.md — not introduced by this fix and not a blocker for human QA. Flagged for Doc-Sync to carry PRD Rev 12 into production.md Video Pipeline Conventions.
+
+**Adjacent-logic regression check**: the fix is isolated to `validateVideoFormat()` and the ACCEPTED_MIME_TYPES Set. The function has two self-contained branches with no shared state touching AC-030 duration validation, AC-031/032 upload pipeline, AC-033/034 player, AC-036 progress overlay, or AC-037 entry point. No regressions found.
+
+---
+
+### Open Items
+
+**SPEC DOC GAP — production.md Video Pipeline Convention not yet updated for PRD Rev 12** (Doc-Sync task, not a blocker)
+production.md Shared Conventions still describes "MP4 container only." PRD Rev 12 added MOV acceptance. Doc-Sync must carry the revision into production.md.
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker — carried from QA Run 4)
+
+---
+
+### Verdict
+
+**PASS** — AC-035 PRD Revision 12 fix verified. `.mov` with no mimeType: accepted. `video/quicktime` mimeType: accepted. `.mp4` still accepted. `.avi` (mimeType `video/x-msvideo`): rejected. `.mkv` (no mimeType): rejected. HEVC: rejected. Error message in both locales updated to "MP4 and MOV." TypeScript clean (0 errors in mod-beta-video). 319/319 tests pass. No regressions in AC-030/031/032/033/034/036/037.
+
+**MOD-005 is ready for human QA.** All ACs pass:
+- AC-030: PASS — 60-second duration cap enforced before upload; ≤60s accepted, >60s rejected
+- AC-031: PASS — Phase 1 placeholder thumbnail compliant per PM ruling (PRD Revision 10); single upload, valid retrievable URL
+- AC-032: PASS — one BetaVideo row attached to exactly one route; route_id FK enforced
+- AC-033: PASS — inline playback via expo-video VideoView, no external links
+- AC-034: PASS — BetaVideoPlayer component exposed for MOD-006 embedding (MOD-006 not yet built — pre-existing dependency gap)
+- AC-035: PASS — MP4 and MOV containers accepted; video/quicktime accepted; .avi/.mkv/.webm/.hevc rejected; error message updated in both locales
+- AC-036: PASS — progress overlay 0-100%, non-dismissable, blocks interaction during upload
+- AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
