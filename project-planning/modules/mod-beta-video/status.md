@@ -2,6 +2,46 @@
 
 ## Engineering Progress
 
+**Status**: Feature implementation — 2026-09-28 (AC-038 three-column grid, AC-039 fullscreen reel viewer)
+
+### Feature — Grid layout + fullscreen reel viewer (AC-038, AC-039) — 2026-09-28
+
+**Commit**: `4a8a22f feat(mod-beta-video): grid layout + fullscreen reel viewer (AC-038, AC-039)`
+
+**AC-038 — Three-column thumbnail grid**
+
+- `src/modules/mod-beta-video/components/BetaVideoSection.tsx` — replaced the per-video `BetaVideoPlayer` list with a `FlatList` (`numColumns={3}`) grid. Each cell is a `Pressable` with a neutral `#1C1C1E` placeholder background and a `videocam` Ionicons overlay in the top-left (no `VideoView` per cell, no frame-extraction library — Tech Lead decision 6). Signed URLs are NOT fetched for thumbnail display in Phase 1 (`thumbnail_url` is a video path, not an image). Cell `testID="beta-video-grid-cell-{id}"`. Grid `testID="beta-video-grid"`. `openIndex` state (`null` = closed, `N` = viewer open at index N) controls the reel viewer.
+
+**AC-039 — Fullscreen reel viewer**
+
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — new component. Full-screen RN `<Modal>` (`animationType="slide"`, `presentationStyle="overFullScreen"`, `statusBarTranslucent`). One `useVideoPlayer` instance; source replaced via `player.replace({ uri })` on index change (one active decoder — Tech Lead decision 4). Signed URL loaded lazily per current video via `getVideoSignedUrl`. Swipe gesture via `PanResponder` (vertical-only, Tech Lead decision 5): swipe up (dy < -50) → next video; swipe down (dy > +50) at index 0 → `onClose()`; swipe down at index > 0 → previous. No wrap at ends (Tech Lead decision 3). Back button (`chevron-back` Ionicons) as accessible dismiss fallback. Counter ("N / M") and caption overlay. Safe area insets applied to button/counter vertical position.
+
+**expo-video mock update**
+
+- `__mocks__/expo-video.js` — added `replace: jest.fn()` to the player object returned by `useVideoPlayer` and `createVideoPlayer` to support `player.replace()` calls in `BetaVideoReelViewer`.
+
+**Tests**
+
+- `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — new. 13 tests covering: modal renders, loading indicator, VideoView shown after URL resolves, error state, back button calls onClose, swipe up increments index, swipe up at last index is no-op, swipe down at index 0 calls onClose, swipe down at index > 0 decrements index, index resets on visible toggle, no VideoView when visible=false, caption shown, getVideoSignedUrl called with correct URL. PanResponder callbacks tested by intercepting `PanResponder.create` with `jest.spyOn` and calling `onPanResponderRelease` directly with synthetic gestureState.
+
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — rewritten. Removed tests for old BetaVideoPlayer list (no longer rendered). Added: grid renders when videos exist, cell per video, tapping cell opens viewer, tapping second cell opens viewer at correct index, grid absent when no videos.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 341 tests, 28 suites, 0 failures (up from 325/27 — 16 new tests added: 13 in BetaVideoReelViewer.test.tsx, 3 net new in BetaVideoSection.test.tsx)
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (13/13, new)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS (11/11, rewritten)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (unaffected)
+- Git scope: only `src/modules/mod-beta-video/` files and `__mocks__/expo-video.js` modified. No other modules touched. PASS.
+
+**ACs implemented in this commit**:
+- **AC-038**: three-column grid with camera-icon overlay; neutral placeholder background (#1C1C1E); no VideoView per cell; no frame-extraction library
+- **AC-039**: fullscreen portrait viewer; auto-play on mount and index change; swipe-up → next; swipe-down at 0 → dismiss; swipe-down at N > 0 → previous; no wrap; accessible back button; portrait from app.json global lock (no expo-screen-orientation added)
+
+---
+
 **Status**: Bug fix applied — 2026-09-28 (expo-file-system File class migration, SDK 57 readAsStringAsync removal)
 
 ### Bug Fix — expo-file-system File.bytes() migration (SDK 57 readAsStringAsync removal) — 2026-09-28
