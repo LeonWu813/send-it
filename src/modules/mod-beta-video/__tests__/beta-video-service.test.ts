@@ -192,10 +192,11 @@ describe('uploadBetaVideo', () => {
 
   it('AC-032: uploads video then inserts row with route_id (Phase 1 — no separate thumbnail upload)', async () => {
     // Phase 1: only the video is uploaded; thumbnail_url is set to the video path.
+    // uriToBlob now uses arrayBuffer() + expo-blob Blob constructor (no base64 fallback).
     mockFetch.mockResolvedValue({
       ok: true,
-      blob: async () => new Blob(['video-data'], { type: 'video/mp4' }),
-    } as Response);
+      arrayBuffer: async () => new ArrayBuffer(8),
+    } as unknown as Response);
 
     const storageBucket = makeStorageMock();
     (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
@@ -231,10 +232,11 @@ describe('uploadBetaVideo', () => {
 
   it('throws (no cleanup needed) when video upload fails', async () => {
     // Phase 1: only one upload — if it fails, nothing was stored, no cleanup needed.
+    // uriToBlob uses arrayBuffer() + expo-blob Blob constructor.
     mockFetch.mockResolvedValue({
       ok: true,
-      blob: async () => new Blob(['data'], { type: 'video/mp4' }),
-    } as Response);
+      arrayBuffer: async () => new ArrayBuffer(8),
+    } as unknown as Response);
 
     const storageBucket = {
       upload: jest.fn().mockResolvedValue({ data: null, error: new Error('upload failed') }),
@@ -259,10 +261,11 @@ describe('uploadBetaVideo', () => {
   });
 
   it('throws and cleans up video artifact when row insert fails', async () => {
+    // uriToBlob uses arrayBuffer() + expo-blob Blob constructor.
     mockFetch.mockResolvedValue({
       ok: true,
-      blob: async () => new Blob(['data'], { type: 'video/mp4' }),
-    } as Response);
+      arrayBuffer: async () => new ArrayBuffer(8),
+    } as unknown as Response);
 
     const storageBucket = {
       upload: jest.fn().mockResolvedValue({ data: {}, error: null }),

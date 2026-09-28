@@ -2,7 +2,35 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-27 (AC-035 .mov acceptance, PRD Revision 12)
+**Status**: Bug fix applied — 2026-09-27 (expo-blob uriToBlob performance fix)
+
+### Bug Fix — expo-blob uriToBlob (base64 fallback elimination) — 2026-09-27
+
+**Root cause**: `beta-video-service.ts` `uriToBlob()` called `fetch(uri).then(r => r.blob())` to convert a local file URI into a Blob for Supabase Storage upload. In React Native (Hermes), calling `.blob()` on a fetch Response triggers a slow JS-side base64-encoding fallback because React Native's built-in Blob is not backed by native binary I/O. For a 60-second compressed video (~10 MB), this caused significant latency during upload preparation.
+
+**Fix**:
+
+- `npx expo install expo-blob` — already installed as `expo-blob@~57.0.2` (SDK-compatible version) in a prior session. Package already present in `package.json` dependencies.
+- `src/modules/mod-beta-video/beta-video-service.ts`:
+  - Added `import { Blob as ExpoBlob } from 'expo-blob'` — imports the native Blob class.
+  - Replaced `uriToBlob` implementation: instead of `response.blob()` (base64 fallback), now calls `response.arrayBuffer()` to get raw binary data, then `new ExpoBlob([buffer])` to wrap it in expo-blob's native Blob. expo-blob's `Blob` constructor is backed by native iOS code (no base64 round-trip).
+  - Updated JSDoc on `uriToBlob` to document the performance rationale.
+  - Return type changed from `Promise<Blob>` to `Promise<ExpoBlob>` — no behavioral change at the call site since `supabase.storage.upload` accepts any Blob-compatible value.
+- `__mocks__/expo-blob.js`:
+  - Updated from a no-op comment to a proper Jest mock that re-exports `globalThis.Blob` as `Blob`. This satisfies `import { Blob as ExpoBlob } from 'expo-blob'` in the test environment (Node.js has a global Blob since Node 18+) and keeps `expect.any(Blob)` assertions working in `beta-video-service.test.ts`.
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`:
+  - Updated all three `uploadBetaVideo` test cases' fetch mocks: replaced `blob: async () => new Blob([...])` with `arrayBuffer: async () => new ArrayBuffer(8)` to match the new `uriToBlob` implementation that calls `response.arrayBuffer()` instead of `response.blob()`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors (pre-existing TS2352 in `mod-send-logging/__tests__/send-service.test.ts` unaffected; 0 errors in any mod-beta-video file)
+- `npm test -- --watchAll=false`: PASS — 325 tests, 27 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- `npx expo run:ios` (simulator): PASS — Build Succeeded, 0 errors, 1 pre-existing `-lc++` linker warning (not introduced by this fix). App installed and opened on iPhone 17 Pro simulator.
+- Git scope check: FAIL (expected — `__mocks__/expo-blob.js` is a legitimate target for this dependency fix; pre-existing dirty files `.env.example`, `project-planning/setup.md`, `supabase/migrations/`, `tsconfig.json` not touched by this fix; same pattern as QA Run 4 expo-av → expo-video migration)
+- All judgment-based checklist items: PASS — no AC logic changed; uriToBlob is an internal implementation detail; no hardcoded values introduced; expo-blob was already in production.md tech stack (installed via `npx expo install` per convention); no gold-plating; no new user-facing behavior.
 
 ### Bug Fix — AC-035 .mov acceptance (PRD Revision 12) — 2026-09-27
 

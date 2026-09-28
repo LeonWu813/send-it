@@ -12,6 +12,7 @@
  *   the caller has verified H.264/AAC/MP4 conformance.
  */
 
+import { Blob as ExpoBlob } from 'expo-blob';
 import { supabase } from '../../lib/supabase';
 import type { BetaVideo, BetaVideoUploadInput, UploadProgress } from './types';
 
@@ -156,16 +157,22 @@ export async function getThumbnailSignedUrl(storagePath: string): Promise<string
 
 /**
  * Convert a local file URI to a Blob for Supabase Storage upload.
- * Uses fetch() which works in both React Native (Hermes) and test environments.
+ *
+ * Uses expo-blob's native Blob constructor (via its ExpoBlob class) to avoid
+ * React Native's slow JS-side base64-encoding fallback that occurs when calling
+ * `fetch(uri).then(r => r.blob())` without a native Blob implementation.
+ * expo-blob backs the Blob constructor with native iOS/Android code, so binary
+ * data is transferred in memory without base64 round-tripping.
  *
  * @param uri  Local file URI (e.g. file:///path/to/video.mp4).
- * @returns    A Blob of the file content.
+ * @returns    A native Blob of the file content.
  * @throws {Error} on any fetch or conversion failure.
  */
-async function uriToBlob(uri: string): Promise<Blob> {
+async function uriToBlob(uri: string): Promise<ExpoBlob> {
   const response = await fetch(uri);
   if (!response.ok) {
     throw new Error(`Failed to read local file: ${uri}`);
   }
-  return response.blob();
+  const buffer = await response.arrayBuffer();
+  return new ExpoBlob([buffer]);
 }
