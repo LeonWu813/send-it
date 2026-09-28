@@ -4,13 +4,14 @@
 **Module Name**: Send Logging
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 9
+**Last Synced from PRD Revision**: 14
+**Last Updated**: 2026-09-28
 
 ---
 
 ## Purpose
 
-Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override) and restricting the ascent style to the three-value set (flash, top, attempt). Expose `fetchUserAchievements(routeIds[])` as a public service function for consumption by MOD-003 screens.
+Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override) and restricting the ascent style to the three-value set (flash, top, attempt). Expose `fetchUserAchievements(routeIds[])`, `fetchMyAscentsForRoute(routeId)`, and `summarizeAscents(ascents)` as public service functions for consumption by MOD-003 screens.
 
 ---
 
@@ -20,7 +21,17 @@ The core climber loop — "log a send without interrupting my climbing rhythm" �
 
 The ascent style selector is restricted to exactly three values: {flash, top, attempt}. The `project` style is removed — it is not selectable in the UI and is not a valid value in the `ascent_style` database enum. Any historical ascent previously logged with `project` is treated as `attempt` (backfilled in the migration). A new migration removes `project` from the `ascent_style` DB enum using the PG15-safe pattern (create new type, backfill, swap, rename). The enum removal migration must run before any code change that removes `project` from the UI (migration first, then code).
 
-MOD-004 owns the `fetchUserAchievements` public service function: given a list of route IDs, it returns the best ascent style achieved by the calling user on each route (scoped to `auth.uid()`), reducing multiple ascents per route to the best style with precedence `flash > top > attempt`. Routes with no ascent by the user are absent from the returned map. This function is consumed by MOD-003 screens (RouteListScreen and RouteDetailScreen) for achievement icon display.
+The log-send form (`LogSendScreen.tsx`) does not present a V-grade or any grade input field. Grade is rendered read-only for display only, inherited from `Route.grade` at display time. The form fields are: style selector, attempts, date, note, is_private. No grade picker exists or should be added. This satisfies AC-011 (revised, Rev 14) — the existing implementation is already correct.
+
+**AC-011 revised (Rev 14) — already satisfied**: `LogSendScreen.tsx` has no grade input field. Grade is displayed read-only (display-only block showing `routeGrade` with a `gradeNote`), never as a selectable or editable control. The `logAscent` payload and `AscentLogInput` type contain no `grade` field. AC-011 revised codifies existing behavior — no code change is required. **One doc-comment fix is needed**: the JSDoc comment at the top of `LogSendScreen.tsx` line 12 lists `project` as a style (removed in Rev 9); drop `project` from the listed style set. The running code is already correct (`ASCENT_STYLES` in `types.ts` is `['flash', 'top', 'attempt']`); only the comment is stale.
+
+MOD-004 owns the following public service functions:
+
+- `fetchUserAchievements(routeIds[])`: given a list of route IDs, returns the best ascent style achieved by the calling user on each route (scoped to `auth.uid()`), reducing multiple ascents per route to the best style with precedence `flash > top > attempt`. Routes with no ascent by the user are absent from the returned map. Consumed by MOD-003 screens (RouteListScreen and RouteDetailScreen) for achievement icon display.
+
+- `fetchMyAscentsForRoute(routeId)`: returns `AscentWithProfile[]` for the calling user's own ascents on a single route, scoped to `auth.uid()`, ordered `logged_at DESC`. Already consumed by RouteDetailScreen today (imported at line 49 of `RouteDetailScreen.tsx`). Consumed by MOD-003 for AC-127 (send-summary cards) and AC-129 (Send History Detail screen list). Return shape: `{ id, user_id, route_id, style, attempts, note, logged_at, is_private, display_name }`.
+
+- `summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number }`: a pure client-side helper that derives the AC-127 two-column summary from the `AscentWithProfile[]` array returned by `fetchMyAscentsForRoute`. Sends = `ascents.filter(a => a.style === 'flash' || a.style === 'top').length`; Attempts = `ascents.reduce((sum, a) => sum + a.attempts, 0)`. This helper keeps the "flash|top = a send" business rule owned by MOD-004 (the send-logging domain). No server-side RPC is needed or should be added for this aggregation — the counts are a trivial client-side reduction over an array already in memory, and a separate RPC would risk the aggregate disagreeing with the AC-129 list.
 
 **Non-goals for this module:**
 - Offline send queue (Phase 2 — Phase 1 shows a clear error on failure).
@@ -41,7 +52,9 @@ MOD-004 owns the `fetchUserAchievements` public service function: given a list o
 
 **AC-010**: The system shall allow a user to log a send from an existing route detail page in ≤4 taps (route → log → style → confirm).
 
-**AC-011**: The system shall save the log with `grade` derived from `Route.grade` at display time; no per-log grade value is stored.
+**AC-011** (revised, Rev 14): The system shall save the log with `grade` derived from `Route.grade` at display time; no per-log grade value is stored. The log-send form shall not present a V-grade (or any grade) input field; grade is inherited from `Route.grade` at display time and is not selectable or editable when logging a send.
+
+> **Implementation note**: AC-011 revised is already satisfied — `LogSendScreen.tsx` has no grade input; grade is display-only. The only action for the engineer is to fix the stale doc-comment on line 12 of `LogSendScreen.tsx`, which lists `project` as a style (removed in Rev 9) — fix the comment but the behavior is already correct.
 
 **AC-012**: The system shall, when the network request to save a send fails, display a clear error message to the user (Phase 1 does not queue sends offline).
 
@@ -53,7 +66,13 @@ MOD-004 owns the `fetchUserAchievements` public service function: given a list o
 
 ## Integration Points
 
-MOD-004 exposes `fetchUserAchievements(routeIds: string[]): Promise<Record<string, 'flash' | 'top' | 'attempt'>>` as a public service function in `send-service.ts`. This function is consumed by MOD-003 (RouteListScreen, RouteDetailScreen) for achievement icon display. MOD-003 imports only the public service function — not MOD-004 internal screens, components, or the `ascents` table. MOD-004 engineer implements this function; MOD-003 engineer confirms it is available before MOD-003 QA handoff.
+MOD-004 exposes the following public service functions in `send-service.ts`:
+
+1. `fetchUserAchievements(routeIds: string[]): Promise<Record<string, 'flash' | 'top' | 'attempt'>>` — consumed by MOD-003 (RouteListScreen, RouteDetailScreen) for achievement icon display. MOD-003 imports only the public service function — not MOD-004 internal screens, components, or the `ascents` table. MOD-004 engineer implements this function; MOD-003 engineer confirms it is available before MOD-003 QA handoff.
+
+2. `fetchMyAscentsForRoute(routeId: string): Promise<AscentWithProfile[]>` — route-scoped, own-user-only (`.eq('user_id', user.id)`, defense-in-depth against RLS OR-clause), ordered `logged_at DESC`. Already consumed by `RouteDetailScreen.tsx` (imported line 49). Also consumed by MOD-003 for AC-127 (send-summary cards via `summarizeAscents`) and AC-129 (Send History Detail screen raw list). No new service function and no new RPC are needed for either AC.
+
+3. `summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number }` — pure client-side helper. `sends` = count where `style ∈ {flash, top}`; `attempts` = sum of `attempts` column. Consumed by MOD-003's RouteDetailScreen for the AC-127 two-column summary cards. Do NOT implement as a server-side RPC.
 
 ---
 
@@ -93,6 +112,19 @@ All tables guarded by Supabase Row-Level Security policies. `Ascent` rows are wr
 
 **Outputs (fetchUserAchievements):**
 - `Promise<Record<string, 'flash' | 'top' | 'attempt'>>` — map of route_id → best ascent style for the calling user; routes with no ascent by this user are absent from the map
+
+**Inputs (fetchMyAscentsForRoute):**
+- `routeId: string` — single route UUID
+- Authenticated user session (scoped to `auth.uid()`)
+
+**Outputs (fetchMyAscentsForRoute):**
+- `Promise<AscentWithProfile[]>` — all of the calling user's ascent records for the route, ordered `logged_at DESC`. Each record carries: `{ id, user_id, route_id, style, attempts, note, logged_at, is_private, display_name }`.
+
+**Inputs (summarizeAscents):**
+- `ascents: AscentWithProfile[]` — the array returned by `fetchMyAscentsForRoute`
+
+**Outputs (summarizeAscents):**
+- `{ sends: number; attempts: number }` — `sends` = count where `style ∈ {flash, top}`; `attempts` = sum of `attempts` column across all records
 
 ---
 
@@ -149,6 +181,34 @@ Expose `fetchUserAchievements(routeIds: string[]): Promise<Record<string, 'flash
 - Must be own-user-scoped: returns only the calling user's own achievements, never another user's. Use `SECURITY INVOKER` if implemented as a Postgres RPC (RLS scopes it to `auth.uid()` automatically). If a SECURITY DEFINER function is ever used instead, `WHERE user_id = auth.uid()` is mandatory and non-optional.
 - Preferred implementation: a `SECURITY INVOKER` Postgres RPC that groups `ascents` by `route_id` for `user_id = auth.uid()`, applies the precedence via an ordered aggregate, and returns `(route_id, style)` rows. A single client-side `SELECT route_id, style FROM ascents WHERE route_id = ANY($ids) AND user_id = auth.uid()` with client-side reduction is acceptable for Phase 1. Engineer's call; document the chosen shape in the implementation.
 - The `ascents_route_id_idx (route_id, logged_at DESC)` index supports the `route_id = ANY(...)` scan.
+
+### fetchMyAscentsForRoute Public Service Function
+
+`fetchMyAscentsForRoute(routeId: string): Promise<AscentWithProfile[]>` is already implemented at `src/modules/mod-send-logging/send-service.ts:146`. It is own-user-scoped (`.eq('user_id', user.id)` — defense-in-depth against the `ascents_select_own_or_public` RLS OR-clause), ordered `logged_at DESC`, and returns `AscentWithProfile[]`.
+
+This function is:
+- **Already consumed** by `RouteDetailScreen.tsx` (imported at line 49, result held in `myAscents` state at line 122).
+- **Sufficient for AC-129** (Send History Detail list): `style` and `attempts` are both present on every returned row — no new field needed.
+- **Sufficient for AC-127** (send-summary cards) via `summarizeAscents` — no new query, no new fetch.
+
+No extension to this function is needed for Rev 14. The Send History Detail screen re-fetches it on mount to ensure a current list.
+
+### summarizeAscents Helper
+
+`summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number }` is a pure, synchronous helper to be added to `send-service.ts` alongside `fetchMyAscentsForRoute`.
+
+```ts
+function summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number } {
+  return {
+    sends: ascents.filter(a => a.style === 'flash' || a.style === 'top').length,
+    attempts: ascents.reduce((sum, a) => sum + a.attempts, 0),
+  };
+}
+```
+
+This helper keeps the "flash|top = a send" business rule owned by MOD-004 (the send-logging domain) so both AC-127 (route detail summary cards) and the Send History Detail screen (which may echo the totals) agree. A screen-inline `.filter/.reduce` is also acceptable for Phase 1, but the helper is preferred.
+
+**Do NOT implement `summarizeAscents` as a server-side RPC.** The counts are a trivial client-side reduction over an array already in memory; a new RPC would be over-engineering and risks the aggregate disagreeing with the AC-129 list.
 
 ---
 

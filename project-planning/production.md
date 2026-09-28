@@ -2,7 +2,7 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 13 (2026-09-28)
+**Last synced from PRD**: rev 14 (2026-09-28)
 **Last Updated**: 2026-09-28
 
 ---
@@ -245,6 +245,14 @@ Phase 1 is globally portrait-locked via `app.json` `"orientation": "portrait"`; 
 ### Thumbnail Grids Never Mount Video Players Per Cell
 
 A grid or list of videos renders `<Image>`/placeholder cells (with an affordance icon), never one `VideoView` per cell; instantiate at most one active video player at a time (in the opened viewer). This protects the cold-start / scroll-performance NFRs and battery.
+
+### Client-Side Aggregation Over Already-Fetched Arrays
+
+When a screen needs both a raw per-item list and a summary of the same single-owner/single-parent set (e.g. "my sends on this route" + "my send count / attempt sum on this route"), fetch the raw set once via the owning module's existing public service and derive the summary client-side (a pure helper in the owning module owns the domain reduction rule). Do not add a server-side aggregate RPC for a single-parent slice — it risks the aggregate disagreeing with the list and adds a redundant round-trip. Reserve batched service functions (`fetch...(ids[])`) for genuine N-across-items reads where a per-item fetch would be N+1.
+
+### Relocated Cross-Module Entry Points Are Removed from the Old Location
+
+When an AC relocates an action entry point (e.g. moving log-send and upload-beta-video into a dedicated action row), the prior affordance must be removed from its old host so exactly one entry path exists. Two entry points to the same flow is a defect, not redundancy. Where the entry point renders in one module's screen but launches another module's flow, the button lives in the host screen and the flow stays owned by the flow's module (host-screen/owning-module split), coordinated across both engineers.
 
 ### TypeScript Strict Mode
 

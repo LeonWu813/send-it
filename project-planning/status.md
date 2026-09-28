@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: fb25f79060b312c877814ceae4fd2ad7535ba545
-timestamp: 2026-09-28T00:00:00Z
+commit: d7a13d30dfe018599d59749d3162de62dc7edb98
+timestamp: 2026-09-28T01:00:00Z
 ```
 
 ## PM Updates
@@ -1320,3 +1320,31 @@ Phase 1 — iOS MVP, Taipei + New Taipei launch
 **Agent wrappers checked:** `.claude/agents/engineer-mod-beta-video.md` and `.claude/agents/qa-mod-beta-video.md` — both are generic templated wrappers that do not enumerate specific ACs; no update required.
 
 **verify-sync.sh result:** 4/6 — same result as pre-sync baseline (Checks 4 and 6 are pre-existing script bugs unrelated to this sync; confirmed by running the script against the stashed/unmodified state and observing the same 4/6 pass count). Checks 1, 2, 3, and 5 all pass.
+
+
+### Sync Report — Delta Sync — 2026-09-28
+
+**Sync type:** delta
+**PRD Revision:** 14
+**PM Update reference:** 2026-09-28 [SUBSTANTIVE] — Route detail + log-send form UX refinements (PRD Revision 14): AC-125–AC-130 (new), AC-011 (revised). Tech Lead Review 2026-09-28 completed before this sync.
+
+**Files modified:**
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced from PRD Revision updated 9 → 14; Last Updated set to 2026-09-28; Related User Stories section updated (US-002 += AC-127/128/129/130; US-004 += AC-130; US-006 += AC-125/AC-126); AC-125 through AC-130 (new) added to Acceptance Criteria Covered section; Integration Point 3 added (cross-module import of fetchMyAscentsForRoute and summarizeAscents from MOD-004 for AC-127/AC-129); new "RouteDetailScreen Composition (AC-125 / AC-126 / AC-127 / AC-128 / AC-129 / AC-130) — Tech Lead Decisions (Rev 14)" subsection added to Key Implementation Notes covering gym-name subtitle (AC-125), added-date footer (AC-126), fetchMyAscentsForRoute data source and client-side aggregation via summarizeAscents (AC-127/AC-129), Send History Detail screen as new 'send-history' view state in RouteNavigator (AC-128/AC-129 with back-to-detail constraint), and AC-130 old entry point removal (coordinated MOD-003 + MOD-005 change).
+- `project-planning/modules/mod-send-logging/spec.md` — Last Synced from PRD Revision updated 9 → 14; Last Updated set to 2026-09-28; Purpose updated to include fetchMyAscentsForRoute and summarizeAscents in the public service contract description; Context updated with AC-011-revised already-satisfied note and summarizeAscents description; AC-011 entry updated with the revised text from PRD Rev 14 (appended no-grade-input sentence) plus implementation note that AC-011 revised is already satisfied with one stale doc-comment fix; Integration Points section updated to document all three public service functions (fetchUserAchievements, fetchMyAscentsForRoute, summarizeAscents) with explicit note that summarizeAscents must NOT be a server-side RPC; Input/Output Contract updated with fetchMyAscentsForRoute and summarizeAscents inputs/outputs; new "fetchMyAscentsForRoute Public Service Function" subsection added to Key Implementation Notes; new "summarizeAscents Helper" subsection added with implementation formula and explicit server-side RPC prohibition.
+- `project-planning/production.md` — Last synced from PRD updated rev 13 → rev 14; Last Updated updated to 2026-09-28; two new Shared Conventions added (copied verbatim from Tech Lead Review 2026-09-28 Proposed Shared Conventions): "Client-Side Aggregation Over Already-Fetched Arrays" and "Relocated Cross-Module Entry Points Are Removed from the Old Location".
+
+**Files created:** none
+
+**Module removals noted:** none
+
+**AMBIGUITY markers added:** none
+
+**CONFLICT markers added:** none
+
+**verify-sync.sh result:** 4/6 — same result as pre-sync baseline. Checks 4 and 6 are pre-existing script bugs unrelated to this sync (documented in every prior sync report since Rev 4). Checks 1, 2, 3, and 5 all pass.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (pre-existing script bug): awk range terminates immediately because the start line matches the end condition; US-IDs are correctly present in all specs.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (pre-existing script bug): script over-matches phase content from PRD sections beyond §7; Phase Plan section is correctly written.

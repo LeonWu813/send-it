@@ -4,7 +4,8 @@
 **Module Name**: Route Catalog
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002
-**Last Synced from PRD Revision**: 9
+**Last Synced from PRD Revision**: 14
+**Last Updated**: 2026-09-28
 
 ---
 
@@ -44,8 +45,10 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 
 ## Related User Stories
 
+- **US-002**: Log a send quickly — AC-010, AC-011, AC-012, AC-014, AC-127, AC-128, AC-129, AC-130
 - **US-003**: Submit a new route
-- **US-006**: Browse currently active routes at a gym
+- **US-004**: Upload a beta video for a route — AC-030, AC-031, AC-032, AC-037, AC-130
+- **US-006**: Browse currently active routes at a gym — AC-005, AC-006, AC-040, AC-041, AC-042, AC-045, AC-125, AC-126
 - **US-021**: Bookmark a route while browsing
 
 ---
@@ -88,6 +91,18 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 
 **AC-047** (new): RouteListScreen shall display a read-only filled bookmark indicator on saved-route cards only; no indicator is shown for unsaved routes. The list indicator is read-only — tapping it performs no save/unsave action (tapping the route entry navigates to its detail screen per AC-042). No saved-routes list surface is provided on the Profile or Home tab in Phase 1.
 
+**AC-125** (new): The route detail screen shall display the gym's name as a subtitle directly beneath the route display-name title. The route detail screen shall not render a separate "岩館" (gym) section label or header; the gym name appears only as the subtitle.
+
+**AC-126** (new): The route detail screen shall display the route's added date (`Route.created_at`) as a footer at the bottom of the screen, below all other route detail content.
+
+**AC-127** (new): The route detail screen shall display a two-column send-summary section scoped to the logged-in user: a left "Sends" card showing the count of the user's ascents on this route where `style` is `flash` or `top`, and a right "Attempts" card showing the sum of the `attempts` column across all of the user's ascents on this route. Both values are sourced from MOD-004's public service (`fetchMyAscentsForRoute`).
+
+**AC-128** (new): Tapping either summary card (Sends or Attempts, AC-127) on the route detail screen shall navigate the user to a Send History Detail screen for that route, passing the route identifier.
+
+**AC-129** (new): The Send History Detail screen shall list all of the logged-in user's individual ascent records for the route (each showing at minimum style and attempts count), and shall provide a back control that returns the user to the route detail screen. Records are sourced from MOD-004's public service.
+
+**AC-130** (new): The route detail screen shall present two action controls positioned below the send-summary section: a "Record Send History" control that launches the log-send flow (AC-010), and an "Upload Beta Video" control that launches the beta-video upload flow (AC-037). These replace any prior placement of the log-send and add-beta-video entry points on the screen.
+
 ---
 
 ## Requirements
@@ -107,6 +122,9 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 
 2. **Cross-module import**: MOD-003 imports `fetchUserAchievements(routeIds: string[])` from MOD-004's public service (`send-service.ts`) for achievement icon display on RouteListScreen cards and RouteDetailScreen. MOD-004 must expose this function before MOD-003 QA handoff. MOD-003 must not query the `ascents` table directly.
    **AC**: AC-046 (MOD-004 perspective: achievement icons on MOD-003 screens)
+
+3. **Cross-module read (AC-127 / AC-129)**: MOD-003 imports `fetchMyAscentsForRoute(routeId)` and `summarizeAscents(ascents)` from MOD-004's public service (`send-service.ts`). `fetchMyAscentsForRoute` is already consumed by RouteDetailScreen today. `summarizeAscents` is a pure helper also in MOD-004's public service. MOD-003 must not query the `ascents` table directly.
+   **AC**: AC-127, AC-129
 
 ---
 
@@ -218,6 +236,36 @@ All tables guarded by Supabase Row-Level Security policies.
 - **Admin merges**: Near-duplicate route merges are performed by the admin via Supabase Studio. No in-app admin UI.
 - **Default filter**: The gym route list shows `active` routes only for normal users (AC-041). Users can apply grade and hold-color chip filters (AC-040). No status filter is surfaced to normal users.
 - **Approval-time active-uniqueness collision**: Because pending rows bypass the partial unique index (`WHERE status = 'active'`), two pending submissions for the same (gym_id, grade, color_tag) can coexist (from different users; per-submitter uniqueness is separately enforced). Approving the second one (`UPDATE status = 'active'`) will hit `routes_active_unique_idx` and raise a unique-violation in Studio. This is expected Phase 1 behavior, not a bug. The admin (Leon) can reject the duplicate in Studio.
+
+### RouteDetailScreen Composition (AC-125 / AC-126 / AC-127 / AC-128 / AC-129 / AC-130) — Tech Lead Decisions (Rev 14)
+
+**AC-125 — gym name as subtitle**: Render the gym's name as a subtitle directly beneath the composed route display-name title. Remove any standalone "岩館" (gym) section label or labeled header block (the current `routes.detail.gym` label block, approximately lines 369-372 of `RouteDetailScreen.tsx`); the gym name appears only as the subtitle, not as a separate labeled section.
+
+**AC-126 — added-date footer**: Render `Route.created_at` as a footer at the very bottom of the screen's ScrollView content, below all other route detail content. The screen already shows an "Added on" block (approximately lines 383-388); AC-126 moves this to a footer position below all other sections.
+
+**AC-127 / AC-129 data source — `fetchMyAscentsForRoute` (MOD-004 public service, `src/modules/mod-send-logging/send-service.ts:146`)**: The function already returns sufficient data for both AC-127 and AC-129. No new service function and no new RPC are needed.
+- **Sends card** (AC-127) = `myAscents.filter(a => a.style === 'flash' || a.style === 'top').length`
+- **Attempts card** (AC-127) = `myAscents.reduce((sum, a) => sum + a.attempts, 0)`
+- Both values are derived **client-side** from the `AscentWithProfile[]` array already held in `myAscents` state (`RouteDetailScreen.tsx:122`). No new DB query, no new fetch — zero additional round-trip.
+- The reduction logic (which styles count as a send; summing attempts) is owned by a MOD-004 pure helper `summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number }`. MOD-003 calls `fetchMyAscentsForRoute` (already does) and passes the result to `summarizeAscents`. This keeps the "flash|top = a send" business rule in MOD-004's domain.
+- **Do NOT add a server-side aggregate RPC for AC-127** — the counts are a trivial client-side reduction over an array already in memory; a new RPC would be over-engineering and risks the aggregate disagreeing with the AC-129 list.
+- **AC-129 (Send History Detail screen)**: the raw `AscentWithProfile[]` returned by `fetchMyAscentsForRoute` already carries `style` and `attempts` per row — sufficient for the list. The Send History Detail screen re-fetches `fetchMyAscentsForRoute(routeId)` on mount so the history is current even if the user logged sends since opening the detail screen.
+
+**AC-128 / AC-129 — Send History Detail screen placement**: a new `'send-history'` view state in the existing `RouteNavigator`. Do NOT add a new navigator.
+- Add one view state to the existing `RouteView` union in `RouteNavigator.tsx`. Recommended name: `'send-history'` (consistent with existing lowercase-kebab `list` / `detail` / `submit` naming). New union member: `{ name: 'send-history'; routeId: string }`.
+- New screen file: `src/modules/mod-route-catalog/screens/SendHistoryDetailScreen.tsx`
+- Props: `{ routeId: string, session: Session, onBack: () => void }`
+- `onBack` must return to `{ name: 'detail', routeId }` — NOT to `list`. Since navigation is a view-state machine keyed by `routeId` (not a persisted stack), a naive `navigateToList()` would drop the user two levels and break AC-129's "returns the user to the route detail screen."
+- Add navigator handler: `function navigateToSendHistory(routeId: string): void { setView({ name: 'send-history', routeId }); }`
+- `RouteDetailScreen` gains `onViewSendHistory: (routeId: string) => void` prop, wired to `navigateToSendHistory`. Both AC-127 summary cards (Sends and Attempts) call `onViewSendHistory(route.id)`.
+
+**AC-130 — old entry point removal**: AC-130 replaces prior placements. Engineer must:
+1. **Remove the "Log Send" button** from the ascent-section header in `RouteDetailScreen.tsx` (approximately lines 408-415). The AC-130 "Record Send History" control replaces it, still opening the same `LogSendScreen` modal via `handleLogSendPress`.
+2. **Remove the "Add beta video" entry point from inside `BetaVideoSection`** (MOD-005-owned component) and surface AC-130's "Upload Beta Video" control in the MOD-003 action row, which launches the MOD-005 upload flow. The upload *flow* remains MOD-005-owned (AC-037). Preferred pattern: MOD-005 exposes an `onUploadPress`/launcher callback that MOD-003's action button invokes, keeping the uploader flow inside MOD-005 while the button lives in MOD-003's AC-130 row (the same host-screen/owning-module split flagged in the 2026-09-23 navigation review).
+- **This is a coordinated MOD-003 + MOD-005 change** — both module engineers must be routed.
+- Do NOT leave both the AC-130 controls and the old entry points in place; shipping duplicate entry points to the same flow is a defect, not redundancy.
+
+**Font size**: Styling decisions for font sizes on the redesigned route detail screen are implementation-level engineer decisions. No AC specifies a required font size.
 
 ### Enum Migration
 
