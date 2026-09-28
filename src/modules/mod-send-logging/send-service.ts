@@ -148,7 +148,9 @@ export async function fetchMyAscentsForRoute(
 ): Promise<AscentWithProfile[]> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) {
-    throw new Error('Failed to load your sends. Please sign in and try again.');
+    // Auth hiccup (e.g. token refresh in progress on a live device) — return an
+    // empty array so the screen shows an empty state rather than crashing.
+    return [];
   }
 
   const { data, error } = await supabase
@@ -156,7 +158,7 @@ export async function fetchMyAscentsForRoute(
     .select(ASCENT_LIST_SELECT)
     .eq('route_id', routeId)
     .eq('user_id', user.id)  // scope to calling user only — defense-in-depth against RLS OR clause
-    .order('created_at', { ascending: false });
+    .order('logged_at', { ascending: false });
 
   if (error) {
     throw new Error('Failed to load your sends for this route. Please try again.');

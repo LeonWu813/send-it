@@ -372,7 +372,7 @@ describe('fetchMyAscentsForRoute', () => {
     expect(qb.eq).toHaveBeenCalledWith('route_id', 'route-001');
     // Must filter by user_id to scope to the calling user only
     expect(qb.eq).toHaveBeenCalledWith('user_id', MOCK_USER_ID);
-    expect(qb.order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(qb.order).toHaveBeenCalledWith('logged_at', { ascending: false });
   });
 
   it('returns an empty array when the user has no ascents on the route', async () => {
@@ -395,16 +395,17 @@ describe('fetchMyAscentsForRoute', () => {
     expect(result).toEqual([]);
   });
 
-  it('throws a sign-in error when auth.getUser returns no user', async () => {
+  it('returns an empty array when auth.getUser returns no user (auth hiccup resilience)', async () => {
     mockGetUser.mockResolvedValueOnce({
       data: { user: null },
       error: null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test helper cast
     } as any);
 
-    await expect(fetchMyAscentsForRoute('route-001')).rejects.toThrow(
-      'Failed to load your sends. Please sign in and try again.',
-    );
+    // Auth hiccup (e.g. token refresh on a live device) must not crash the screen.
+    // The function returns [] so the screen shows an empty state rather than an error.
+    const result = await fetchMyAscentsForRoute('route-001');
+    expect(result).toEqual([]);
     // Must not call from() when auth fails
     expect(mockFrom).not.toHaveBeenCalled();
   });

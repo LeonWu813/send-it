@@ -2,6 +2,34 @@
 
 ## Engineering Progress
 
+### Bugfix — fetchMyAscentsForRoute auth resilience + order column (2026-09-27)
+
+**Issue reported (human QA)**: After wiring `fetchMyAscentsForRoute` into `RouteDetailScreen`, the send history section shows nothing or an error state on a live device.
+
+**Root causes found:**
+
+1. **`order('created_at')` — wrong column name**: `fetchMyAscentsForRoute` in `send-service.ts` called `.order('created_at', { ascending: false })`. The `ascents` table has no `created_at` column — the timestamp is `logged_at` (present in `ASCENT_LIST_SELECT` and the `Ascent` type). This caused Supabase to return an error on every real device query, triggering the `ascentsError` state and blanking the section. `loadAscentsForRoute` (the reference implementation) correctly used `logged_at`.
+
+2. **`fetchMyAscentsForRoute` throws on auth hiccup**: When `supabase.auth.getUser()` returned an error or null (e.g. during token refresh on a live device), the function threw `'Failed to load your sends. Please sign in and try again.'` instead of returning `[]`. This caused the inline ascent section to show an error state rather than an empty state during momentary auth gaps.
+
+**Fixes:**
+
+- `send-service.ts` `fetchMyAscentsForRoute`: changed `.order('created_at', ...)` to `.order('logged_at', ...)` — matching `loadAscentsForRoute` and the `Ascent` type.
+- `send-service.ts` `fetchMyAscentsForRoute`: changed the `if (userError || !user)` branch from `throw new Error(...)` to `return []`. Auth hiccups now produce an empty state on the screen, not a crash.
+- The inline error/empty state rendering in `RouteDetailScreen` was already correct — the section shows a visible error message with a retry button when `ascentsError` is set, and the empty-state text when `myAscents.length === 0`. No screen changes needed.
+
+**Files changed:**
+- `src/modules/mod-send-logging/send-service.ts` — `fetchMyAscentsForRoute`: `.order('created_at')` → `.order('logged_at')`; auth-fail branch returns `[]` instead of throwing.
+- `src/modules/mod-send-logging/__tests__/send-service.test.ts` — updated order assertion from `'created_at'` to `'logged_at'`; updated auth-fail test from "throws a sign-in error" to "returns an empty array (auth hiccup resilience)".
+
+**Self-check (2026-09-27):**
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 325 tests, 27 suites, 0 failures
+- PASS: No MOD-004 screen/component files edited — only `send-service.ts` (the public service) and its test
+- PASS: No gold-plating — changes confined exactly to the two root causes identified
+
+---
+
 ### Bugfix — Ascent list scoped to current user only (2026-09-27)
 
 **Issue**: `RouteDetailScreen` displayed ascent history for all users, not just the logged-in user. The `AscentList` component (MOD-004) internally called `loadAscentsForRoute`, which returns all visible ascents via the `ascents_select_own_or_public` RLS policy — this includes other users' public sends.
