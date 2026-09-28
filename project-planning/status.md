@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-beta-video
-mode: regression
-module: mod-beta-video
+agent: doc-sync
+mode: trivial
+module: n/a
 result: success
-commit: f370525fe8f98a5f2fa23531e3b1e7ecaba6ae34
-timestamp: 2026-09-27T02:00:00Z
+commit: 59327b3ef6af6561bd181e4b93982eb52c0ffd25
+timestamp: 2026-09-27T03:00:00Z
 ```
 
 ## PM Updates
@@ -811,6 +811,22 @@ The column drop touches **migrations, one service function, types, the onboardin
 ### Sync Report — Trivial Passthrough — 2026-09-24
 
 Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
+
+### Sync Report — Trivial Passthrough — 2026-09-27
+
+**Sync type:** trivial
+**PRD Revision:** 12
+**PM Update reference:** 2026-09-27 [TRIVIAL] — AC-035 `.mov` container ruling (PRD Revision 12)
+**Files modified:**
+- `project-planning/production.md` — Video Pipeline Conventions paragraph updated: stale "MP4 container only" wording replaced with the two-container rule from AC-035 (revised). Accepted containers are now MP4 (`.mp4`) and QuickTime (`.mov`); rejection is codec-based (H.264/HEVC video + AAC audio required); both stored as-is with no server-side transcoding. Header metadata updated: Last synced from PRD rev 11 → rev 12; Last Updated 2026-09-25 → 2026-09-27.
+
+**Files not touched:**
+- All module specs — wording change is confined to the production.md shared convention; no spec content is affected.
+- `prd.md` — read-only.
+
+**AMBIGUITY markers added:** none
+**CONFLICT markers added:** none
+**verify-sync.sh:** Skipped — trivial passthrough per skill routing rules.
 
 ## Skill Recommendations
 
