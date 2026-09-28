@@ -21,6 +21,7 @@ function useVideoPlayer(_source, setup) {
     play: jest.fn(),
     pause: jest.fn(),
     replace: jest.fn(),
+    replaceAsync: jest.fn().mockResolvedValue(undefined),
     addListener: jest.fn((_event, _callback) => ({ remove: jest.fn() })),
   };
   if (typeof setup === 'function') {
@@ -35,6 +36,7 @@ function createVideoPlayer(_source) {
     play: jest.fn(),
     pause: jest.fn(),
     replace: jest.fn(),
+    replaceAsync: jest.fn().mockResolvedValue(undefined),
     addListener: jest.fn((_event, _callback) => ({ remove: jest.fn() })),
   };
 }

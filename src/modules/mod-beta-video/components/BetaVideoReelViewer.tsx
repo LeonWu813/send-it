@@ -17,7 +17,7 @@
  * 6. Thumbnails: placeholder only — do NOT mount VideoView per grid cell.
  *
  * Playback: one `useVideoPlayer` instance whose source is replaced
- * (`player.replace()`) when currentIndex changes — one active decoder at a time.
+ * (`player.replaceAsync()`) when currentIndex changes — one active decoder at a time.
  * Signed URLs are loaded lazily: only the current video's signed URL is fetched.
  */
 
@@ -95,10 +95,26 @@ export default function BetaVideoReelViewer({
   const [urlError, setUrlError] = useState(false);
 
   // ── Video player ─────────────────────────────────────────────────────────
-  // One player instance — source is replaced via player.replace() on index change.
+  // One player instance — source is replaced via player.replaceAsync() on index change.
   const player = useVideoPlayer(null, (p) => {
     p.loop = false;
   });
+
+  // Bug 2 fix: pause on unmount so audio does not bleed after the component
+  // is destroyed (e.g. navigating away while the modal is still mounted).
+  useEffect(() => {
+    return () => {
+      player.pause();
+    };
+  }, [player]);
+
+  // Bug 2 fix: pause whenever the modal is hidden so audio stops immediately
+  // when the parent sets visible=false without waiting for unmount.
+  useEffect(() => {
+    if (!visible) {
+      player.pause();
+    }
+  }, [visible, player]);
 
   /**
    * Load signed URL for the current video, then replace the player source and
@@ -121,9 +137,12 @@ export default function BetaVideoReelViewer({
         if (cancelled) return;
         setSignedUrl(url);
         setUrlLoading(false);
-        // Replace source and auto-play (Tech Lead decision 4).
-        player.replace({ uri: url });
-        player.play();
+        // Bug 3 fix: use replaceAsync to avoid synchronous main-thread I/O
+        // (avoids iOS deprecation warning). Chain play() after the async load
+        // completes so playback starts only when the asset is ready.
+        void player.replaceAsync({ uri: url }).then(() => {
+          if (!cancelled) player.play();
+        });
       })
       .catch(() => {
         if (cancelled) return;
@@ -148,10 +167,13 @@ export default function BetaVideoReelViewer({
   /**
    * AC-039: swiping down or tapping a back control shall dismiss the viewer.
    * Dismissal is unconditional — there is no "go to previous" on swipe-down.
+   * Bug 2 fix: pause the player before calling onClose so audio stops
+   * immediately rather than continuing until the component unmounts.
    */
   const handleDismiss = useCallback((): void => {
+    player.pause();
     onClose();
-  }, [onClose]);
+  }, [player, onClose]);
 
   // ── PanResponder (vertical-only swipe, Tech Lead decision 5) ─────────────
   // Re-create callbacks reference so PanResponder handlers stay current.
@@ -185,16 +207,16 @@ export default function BetaVideoReelViewer({
       presentationStyle="overFullScreen"
       statusBarTranslucent
       transparent={false}
-      onRequestClose={onClose}
+      onRequestClose={handleDismiss}
       testID="beta-video-reel-modal"
     >
-      {/* Full-screen gesture area */}
-      <View
-        style={styles.fullscreen}
-        {...panRef.current.panHandlers}
-        testID="beta-video-reel-viewer"
-      >
-        {/* Video layer */}
+      {/* Outermost container — full-screen black background. Does NOT own
+          panHandlers: VideoView is a native iOS component that absorbs touches
+          before RN's responder system sees them. Gesture capture is done on
+          the transparent overlay below instead (Bug 1 fix). */}
+      <View style={styles.fullscreen} testID="beta-video-reel-viewer">
+        {/* Video layer — rendered below the gesture overlay so native touches
+            are intercepted by the overlay before reaching the native view. */}
         {signedUrl && !urlError ? (
           <VideoView
             player={player}
@@ -225,32 +247,38 @@ export default function BetaVideoReelViewer({
           </View>
         ) : null}
 
-        {/* Back / close button — accessible fallback for swipe (Tech Lead decision 5) */}
-        <Pressable
-          style={[styles.backButton, { top: insets.top + 12 }]}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close video viewer"
-          testID="beta-video-reel-close"
-        >
-          <Ionicons name="chevron-back" size={28} color={theme.colors.textInverse} />
-        </Pressable>
+        {/* Transparent gesture-capture overlay — sits ABOVE the VideoView so
+            PanResponder receives touch events before the native video layer
+            can absorb them (Bug 1 fix). All interactive controls also live
+            here so they remain tappable. */}
+        <View style={StyleSheet.absoluteFill} {...panRef.current.panHandlers}>
+          {/* Back / close button — accessible fallback for swipe (Tech Lead decision 5) */}
+          <Pressable
+            style={[styles.backButton, { top: insets.top + 12 }]}
+            onPress={handleDismiss}
+            accessibilityRole="button"
+            accessibilityLabel="Close video viewer"
+            testID="beta-video-reel-close"
+          >
+            <Ionicons name="chevron-back" size={28} color={theme.colors.textInverse} />
+          </Pressable>
 
-        {/* Video counter (e.g. "2 / 5") */}
-        {videos.length > 1 ? (
-          <View style={[styles.counter, { top: insets.top + 12 }]}>
-            <Text style={styles.counterText}>
-              {currentIndex + 1} / {videos.length}
-            </Text>
-          </View>
-        ) : null}
+          {/* Video counter (e.g. "2 / 5") */}
+          {videos.length > 1 ? (
+            <View style={[styles.counter, { top: insets.top + 12 }]}>
+              <Text style={styles.counterText}>
+                {currentIndex + 1} / {videos.length}
+              </Text>
+            </View>
+          ) : null}
 
-        {/* Caption (if any) */}
-        {currentVideo?.caption ? (
-          <View style={[styles.captionContainer, { bottom: insets.bottom + 16 }]}>
-            <Text style={styles.captionText}>{currentVideo.caption}</Text>
-          </View>
-        ) : null}
+          {/* Caption (if any) */}
+          {currentVideo?.caption ? (
+            <View style={[styles.captionContainer, { bottom: insets.bottom + 16 }]}>
+              <Text style={styles.captionText}>{currentVideo.caption}</Text>
+            </View>
+          ) : null}
+        </View>
       </View>
     </Modal>
   );
