@@ -7,10 +7,10 @@
  * AC-032: one BetaVideo attached to exactly one route (route_id).
  * AC-036: upload progress reported via onProgress callback.
  *
- * Upload pattern: expo-file-system readAsStringAsync (base64) → atob → Uint8Array
+ * Upload pattern: expo-file-system File class → File.bytes() → Uint8Array
  *   → supabase.storage.upload(Uint8Array).
  * expo-file-system is mocked via moduleNameMapper → __mocks__/expo-file-system.js.
- * readAsStringAsync is set to return a known base64 string in beforeEach.
+ * ExpoFile.prototype.bytes is spied on in beforeEach to return a known Uint8Array.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -22,8 +22,7 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }));
 
-import * as FileSystem from 'expo-file-system';
-
+import * as ExpoFileSystem from 'expo-file-system';
 import { supabase } from '../../../lib/supabase';
 import {
   fetchBetaVideosForRoute,
@@ -32,6 +31,12 @@ import {
   getThumbnailSignedUrl,
 } from '../beta-video-service';
 import type { BetaVideo } from '../types';
+
+// Access the File class from the expo-file-system mock. The moduleNameMapper routes
+// 'expo-file-system' → __mocks__/expo-file-system.js which exports { File, ... }.
+// We use the namespace import so prototype spying works regardless of Babel CJS interop.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ExpoFile = (ExpoFileSystem as any).File as { new (uri: string): unknown; prototype: { bytes: () => Promise<Uint8Array> } };
 
 const mockSupabase = supabase as jest.Mocked<typeof supabase>;
 
@@ -168,10 +173,10 @@ describe('getThumbnailSignedUrl', () => {
 describe('uploadBetaVideo', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default FileSystem mock: readAsStringAsync returns a known base64 string.
-    // 'dGVzdA==' decodes to 'test' (4 bytes). This satisfies the
-    // expo-file-system base64 → atob → Uint8Array → upload(Uint8Array) pattern.
-    (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue('dGVzdA==');
+    // Spy on ExpoFile.prototype.bytes to return a known Uint8Array.
+    // [116, 101, 115, 116] = 'test' (4 bytes). This satisfies the
+    // expo-file-system File.bytes() → Uint8Array → upload(Uint8Array) pattern.
+    jest.spyOn(ExpoFile.prototype, 'bytes').mockResolvedValue(new Uint8Array([116, 101, 115, 116]));
   });
 
   function makeStorageMock({
@@ -197,8 +202,7 @@ describe('uploadBetaVideo', () => {
 
   it('AC-032: uploads video then inserts row with route_id (Phase 1 — no separate thumbnail upload)', async () => {
     // Phase 1: only the video is uploaded; thumbnail_url is set to the video path.
-    // Upload uses expo-file-system readAsStringAsync (base64) → atob → Uint8Array
-    // → supabase.storage.upload(Uint8Array).
+    // Upload uses expo-file-system File.bytes() → Uint8Array → supabase.storage.upload(Uint8Array).
     const storageBucket = makeStorageMock();
     (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
 
@@ -234,8 +238,7 @@ describe('uploadBetaVideo', () => {
 
   it('throws (no cleanup needed) when video upload fails', async () => {
     // Phase 1: only one upload — if it fails, nothing was stored, no cleanup needed.
-    // Upload uses expo-file-system readAsStringAsync (base64) → atob → Uint8Array
-    // → supabase.storage.upload(Uint8Array).
+    // Upload uses expo-file-system File.bytes() → Uint8Array → supabase.storage.upload(Uint8Array).
     const storageBucket = {
       upload: jest.fn().mockResolvedValue({ data: null, error: new Error('upload failed') }),
       remove: jest.fn().mockResolvedValue({ data: null, error: null }),
@@ -259,8 +262,7 @@ describe('uploadBetaVideo', () => {
   });
 
   it('throws and cleans up video artifact when row insert fails', async () => {
-    // Upload uses expo-file-system readAsStringAsync (base64) → atob → Uint8Array
-    // → supabase.storage.upload(Uint8Array).
+    // Upload uses expo-file-system File.bytes() → Uint8Array → supabase.storage.upload(Uint8Array).
     const storageBucket = {
       upload: jest.fn().mockResolvedValue({ data: {}, error: null }),
       remove: jest.fn().mockResolvedValue({ data: null, error: null }),

@@ -10,13 +10,12 @@
  * - AC-032: one BetaVideo row attached to exactly one Route (route_id FK).
  * - AC-035: codec validation is caller-side; this service inserts only after
  *   the caller has verified H.264/AAC/MP4 or MOV conformance.
- * - Storage upload: reads the local video file as base64 via expo-file-system,
- *   then decodes to Uint8Array before uploading. This is the reliable binary-read
- *   path in React Native — fetch() on file:// URIs can silently corrupt large
- *   binary files on iOS (AVFoundationErrorDomain Code=-11829).
+ * - Storage upload: uses expo-file-system's File class (SDK 54+ API). File.bytes()
+ *   returns a Uint8Array directly — no base64 detour, no fetch() corruption risk.
+ *   The legacy readAsStringAsync API was removed in SDK 54+.
  */
 
-import * as FileSystem from 'expo-file-system';
+import { File as ExpoFile } from 'expo-file-system';
 
 import { supabase } from '../../lib/supabase';
 import type { BetaVideo, BetaVideoUploadInput, UploadProgress } from './types';
@@ -55,9 +54,9 @@ export async function fetchBetaVideosForRoute(routeId: string): Promise<BetaVide
  * Progress is reported via the onProgress callback for each phase:
  *   video → saving row
  *
- * Upload strategy: expo-file-system reads the local file as base64, which is then
- * decoded to a Uint8Array and uploaded directly. This avoids the iOS binary-corruption
- * bug triggered by fetch() on file:// URIs (AVFoundationErrorDomain Code=-11829).
+ * Upload strategy: expo-file-system File class (SDK 54+ API). File.bytes() returns a
+ * Uint8Array directly — no base64 detour, no fetch() corruption risk. The legacy
+ * readAsStringAsync API was removed in SDK 54+.
  *
  * AC-032: the returned BetaVideo row is attached to exactly one route.
  * AC-036: progress overlay percentage is driven by onProgress.
@@ -80,13 +79,9 @@ export async function uploadBetaVideo(
     // thumbnail Storage upload is performed — thumbnail_url is set to the video's
     // storage path so it remains a valid retrievable URL.
     //
-    // Upload strategy: expo-file-system base64 → Uint8Array.
-    //   1. FileSystem.readAsStringAsync(localUri, { encoding: Base64 }) — reads
-    //      the local file as a base64 string. This is the reliable binary-read path
-    //      in React Native; fetch() on file:// URIs silently corrupts large files
-    //      on iOS (AVFoundationErrorDomain Code=-11829 "此媒體可能已損毀").
-    //   2. atob(base64Data) → char codes → Uint8Array — decodes base64 to raw bytes.
-    //   3. upload(Uint8Array) — Supabase JS Storage client accepts Uint8Array directly.
+    // Upload strategy: expo-file-system File class (SDK 54+ API).
+    //   File.bytes() returns a Uint8Array directly — no base64 detour needed.
+    //   The legacy readAsStringAsync API was removed in SDK 54+ and throws at runtime.
     onProgress?.({ percent: 10, phase: 'video' });
 
     const ext = input.localVideoUri.split('.').pop() ?? 'mp4';
@@ -95,19 +90,11 @@ export async function uploadBetaVideo(
       ? 'video/quicktime'
       : 'video/mp4';
 
-    // Read the local video file as base64 using expo-file-system.
-    // This is the reliable binary-read path in React Native — fetch() on
-    // file:// URIs can silently corrupt large binary files on iOS.
-    const base64Data = await FileSystem.readAsStringAsync(input.localVideoUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Decode base64 string → Uint8Array for binary upload.
-    const binaryString = atob(base64Data);
-    const uint8Array = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      uint8Array[i] = binaryString.charCodeAt(i);
-    }
+    // Read the local video file as raw bytes using expo-file-system's File class.
+    // The legacy readAsStringAsync API was removed in SDK 54+. File.bytes() returns
+    // a Uint8Array directly — no base64 detour needed.
+    const expoFile = new ExpoFile(input.localVideoUri);
+    const uint8Array = await expoFile.bytes();
 
     const { error: storageError } = await supabase.storage
       .from(BETA_VIDEO_BUCKET)
