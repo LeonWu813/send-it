@@ -40,11 +40,12 @@ describe('LogSendScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('renders the grade read-only — not editable', () => {
+  it('does not render the grade display section in the log form (AC-131)', () => {
     render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    // Grade displayed
-    expect(screen.getByText('V5')).toBeTruthy();
+    // Grade must NOT appear inside the log-send form (AC-131: grade is shown on
+    // route detail screen, not repeated in the log form)
+    expect(screen.queryByText('V5')).toBeNull();
   });
 
   it('renders exactly three style chips (flash, top, attempt) — project is removed (AC-014)', () => {
@@ -143,7 +144,7 @@ describe('LogSendScreen', () => {
       attempts: 1,
       note: null,
       logged_at: '2026-09-20T00:00:00.000Z',
-      is_private: false,
+      is_private: true,
     });
 
     render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
@@ -162,5 +163,7 @@ describe('LogSendScreen', () => {
     const callArgs = mockLogAscent.mock.calls[0];
     // Second arg is the AscentLogInput — must not have grade
     expect(callArgs[1]).not.toHaveProperty('grade');
+    // AC-132: is_private must be hardcoded true — never user-supplied
+    expect(callArgs[1]).toHaveProperty('is_private', true);
   });
 });

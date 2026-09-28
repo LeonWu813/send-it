@@ -10,9 +10,10 @@
  *   - attempts number input (min 1; locked to 1 when style = flash)
  *   - date (defaults to today)
  *   - note (optional text, private — shown only to the owner)
- *   - is_private toggle
  *
- * Grade is displayed (read from route.grade) but NOT stored or editable (AC-011).
+ * Grade is NOT stored or editable (AC-011). Grade display is not shown in the
+ * log form — it is visible on the route detail screen before the form opens (AC-131).
+ * All sends are private (is_private = true hardcoded, AC-132).
  * AC-010: completing the form from a known route page requires ≤4 taps.
  * AC-012: on network failure, shows a clear error — never silent, no offline queue.
  */
@@ -25,7 +26,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   View,
@@ -71,7 +71,6 @@ export default function LogSendScreen({
     new Date().toISOString().slice(0, 10), // default today: YYYY-MM-DD
   );
   const [note, setNote] = useState<string>('');
-  const [isPrivate, setIsPrivate] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -111,7 +110,7 @@ export default function LogSendScreen({
         attempts: resolvedAttempts,
         note: note.trim() === '' ? null : note.trim(),
         logged_at: loggedAt,
-        is_private: isPrivate,
+        is_private: true,
       });
       onSuccess();
     } catch (err) {
@@ -146,13 +145,6 @@ export default function LogSendScreen({
         </Pressable>
         <Text style={styles.screenTitle}>{t('sends.logSend')}</Text>
         <View style={styles.headerSpacer} />
-      </View>
-
-      {/* Grade display — read-only, never editable */}
-      <View style={styles.gradeDisplay}>
-        <Text style={styles.fieldLabel}>{t('sends.grade')}</Text>
-        <Text style={styles.gradeValue}>{routeGrade}</Text>
-        <Text style={styles.gradeNote}>{t('sends.gradeNote')}</Text>
       </View>
 
       {/* Style selector — Tap 2 in the ≤4-tap flow */}
@@ -231,28 +223,6 @@ export default function LogSendScreen({
         textAlignVertical="top"
       />
 
-      {/* is_private toggle — Tap 3 in the ≤4-tap flow is style; confirm is tap 4 */}
-      <View style={styles.privateRow}>
-        <View style={styles.privateTextGroup}>
-          <Text style={styles.privateLabel}>{t('sends.private')}</Text>
-          <Text style={styles.privateDescription}>
-            {t('sends.privateDescription')}
-          </Text>
-        </View>
-        <Switch
-          value={isPrivate}
-          onValueChange={setIsPrivate}
-          trackColor={{
-            false: theme.colors.border,
-            true: theme.colors.primary,
-          }}
-          thumbColor={theme.colors.surfaceElevated}
-          accessibilityLabel={t('sends.private')}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: isPrivate }}
-        />
-      </View>
-
       {/* Error message — AC-012: always shown on failure */}
       {errorMessage !== null && (
         <View style={styles.errorContainer}>
@@ -315,22 +285,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     headerSpacer: {
       width: 60, // mirrors the cancel button width to center the title
-    },
-    gradeDisplay: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.md,
-      padding: theme.spacing.md,
-      marginBottom: theme.spacing.lg,
-    },
-    gradeValue: {
-      fontSize: theme.fontSize.display,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      marginVertical: theme.spacing.xs,
-    },
-    gradeNote: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
     },
     fieldLabel: {
       fontSize: theme.fontSize.xs,
@@ -407,29 +361,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textPrimary,
       backgroundColor: theme.colors.surface,
       minHeight: 80,
-    },
-    privateRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginTop: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.divider,
-    },
-    privateTextGroup: {
-      flex: 1,
-      marginRight: theme.spacing.md,
-    },
-    privateLabel: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textPrimary,
-    },
-    privateDescription: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginTop: theme.spacing.xs,
     },
     errorContainer: {
       marginTop: theme.spacing.md,
