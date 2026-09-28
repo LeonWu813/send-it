@@ -1527,3 +1527,159 @@ None. All 366/366 tests pass. tsc --noEmit exits 0. No previously passing manual
 | New regressions | None |
 
 **Overall status: READY FOR HUMAN RE-TEST.** All automated checks pass (366/366 tests, tsc --noEmit exits 0). All Rev 14 items verified: summarizeAscents is a correct pure export, index.ts exposes both summarizeAscents and AscentWithProfile, and the stale 'project' doc-comment in LogSendScreen.tsx is removed. AC-011 revised is satisfied — no grade input field exists. No regressions in any previously passing item. Human must complete the manual test script (Tests A–M, with corrections from QA Run 4) before marking MOD-004 as QA PASS.
+
+---
+
+## QA Run 8 — Regression — 2026-09-28
+
+**QA Agent:** qa-mod-send-logging
+**Workflow:** regression-test (re-verification after Rev 15: AC-131 grade display removed, AC-132 is_private always true)
+**Scope:** Formal close of AC-131 and AC-132. Human visual QA already confirmed PASS. This run verifies automated checks and code inspection.
+
+---
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npm test -- --watchAll=false` (full suite) | PASS | 366/366 tests, 29 suites, exit 0 |
+| `npx tsc --noEmit` | PASS | Zero TypeScript errors, strict mode enabled, exit 0 |
+| AC-131 test | PASS | "does not render the grade display section in the log form (AC-131)" — `queryByText('V5')` returns null |
+| AC-132 test | PASS | "does not include a grade field in the logAscent call payload" — `callArgs[1]` has `is_private === true` |
+
+---
+
+### AC-131 Verification — Grade Display Removed
+
+**Spec (AC-131, Rev 15):** The log-send form shall not display a route grade section. The route's grade is shown on the route detail screen before the form is opened; it is not repeated inside the log-send form.
+
+**Item 1 — No grade display JSX in LogSendScreen.tsx**
+- PASS (inspected): `src/modules/mod-send-logging/screens/LogSendScreen.tsx` has no `gradeDisplay`, `gradeValue`, or `gradeNote` style names. There is no `View` or `Text` block rendering `routeGrade`. A grep for "難度" returns zero matches. A search for `gradeDisplay` returns zero matches. The `routeGrade` prop is declared in `LogSendScreenProps` (line 44) and accepted as a parameter, but it is never rendered anywhere in the JSX output.
+
+**Item 2 — No "難度" label in the form body**
+- PASS (inspected): The Chinese label "難度" does not appear anywhere in `LogSendScreen.tsx`. The JSDoc at lines 1–18 explicitly states "Grade display is not shown in the log form — it is visible on the route detail screen before the form opens (AC-131)."
+
+**Item 3 — Removed grade styles are absent**
+- PASS (inspected): The `makeStyles` function (line 256 onward) contains no `gradeDisplay`, `gradeValue`, or `gradeNote` style keys. No style block for grade exists.
+
+**Item 4 — Unit test asserts grade is NOT rendered (AC-131)**
+- PASS (test): `LogSendScreen.test.tsx` line 43–49: "does not render the grade display section in the log form (AC-131)" — renders with `routeGrade: 'V5'` and asserts `screen.queryByText('V5')` is null. This test runs as part of the 366/366 suite and passes.
+
+---
+
+### AC-132 Verification — Always-Private Sends
+
+**Spec (AC-132, Rev 15):** The log-send form shall not present a "set as private" (設為私人) toggle. All send records logged in Phase 1 are private: the system shall set `is_private = true` on every ascent insert. The `is_private` column remains in the schema (no migration), but it is not user-controllable in Phase 1.
+
+**Item 1 — No Switch component or isPrivate state in LogSendScreen.tsx**
+- PASS (inspected): `LogSendScreen.tsx` — no `Switch` in the React Native import list (line 24–32 import block contains: `ActivityIndicator`, `Pressable`, `ScrollView`, `StyleSheet`, `Text`, `TextInput`, `View`). No `isPrivate` state variable. No `useState<boolean>` for a private toggle. No `sends.private` or `sends.privateDescription` i18n key references.
+
+**Item 2 — is_private: true hardcoded in submit payload**
+- PASS (inspected): `LogSendScreen.tsx` line 113: `is_private: true` is hardcoded in the `AscentLogInput` payload passed to `logAscent`. This is inside `handleSubmit()` in the `try` block. The value is a boolean literal `true` — not a state variable, not a prop, not a user-supplied value.
+
+**Item 3 — No private toggle JSX or styles**
+- PASS (inspected): No `privateRow`, `privateTextGroup`, `privateLabel`, or `privateDescription` style keys exist in `makeStyles`. No `Switch` JSX block is rendered anywhere in the component.
+
+**Item 4 — Unit test asserts is_private === true in submitted payload (AC-132)**
+- PASS (test): `LogSendScreen.test.tsx` line 138–168: "does not include a grade field in the logAscent call payload" — submits the form and asserts `callArgs[1]` (the `AscentLogInput` passed to `logAscent`): (a) does not have `grade` property (AC-011), and (b) `toHaveProperty('is_private', true)` (AC-132). Test passes as part of the 366/366 run.
+
+**Item 5 — is_private column still exists in schema (no migration)**
+- PASS (inspected): `supabase/migrations/20260920000004_mod_004_send_logging.sql` line 36: `is_private BOOLEAN NOT NULL DEFAULT FALSE` — the column is present in the migration. No new migration was created for AC-132. The column is retained for Phase 2 per spec.
+
+**Item 6 — is_private field still in Ascent type and AscentWithProfile**
+- PASS (inspected): `src/modules/mod-send-logging/types.ts` line 25: `is_private: boolean` is present in the `Ascent` interface. `AscentWithProfile extends Ascent` (line 32), so it inherits `is_private`. `AscentLogInput` (line 40) retains `is_private: boolean` as a field — it is hardcoded to `true` at the call site, not removed from the type.
+
+---
+
+### Previously Passing Items — Regression Verification
+
+**AC-010 (≤4 taps):**
+- REGRESSION PASS: The tap flow is unchanged — no grade block removal affects modal open/close. No private toggle removal affects the tap count. 6/6 LogSendScreen tests pass. PENDING HUMAN SIGN-OFF resolved: human confirmed PASS visually before this automated run.
+
+**AC-011 (grade not stored):**
+- REGRESSION PASS: `logAscent()` payload has no `grade` field (confirmed: `callArgs[1]` does not have property `grade` per test at line 165). `Ascent` type and migration have no `grade` column. PASS.
+
+**AC-012 (clear error on failure):**
+- REGRESSION PASS: `handleSubmit()` catch block and `errorMessage` state are unchanged. 6/6 LogSendScreen tests pass. PASS.
+
+**AC-013 (list refreshes after log):**
+- REGRESSION PASS: `AscentList.tsx` `refreshKey` prop and `useEffect` dependency unchanged. AC-013 unit test passes. PASS.
+
+**AC-014 (project style removed):**
+- REGRESSION PASS: `ASCENT_STYLES = ['flash', 'top', 'attempt']` unchanged. Test "renders exactly three style chips — project is removed (AC-014)" passes. PASS.
+
+**fetchUserAchievements security fix intact:**
+- REGRESSION PASS: `.eq('user_id', user.id)` and `auth.getUser()` guard unchanged in `send-service.ts`. All 6 fetchUserAchievements tests pass. PASS.
+
+**fetchMyAscentsForRoute correct behavior:**
+- REGRESSION PASS: Function unchanged. 5 tests pass. PASS.
+
+**summarizeAscents correct behavior:**
+- REGRESSION PASS: Function unchanged. 5 summarizeAscents tests pass. PASS.
+
+**deleteAscent correct DELETE + error:**
+- REGRESSION PASS: Function unchanged. 2 deleteAscent tests pass. PASS.
+
+**i18n parity (EN/zh-TW):**
+- REGRESSION PASS: No i18n keys deleted for AC-131 or AC-132 (i18n keys `sends.private`/`sends.privateDescription` retained per spec). Key counts unchanged. PASS.
+
+**No hardcoded hex colors:**
+- REGRESSION PASS: No new style blocks introduced. Grade/private styles removed (all were theme-token-based; their removal does not introduce any hardcoded values). PASS.
+
+**Supabase singleton convention:**
+- REGRESSION PASS: `send-service.ts` imports unchanged. No `createClient()` at call site. PASS.
+
+**Gold-plating check:**
+- REGRESSION PASS: AC-131 removes the grade display (presentational only). AC-132 removes the private toggle and hardcodes `is_private: true`. No features added beyond spec scope. `routeGrade` prop retained in interface as spec notes grade may be needed by the caller — this is intentional and spec-noted, not gold-plating. PASS.
+
+**TypeScript strict mode:**
+- REGRESSION PASS: `tsc --noEmit` exits 0, zero errors. Removing the grade JSX block and `isPrivate` state reduces the type surface — no new `any` casts needed. PASS.
+
+---
+
+### Human Sign-off Status
+
+Human QA confirmed PASS visually before this automated run. Both AC-131 (no grade display in the form) and AC-132 (no private toggle; all sends private) were verified in the app. No additional human test steps are required for these two ACs. The prior pending manual tests (A–M) that were written for AC-010 through the delete feature remain on record as verified by human QA in prior sessions.
+
+---
+
+### New Regressions
+
+None. All 366/366 tests pass. `tsc --noEmit` exits 0. No previously passing manual or code-inspection checks have changed.
+
+---
+
+### Summary — QA Run 8
+
+| Category | Result |
+|----------|--------|
+| Automated tests | PASS — 366/366 tests, 29 suites |
+| TypeScript strict mode | PASS — zero errors, exit 0 |
+| AC-131: no grade display JSX (no "難度", no gradeDisplay/gradeValue/gradeNote) | PASS — inspected |
+| AC-131: no routeGrade rendered in form body | PASS — inspected |
+| AC-131: grade styles absent from makeStyles | PASS — inspected |
+| AC-131: test asserts grade NOT rendered | PASS — queryByText('V5') is null |
+| AC-132: no Switch component or isPrivate state | PASS — inspected |
+| AC-132: is_private: true hardcoded in submit payload (line 113) | PASS — inspected |
+| AC-132: no private toggle JSX or styles | PASS — inspected |
+| AC-132: test asserts is_private === true in call payload | PASS — toHaveProperty('is_private', true) |
+| AC-132: is_private column retained in migration (no schema change) | PASS — migration line 36 confirmed |
+| AC-132: is_private field retained in Ascent type and AscentWithProfile | PASS — types.ts line 25 confirmed |
+| Human sign-off — AC-131 | PASS — confirmed visually by human QA |
+| Human sign-off — AC-132 | PASS — confirmed visually by human QA |
+| AC-010 (≤4 taps) | REGRESSION PASS — human confirmed |
+| AC-011 (grade not stored) | REGRESSION PASS |
+| AC-012 (error on failure) | REGRESSION PASS |
+| AC-013 (list refreshes after log) | REGRESSION PASS |
+| AC-014 (project style removed) | REGRESSION PASS |
+| fetchUserAchievements security fix intact | REGRESSION PASS |
+| fetchMyAscentsForRoute correct behavior | REGRESSION PASS |
+| summarizeAscents correct behavior | REGRESSION PASS |
+| deleteAscent correct DELETE + error | REGRESSION PASS |
+| i18n parity (EN/zh-TW) | REGRESSION PASS |
+| No hardcoded hex colors | REGRESSION PASS |
+| Supabase singleton convention | REGRESSION PASS |
+| Gold-plating check | REGRESSION PASS |
+| New regressions | None |
+
+**Overall status: QA PASS.** All automated checks green (366/366 tests, tsc --noEmit exits 0). AC-131 and AC-132 formally closed: grade display is absent from the log-send form, and is_private is hardcoded true in the submit payload with no user-facing toggle. Human QA confirmed both ACs visually. All previously passing items continue to pass. MOD-004 (Send Logging) is ready for next phase.
