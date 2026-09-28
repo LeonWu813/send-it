@@ -1679,3 +1679,204 @@ No source files other than `send-service.ts` and its test were modified by these
 - PASS: No gold-plating — changes confined to spec scope
 - PASS: No new native dependencies introduced
 - PASS: All pre-existing tests unaffected
+
+---
+
+## QA Rev 14 Results — AC-125 through AC-130
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-28
+**Workflow**: regression-test (re-verification after Route Detail redesign — PRD Revision 14, AC-125–AC-130)
+**Overall verdict**: PASS — all six new acceptance criteria verified; no regressions on any previously passing AC or test suite
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false`
+- Result: **366 tests passed, 0 failed across 29 suites**
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+- Count vs. prior run (325 tests): +41 tests — 8 new tests in RouteDetailScreen.test.tsx (AC-125–130) + 10 new tests in SendHistoryDetailScreen.test.tsx (AC-129) + pre-existing tests from other modules added since last QA run. No mod-route-catalog tests removed.
+
+---
+
+### AC-125 — Gym name as subtitle; no "岩館" label; route name font increased
+
+**Source**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
+
+- Gym name as subtitle: PASS. `<Text style={styles.gymSubtitle}>{gymName}</Text>` at line 398, rendered immediately after the `routeNameRow` block. The prop `gymName: string` is declared in `RouteDetailScreenProps` (line 100) and wired from `RouteNavigator` (line 99 of RouteNavigator.tsx passes `gymName={gymName}`).
+- No "岩館" label anywhere on screen: PASS. `grep "岩館\|routes.detail.gym\|gymSection\|gymLabel"` returns zero JSX output — 岩館 appears only in two comment lines (lines 16, 664) confirming the removal. No text node, no i18n key, no section label renders the gym name as a separate labeled block.
+- Route name font size increased: PASS. `routeNameText` style at line 659: `fontSize: 26`. Prior value was `theme.fontSize.xl`. Spec notes "styling decisions for font sizes are implementation-level engineer decisions" — no specific size is required; the increase is confirmed present.
+- Test coverage: `RouteDetailScreen.test.tsx` "AC-125: shows gym name as subtitle beneath the route name" (line 151) verifies `screen.getByText('Test Gym')` — PASS.
+
+---
+
+### AC-126 — Added-date footer at bottom using `routeCatalog.detail.addedDate`
+
+**Source**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
+
+- `route.created_at` used: PASS. Line 326: `const addedDateStr = new Date(route.created_at).toISOString().slice(0, 10)` — YYYY-MM-DD format.
+- i18n key `routeCatalog.detail.addedDate`: PASS. Line 327: `t('routeCatalog.detail.addedDate', { date: addedDateStr })`. Key present in both locales:
+  - EN `locales/en/common.json` line 149: `"addedDate": "Added {{date}}"`. PASS.
+  - zh-TW `locales/zh-TW/common.json` line 149: `"addedDate": "新增於 {{date}}"`. PASS.
+- Footer placement — last element in ScrollView: PASS. `<Text style={styles.addedDateFooter}>{addedDateLabel}</Text>` at line 578, which is the final child inside the `<ScrollView>` block (closed at line 580), after `BetaVideoSection` (lines 571-575). Nothing is rendered below it in the scroll content.
+- Test coverage: `RouteDetailScreen.test.tsx` "AC-126: shows the added date footer at the bottom" (line 162) verifies text matching `/2026-09-20/`, `/Added/`, or `/新增於/` — PASS.
+
+---
+
+### AC-127 — Two-column send-summary; `summarizeAscents` from `mod-send-logging`; Sends=flash|top count; Attempts=sum
+
+**Source**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` + `src/modules/mod-send-logging/send-service.ts`
+
+- `summarizeAscents` imported from MOD-004 public service: PASS. Line 57: `summarizeAscents` imported from `'../../mod-send-logging/send-service'`. MOD-004's `send-service.ts` exports `summarizeAscents` at line 197.
+- `summarizeAscents` logic matches spec: PASS. `send-service.ts` lines 201-207: `sends` = count of ascents where `style === 'flash' || style === 'top'`; `attempts` = sum of `a.attempts`. Matches AC-127 exactly ("Sends card = flash/top count; Attempts card = sum of attempts").
+- Client-side reduction over already-fetched `myAscents`: PASS. Line 323: `const summary = summarizeAscents(myAscents)` — called in render using the `myAscents` state already fetched by `fetchMyAscentsForRoute`. No additional DB query or RPC.
+- Two-column layout: PASS. Lines 423-446 — `summaryRow` View with two `summaryCard` Pressable children: left card (`testID="sends-summary-card"`) shows `summary.sends` + `routeCatalog.detail.sends` label; right card (`testID="attempts-summary-card"`) shows `summary.attempts` + `routeCatalog.detail.attempts` label.
+- Both cards are `<Pressable>`: PASS. Both use `<Pressable style={styles.summaryCard} ...>` — tappable.
+- i18n keys: PASS. `routeCatalog.detail.sends` = "Sends" (EN) / "完攀" (zh-TW) at lines 150; `routeCatalog.detail.attempts` = "Attempts" (EN) / "嘗試次數" (zh-TW) at lines 151 in both locale files.
+- Test coverage: `RouteDetailScreen.test.tsx` "AC-127: shows two summary cards" (line 177) verifies `queryAllByTestId('sends-summary-card')` and `queryAllByTestId('attempts-summary-card')` both have length > 0. Test at line 330 verifies `mockSummarizeAscents` is called with fetched ascents — PASS.
+
+---
+
+### AC-128 — Tapping either card calls `onViewSendHistory(route.id)`; navigator wires to `send-history`
+
+**Source**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` + `src/modules/mod-route-catalog/RouteNavigator.tsx`
+
+- Both cards call `onViewSendHistory(route.id)` on press: PASS.
+  - Sends card line 427: `onPress={() => { onViewSendHistory(route.id); }}`
+  - Attempts card line 437: `onPress={() => { onViewSendHistory(route.id); }}`
+- `onViewSendHistory` prop on `RouteDetailScreen`: PASS. Declared at line 104: `onViewSendHistory: (routeId: string) => void`.
+- Navigator wires to `navigateToSendHistory`: PASS. RouteNavigator.tsx line 102: `onViewSendHistory={navigateToSendHistory}`. `navigateToSendHistory(routeId)` at line 77 calls `setView({ name: 'send-history', routeId })`.
+- `RouteView` union includes `'send-history'`: PASS. RouteNavigator.tsx line 35: `| { name: 'send-history'; routeId: string }`.
+- Test coverage: `RouteDetailScreen.test.tsx` "AC-128: tapping the Sends card calls onViewSendHistory with route id" (line 191) and "AC-128: tapping the Attempts card calls onViewSendHistory with route id" (line 204) both verify `mockOnViewSendHistory` called with `'route-001'` — PASS.
+
+---
+
+### AC-129 — `SendHistoryDetailScreen` fetches `fetchMyAscentsForRoute`; renders style+attempts+date; back → detail
+
+**Source**: `src/modules/mod-route-catalog/screens/SendHistoryDetailScreen.tsx` + `src/modules/mod-route-catalog/RouteNavigator.tsx`
+
+- File exists: PASS. `src/modules/mod-route-catalog/screens/SendHistoryDetailScreen.tsx` (291 lines).
+- Props: `{ routeId: string; session: Session; onBack: () => void }`: PASS. Lines 56-60.
+- Fetches `fetchMyAscentsForRoute` from MOD-004 barrel: PASS. Line 36: `import { fetchMyAscentsForRoute } from '../../mod-send-logging'`. The barrel (`index.ts` line 15) re-exports `fetchMyAscentsForRoute` from `send-service.ts`.
+- Fetches on mount with correct `routeId`: PASS. Lines 79 and 88: `fetchMyAscentsForRoute(routeId)` called inside `loadAscents` which is invoked via `useEffect`.
+- Re-fetches on mount (current history): PASS. `loadAscents` is called from `useEffect([loadAscents])` — fires on mount, fetching the most current ascents.
+- Renders style: PASS. Lines 138-143 — style badge with `t(\`sends.styles.${ascent.style}\`)` text.
+- Renders attempts count: PASS. Line 148: `t('sends.attemptsCount', { count: ascent.attempts })`.
+- Renders date: PASS. Line 135: `const displayDate = new Date(ascent.logged_at).toLocaleDateString()` displayed at line 144.
+- Back button calls `onBack`: PASS. Lines 96-103: `<Pressable onPress={onBack} accessibilityLabel={t('common.back')}>`.
+- `onBack` returns to `{ name: 'detail', routeId }` NOT `list`: PASS. RouteNavigator.tsx line 120: `onBack={() => { setView({ name: 'detail', routeId: view.routeId }); }}`. The `routeId` is preserved from the `send-history` view state — user returns to the exact route detail they came from.
+- Safe area insets: PASS. Lines 33, 68-69: `useSafeAreaInsets()` + `makeStyles(theme, insets.top)` + `paddingTop: topInset` on `topBar` (line 179).
+- i18n keys `sendHistoryTitle` + `noSends`: PASS. Both EN and zh-TW have `routeCatalog.detail.sendHistoryTitle` ("Send History" / "攀登紀錄") and `routeCatalog.detail.noSends` ("No sends recorded yet" / "尚無紀錄").
+- Test coverage: `SendHistoryDetailScreen.test.tsx` — 10 tests: loading indicator, empty state, style badge render, attempts count, date render, note, private indicator, back button calls onBack, fetch with routeId, error+retry, title text, multiple rows — all PASS in the 366-test run.
+
+---
+
+### AC-130 — Two action buttons below summary; old log-send button removed from ascent header; `BetaVideoUploader` removed from inside `BetaVideoSection`
+
+**Source**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` + `src/modules/mod-beta-video/components/BetaVideoSection.tsx`
+
+- "Record Send" button below summary: PASS. Lines 450-458: `<Pressable style={styles.actionButton} onPress={handleLogSendPress} accessibilityLabel={t('routeCatalog.detail.recordSend')}>`. Positioned in `actionRow` (lines 449-468) immediately after the `summaryRow` block (lines 423-446) — below the summary section. Opens the `LogSendScreen` modal via `handleLogSendPress → setIsLogSendVisible(true)`.
+- "Upload Beta Video" button below summary: PASS. Lines 459-467: `<Pressable style={[styles.actionButton, styles.actionButtonSecondary]} onPress={handleUploadBetaPress} accessibilityLabel={t('routeCatalog.detail.uploadBeta')}>`. Calls `handleUploadBetaPress → uploadLauncherRef.current?.()`.
+- Old log-send button in ascent-section header removed: PASS. Lines 473-476 — the ascent section header is now a plain `<Text style={styles.ascentSectionTitle}>` with no `<Pressable>` wrapping it. Lines 474-475 contain a comment explicitly noting "AC-130: Log Send button removed from ascent section header." No `logButton` or `logButtonText` style exists in `makeStyles`. No `<Pressable>` with log-send behavior exists outside the AC-130 action row and the modal.
+- `BetaVideoUploader` removed from inside `BetaVideoSection` when `onRegisterUploadLauncher` is provided: PASS. BetaVideoSection.tsx lines 290-296: `{onRegisterUploadLauncher ? null : <BetaVideoUploader .../>}`. Since `RouteDetailScreen` always passes `onRegisterUploadLauncher={handleRegisterUploadLauncher}` (line 574), the `BetaVideoUploader` button is never rendered inside the section when viewed from `RouteDetailScreen`. The upload flow is triggered exclusively by the AC-130 "Upload Beta Video" action button in the action row.
+- No duplicate entry points: PASS. No `BetaVideoUploader` inside the section + no old log-send button in the ascent header. Exactly two entry points exist — one per spec-required control, neither duplicated.
+- i18n keys: PASS. `routeCatalog.detail.recordSend` = "Record Send" (EN) / "記錄攀登" (zh-TW) and `routeCatalog.detail.uploadBeta` = "Upload Beta Video" (EN) / "上傳 Beta 影片" (zh-TW) — all present.
+- Test coverage: `RouteDetailScreen.test.tsx` "AC-130: shows Record Send action button" (line 217) and "AC-130: shows Upload Beta Video action button" (line 232) both PASS.
+
+---
+
+### Regression — AC-040 through AC-047
+
+**AC-040**: `RouteListScreen.tsx` grade + color filter chips unchanged. No status filter for normal users. PASS.
+**AC-041**: `listRoutes()` applies `.eq('status', 'active')` unchanged. No status filter surfaced. PASS.
+**AC-042**: `renderRouteCard.onPress → onSelectRoute` and navigator `navigateToDetail` unchanged. PASS.
+**AC-043**: `RouteSubmitScreen` `initialGrade`/`initialColorTag` props and their `useState` initialisers unchanged. PASS.
+**AC-045**: `formatRouteName` helper and `routeNameRow` with composed route name unchanged. PASS.
+**AC-046**: Bookmark toggle (`isSaved` state, optimistic update, `saveRoute`/`unsaveRoute`, icon in `topBar`) unchanged. Achievement icons (`fetchUserAchievements` call + ternary in `routeNameRow`) unchanged. PASS.
+**AC-047**: `fetchSavedRouteIds`, `savedRouteIds` state, read-only bookmark indicator on list cards — all unchanged in `RouteListScreen.tsx`. PASS.
+
+Previously passing checks — confirmed unaffected by this change:
+- AC-020 (single-page submit), AC-021 (photo required), AC-024b (no retire button), AC-025/026/027/028/029 (approval/RLS). PASS.
+- Photo signed URL (`getPhotoSignedUrl`, `photoUri` state) in `RouteDetailScreen`. PASS.
+- Sticky top bar (back + bookmark above scroll). PASS.
+- Safe area insets on all screens (RouteListScreen, RouteDetailScreen, RouteSubmitScreen, SendHistoryDetailScreen). PASS.
+- Saved routes sort to top (`sortedRoutes` memo in RouteListScreen). PASS.
+- All migrations, RLS policies, RPC (`submit_route`) — no migration files touched. PASS.
+
+---
+
+### i18n Key Parity — All 7 new keys under `routeCatalog.detail`
+
+| Key | EN value | zh-TW value | EN present | zh-TW present |
+|-----|----------|-------------|------------|---------------|
+| `routeCatalog.detail.addedDate` | `"Added {{date}}"` | `"新增於 {{date}}"` | PASS | PASS |
+| `routeCatalog.detail.sends` | `"Sends"` | `"完攀"` | PASS | PASS |
+| `routeCatalog.detail.attempts` | `"Attempts"` | `"嘗試次數"` | PASS | PASS |
+| `routeCatalog.detail.recordSend` | `"Record Send"` | `"記錄攀登"` | PASS | PASS |
+| `routeCatalog.detail.uploadBeta` | `"Upload Beta Video"` | `"上傳 Beta 影片"` | PASS | PASS |
+| `routeCatalog.detail.sendHistoryTitle` | `"Send History"` | `"攀登紀錄"` | PASS | PASS |
+| `routeCatalog.detail.noSends` | `"No sends recorded yet"` | `"尚無紀錄"` | PASS | PASS |
+
+All 7 keys present in both locale files with correct structure. No missing keys. PASS.
+
+---
+
+### Gold-Plating Check
+
+- No features implemented beyond the 6 ACs in scope.
+- `BetaVideoSection.tsx` change is strictly backward-compatible (new optional prop; legacy mode unchanged).
+- `SendHistoryDetailScreen` shows only what the spec requires: style, attempts, date (plus note and private indicator which are data already available on the `AscentWithProfile` type — not extra DB fields).
+- No new native dependencies introduced.
+- No new Supabase tables or migrations.
+
+PASS — no gold-plating detected.
+
+---
+
+### Failure Summary
+
+None. All items PASS.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| AC-125: gym name subtitle beneath route name | PASS |
+| AC-125: no "岩館" label anywhere on screen | PASS |
+| AC-125: route name font increased | PASS |
+| AC-126: `route.created_at` footer at bottom of ScrollView | PASS |
+| AC-126: i18n key `routeCatalog.detail.addedDate` used | PASS |
+| AC-127: `summarizeAscents` imported from `send-service.ts` | PASS |
+| AC-127: Sends = flash|top count; Attempts = sum of `a.attempts` | PASS |
+| AC-127: client-side reduction, no new RPC | PASS |
+| AC-127: both cards are `<Pressable>` | PASS |
+| AC-128: Sends card `onPress` calls `onViewSendHistory(route.id)` | PASS |
+| AC-128: Attempts card `onPress` calls `onViewSendHistory(route.id)` | PASS |
+| AC-128: navigator `navigateToSendHistory` sets `{ name: 'send-history', routeId }` | PASS |
+| AC-129: `SendHistoryDetailScreen.tsx` exists | PASS |
+| AC-129: fetches `fetchMyAscentsForRoute` from MOD-004 barrel | PASS |
+| AC-129: renders style badge, attempts count, date per row | PASS |
+| AC-129: back button calls `onBack` | PASS |
+| AC-129: `onBack` in navigator sets `{ name: 'detail', routeId }` NOT `list` | PASS |
+| AC-129: safe area insets applied | PASS |
+| AC-130: "Record Send" button below summary, opens log-send flow | PASS |
+| AC-130: "Upload Beta Video" button below summary, calls upload launcher | PASS |
+| AC-130: old log-send button in ascent-section header removed | PASS |
+| AC-130: `BetaVideoUploader` not rendered inside `BetaVideoSection` when `onRegisterUploadLauncher` provided | PASS |
+| AC-130: no duplicate entry points | PASS |
+| All 7 i18n keys in EN + zh-TW under `routeCatalog.detail` | PASS |
+| `npm test -- --watchAll=false` — 366 tests, 29 suites, 0 failures | PASS |
+| `npx tsc --noEmit` — 0 errors | PASS |
+| AC-040–AC-047 regression | PASS |
+| AC-020/021/043 regression | PASS |
+| AC-024b/025/026/027/028/029 regression | PASS |
+| Photo signed URL regression | PASS |
+| Sticky top bar regression | PASS |
+| Safe area insets — all screens including SendHistoryDetailScreen | PASS |
+| No gold-plating | PASS |
+
+**Overall verdict: PASS. All AC-125 through AC-130 verified. No regressions on any previously passing AC. MOD-003 ready for human QA.**
