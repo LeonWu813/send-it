@@ -1326,3 +1326,118 @@ No remaining `getByText('V5')` call exists in the test file. The regex `/V5/` co
 | No gold-plating | PASS | PASS |
 
 **Overall verdict: PASS. All three UI fixes verified correct. Test pattern updates verified. No regressions. MOD-003 ready for human QA.**
+
+---
+
+## QA Ascent-Scope Regression — 2026-09-27
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-27
+**Workflow**: regression-test (re-verification after engineer replaced `<AscentList>` with an inline section that fetches via `fetchMyAscentsForRoute` — scoping send history to the logged-in user's sends only)
+**Overall verdict**: PASS — fix verified correct; all previously passing ACs and the full test suite unaffected
+
+---
+
+### Fix Being Re-Verified
+
+**Issue**: `RouteDetailScreen` previously used `<AscentList>`, which internally called `loadAscentsForRoute`. That function returns all ascents visible under the `ascents_select_own_or_public` RLS policy — i.e. the current user's own ascents PLUS other users' public ascents — so the screen was showing other users' sends.
+
+**Fix**: Replaced `<AscentList>` with an inline ascent section that fetches via `fetchMyAscentsForRoute(routeId)`, imported from `../../mod-send-logging/send-service`. `fetchMyAscentsForRoute` applies `.eq('user_id', user.id)` on top of RLS as a defense-in-depth filter, returning only the calling user's own ascents. `handleLogSendSuccess()` now re-fetches via the local `fetchMyAscents` callback directly (no `ascentRefreshKey` state). `deleteAscent` also imported from the same service.
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false`
+- Result: **325 tests passed, 0 failed across 27 suites**
+- Exit code: 0 (clean)
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+- Count vs. prior run (314 tests): +11 tests — new tests added across modules since the last QA run, including the new test in RouteDetailScreen.test.tsx verifying `fetchMyAscentsForRoute` is called.
+
+---
+
+### Regression Verification 1 — Fix: No `<AscentList>` import; `fetchMyAscentsForRoute` called with routeId
+
+**Source**: `/Users/tsan/Desktop/MacBookPro/send-it/src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
+
+- `import AscentList` absent: PASS. `grep "AscentList" RouteDetailScreen.tsx` returns no output — the component is not imported anywhere in the file.
+- `fetchMyAscentsForRoute` imported from `../../mod-send-logging/send-service`: PASS. Line 49 confirms the import alongside `deleteAscent` and `fetchUserAchievements` from the same public service file.
+- `loadAscentsForRoute` not imported or called: PASS. Only comments mention it by name (explaining why the alternative was not used). No call site exists.
+- `fetchMyAscentsForRoute(routeId)` called in the `fetchMyAscents` callback: PASS. Line 135 — `const data = await fetchMyAscentsForRoute(routeId);` inside the `useCallback`-wrapped `fetchMyAscents` function.
+- `myAscents` / `ascentsLoading` / `ascentsError` state present: PASS. Lines 122–124 declare all three state variables.
+
+**Regression Verification 2 — `fetchMyAscentsForRoute` called with the route's ID**
+
+- `fetchMyAscentsForRoute` is called with `routeId` (the prop): PASS. Line 135 passes `routeId` directly — same value received as a prop from `RouteNavigator`.
+- Test `'calls fetchMyAscentsForRoute (not loadAscentsForRoute) to show only the current user\'s sends'` in `RouteDetailScreen.test.tsx` line 209 explicitly asserts `expect(mockFetchMyAscentsForRoute).toHaveBeenCalledWith('route-001')` and passes. PASS.
+- Both `useEffect` calls (`fetchRoute` and `fetchMyAscents`) fire on mount: PASS. Lines 189–192 — `void fetchRoute()` and `void fetchMyAscents()` both called in the same `useEffect([fetchRoute, fetchMyAscents])`.
+
+**Regression Verification 3 — `handleLogSendSuccess` re-fetches via `fetchMyAscents` directly**
+
+- `handleLogSendSuccess` sets `isLogSendVisible` to `false` then calls `void fetchMyAscents()`: PASS. Lines 217–221 — no `ascentRefreshKey` counter increment; the direct callback invocation is the re-fetch mechanism.
+- `ascentRefreshKey` state absent: PASS. `grep "ascentRefreshKey" RouteDetailScreen.tsx` returns no output.
+
+**Regression Verification 4 — Inline ascent section renders from `myAscents` state**
+
+- The inline ascent section maps over `myAscents` at line 441: PASS. `myAscents.map((ascent) => { ... })` renders ascent rows with style badge, attempts, date, display name, note (own only), private indicator, and optimistic delete via `handleDeleteAscent`.
+- `deleteAscent` imported and used in `handleDeleteAscent`: PASS. Line 48 imports it; lines 247 calls `void deleteAscent(ascentId)` with an optimistic remove and a `fetchMyAscents()` revert on failure.
+- Loading, error, and empty states are rendered: PASS. Lines 418, 422–434, 436 render `<ActivityIndicator>`, error container with retry, and empty text respectively, driven by `ascentsLoading` / `ascentsError` / `myAscents.length === 0`.
+
+---
+
+### Regression — Previously Passing ACs
+
+**Sticky top bar (back + bookmark fixed above scroll)**: `<View style={styles.topBar}>` outside `<ScrollView>` is confirmed at line 300. `paddingTop: topInset` at line 534. PASS.
+
+**Photo display (signed URL)**: `photoUri` state and `getPhotoSignedUrl` call in `fetchRoute` unchanged. `{photoUri ? <Image source={{ uri: photoUri }} ... /> : null}` at line 339. PASS.
+
+**AC-046 bookmark toggle**: `isSaved` state, optimistic update in `handleBookmarkToggle`, `saveRoute`/`unsaveRoute` calls, and icon in `topBar` — all unchanged. PASS.
+
+**Achievement icon (AC-046)**: `fetchUserAchievements([routeId])` called after route load; icon ternary in `routeNameRow` unchanged. PASS.
+
+**AC-045 route display name**: `formatRouteName` helper and `routeNameRow` with `{routeName}` text unchanged. PASS.
+
+**AC-024b (no retire button)**: No retire button exists in the file. PASS.
+
+**Safe area insets**: `useSafeAreaInsets()` at line 106; `makeStyles(theme, insets.top)` at line 107; `paddingTop: topInset` on `topBar`. PASS.
+
+**AC-040/041/042 (list, filter, detail navigation)**: `RouteListScreen.tsx` and `RouteNavigator.tsx` unmodified by this fix. PASS.
+
+**AC-020/021/043 (submit flow)**: `RouteSubmitScreen.tsx` unmodified by this fix. PASS.
+
+**Saved routes sort to top (RouteListScreen)**: `sortedRoutes` `useMemo` at line 140 in `RouteListScreen.tsx` unmodified. PASS.
+
+**i18n — all previously verified keys**: No locale files modified by this fix. PASS.
+
+**Migrations, RLS, RPC**: No migration files touched by this fix. All previously passing DB-level checks carry over. PASS.
+
+---
+
+### Summary
+
+| Item | Prior result | This regression result |
+|------|--------------|------------------------|
+| Fix: no `<AscentList>` import in RouteDetailScreen | N/A (new fix) | PASS |
+| Fix: `fetchMyAscentsForRoute` imported from send-service | N/A (new fix) | PASS |
+| Fix: `fetchMyAscentsForRoute(routeId)` called on mount and after log | N/A (new fix) | PASS |
+| Fix: `myAscents` / `ascentsLoading` / `ascentsError` state drives inline section | N/A (new fix) | PASS |
+| Fix: `handleLogSendSuccess` calls `fetchMyAscents()` directly (no refreshKey) | N/A (new fix) | PASS |
+| Fix: `deleteAscent` imported and used in `handleDeleteAscent` | N/A (new fix) | PASS |
+| Test: `mockFetchMyAscentsForRoute` and `mockDeleteAscent` in send-service mock | N/A (new fix) | PASS |
+| Test: new test verifies `fetchMyAscentsForRoute` called with route ID | N/A (new fix) | PASS |
+| npm test -- --watchAll=false — 325 tests, 27 suites, 0 failures | PASS (314) | PASS (325) |
+| npx tsc --noEmit — 0 errors | PASS | PASS |
+| Sticky top bar (back + bookmark above scroll) | PASS | PASS |
+| Photo display via signed URL | PASS | PASS |
+| AC-045 route display name | PASS | PASS |
+| AC-046 bookmark toggle (optimistic update) | PASS | PASS |
+| AC-046 achievement icon | PASS | PASS |
+| AC-047 read-only saved indicator on list | PASS | PASS |
+| AC-024b no retire button | PASS | PASS |
+| AC-020/021/043 submit flow | PASS | PASS |
+| AC-040/041/042 list, filter, detail navigation | PASS | PASS |
+| Saved routes sort to top (RouteListScreen) | PASS | PASS |
+| Safe area insets (all 3 screens) | PASS | PASS |
+| No gold-plating | PASS | PASS |
+
+**Overall verdict: PASS. Ascent-scope fix verified correct. All previously passing ACs unaffected. MOD-003 ready for human QA.**
