@@ -2,6 +2,28 @@
 
 ## Engineering Progress
 
+### Bugfix — Ascent list scoped to current user only (2026-09-27)
+
+**Issue**: `RouteDetailScreen` displayed ascent history for all users, not just the logged-in user. The `AscentList` component (MOD-004) internally called `loadAscentsForRoute`, which returns all visible ascents via the `ascents_select_own_or_public` RLS policy — this includes other users' public sends.
+
+**Root cause**: `AscentList` is a MOD-004-owned component that fetches its own data using `loadAscentsForRoute`. That function returns the current user's own ascents plus all other users' public ascents (RLS: `auth.uid() = user_id OR is_private = FALSE`). MOD-004's `send-service.ts` already provides `fetchMyAscentsForRoute(routeId)` which scopes the query to `.eq('user_id', user.id)` as a defense-in-depth filter on top of RLS.
+
+**Fix**: Replaced the `<AscentList>` component usage in `RouteDetailScreen` with an inline ascent section that fetches ascents directly via `fetchMyAscentsForRoute(routeId)` (imported from `../../mod-send-logging/send-service`). The inline section renders the same UI as `AscentList` — section header, "Log a Send" button, loading/error/empty states, ascent rows with style badge, attempts, date, display name, note (own only), private indicator, and optimistic delete. Also imports `deleteAscent` from the same service for the trash-icon delete flow.
+
+The `AscentList` import and `ascentRefreshKey` state are removed. Re-fetch after a successful log send is now a direct call to `fetchMyAscents()` in `handleLogSendSuccess()`.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — replaced `<AscentList>` with inline ascent section fetching via `fetchMyAscentsForRoute`; added `myAscents`, `ascentsLoading`, `ascentsError` state; added `fetchMyAscents` callback; imported `deleteAscent`, `fetchMyAscentsForRoute`, `AscentWithProfile`, `AscentStyle` from MOD-004 public service
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — added `fetchMyAscentsForRoute` and `deleteAscent` to `send-service` mock; added typed mock variables; added `mockFetchMyAscentsForRoute.mockResolvedValue([])` and `mockDeleteAscent.mockResolvedValue(undefined)` to `beforeEach`; added new test: "calls fetchMyAscentsForRoute (not loadAscentsForRoute) to show only the current user's sends"
+
+**Self-check (2026-09-27):**
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 325 tests, 27 suites, 0 failures
+- PASS: No MOD-004 files edited — cross-module import only via public service functions (`fetchMyAscentsForRoute`, `deleteAscent`, `fetchUserAchievements`) from `send-service.ts`
+- PASS: No gold-plating — change confined to the reported data-scope bug
+
+---
+
 ### Rev 9 Implementation (2026-09-24)
 
 **Features implemented:**

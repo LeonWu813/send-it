@@ -23,6 +23,8 @@ jest.mock('../route-service', () => ({
 
 jest.mock('../../mod-send-logging/send-service', () => ({
   fetchUserAchievements: jest.fn(),
+  fetchMyAscentsForRoute: jest.fn(),
+  deleteAscent: jest.fn(),
 }));
 
 // Mock the BetaVideoSection entry point from MOD-005 so RouteDetailScreen tests
@@ -45,7 +47,7 @@ import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
 import { loadRoute, getPhotoSignedUrl, fetchSavedRouteIds, saveRoute, unsaveRoute } from '../route-service';
-import { fetchUserAchievements } from '../../mod-send-logging/send-service';
+import { fetchUserAchievements, fetchMyAscentsForRoute, deleteAscent } from '../../mod-send-logging/send-service';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
 import { renderOptions } from '../test-utils';
@@ -56,6 +58,8 @@ const mockFetchSavedRouteIds = fetchSavedRouteIds as jest.MockedFunction<typeof 
 const mockSaveRoute = saveRoute as jest.MockedFunction<typeof saveRoute>;
 const mockUnsaveRoute = unsaveRoute as jest.MockedFunction<typeof unsaveRoute>;
 const mockFetchUserAchievements = fetchUserAchievements as jest.MockedFunction<typeof fetchUserAchievements>;
+const mockFetchMyAscentsForRoute = fetchMyAscentsForRoute as jest.MockedFunction<typeof fetchMyAscentsForRoute>;
+const mockDeleteAscent = deleteAscent as jest.MockedFunction<typeof deleteAscent>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -92,10 +96,12 @@ const DEFAULT_PROPS = {
 describe('RouteDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default: photo signing succeeds, not saved, no achievement
+    // Default: photo signing succeeds, not saved, no achievement, no ascents
     mockGetPhotoSignedUrl.mockResolvedValue('https://signed.example.com/photo.jpg');
     mockFetchSavedRouteIds.mockResolvedValue([]);
     mockFetchUserAchievements.mockResolvedValue({});
+    mockFetchMyAscentsForRoute.mockResolvedValue([]);
+    mockDeleteAscent.mockResolvedValue(undefined);
     mockSaveRoute.mockResolvedValue(undefined);
     mockUnsaveRoute.mockResolvedValue(undefined);
   });
@@ -197,6 +203,16 @@ describe('RouteDetailScreen', () => {
 
     await waitFor(() => {
       expect(mockFetchUserAchievements).toHaveBeenCalledWith(['route-001']);
+    });
+  });
+
+  it('calls fetchMyAscentsForRoute (not loadAscentsForRoute) to show only the current user\'s sends', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(mockFetchMyAscentsForRoute).toHaveBeenCalledWith('route-001');
     });
   });
 
