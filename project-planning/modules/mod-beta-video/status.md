@@ -2,7 +2,35 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-27 (RN native upload + error logging)
+**Status**: Bug fix applied — 2026-09-27 (contentType options object on storage.upload)
+
+### Bug Fix — StorageApiError mime type: add contentType options to storage.upload — 2026-09-27
+
+**Root cause**: `supabase.storage.from('beta-videos').upload(fileName, { uri, type, name } as any)` was called without a third `options` argument. The Supabase Storage API honors `contentType` only when it is passed in the `options` parameter (the third argument). Without it, the Supabase JS client infers the MIME type from the React Native fetch layer, which sets `Content-Type: text/plain;charset=UTF-8` instead of `video/mp4` or `video/quicktime`. This caused a `StorageApiError: mime type text/plain;charset=UTF-8 is not supported` at runtime.
+
+**Fix**:
+
+- `src/modules/mod-beta-video/beta-video-service.ts`:
+  - Added `{ contentType, upsert: false }` as the third argument to `supabase.storage.from(BETA_VIDEO_BUCKET).upload(...)`. The `contentType` value is already derived from the URI extension (`.mov` → `video/quicktime`, else `video/mp4`). Passing it explicitly in the options object forces the correct MIME type on the Storage API request regardless of what the RN fetch layer infers.
+  - Call site reformatted to multi-argument style for readability (no logic change beyond adding the options object).
+
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`:
+  - Updated the happy-path `storageBucket.upload` assertion to assert the third argument: `expect.objectContaining({ contentType: 'video/mp4' })`. Two-argument `toHaveBeenCalledWith` was insufficient to verify the fix.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors (pre-existing TS2352 in `mod-send-logging/__tests__/send-service.test.ts` unaffected; 0 errors in any mod-beta-video file)
+- `npm test -- --watchAll=false`: PASS — 325 tests, 27 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- Git scope check: only `src/modules/mod-beta-video/beta-video-service.ts` and `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` modified by this fix. Pre-existing dirty files (`.env.example`, `project-planning/setup.md`, `supabase/migrations/`, `tsconfig.json`) not touched. PASS.
+- Judgment-based checklist items:
+  - No AC logic changed — this is a pure upload options fix: PASS
+  - `contentType` already derived correctly; no new hardcoded values: PASS
+  - `as any` cast + eslint-disable comment unchanged and still justified per production.md TypeScript Strict Mode convention: PASS
+  - No new dependencies introduced: PASS
+  - No gold-plating: PASS
 
 ### Bug Fix — RN native { uri, type, name } upload + error logging — 2026-09-27
 

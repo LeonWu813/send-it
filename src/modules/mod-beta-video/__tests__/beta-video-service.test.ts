@@ -220,6 +220,7 @@ describe('uploadBetaVideo', () => {
         type: 'video/mp4',
         name: expect.stringMatching(/\.mp4$/),
       }),
+      expect.objectContaining({ contentType: 'video/mp4' }),
     );
   });
 

@@ -88,11 +88,18 @@ export async function uploadBetaVideo(
 
     const { error: storageError } = await supabase.storage
       .from(BETA_VIDEO_BUCKET)
-      .upload(fileName, {
-        uri: input.localVideoUri,
-        type: contentType,
-        name: fileName,
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any -- RN file object pattern; Supabase JS client accepts { uri, type, name } in React Native environments
+      .upload(
+        fileName,
+        {
+          uri: input.localVideoUri,
+          type: contentType,
+          name: fileName,
+        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- RN file object pattern; Supabase JS client accepts { uri, type, name } in React Native environments
+        {
+          contentType, // forces the correct MIME type on the Storage API request regardless of what the RN fetch layer infers
+          upsert: false,
+        },
+      );
 
     if (storageError) {
       console.error('[uploadBetaVideo] storage error:', storageError);
