@@ -260,6 +260,10 @@
     "noVideos": "還沒有 Beta 影片，成為第一個分享技巧的人吧！",
     "uploading": "上傳中…",
     "uploadProgress": "{{percent}}% 完成",
+    "loadError": "無法載入影片",
+    "grid": {
+      "openVideo": "開啟影片"
+    },
     "player": {
       "play": "播放 Beta 影片",
       "thumbnailAlt": "Beta 影片縮圖"

@@ -5,8 +5,7 @@
  *
  * Covers:
  * - Swipe up increments index (advances to next video).
- * - Swipe down at index 0 calls onClose.
- * - Swipe down at index > 0 decrements index (goes to previous video).
+ * - Swipe down at any index calls onClose (AC-039: dismiss always, no prev navigation).
  * - Swipe up at last index is a no-op (does not wrap).
  * - Back/close button calls onClose.
  * - Loading indicator while signed URL is being fetched.
@@ -240,7 +239,7 @@ describe('BetaVideoReelViewer', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('AC-039: swipe down at index > 0 decrements index (goes to previous)', async () => {
+  it('AC-039: swipe down at index > 0 calls onClose (dismiss always, no prev navigation)', async () => {
     const onClose = jest.fn();
 
     render(
@@ -253,14 +252,11 @@ describe('BetaVideoReelViewer', () => {
     });
 
     await act(async () => {
-      simulateSwipe(80); // swipe down at index 2 → should go to index 1
+      simulateSwipe(80); // swipe down at index 2 → must dismiss (AC-039)
     });
 
-    // Should now be at index 1 — counter shows "2 / 3"
-    await waitFor(() => {
-      expect(screen.getByText('2 / 3')).toBeTruthy();
-    });
-    expect(onClose).not.toHaveBeenCalled();
+    // AC-039: swiping down shall dismiss the viewer at any index.
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('resets to initialIndex when visible toggles back to true', async () => {

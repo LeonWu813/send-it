@@ -120,11 +120,11 @@ export default function BetaVideoSection({
         <View style={styles.thumbnailPlaceholder} />
         {/* Camera-icon overlay (top-left) — "this is a video" affordance (AC-038). */}
         <View style={styles.cameraIconContainer}>
-          <Ionicons name="videocam" size={14} color="#FFFFFF" />
+          <Ionicons name="videocam" size={14} color={theme.colors.textInverse} />
         </View>
       </Pressable>
     ),
-    [styles, t],
+    [styles, t, theme],
   );
 
   if (isLoading) {
@@ -229,7 +229,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     thumbnailPlaceholder: {
       width: '100%',
       height: '100%',
-      backgroundColor: '#1C1C1E',
+      backgroundColor: theme.colors.surface,
     },
     cameraIconContainer: {
       position: 'absolute',
@@ -238,7 +238,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       width: 22,
       height: 22,
       borderRadius: 4,
-      backgroundColor: 'rgba(0,0,0,0.45)',
+      backgroundColor: theme.colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
     },

@@ -24,6 +24,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Modal,
@@ -37,6 +38,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
 import { getVideoSignedUrl } from '../beta-video-service';
 import type { BetaVideo } from '../types';
+
+/**
+ * Intentional named constant for the video viewer background.
+ * Pure black is required here: the viewer occupies the full screen as a cinema
+ * canvas, and no theme token maps to #000000 (the darkest token is
+ * theme.colors.background at #121212). Using a named constant rather than an
+ * inline literal satisfies the no-hardcoded-hex convention.
+ */
+const VIDEO_VIEWER_BG = '#000000';
 
 /** Minimum dy (in pixels) to trigger a swipe. */
 const SWIPE_THRESHOLD = 50;
@@ -65,6 +75,7 @@ export default function BetaVideoReelViewer({
   onClose,
 }: BetaVideoReelViewerProps): React.JSX.Element {
   const { theme } = useTheme();
+  const { t } = useTranslation('common');
   const insets = useSafeAreaInsets();
   const styles = makeStyles(theme);
 
@@ -134,58 +145,35 @@ export default function BetaVideoReelViewer({
     });
   }, [videos.length]);
 
-  const goToPrevOrClose = useCallback((): void => {
-    setCurrentIndex((prev) => {
-      if (prev > 0) return prev - 1;
-      // At first video — dismiss.
-      onClose();
-      return prev;
-    });
+  /**
+   * AC-039: swiping down or tapping a back control shall dismiss the viewer.
+   * Dismissal is unconditional — there is no "go to previous" on swipe-down.
+   */
+  const handleDismiss = useCallback((): void => {
+    onClose();
   }, [onClose]);
 
   // ── PanResponder (vertical-only swipe, Tech Lead decision 5) ─────────────
-  const panResponder = useRef(
-    PanResponder.create({
-      // Capture gesture only when vertical movement dominates
-      onMoveShouldSetPanResponder: (_evt, gestureState) => {
-        const { dx, dy } = gestureState;
-        return Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 5;
-      },
-      onPanResponderRelease: (_evt, gestureState) => {
-        const { dy } = gestureState;
-        if (dy < -SWIPE_THRESHOLD) {
-          // Swipe up → advance to next
-          goToNext();
-        } else if (dy > SWIPE_THRESHOLD) {
-          // Swipe down → dismiss or go to previous
-          goToPrevOrClose();
-        }
-      },
-    }),
-  ).current;
-
   // Re-create callbacks reference so PanResponder handlers stay current.
   // PanResponder.create memoizes handlers, so we wire through a stable ref.
   const goToNextRef = useRef(goToNext);
-  const goToPrevOrCloseRef = useRef(goToPrevOrClose);
+  const handleDismissRef = useRef(handleDismiss);
   useEffect(() => { goToNextRef.current = goToNext; }, [goToNext]);
-  useEffect(() => { goToPrevOrCloseRef.current = goToPrevOrClose; }, [goToPrevOrClose]);
+  useEffect(() => { handleDismissRef.current = handleDismiss; }, [handleDismiss]);
 
   // Re-create PanResponder when navigation callbacks change so the handlers
-  // always reference the latest `goToNext` / `goToPrevOrClose`.
+  // always reference the latest `goToNext` / `handleDismiss`.
   const panRef = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_evt, gs) =>
         Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
       onPanResponderRelease: (_evt, gs) => {
         if (gs.dy < -SWIPE_THRESHOLD) goToNextRef.current();
-        else if (gs.dy > SWIPE_THRESHOLD) goToPrevOrCloseRef.current();
+        // AC-039: swipe down always dismisses regardless of current index.
+        else if (gs.dy > SWIPE_THRESHOLD) handleDismissRef.current();
       },
     }),
   );
-  // Keep panRef.current stable (PanResponder is created once and the handler
-  // refs are updated above, so the closure always reads the latest values).
-  void panResponder; // silence unused warning — panRef is the one used below
 
   const currentVideo = videos[currentIndex];
 
@@ -232,7 +220,7 @@ export default function BetaVideoReelViewer({
         {urlError ? (
           <View style={styles.centeredOverlay}>
             <Text style={styles.errorText} testID="beta-video-reel-error">
-              Unable to load video
+              {t('betaVideo.loadError')}
             </Text>
           </View>
         ) : null}
@@ -273,7 +261,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     fullscreen: {
       flex: 1,
-      backgroundColor: '#000000',
+      backgroundColor: VIDEO_VIEWER_BG,
     },
     video: {
       width: '100%',

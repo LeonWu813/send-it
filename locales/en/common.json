@@ -260,6 +260,10 @@
     "noVideos": "No beta videos yet — be the first to share your technique!",
     "uploading": "Uploading…",
     "uploadProgress": "{{percent}}% complete",
+    "loadError": "Unable to load video",
+    "grid": {
+      "openVideo": "Open video"
+    },
     "player": {
       "play": "Play beta video",
       "thumbnailAlt": "Beta video thumbnail"
