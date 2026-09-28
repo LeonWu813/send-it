@@ -2,6 +2,62 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-09-28 (QA Run 6 — 7 theming, i18n, and swipe-down bugs fixed)
+
+### Bug Fix — QA Run 6 — theming, i18n, and swipe-down behavior — 2026-09-28
+
+**Commit**: `d13ea1c fix(mod-beta-video): QA Run 6 — fix theming, i18n, and swipe-down behavior`
+
+**Bug 1 — BetaVideoSection.tsx line 232 — hardcoded `#1C1C1E` (AC-038)**
+- Replaced `backgroundColor: '#1C1C1E'` in `thumbnailPlaceholder` with `backgroundColor: theme.colors.surface`.
+- `theme.colors.surface` resolves to `#F5F5F5` (light) / `#1E1E1E` (dark) — the closest semantic dark-neutral surface token in the palette.
+
+**Bug 2 — BetaVideoSection.tsx line 241 — hardcoded `rgba(0,0,0,0.45)` (AC-038)**
+- Replaced `backgroundColor: 'rgba(0,0,0,0.45)'` in `cameraIconContainer` with `backgroundColor: theme.colors.overlay`.
+- `theme.colors.overlay` resolves to `rgba(0,0,0,0.4)` (light) / `rgba(0,0,0,0.6)` (dark).
+
+**Bug 3 — BetaVideoSection.tsx line 123 — hardcoded `color="#FFFFFF"` on Ionicons (AC-038)**
+- Replaced `color="#FFFFFF"` prop on the `<Ionicons name="videocam" ...>` element with `color={theme.colors.textInverse}`.
+- The color is passed as a JSX prop (not in `StyleSheet.create`) so it correctly references the live theme value.
+- Added `theme` to the `renderCell` `useCallback` dependency array to ensure the color re-evaluates when the color scheme changes.
+
+**Bug 4 — Missing i18n key `betaVideo.grid.openVideo` (AC-038)**
+- Added `"grid": { "openVideo": "Open video" }` under `betaVideo` in `locales/en/common.json`.
+- Added `"grid": { "openVideo": "開啟影片" }` under `betaVideo` in `locales/zh-TW/common.json`.
+
+**Bug 5 — BetaVideoReelViewer.tsx lines 137-144 — swipe-down behavior contradicts AC-039 (AC-039)**
+- Removed `goToPrevOrClose` (which decremented index when `index > 0`) and replaced with `handleDismiss` that unconditionally calls `onClose()`.
+- Updated PanResponder ref to `handleDismissRef` pointing to `handleDismiss`.
+- The swipe-down handler now reads: `else if (gs.dy > SWIPE_THRESHOLD) handleDismissRef.current()` — no index check.
+- Updated `BetaVideoReelViewer.test.tsx` test "swipe down at index > 0 decrements index (goes to previous)" → renamed and updated to assert `onClose` is called once, not that the counter decrements. Both swipe-down tests (index 0 and index > 0) now pass with `onClose` assertion.
+
+**Bug 6 — BetaVideoReelViewer.tsx line 235 — inline English string "Unable to load video" (AC-039)**
+- Added `import { useTranslation } from 'react-i18next'` to `BetaVideoReelViewer.tsx`.
+- Added `const { t } = useTranslation('common')` in the component body.
+- Replaced `Unable to load video` inline string with `{t('betaVideo.loadError')}`.
+- Added `"loadError": "Unable to load video"` under `betaVideo` in `locales/en/common.json`.
+- Added `"loadError": "無法載入影片"` under `betaVideo` in `locales/zh-TW/common.json`.
+
+**Bug 7 — BetaVideoReelViewer.tsx line 276 — hardcoded `#000000` (AC-039)**
+- Added module-level named constant `const VIDEO_VIEWER_BG = '#000000'` with a doc comment explaining the rationale: no theme token maps to pure black (darkest is `theme.colors.background` at `#121212`); pure black is intentional for a cinema-canvas video viewer; named constant satisfies the no-inline-hex convention.
+- Replaced `backgroundColor: '#000000'` in `fullscreen` StyleSheet entry with `backgroundColor: VIDEO_VIEWER_BG`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 341 tests, 28 suites, 0 failures
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (swipe-down test updated for AC-039 behavior)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (unaffected)
+- Git scope: only `src/modules/mod-beta-video/` files and `locales/` modified. No other modules touched. PASS.
+
+**ACs addressed**:
+- **AC-038**: theming convention violations resolved (3 bugs); i18n key added (1 bug)
+- **AC-039**: swipe-down always dismisses (spec compliance); i18n key added; hardcoded hex replaced with named constant
+
+---
+
 **Status**: Feature implementation — 2026-09-28 (AC-038 three-column grid, AC-039 fullscreen reel viewer)
 
 ### Feature — Grid layout + fullscreen reel viewer (AC-038, AC-039) — 2026-09-28
@@ -1219,3 +1275,177 @@ The swipe-down → previous behavior at index > 0 is not in the spec (AC-039) or
 **Previously passing ACs (AC-030, 031, 032, 033, 034, 035, 036, 037)** — all PASS, no regressions.
 
 Next: `claude --agent engineer-mod-beta-video` to fix the 7 reported bugs.
+
+---
+
+## QA Run 7 — Regression — 2026-09-28
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after QA Run 6 — 7 theming, i18n, and swipe-down bugs fixed)
+**Re-verifying**: all 7 bugs reported in QA Run 6
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 341 tests, 28 suites, 0 failures (count unchanged — all 7 fixes were code/locale corrections, no new test files added)
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (13/13)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS (11/11)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (unaffected)
+- Pre-existing `act()` console warnings (Icon state updates in BetaVideoUploader, RouteListScreen, RouteSubmitScreen, RequestGymScreen) — unchanged from prior QA runs; not introduced by this fix; all suites pass.
+
+---
+
+### Bug Fix Verification — All 7 Bugs
+
+**Bug 1 — BetaVideoSection.tsx — hardcoded `#1C1C1E` thumbnail placeholder background (AC-038)**
+
+REGRESSION PASS. `src/modules/mod-beta-video/components/BetaVideoSection.tsx` line 232:
+`backgroundColor: theme.colors.surface`
+
+`#1C1C1E` is gone. `theme.colors.surface` is used. The `makeStyles` function receives `theme` as a parameter and the value is correctly resolved at style-creation time. PASS.
+
+**Bug 2 — BetaVideoSection.tsx — hardcoded `rgba(0,0,0,0.45)` camera icon background (AC-038)**
+
+REGRESSION PASS. Line 241:
+`backgroundColor: theme.colors.overlay`
+
+`rgba(0,0,0,0.45)` is gone. `theme.colors.overlay` is used (`rgba(0,0,0,0.4)` light / `rgba(0,0,0,0.6)` dark). PASS.
+
+**Bug 3 — BetaVideoSection.tsx — hardcoded `color="#FFFFFF"` on Ionicons (AC-038)**
+
+REGRESSION PASS. Line 123:
+`<Ionicons name="videocam" size={14} color={theme.colors.textInverse} />`
+
+`#FFFFFF` is gone. `theme.colors.textInverse` is used as a JSX prop expression (not in StyleSheet.create, which cannot hold prop values). `theme` is included in the `renderCell` `useCallback` dependency array at line 127: `[styles, t, theme]`. PASS.
+
+**Bug 4 — Missing i18n keys `betaVideo.grid.openVideo` and `betaVideo.loadError` (AC-038, AC-039)**
+
+REGRESSION PASS. Both keys present in both locale files:
+- `locales/en/common.json`: `betaVideo.grid.openVideo = "Open video"`, `betaVideo.loadError = "Unable to load video"`
+- `locales/zh-TW/common.json`: `betaVideo.grid.openVideo = "開啟影片"`, `betaVideo.loadError = "無法載入影片"`
+
+All EN betaVideo keys verified: `sectionTitle`, `addVideo`, `noVideos`, `uploading`, `uploadProgress`, `loadError`, `grid`, `player`, `errors`. `grid.openVideo` is present under the `grid` subtree. PASS.
+
+**Bug 5 — BetaVideoReelViewer.tsx — swipe-down behavior contradicted AC-039 (AC-039)**
+
+REGRESSION PASS. `goToPrevOrClose` (which decremented index at index > 0) is gone. Replaced with `handleDismiss`:
+
+```
+const handleDismiss = useCallback((): void => {
+  onClose();
+}, [onClose]);
+```
+
+`handleDismissRef` points to `handleDismiss`. The PanResponder release handler at line 173:
+`else if (gs.dy > SWIPE_THRESHOLD) handleDismissRef.current();`
+
+No index check. Swipe-down unconditionally calls `onClose()` at any index. The doc comment at line 149–151 explicitly states: "Dismissal is unconditional — there is no 'go to previous' on swipe-down."
+
+Test verification — `BetaVideoReelViewer.test.tsx` line 242–259: test named "AC-039: swipe down at index > 0 calls onClose (dismiss always, no prev navigation)" asserts `expect(onClose).toHaveBeenCalledTimes(1)` after a swipe-down at `initialIndex={2}`. The prior test name "swipe down at index > 0 decrements index (goes to previous)" no longer exists. PASS.
+
+**Bug 6 — BetaVideoReelViewer.tsx — inline "Unable to load video" string literal (AC-039)**
+
+REGRESSION PASS. `useTranslation` is imported at line 27:
+`import { useTranslation } from 'react-i18next';`
+
+`const { t } = useTranslation('common')` declared in the component body at line 78. The error state renders `{t('betaVideo.loadError')}` at line 223. No hardcoded English string literal in JSX. PASS.
+
+**Bug 7 — BetaVideoReelViewer.tsx — hardcoded `#000000` viewer background (AC-039)**
+
+REGRESSION PASS. Named module-level constant declared at line 49:
+`const VIDEO_VIEWER_BG = '#000000';`
+
+The doc comment at lines 43–48 explains the rationale (no theme token maps to pure black; the darkest token is `theme.colors.background` at `#121212`; pure black is intentional for a cinema-canvas video viewer; named constant satisfies the no-inline-hex convention). Used at line 264:
+`backgroundColor: VIDEO_VIEWER_BG`
+
+No inline `#000000` literal in `StyleSheet.create`. PASS.
+
+---
+
+### Spot-check — AC-030 through AC-037 Regression (BetaVideoSection.tsx, BetaVideoUploader.tsx)
+
+**BetaVideoSection.tsx** — the 3 color-token fixes and `theme` addition to `renderCell` dependency array are the only changes from QA Run 6. The following are unchanged:
+- `openIndex` state and `setOpenIndex` wiring to grid cells (AC-038/AC-039)
+- `handleUploadSuccess` prepend logic (AC-037)
+- `BetaVideoUploader` mount with `routeId` and `userId` (AC-037)
+- `BetaVideoReelViewer` mount with `videos`, `initialIndex`, `visible`, `onClose` (AC-039)
+- `fetchBetaVideosForRoute` call and `loadVideos` flow (AC-032)
+
+**BetaVideoUploader.tsx** — no changes from QA Run 6. All previously passing logic intact:
+- `validateDuration()` with `MAX_DURATION_SECONDS = 60` (AC-030) — unchanged
+- `validateVideoFormat()` with ACCEPTED_MIME_TYPES Set (AC-035) — unchanged
+- `isUploading` Modal progress overlay (AC-036) — unchanged
+- `routeId` prop threading to `uploadBetaVideo` (AC-037/AC-032) — unchanged
+
+No unintended changes detected in either file.
+
+---
+
+### Integration Checks
+
+**No hardcoded hex colors** — PASS
+Searched both changed files for inline hex literals in functional code:
+- `BetaVideoSection.tsx`: the comment at line 22 references `#1C1C1E` in historical context only; no functional hex value present. `theme.colors.surface`, `theme.colors.overlay`, `theme.colors.textInverse` used correctly.
+- `BetaVideoReelViewer.tsx`: the doc comment at line 45 references `#000000` and `#121212` for context only; `VIDEO_VIEWER_BG = '#000000'` is a named constant (not inline). No inline hex literal in `StyleSheet.create` or JSX prop position.
+
+**i18n completeness** — PASS
+All `betaVideo.*` keys present in both locale files with no missing counterparts. `betaVideo.grid.openVideo` and `betaVideo.loadError` newly confirmed present.
+
+**Cross-module import rule** — PASS (unchanged from QA Run 6)
+`RouteDetailScreen.tsx` imports only `BetaVideoSection` from `mod-beta-video`.
+
+**Supabase client singleton** — PASS (unchanged)
+`beta-video-service.ts` imports from `../../lib/supabase`; no `createClient()` at call sites.
+
+**No expo-screen-orientation** — PASS (unchanged)
+No import in any mod-beta-video file.
+
+**No react-native-gesture-handler** — PASS (unchanged)
+
+**No VideoView per grid cell** — PASS (unchanged)
+
+**Safe area insets** — PASS
+`BetaVideoReelViewer` still uses `useSafeAreaInsets()` with `insets.top` and `insets.bottom` applied to back button, counter, and caption. Unchanged from QA Run 6.
+
+---
+
+### Open Items (carried forward — non-blocking)
+
+**SPEC DOC GAP — production.md Video Pipeline Convention not yet updated for PRD Rev 12** (Doc-Sync task, not a blocker)
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker — carried from QA Run 4)
+
+---
+
+### Verdict
+
+**PASS** — All 7 QA Run 6 bugs confirmed fixed. No regressions in AC-030 through AC-037.
+
+**AC-038 (4 bugs — all resolved):**
+1. `BetaVideoSection.tsx:232` — `theme.colors.surface` replaces hardcoded `#1C1C1E`. PASS.
+2. `BetaVideoSection.tsx:241` — `theme.colors.overlay` replaces hardcoded `rgba(0,0,0,0.45)`. PASS.
+3. `BetaVideoSection.tsx:123` — `theme.colors.textInverse` replaces hardcoded `color="#FFFFFF"` JSX prop; `theme` in `renderCell` dep array. PASS.
+4. `locales/en/common.json` + `locales/zh-TW/common.json` — `betaVideo.grid.openVideo` and `betaVideo.loadError` present in both files. PASS.
+
+**AC-039 (3 bugs — all resolved):**
+5. `BetaVideoReelViewer.tsx` — `handleDismiss` unconditionally calls `onClose()` on swipe-down at any index; no index check. Test updated to assert `onClose` called (not index decrement) at index > 0. PASS.
+6. `BetaVideoReelViewer.tsx` — `useTranslation('common')` imported; `t('betaVideo.loadError')` used in error state. PASS.
+7. `BetaVideoReelViewer.tsx` — `VIDEO_VIEWER_BG = '#000000'` named constant; used in `backgroundColor: VIDEO_VIEWER_BG`. PASS.
+
+**All ACs — PASS:**
+- AC-030: PASS — 60-second duration cap enforced before upload
+- AC-031: PASS — Phase 1 placeholder thumbnail compliant per PM ruling (PRD Revision 10)
+- AC-032: PASS — one BetaVideo row attached to exactly one route
+- AC-033: PASS — inline playback via grid + fullscreen viewer, no external links
+- AC-034: PASS — BetaVideoPlayer component exposed for MOD-006 embedding (MOD-006 not yet built — pre-existing dependency gap)
+- AC-035: PASS — MP4 and MOV containers accepted; codec/extension rejection enforced
+- AC-036: PASS — progress overlay 0-100%, blocks interaction during upload
+- AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
+- AC-038: PASS — three-column thumbnail grid; camera-icon overlay top-left; no VideoView per cell; no frame-extraction library; all colors themed
+- AC-039: PASS — fullscreen portrait viewer; auto-play on open; swipe-up → next (no wrap at last); swipe-down → dismiss unconditionally; back button accessible fallback; i18n on error state; VIDEO_VIEWER_BG named constant; safe area insets applied
+
+**MOD-005 is PASS and ready for human QA.** All 10 ACs (AC-030 through AC-039) pass automated and static verification.

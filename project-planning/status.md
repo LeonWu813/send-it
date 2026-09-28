@@ -6,9 +6,9 @@
 agent: qa-mod-beta-video
 mode: regression
 module: mod-beta-video
-result: bugs-found
-commit: 10ee32c07787f9bc6cf4776db095a1bf019f1cfb
-timestamp: 2026-09-28T00:00:00Z
+result: success
+commit: 16895c85a40867f03bca9a5093cdb10efe0bfd03
+timestamp: 2026-09-28T12:00:00Z
 ```
 
 ## PM Updates
