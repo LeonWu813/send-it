@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: ec4edd9be5fb14cf8a64b2b30a8049c068ed6891
+commit: 0fbae66d40979aa9d67fc1c6309a8aed318ae959
 timestamp: 2026-09-28T00:00:00Z
 ```
 
@@ -1347,6 +1347,36 @@ Phase 1 — iOS MVP, Taipei + New Taipei launch
 **CONFLICT markers added:** none
 
 **verify-sync.sh result:** 4/6 — same result as pre-sync baseline. Checks 4 and 6 are pre-existing script bugs unrelated to this sync (documented in every prior sync report since Rev 4). Checks 1, 2, 3, and 5 all pass.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (pre-existing script bug): awk range terminates immediately because the start line matches the end condition; US-IDs are correctly present in all specs.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (pre-existing script bug): script over-matches phase content from PRD sections beyond §7; Phase Plan section is correctly written.
+
+### Sync Report — Delta Sync — 2026-09-28
+
+**Sync type:** delta
+**PRD Revision:** 15
+**PM Update reference:** 2026-09-28 [SUBSTANTIVE] — Log-send form: remove route grade display and make all sends always-private (PRD Revision 15)
+**Affected module:** MOD-004 (mod-send-logging) only
+
+**Files modified:**
+- `project-planning/modules/mod-send-logging/spec.md` — Last Synced from PRD Revision updated 14 → 15; AC-131 (new) added to Acceptance Criteria Covered section with implementation note (remove read-only grade display block from LogSendScreen.tsx, presentational-only change); AC-132 (new) added to Acceptance Criteria Covered section with implementation note (remove is_private toggle from LogSendScreen.tsx, hardcode is_private: true in AscentLogInput payload, column retained in schema, no migration); Related User Stories section updated (US-002 AC list now includes AC-131 and AC-132); Context section updated with AC-131 and AC-132 descriptions; Purpose Non-goals updated (always-private note added); Data Model updated (is_private always-true note added); Input/Output Contract updated (is_private removed from client-supplied inputs, noted as hardcoded true); Key Implementation Notes updated (is_private bullet corrected; AC-131 Grade Display Removal subsection added; AC-132 Always-Private Sends subsection added); Out of Scope updated (public/shared send-record visibility toggle added).
+
+**Files not touched:**
+- `project-planning/production.md` — no shared conventions changed; no module boundary or phase plan changes.
+- All other module specs — change confined to MOD-004 per PM note.
+
+**Files created:** none
+
+**Module removals noted:** none
+
+**AMBIGUITY markers added:** none
+
+**CONFLICT markers added:** none
+
+**verify-sync.sh result:** 4/6 — same as pre-sync baseline. Checks 4 and 6 are pre-existing script bugs unrelated to this delta (documented in every prior sync report since Rev 4). Checks 1, 2, 3, and 5 all pass.
 - Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
 - Check 2 PASS: all spec.md files have a corresponding Module Map entry.
 - Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.

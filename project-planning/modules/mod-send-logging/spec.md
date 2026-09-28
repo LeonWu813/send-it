@@ -4,7 +4,7 @@
 **Module Name**: Send Logging
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 14
+**Last Synced from PRD Revision**: 15
 **Last Updated**: 2026-09-28
 
 ---
@@ -25,6 +25,10 @@ The log-send form (`LogSendScreen.tsx`) does not present a V-grade or any grade 
 
 **AC-011 revised (Rev 14) — already satisfied**: `LogSendScreen.tsx` has no grade input field. Grade is displayed read-only (display-only block showing `routeGrade` with a `gradeNote`), never as a selectable or editable control. The `logAscent` payload and `AscentLogInput` type contain no `grade` field. AC-011 revised codifies existing behavior — no code change is required. **One doc-comment fix is needed**: the JSDoc comment at the top of `LogSendScreen.tsx` line 12 lists `project` as a style (removed in Rev 9); drop `project` from the listed style set. The running code is already correct (`ASCENT_STYLES` in `types.ts` is `['flash', 'top', 'attempt']`); only the comment is stale.
 
+**AC-131 (new, Rev 15)**: The log-send form shall not display a route grade section. The route's grade is shown on the route detail screen before the form is opened; it is not repeated inside the log-send form. Note: AC-011 governs the absence of a grade input field; AC-131 additionally removes the read-only grade display. The entire read-only grade display block (labeled "難度") in `LogSendScreen.tsx` must be removed. This is a presentational-only change; no data or logic change is required.
+
+**AC-132 (new, Rev 15)**: The log-send form shall not present a "set as private" (設為私人) toggle. All send records logged in Phase 1 are private: the system shall set `is_private = true` on every ascent insert. The `is_private` column remains in the schema (no migration), but it is not user-controllable in Phase 1. The `is_private` toggle must be removed from `LogSendScreen.tsx`; `is_private: true` must be hardcoded in the `AscentLogInput` payload sent to `insertAscent`. The `is_private` column stays in the DB schema and `Ascent` type for Phase 2.
+
 MOD-004 owns the following public service functions:
 
 - `fetchUserAchievements(routeIds[])`: given a list of route IDs, returns the best ascent style achieved by the calling user on each route (scoped to `auth.uid()`), reducing multiple ascents per route to the best style with precedence `flash > top > attempt`. Routes with no ascent by the user are absent from the returned map. Consumed by MOD-003 screens (RouteListScreen and RouteDetailScreen) for achievement icon display.
@@ -39,12 +43,13 @@ MOD-004 owns the following public service functions:
 - Comments on sends (out of scope for Phase 1).
 - Per-user grade overrides (Phase 1 forces grade from Route.grade).
 - The `project` ascent style (removed entirely from UI and DB enum in Phase 1).
+- A public/shared send-record visibility toggle (out of scope for Phase 1 — all sends are private, `is_private = true`).
 
 ---
 
 ## Related User Stories
 
-- **US-002**: Log a send quickly
+- **US-002**: Log a send quickly (AC-010, AC-011, AC-012, AC-014, AC-127, AC-128, AC-129, AC-130, AC-131, AC-132)
 
 ---
 
@@ -61,6 +66,14 @@ MOD-004 owns the following public service functions:
 **AC-013**: After a send is successfully logged, the ascent list on the route detail screen refreshes immediately to show the new entry without requiring re-navigation.
 
 **AC-014** (new): The system shall restrict the ascent style selector to the fixed three-value enum {flash, top, attempt}. The `project` style is removed — it is not selectable in the UI and is not a valid value in the `ascent_style` database enum. Any historical ascent previously logged with `project` shall be treated as `attempt` (see migration note below).
+
+**AC-131** (new, Rev 15): The log-send form shall not display a route grade section. The route's grade is shown on the route detail screen before the form is opened; it is not repeated inside the log-send form. (Note: AC-011 governs the absence of a grade input field; AC-131 additionally removes the read-only grade display.)
+
+> **Implementation note**: Remove the entire read-only grade display block from `LogSendScreen.tsx` (labeled "難度"). This is a presentational-only change — no data model change and no change to the `AscentLogInput` payload are required.
+
+**AC-132** (new, Rev 15): The log-send form shall not present a "set as private" (設為私人) toggle. All send records logged in Phase 1 are private: the system shall set `is_private = true` on every ascent insert. The `is_private` column remains in the schema (no migration), but it is not user-controllable in Phase 1.
+
+> **Implementation note**: Remove the `is_private` toggle from `LogSendScreen.tsx`; hardcode `is_private: true` in the `AscentLogInput` payload sent to `insertAscent`. The `is_private` column stays in the DB schema and `Ascent` type — no migration is required. The column is retained for Phase 2, when a public/shared visibility toggle may be introduced.
 
 ---
 
@@ -87,6 +100,10 @@ Ascent (a "log")
    -- The 'project' ascent style is REMOVED. ascent_style has exactly three
    -- values (flash | top | attempt). Historical 'project' rows are backfilled
    -- to 'attempt' in the migration.
+   -- is_private is ALWAYS true in Phase 1 — the system sets it on every insert;
+   -- it is NOT user-controllable (no "set as private" toggle in the log-send
+   -- form, per AC-132). The column is retained in the schema (no migration) for
+   -- Phase 2, when a public/shared visibility toggle may be introduced.
 ```
 
 All tables guarded by Supabase Row-Level Security policies. `Ascent` rows are writable by the owning user (insert own logs) and readable per privacy rules (own logs always; other users' logs subject to the route owner's privacy setting propagated from MOD-001 `privacy_setting`). The data flow on insert: client → Supabase Auth (session) → Postgres insert into `Ascent` (RLS-checked) → PostHog event (MOD-011).
@@ -96,12 +113,13 @@ All tables guarded by Supabase Row-Level Security policies. `Ascent` rows are wr
 ## Input / Output Contract
 
 **Inputs (log a send):**
-- `route_id` (FK from MOD-003), `style` (flash | top | attempt), `attempts` (integer), `note` (optional text), `is_private` (bool)
+- `route_id` (FK from MOD-003), `style` (flash | top | attempt), `attempts` (integer), `note` (optional text)
+- `is_private` is hardcoded to `true` on every insert — not a client-supplied field (AC-132)
 - Authenticated user session (MOD-001)
 - `logged_at` (timestamp — client-supplied or server `now()`)
 
 **Outputs (log a send):**
-- `Ascent` row inserted in Postgres
+- `Ascent` row inserted in Postgres (with `is_private = true`)
 - Success confirmation shown to user
 - On network failure: clear error message displayed to user (no silent failure, no offline queue)
 - PostHog event emitted (first send, via MOD-011)
@@ -134,10 +152,18 @@ All tables guarded by Supabase Row-Level Security policies. `Ascent` rows are wr
 - The send log flow from a route detail page must complete in ≤4 taps: route page → log tap → style selection → confirm (AC-010).
 - A global "+" entry point is also required (implied by PRD §6 MOD-004 purpose statement: "from a route page or global '+' entry point").
 - On any network failure saving the send, display a clear error message. Do not silently fail. Do not queue the send for later retry (Phase 2 adds the offline queue). The user can retry manually.
-- `is_private` field allows users to mark individual sends as private.
+- `is_private` is always `true` in Phase 1 — hardcode it in the `AscentLogInput` payload; do not expose a toggle to the user (AC-132).
 - `style` enum: `flash | top | attempt` only. `project` is removed.
 - Any TypeScript union type or picker option list enumerating ascent styles must be `'flash' | 'top' | 'attempt'` — drop `'project'`.
 - RLS: a user may only insert Ascent rows with their own `user_id`. Reading other users' ascents is controlled by the profile privacy setting (MOD-001 `privacy_setting = followers_only` hides logs from non-followers).
+
+### AC-131 — Grade Display Removal
+
+Remove the entire read-only grade display block (labeled "難度") from `LogSendScreen.tsx`. AC-011 already required no grade *input* field; AC-131 (Rev 15) additionally removes the read-only grade *display*. This is a presentational-only change — no data model change, no change to the `AscentLogInput` payload, and no schema migration are required.
+
+### AC-132 — Always-Private Sends
+
+Remove the `is_private` toggle from `LogSendScreen.tsx`. Hardcode `is_private: true` in the `AscentLogInput` payload sent to `insertAscent`. The `is_private` column stays in the DB schema and `Ascent` type — **no migration is required**. The column is retained for Phase 2, when a public/shared visibility toggle may be introduced. Engineers must not remove `is_private` from the schema, the `Ascent` type, or the `AscentWithProfile` shape.
 
 ### ascent_style Enum Migration (AC-014)
 
@@ -221,3 +247,4 @@ This helper keeps the "flash|top = a send" business rule owned by MOD-004 (the s
 - Send history and stats display (owned by MOD-008).
 - Feed rendering of sends (owned by MOD-006).
 - The `project` ascent style (removed from UI and DB enum in Phase 1; historical rows backfilled to `attempt`).
+- A public/shared send-record visibility toggle (out of scope for Phase 1; `is_private` column retained in schema for Phase 2).
