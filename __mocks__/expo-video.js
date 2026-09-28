@@ -20,6 +20,7 @@ function useVideoPlayer(_source, setup) {
     loop: false,
     play: jest.fn(),
     pause: jest.fn(),
+    replace: jest.fn(),
     addListener: jest.fn((_event, _callback) => ({ remove: jest.fn() })),
   };
   if (typeof setup === 'function') {
@@ -33,6 +34,7 @@ function createVideoPlayer(_source) {
     loop: false,
     play: jest.fn(),
     pause: jest.fn(),
+    replace: jest.fn(),
     addListener: jest.fn((_event, _callback) => ({ remove: jest.fn() })),
   };
 }

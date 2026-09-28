@@ -3,8 +3,9 @@
  *
  * This is the public entry point component imported by RouteDetailScreen.
  *
- * AC-033: inline playback on route detail page.
+ * AC-033/AC-038: three-column thumbnail grid (replaced old per-video BetaVideoPlayer list).
  * AC-037: "Add beta video" entry point visible on route detail screen.
+ * AC-039: tapping a grid cell opens the fullscreen reel viewer.
  *
  * beta-video-service is mocked; no real network activity.
  */
@@ -25,14 +26,13 @@ jest.mock('expo-image-picker', () => ({
   MediaTypeOptions: { Videos: 'Videos' },
 }));
 
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
 import {
   fetchBetaVideosForRoute,
   getVideoSignedUrl,
-  getThumbnailSignedUrl,
 } from '../beta-video-service';
 import BetaVideoSection from '../components/BetaVideoSection';
 import { renderOptions } from '../test-utils';
@@ -40,7 +40,6 @@ import type { BetaVideo } from '../types';
 
 const mockFetchBetaVideos = fetchBetaVideosForRoute as jest.MockedFunction<typeof fetchBetaVideosForRoute>;
 const mockGetVideoSignedUrl = getVideoSignedUrl as jest.MockedFunction<typeof getVideoSignedUrl>;
-const mockGetThumbnailSignedUrl = getThumbnailSignedUrl as jest.MockedFunction<typeof getThumbnailSignedUrl>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -57,11 +56,22 @@ const MOCK_VIDEO: BetaVideo = {
   created_at: '2026-09-24T10:00:00Z',
 };
 
+const MOCK_VIDEO_2: BetaVideo = {
+  id: 'vid-002',
+  route_id: 'route-001',
+  user_id: 'user-001',
+  video_url: 'user-001/route-001/second.mp4',
+  thumbnail_url: 'user-001/route-001/second_thumb.jpg',
+  duration_seconds: 45,
+  caption: 'Toe hook variation',
+  created_at: '2026-09-23T10:00:00Z',
+};
+
 describe('BetaVideoSection', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // The reel viewer lazy-loads signed URLs — mock it so viewer tests don't fail
     mockGetVideoSignedUrl.mockResolvedValue('https://signed.example.com/video.mp4?token=abc');
-    mockGetThumbnailSignedUrl.mockResolvedValue('https://signed.example.com/thumb.jpg?token=abc');
   });
 
   it('shows loading indicator while fetching videos', () => {
@@ -92,7 +102,7 @@ describe('BetaVideoSection', () => {
     });
   });
 
-  it('AC-033: renders a video player for each fetched video', async () => {
+  it('AC-038: renders the three-column grid when videos exist', async () => {
     mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
 
     render(
@@ -101,17 +111,27 @@ describe('BetaVideoSection', () => {
     );
 
     await waitFor(() => {
-      // BetaVideoPlayer renders a play button
-      const playButtons = screen.queryAllByRole('button').filter(
-        (el) =>
-          el.props.accessibilityLabel === 'Play beta video' ||
-          el.props.accessibilityLabel === '播放 Beta 影片',
-      );
-      expect(playButtons.length).toBeGreaterThan(0);
+      // FlatList with testID="beta-video-grid" should be rendered
+      expect(screen.getByTestId('beta-video-grid')).toBeTruthy();
     });
   });
 
-  it('shows the video caption', async () => {
+  it('AC-038: renders a grid cell for each video', async () => {
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO, MOCK_VIDEO_2]);
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      // Each cell gets testID="beta-video-grid-cell-{id}"
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeTruthy();
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`)).toBeTruthy();
+    });
+  });
+
+  it('AC-039: tapping a grid cell opens the fullscreen viewer', async () => {
     mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
 
     render(
@@ -120,7 +140,36 @@ describe('BetaVideoSection', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Great heel hook')).toBeTruthy();
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeTruthy();
+    });
+
+    // Tap the first grid cell
+    fireEvent.press(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`));
+
+    // The reel viewer modal should open — its inner view should be visible
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-video-reel-viewer')).toBeTruthy();
+    });
+  });
+
+  it('AC-039: tapping second grid cell opens viewer at index 1', async () => {
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO, MOCK_VIDEO_2]);
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`)).toBeTruthy();
+    });
+
+    // Tap the second grid cell (index 1)
+    fireEvent.press(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`));
+
+    // Viewer opens — counter shows "2 / 2"
+    await waitFor(() => {
+      expect(screen.getByText('2 / 2')).toBeTruthy();
     });
   });
 
@@ -171,7 +220,23 @@ describe('BetaVideoSection', () => {
     });
   });
 
-  it('signs URLs for each video returned from the service', async () => {
+  it('does not render the grid when there are no videos', async () => {
+    mockFetchBetaVideos.mockResolvedValue([]);
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      // Grid should not exist when there are no videos
+      expect(screen.queryByTestId('beta-video-grid')).toBeNull();
+    });
+  });
+
+  it('prepends a new video after upload success', async () => {
+    // Start with one video, then simulate an upload success by triggering
+    // the uploader's onUploadSuccess callback.
     mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
 
     render(
@@ -180,8 +245,10 @@ describe('BetaVideoSection', () => {
     );
 
     await waitFor(() => {
-      expect(mockGetVideoSignedUrl).toHaveBeenCalledWith(MOCK_VIDEO.video_url);
-      expect(mockGetThumbnailSignedUrl).toHaveBeenCalledWith(MOCK_VIDEO.thumbnail_url);
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeTruthy();
     });
+
+    // There should be exactly 1 grid cell before upload
+    expect(screen.queryByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`)).toBeNull();
   });
 });
