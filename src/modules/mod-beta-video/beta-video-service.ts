@@ -10,9 +10,11 @@
  * - AC-032: one BetaVideo row attached to exactly one Route (route_id FK).
  * - AC-035: codec validation is caller-side; this service inserts only after
  *   the caller has verified H.264/AAC/MP4 conformance.
+ * - Storage upload: uses the React Native { uri, type, name } object pattern
+ *   (no fetch/blob conversion) so the Supabase JS client delegates to RN's
+ *   native file transport — avoids the fragile uriToBlob fetch→arrayBuffer path.
  */
 
-import { Blob as ExpoBlob } from 'expo-blob';
 import { supabase } from '../../lib/supabase';
 import type { BetaVideo, BetaVideoUploadInput, UploadProgress } from './types';
 
@@ -64,57 +66,74 @@ export async function uploadBetaVideo(
   userId: string,
   onProgress?: (progress: UploadProgress) => void,
 ): Promise<BetaVideo> {
-  const timestamp = Date.now();
-  const videoPath = `${userId}/${input.route_id}/${timestamp}.mp4`;
+  try {
+    // ── Phase 1: Upload video ─────────────────────────────────────────────────
+    // Phase 1 PM ruling (AC-031): true JPEG thumbnail frame extraction is deferred
+    // to Phase 2. The video URI itself is the placeholder thumbnail. No separate
+    // thumbnail Storage upload is performed — thumbnail_url is set to the video's
+    // storage path so it remains a valid retrievable URL.
+    //
+    // Upload strategy: pass a { uri, type, name } object directly to the Supabase
+    // JS client. React Native's fetch internally treats this as a native file
+    // reference (no JS-side base64 encoding or blob conversion). This is more
+    // reliable on the iOS simulator and on-device than the fetch→arrayBuffer→Blob
+    // path, which can fail silently in some RN environments.
+    onProgress?.({ percent: 10, phase: 'video' });
 
-  // ── Phase 1: Upload video ─────────────────────────────────────────────────
-  // Phase 1 PM ruling (AC-031): true JPEG thumbnail frame extraction is deferred
-  // to Phase 2. The video URI itself is the placeholder thumbnail. No separate
-  // thumbnail Storage upload is performed — thumbnail_url is set to the video's
-  // storage path so it remains a valid retrievable URL.
-  onProgress?.({ percent: 10, phase: 'video' });
+    const ext = input.localVideoUri.split('.').pop() ?? 'mp4';
+    const fileName = `${userId}/${Date.now()}.${ext}`;
+    const contentType = input.localVideoUri.toLowerCase().endsWith('.mov')
+      ? 'video/quicktime'
+      : 'video/mp4';
 
-  const videoBlob = await uriToBlob(input.localVideoUri);
-  const { error: videoError } = await supabase.storage
-    .from(BETA_VIDEO_BUCKET)
-    .upload(videoPath, videoBlob, {
-      contentType: 'video/mp4',
-      upsert: false,
-    });
+    const { error: storageError } = await supabase.storage
+      .from(BETA_VIDEO_BUCKET)
+      .upload(fileName, {
+        uri: input.localVideoUri,
+        type: contentType,
+        name: fileName,
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any -- RN file object pattern; Supabase JS client accepts { uri, type, name } in React Native environments
 
-  if (videoError) {
-    throw new Error('Failed to upload video. Please try again.');
+    if (storageError) {
+      console.error('[uploadBetaVideo] storage error:', storageError);
+      throw new Error('Failed to upload video. Please try again.');
+    }
+
+    const videoPath = fileName;
+
+    onProgress?.({ percent: 80, phase: 'video' });
+
+    // ── Phase 2: Insert BetaVideo row ─────────────────────────────────────────
+    onProgress?.({ percent: 90, phase: 'saving' });
+
+    const { data, error: insertError } = await supabase
+      .from('beta_videos')
+      .insert({
+        route_id: input.route_id,
+        user_id: userId,
+        video_url: videoPath,
+        // Phase 1: thumbnail_url stores the video storage path as a placeholder.
+        // Phase 2 will replace this with a real JPEG frame URL (ffmpeg-kit-react-native).
+        thumbnail_url: videoPath,
+        duration_seconds: input.duration_seconds,
+        caption: input.caption ?? null,
+      })
+      .select('id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at')
+      .single();
+
+    if (insertError) {
+      // Clean up the video artifact
+      await supabase.storage.from(BETA_VIDEO_BUCKET).remove([videoPath]);
+      throw new Error('Failed to save beta video. Please try again.');
+    }
+
+    onProgress?.({ percent: 100, phase: 'saving' });
+
+    return data as BetaVideo;
+  } catch (error) {
+    console.error('[uploadBetaVideo] error:', error);
+    throw error;
   }
-
-  onProgress?.({ percent: 80, phase: 'video' });
-
-  // ── Phase 2: Insert BetaVideo row ─────────────────────────────────────────
-  onProgress?.({ percent: 90, phase: 'saving' });
-
-  const { data, error: insertError } = await supabase
-    .from('beta_videos')
-    .insert({
-      route_id: input.route_id,
-      user_id: userId,
-      video_url: videoPath,
-      // Phase 1: thumbnail_url stores the video storage path as a placeholder.
-      // Phase 2 will replace this with a real JPEG frame URL (ffmpeg-kit-react-native).
-      thumbnail_url: videoPath,
-      duration_seconds: input.duration_seconds,
-      caption: input.caption ?? null,
-    })
-    .select('id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at')
-    .single();
-
-  if (insertError) {
-    // Clean up the video artifact
-    await supabase.storage.from(BETA_VIDEO_BUCKET).remove([videoPath]);
-    throw new Error('Failed to save beta video. Please try again.');
-  }
-
-  onProgress?.({ percent: 100, phase: 'saving' });
-
-  return data as BetaVideo;
 }
 
 /**
@@ -155,24 +174,3 @@ export async function getThumbnailSignedUrl(storagePath: string): Promise<string
   return data.signedUrl;
 }
 
-/**
- * Convert a local file URI to a Blob for Supabase Storage upload.
- *
- * Uses expo-blob's native Blob constructor (via its ExpoBlob class) to avoid
- * React Native's slow JS-side base64-encoding fallback that occurs when calling
- * `fetch(uri).then(r => r.blob())` without a native Blob implementation.
- * expo-blob backs the Blob constructor with native iOS/Android code, so binary
- * data is transferred in memory without base64 round-tripping.
- *
- * @param uri  Local file URI (e.g. file:///path/to/video.mp4).
- * @returns    A native Blob of the file content.
- * @throws {Error} on any fetch or conversion failure.
- */
-async function uriToBlob(uri: string): Promise<ExpoBlob> {
-  const response = await fetch(uri);
-  if (!response.ok) {
-    throw new Error(`Failed to read local file: ${uri}`);
-  }
-  const buffer = await response.arrayBuffer();
-  return new ExpoBlob([buffer]);
-}

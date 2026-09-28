@@ -7,7 +7,7 @@ agent: engineer-mod-beta-video
 mode: bugfix
 module: mod-beta-video
 result: success
-commit: 4ffd7febbe4e74a7a2b4692f0276090728e4ccfe
+commit: 78c722c04dc36d0ed7d8c64238d620e40833abb8
 timestamp: 2026-09-27T00:00:00Z
 ```
 

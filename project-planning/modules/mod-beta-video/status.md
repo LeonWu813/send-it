@@ -2,7 +2,43 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-27 (expo-blob uriToBlob performance fix)
+**Status**: Bug fix applied — 2026-09-27 (RN native upload + error logging)
+
+### Bug Fix — RN native { uri, type, name } upload + error logging — 2026-09-27
+
+**Root cause**: `uploadBetaVideo` was failing silently on the iOS simulator — "Failed to upload video" appeared in the UI but nothing was logged to the Metro console. The `uriToBlob` approach (fetch → arrayBuffer → ExpoBlob) is fragile in React Native and can fail silently. Additionally, there was no `console.error` in the upload path, so the actual failure reason was invisible.
+
+**Fix**:
+
+- `src/modules/mod-beta-video/beta-video-service.ts`:
+  - Removed `import { Blob as ExpoBlob } from 'expo-blob'` — no longer needed.
+  - Removed `uriToBlob` helper function entirely (nothing else uses it).
+  - Replaced the `uriToBlob` + `supabase.storage.upload(path, blob, options)` pattern with a direct `supabase.storage.upload(fileName, { uri, type, name } as any)` call. The Supabase JS client in React Native accepts a `{ uri, type, name }` plain object and React Native's fetch internally handles it as a native file reference — no JS-side blob conversion, no fragile fetch→arrayBuffer path.
+  - Content type is derived from the URI extension: `.mov` → `video/quicktime`, everything else → `video/mp4`. File name includes user ID and timestamp.
+  - Added `console.error('[uploadBetaVideo] storage error:', storageError)` immediately before throwing on storage failure.
+  - Wrapped the entire function body in try/catch; catch block logs `console.error('[uploadBetaVideo] error:', error)` and rethrows — so any failure reason (storage or row insert) is always visible in Metro console.
+
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`:
+  - Removed global `fetch` mock and `mockFetch` variable (no longer needed — fetch is never called).
+  - Removed all `arrayBuffer: async () => new ArrayBuffer(8)` mock calls from the three `uploadBetaVideo` tests.
+  - Updated the happy-path `storageBucket.upload` assertion: replaced `expect.any(Blob)` with `expect.objectContaining({ uri: 'file:///path/to/video.mp4', type: 'video/mp4', name: expect.stringMatching(/\.mp4$/) })` to verify the RN file object shape is passed correctly.
+  - Updated all three test comments to reflect the new upload approach.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors (pre-existing TS2352 in `mod-send-logging/__tests__/send-service.test.ts` unaffected; 0 errors in any mod-beta-video file)
+- `npm test -- --watchAll=false`: PASS — 325 tests, 27 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- Git scope check: FAIL (expected — pre-existing dirty files `.env.example`, `project-planning/setup.md`, `supabase/migrations/`, `tsconfig.json` not touched by this fix; only `src/modules/mod-beta-video/beta-video-service.ts` and `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` modified)
+- Judgment-based checklist items:
+  - All ACs unaffected (no AC logic changed — this is a pure upload mechanism + logging fix): PASS
+  - `uriToBlob` removed — no other callers in module or project: PASS
+  - `as any` cast justified with eslint-disable comment per production.md TypeScript Strict Mode convention: PASS
+  - No new dependencies introduced: PASS
+  - No hardcoded values: PASS
+  - No gold-plating: PASS
 
 ### Bug Fix — expo-blob uriToBlob (base64 fallback elimination) — 2026-09-27
 
