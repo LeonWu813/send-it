@@ -1044,3 +1044,178 @@ production.md Shared Conventions still describes "MP4 container only." PRD Rev 1
 - AC-035: PASS — MP4 and MOV containers accepted; video/quicktime accepted; .avi/.mkv/.webm/.hevc rejected; error message updated in both locales
 - AC-036: PASS — progress overlay 0-100%, non-dismissable, blocks interaction during upload
 - AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
+
+---
+
+## QA Run 6 — Regression — 2026-09-28
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after AC-038 three-column grid + AC-039 fullscreen reel viewer implementation)
+**Re-verifying**: AC-038, AC-039 (new ACs); regression check of AC-030/031/032/033/034/035/036/037
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 341 tests, 28 suites, 0 failures (up from 319/27 — 16 new tests added: 13 in BetaVideoReelViewer.test.tsx, 3 net new in BetaVideoSection.test.tsx)
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (13/13, new)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS (11/11, rewritten)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (unaffected)
+- Pre-existing `act()` console warnings (Icon state updates in BetaVideoUploader, RouteListScreen, RouteSubmitScreen, RequestGymScreen) — unchanged from prior QA runs; not introduced by this change; all suites pass.
+
+---
+
+### AC-038 — Three-column thumbnail grid — FAIL (4 sub-issues, all implementation bugs → Engineer)
+
+Static verification of `src/modules/mod-beta-video/components/BetaVideoSection.tsx`:
+
+**AC-038 structure — PASS**
+`FlatList` rendered with `numColumns={NUM_COLUMNS}` where `NUM_COLUMNS = 3`. Grid `testID="beta-video-grid"`. Each cell is a `Pressable` with `testID="beta-video-grid-cell-{id}"`. Tapping a cell calls `setOpenIndex(index)`. No `VideoView` per cell (only a comment reference; no import or usage). No frame-extraction library. Camera icon (`videocam` Ionicons) rendered in top-left overlay position. Grid not rendered when `betaVideos.length === 0`. All structural requirements of AC-038 are met.
+
+**FAIL AC-038 — hardcoded hex color (thumbnail placeholder background)**
+`FAIL AC-038: Input=[BetaVideoSection renders grid cell], Actual=[thumbnailPlaceholder backgroundColor: '#1C1C1E' (hardcoded hex, line 232)], Expected=[theme token per production.md Theming Rules: "Every screen uses tokens from the theme provider; no hardcoded hex colors in components." Tech Lead Decision 6 says to use 'theme.colors.textDisabled' or similar themed placeholder fill]`
+- File: `src/modules/mod-beta-video/components/BetaVideoSection.tsx` line 232
+- Routing: implementation bug → Engineer (replace `'#1C1C1E'` with a theme token such as `theme.colors.surface` or `theme.colors.surfaceElevated`)
+
+**FAIL AC-038 — hardcoded RGBA for camera icon background**
+`FAIL AC-038: Input=[BetaVideoSection renders grid cell camera icon container], Actual=[cameraIconContainer backgroundColor: 'rgba(0,0,0,0.45)' (hardcoded RGBA, line 241)], Expected=[theme token — theme.colors.overlay already exists ('rgba(0,0,0,0.4)' light / 'rgba(0,0,0,0.6)' dark)]`
+- File: `src/modules/mod-beta-video/components/BetaVideoSection.tsx` line 241
+- Routing: implementation bug → Engineer (replace with `theme.colors.overlay`)
+
+**FAIL AC-038 — hardcoded hex for camera icon foreground color**
+`FAIL AC-038: Input=[BetaVideoSection renders grid cell camera icon], Actual=[Ionicons color="#FFFFFF" (hardcoded hex, line 123)], Expected=[theme token — theme.colors.textInverse exists ('#FFFFFF' light / '#111111' dark)]`
+- File: `src/modules/mod-beta-video/components/BetaVideoSection.tsx` line 123
+- Routing: implementation bug → Engineer (replace with `theme.colors.textInverse`)
+
+**FAIL AC-038 — missing i18n key for grid cell accessibility label**
+`FAIL AC-038: Input=[BetaVideoSection renders grid cell with accessibilityLabel={t('betaVideo.grid.openVideo', { index: index + 1 })}], Actual=[translation key 'betaVideo.grid.openVideo' is missing from locales/en/common.json and locales/zh-TW/common.json — i18n-js will return the key string at runtime, not a human-readable label], Expected=[key present in both locale files per production.md i18n rule "Message catalogs must be complete (no missing keys) at ship"]`
+- File: `src/modules/mod-beta-video/components/BetaVideoSection.tsx` line 115
+- Missing in: `locales/en/common.json` (no `betaVideo.grid` subtree), `locales/zh-TW/common.json` (same)
+- Routing: implementation bug → Engineer (add `betaVideo.grid.openVideo` key to both locale files, e.g. `"openVideo": "Open beta video {{index}}"` / `"openVideo": "開啟第 {{index}} 支 Beta 影片"`)
+
+---
+
+### AC-039 — Fullscreen reel viewer — FAIL (3 bugs → Engineer)
+
+Static verification of `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`:
+
+**AC-039 structure — PASS**
+RN `<Modal>` with `animationType="slide"`, `presentationStyle="overFullScreen"`, `statusBarTranslucent`, `onRequestClose={onClose}`. Single `useVideoPlayer` with `p.loop = false`. `player.replace({ uri: url })` + `player.play()` on signed URL resolve. `getVideoSignedUrl` called lazily per current video. `nativeControls={false}` on `VideoView`. No `expo-screen-orientation` import anywhere in module. No `enterFullscreen()` call. Close button (`chevron-back` Ionicons, `testID="beta-video-reel-close"`) calls `onClose`. `onMoveShouldSetPanResponder` returns true when `|dy| > |dx|` and `|dy| > 5`. `SWIPE_THRESHOLD = 50`. Swipe-up (dy < -50) → `goToNext`. No-wrap: `goToNext` returns `prev` at last index. Counter overlay and caption overlay present and use `insets.top`/`insets.bottom` for safe area positioning. `useVideoPlayer` initialized once; source replaced — single active decoder at a time. Safe area insets applied via `useSafeAreaInsets`. All structural spec requirements met except the three bugs below.
+
+**FAIL AC-039 — swipe-down behavior contradicts spec**
+`FAIL AC-039: Input=[user swipes down (dy > +50) while viewing video at currentIndex > 0], Actual=[viewer navigates to previous video (currentIndex decremented by 1) — onClose NOT called], Expected=[viewer dismissed and returns to route detail screen per AC-039: "swiping down or tapping a back control shall dismiss the viewer" — no exception for index > 0; Tech Lead Decision 3: "Swipe-down at any index dismisses"]`
+- File: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` lines 137–144 (`goToPrevOrClose` returns `prev - 1` when `prev > 0`)
+- The spec AC-039 text and Tech Lead Decision 3 both state swipe-down = dismiss unconditionally; the implementation adds a "go to previous" behavior at index > 0 that is not in the spec.
+- Routing: implementation bug → Engineer (change `goToPrevOrClose` to always call `onClose()` regardless of current index; rename function to `handleSwipeDown` or similar for clarity)
+
+**FAIL AC-039 — inline string literal "Unable to load video" (i18n violation)**
+`FAIL AC-039: Input=[BetaVideoReelViewer renders error state (URL fetch fails)], Actual=[<Text>Unable to load video</Text> rendered — hardcoded English string, not going through i18n (no useTranslation in component, no t() call)], Expected=[user-facing string pulled through i18n hook per production.md i18n rule "All user-facing strings are pulled through the i18n hook — no inline string literals in components"]`
+- File: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` line 235
+- Routing: implementation bug → Engineer (add `useTranslation('common')`, add a key `betaVideo.viewer.loadFailed` (or similar) to both locale files, use `t(...)` in the component)
+
+**FAIL AC-039 — hardcoded hex for fullscreen viewer background**
+`FAIL AC-039: Input=[BetaVideoReelViewer renders fullscreen view], Actual=[fullscreen View backgroundColor: '#000000' (hardcoded hex, line 276)], Expected=[theme token per production.md Theming Rules — no equivalent pure-black token in the theme palette; closest semantic token is theme.colors.background (dark: '#121212') or a new dedicated video-viewer token]`
+- File: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` line 276
+- Routing: implementation bug → Engineer (consult Tech Lead on whether to use `theme.colors.background` for dark mode or add a new `videoViewerBackground` token; do not leave hardcoded `#000000`)
+
+---
+
+### Previously Passing ACs — Regression Check
+
+**AC-030** — PASS (unaffected)
+`validateDuration()` in `BetaVideoUploader.tsx` unchanged. `MAX_DURATION_SECONDS = 60`. 90-second rejection test passes. Upload never starts on rejection.
+
+**AC-031** — PASS (unaffected)
+Upload pipeline in `beta-video-service.ts` unchanged. Single `storage.upload` with `contentType: 'video/mp4'`. `thumbnail_url` set to `videoPath`. Tests pass.
+
+**AC-032** — PASS (unaffected)
+`route_id` threading from `BetaVideoSection` → `BetaVideoUploader` → `uploadBetaVideo` → DB insert is unchanged. Tests pass.
+
+**AC-033** — PASS (revised scope, unaffected by bugs)
+AC-033 is now satisfied by AC-038 (grid) + AC-039 (fullscreen viewer). No external link or browser opened. The bugs above affect implementation quality but do not prevent in-app playback from functioning.
+
+**AC-034** — PASS (unaffected)
+`BetaVideoPlayer` component exposure unchanged. MOD-006 is not yet built — pre-existing dependency gap.
+
+**AC-035** — PASS (unaffected)
+`validateVideoFormat()` in `BetaVideoUploader.tsx` unchanged. `.mov`/`video/quicktime` accepted; `.avi`/`.mkv`/HEVC rejected. Tests pass.
+
+**AC-036** — PASS (unaffected)
+Progress overlay and `isUploading` Modal in `BetaVideoUploader` unchanged. `finally` block still clears `isUploading`. Tests pass.
+
+**AC-037** — PASS (unaffected)
+`BetaVideoSection` "Add Beta Video" entry point renders `BetaVideoUploader` with `routeId` and `userId`. Visible without leaving route detail screen. Tests pass.
+
+---
+
+### Integration Checks
+
+**Cross-module import rule** — PASS
+`RouteDetailScreen.tsx` still imports only `BetaVideoSection` from `mod-beta-video`. No internal `screens/` or `components/` imported directly from MOD-005 outside its directory.
+
+**Supabase client singleton** — PASS
+`beta-video-service.ts` imports from `../../lib/supabase`; no `createClient()` at call sites.
+
+**No expo-screen-orientation** — PASS
+`grep -r "expo-screen-orientation" src/modules/mod-beta-video/` returns only a comment in `BetaVideoReelViewer.tsx` ("Do NOT add expo-screen-orientation") — no import.
+
+**No react-native-gesture-handler** — PASS
+`grep -r "react-native-gesture-handler" src/modules/mod-beta-video/` returns no results.
+
+**No VideoView per grid cell** — PASS
+`BetaVideoSection.tsx` imports `VideoView` only via `BetaVideoReelViewer` (a separate component) — the grid cell `renderCell` function contains no `VideoView`. Confirmed.
+
+**expo-video mock completeness** — PASS
+`__mocks__/expo-video.js` exports `VideoView`, `useVideoPlayer` (with `play`, `pause`, `replace`, `addListener`), and `createVideoPlayer`. The `replace` mock (added in this commit) is present and matches the `player.replace({ uri: url })` call site in `BetaVideoReelViewer.tsx`.
+
+**i18n — en locale (AC-038 new keys)** — FAIL
+`betaVideo.grid.openVideo` key is missing from `locales/en/common.json`. See AC-038 FAIL above.
+
+**i18n — zh-TW locale (AC-038 new keys)** — FAIL
+`betaVideo.grid.openVideo` key is missing from `locales/zh-TW/common.json`. See AC-038 FAIL above.
+
+**i18n — BetaVideoReelViewer** — FAIL
+`BetaVideoReelViewer.tsx` has no `useTranslation` import. "Unable to load video" at line 235 is a hardcoded English string. See AC-039 FAIL above.
+
+**No hardcoded hex colors (new components)** — FAIL
+Four hardcoded color values found across `BetaVideoSection.tsx` and `BetaVideoReelViewer.tsx`. See AC-038 and AC-039 FAIL items above.
+
+**Safe area insets (BetaVideoReelViewer)** — PASS
+`useSafeAreaInsets()` called at line 68; `insets.top` applied to back button and counter (`top: insets.top + 12`); `insets.bottom` applied to caption container (`bottom: insets.bottom + 16`). Correct.
+
+**No HTML template comments in spec** — PASS (unchanged)
+
+**Gold-plating check** — FAIL (one item)
+The swipe-down → previous behavior at index > 0 is not in the spec (AC-039) or Tech Lead decisions. This is not a gold-plating spec issue (it's a deviation from spec), but it is flagged here as behavior-beyond-spec. Routing to Engineer as an implementation bug per the AC-039 FAIL above.
+
+---
+
+### Open Items (carried forward)
+
+**SPEC DOC GAP — production.md Video Pipeline Convention not yet updated for PRD Rev 12** (Doc-Sync task, not a blocker)
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker — carried from QA Run 4)
+
+---
+
+### Verdict
+
+**BUGS FOUND** — 7 implementation bugs across AC-038 and AC-039. All are Engineer fixes.
+
+**AC-038 failures (4):**
+1. `BetaVideoSection.tsx:232` — hardcoded `#1C1C1E` placeholder background; must use theme token
+2. `BetaVideoSection.tsx:241` — hardcoded `rgba(0,0,0,0.45)` camera icon overlay; must use `theme.colors.overlay`
+3. `BetaVideoSection.tsx:123` — hardcoded `#FFFFFF` camera icon foreground; must use `theme.colors.textInverse`
+4. `locales/en/common.json` + `locales/zh-TW/common.json` — missing `betaVideo.grid.openVideo` i18n key used in grid cell accessibility label
+
+**AC-039 failures (3):**
+5. `BetaVideoReelViewer.tsx:137-144` — swipe-down at index > 0 navigates to previous instead of dismissing; spec says swipe-down dismisses unconditionally (AC-039 text + Tech Lead Decision 3)
+6. `BetaVideoReelViewer.tsx:235` — "Unable to load video" inline string literal; no `useTranslation`; must use i18n key
+7. `BetaVideoReelViewer.tsx:276` — hardcoded `#000000` viewer background; must use theme token
+
+**Previously passing ACs (AC-030, 031, 032, 033, 034, 035, 036, 037)** — all PASS, no regressions.
+
+Next: `claude --agent engineer-mod-beta-video` to fix the 7 reported bugs.

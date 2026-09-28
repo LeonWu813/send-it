@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
-module: n/a
-result: success
-commit: 856967cd32eb14f742d476f59008a95948fc19dc
+agent: qa-mod-beta-video
+mode: regression
+module: mod-beta-video
+result: bugs-found
+commit: 10ee32c07787f9bc6cf4776db095a1bf019f1cfb
 timestamp: 2026-09-28T00:00:00Z
 ```
 
