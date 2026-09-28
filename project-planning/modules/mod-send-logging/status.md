@@ -1342,3 +1342,140 @@ None. All 319/319 tests pass. `tsc --noEmit` exits 0. No previously passing manu
 | New regressions | None |
 
 **Overall status: READY FOR HUMAN RE-TEST.** All automated checks pass (319/319 tests, `tsc --noEmit` exits 0). The TS2352 cast bug from QA Run 5 is resolved. The security fix (`fetchUserAchievements` `.eq('user_id', user.id)` + auth guard) is intact and verified. No regressions in any previously passing item. Human must complete the manual test script (Tests A–M, with corrections from QA Run 4) before marking MOD-004 as QA PASS.
+
+---
+
+## QA Run 7 — Regression — 2026-09-28
+
+**QA Agent:** qa-mod-send-logging
+**Workflow:** regression-test (re-verification after Rev 14 engineer changes: summarizeAscents helper, index.ts barrel export, LogSendScreen stale doc-comment fix)
+**Re-verifying:** All five targeted items from the task + full regression of all previously passing items.
+
+---
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npm test -- --watchAll=false` (full suite) | PASS | 366/366 tests, 29 suites, exit 0 |
+| `npx tsc --noEmit` | PASS | Zero TypeScript errors, strict mode enabled, exit 0 |
+| mod-send-logging summarizeAscents tests | PASS | 5 new tests in describe('summarizeAscents') all pass |
+
+NOTE: Test count increased from 319 (QA Run 6) to 366, consistent with the 5 new summarizeAscents tests plus tests added by the separate MOD-003 engineer run (366 − 319 = 47 total new tests across the suite, of which 5 are in mod-send-logging). Two pre-existing `act(...)` warnings from `RequestGymScreen.test.tsx` and `RouteSubmitScreen.test.tsx` (Ionicons async font loading) continue to appear — not introduced by this change.
+
+---
+
+### Rev 14 Item Verification
+
+**Item 1 — summarizeAscents is a named export in send-service.ts**
+- PASS (inspected): `src/modules/mod-send-logging/send-service.ts` line 197: `export function summarizeAscents(ascents: AscentWithProfile[]): { sends: number; attempts: number }` — `export` keyword is present; this is a named export, not a default export.
+
+**Item 2 — summarizeAscents logic: sends = flash|top count, attempts = sum with ?? 0 guard**
+- PASS (inspected): Lines 201–208 of send-service.ts — a plain `for...of` loop with `if (a.style === 'flash' || a.style === 'top') sends++` and `attempts += a.attempts ?? 0`. The `?? 0` guard handles null/undefined attempts fields. Logic matches the spec exactly.
+- PASS (test): `send-service.test.ts` describe('summarizeAscents') — test 2 ("counts flash and top as sends; attempt is not a send"): flash + top = 2 sends, attempt does not count. Test 4 ("treats null/undefined attempts as 0"): null + undefined attempts contribute 0 to the sum, only the non-null row's 4 is counted.
+
+**Item 3 — summarizeAscents is a pure function (no Supabase call, no async/await)**
+- PASS (inspected): `summarizeAscents` is declared `export function` (no `async`). The function body contains no `await`, no `supabase`, no RPC. It is synchronous and operates only over the input array. No Supabase import is referenced inside the function. This satisfies the spec requirement "Do NOT implement summarizeAscents as a server-side RPC."
+
+**Item 4 — index.ts exports both summarizeAscents and AscentWithProfile**
+- PASS (inspected): `src/modules/mod-send-logging/index.ts` line 9: `export type { Ascent, AscentLogInput, AscentStyle, AscentWithProfile } from './types';` — AscentWithProfile exported as a type. Line 19: `summarizeAscents,` is in the service-function export block. Both are present.
+
+**Item 5 — LogSendScreen.tsx: 'project' absent from file-level doc comment's style list**
+- PASS (inspected): The JSDoc at lines 1–18 of `LogSendScreen.tsx` lists `- style selector (flash / top / attempt)` at line 9. The word "project" does not appear anywhere in the file (confirmed with grep — zero matches). The stale `/ project` that QA Run 4 flagged as an observation is now removed.
+
+**Item 6 — AC-011 revised: no grade input field anywhere in LogSendScreen.tsx**
+- PASS (inspected): Grade references in `LogSendScreen.tsx` are limited to: (a) prop comment "Grade read from Route.grade — displayed but never stored on the ascent" at line 43, (b) a read-only display block at lines 151–155 using two `Text` elements (`gradeValue` and `gradeNote`) inside a `View style={styles.gradeDisplay}` — no `TextInput`, no `Picker`, no `Select`, no editable control of any kind for grade. The JSDoc at line 15 explicitly states "Grade is displayed (read from route.grade) but NOT stored or editable (AC-011)."
+
+**Item 7 — All 5 summarizeAscents test cases verified**
+- PASS: `send-service.test.ts` describe('summarizeAscents') contains exactly 5 tests:
+  1. "returns { sends: 0, attempts: 0 } for an empty array" — empty input, both counts are 0.
+  2. "counts flash and top as sends; attempt is not a send" — flash+top→sends:2, all styles sum attempts:9.
+  3. "sums the attempts column across all ascents regardless of style" — mixed styles, attempts = 10.
+  4. "treats null/undefined attempts as 0 (graceful null handling)" — null top + undefined flash → 0 each, only the attempt row's 4 contributes; sends = 2 (flash+top still count).
+  5. "returns sends: 0 when all ascents have style attempt" — 2 attempt rows → sends:0, attempts:5.
+  All 5 cases pass (366/366 suite-wide).
+
+---
+
+### Previously Passing Items — Regression Verification
+
+**AC-010 (≤4 taps):**
+- REGRESSION PASS: No changes to LogSendScreen tap flow, AscentList log-send button, or modal open/close. Rev 14 touches are: send-service.ts (new function, no change to logAscent or modal flow), index.ts (new file, no UI), LogSendScreen.tsx (1-line doc-comment edit). 6/6 LogSendScreen tests pass. PENDING HUMAN SIGN-OFF unchanged.
+
+**AC-011 (grade not stored):**
+- REGRESSION PASS: logAscent() payload and AscentLogInput type are unchanged. AscentWithProfile has no grade field. AscentLogInput has no grade field. The display-only grade block in LogSendScreen.tsx is unchanged. Tests pass.
+
+**AC-012 (clear error on failure):**
+- REGRESSION PASS: No changes to LogSendScreen handleSubmit() error path, errorMessage state, or success gate. 6/6 LogSendScreen tests pass.
+
+**AC-013 (list refreshes after log):**
+- REGRESSION PASS: No changes to AscentList.tsx refreshKey prop or RouteDetailScreen ascentRefreshKey state. AC-013 unit test passes.
+
+**AC-014 (project style removed):**
+- REGRESSION PASS: types.ts ASCENT_STYLES and AscentStyle type are unchanged. LogSendScreen chip rendering is unchanged. AscentList switch is unchanged. Locale files are unchanged. AC-014 tests pass.
+
+**fetchUserAchievements — security fix intact:**
+- REGRESSION PASS (inspected): send-service.ts line 103: supabase.auth.getUser() called before from(). Line 112: .eq('user_id', user.id) present in query chain. Auth guard at lines 104–106 unchanged. All 6 fetchUserAchievements tests pass.
+
+**fetchMyAscentsForRoute — correct behavior:**
+- REGRESSION PASS: Function body unchanged at lines 146–188. Both .eq('route_id', routeId) and .eq('user_id', user.id) predicates present. 5 fetchMyAscentsForRoute tests pass.
+
+**deleteAscent() — correct DELETE + error:**
+- REGRESSION PASS: deleteAscent function body unchanged at lines 25–33. 2 deleteAscent tests pass.
+
+**i18n parity (EN/zh-TW):**
+- REGRESSION PASS: No new i18n keys added in Rev 14. Key counts unchanged from QA Run 6.
+
+**No hardcoded hex colors:**
+- REGRESSION PASS: No new style blocks in Rev 14 changes. summarizeAscents is a pure computation function with no UI code. LogSendScreen doc-comment is not a style block.
+
+**Supabase singleton convention:**
+- REGRESSION PASS: send-service.ts imports unchanged — `{ supabase } from '../../lib/supabase'`. summarizeAscents has no Supabase call. No createClient() at call site.
+
+**Gold-plating check:**
+- REGRESSION PASS: summarizeAscents implements exactly what the spec requires — count flash|top, sum attempts with ?? 0 guard, no RPC, no additional aggregation. index.ts exposes only the public API items listed in spec §Integration Points. No extra features.
+
+**TypeScript strict mode:**
+- REGRESSION PASS: tsc --noEmit exits 0, zero errors. summarizeAscents is synchronous, non-generic, and fully typed with no as any casts. index.ts re-exports are typed. LogSendScreen doc-comment change has no TypeScript surface.
+
+**TS2352 cast fix from QA Run 5/6:**
+- REGRESSION PASS (inspected): send-service.test.ts line 33 reads `data: { user: { id: userId } },` — the invalid `as Parameters<typeof mockGetUser>[never]` cast remains absent. The outer `as any` on the mockResolvedValueOnce call handles the mock shape.
+
+---
+
+### New Regressions
+
+None. All 366/366 tests pass. tsc --noEmit exits 0. No previously passing manual or code-inspection checks have changed.
+
+---
+
+### Summary — QA Run 7
+
+| Category | Result |
+|----------|--------|
+| Automated tests | PASS — 366/366 tests, 29 suites |
+| TypeScript strict mode | PASS — zero errors, exit 0 |
+| summarizeAscents named export in send-service.ts | PASS — `export function summarizeAscents` at line 197 |
+| summarizeAscents logic: flash\|top = send, attempts ?? 0 | PASS — inspected lines 201–208; test 2 + test 4 verify |
+| summarizeAscents is pure (no Supabase, no async) | PASS — no `async`, no `supabase`, synchronous only |
+| index.ts exports summarizeAscents | PASS — line 19 of index.ts |
+| index.ts exports AscentWithProfile | PASS — line 9 of index.ts |
+| LogSendScreen.tsx: 'project' absent from doc comment | PASS — zero grep matches for 'project' in file |
+| AC-011 revised: no grade input field | PASS — only read-only Text elements for grade display |
+| 5 summarizeAscents test cases all present and passing | PASS — empty, sends-count, attempts-sum, null/undefined, all-attempt |
+| AC-010 (≤4 taps) | REGRESSION PASS (code) / PENDING HUMAN SIGN-OFF (UI) |
+| AC-011 (grade not stored) | REGRESSION PASS |
+| AC-012 (error on failure) | REGRESSION PASS |
+| AC-013 (list refreshes after log) | REGRESSION PASS |
+| AC-014 (project style removed) | REGRESSION PASS |
+| fetchUserAchievements security fix intact | REGRESSION PASS |
+| fetchMyAscentsForRoute correct behavior | REGRESSION PASS |
+| deleteAscent correct DELETE + error | REGRESSION PASS |
+| i18n parity (EN/zh-TW) | REGRESSION PASS |
+| No hardcoded hex colors | REGRESSION PASS |
+| Supabase singleton convention | REGRESSION PASS |
+| Gold-plating check | REGRESSION PASS |
+| TS2352 cast fix from QA Run 5/6 | REGRESSION PASS |
+| New regressions | None |
+
+**Overall status: READY FOR HUMAN RE-TEST.** All automated checks pass (366/366 tests, tsc --noEmit exits 0). All Rev 14 items verified: summarizeAscents is a correct pure export, index.ts exposes both summarizeAscents and AscentWithProfile, and the stale 'project' doc-comment in LogSendScreen.tsx is removed. AC-011 revised is satisfied — no grade input field exists. No regressions in any previously passing item. Human must complete the manual test script (Tests A–M, with corrections from QA Run 4) before marking MOD-004 as QA PASS.
