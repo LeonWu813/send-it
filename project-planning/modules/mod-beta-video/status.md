@@ -2,7 +2,49 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-27 (contentType options object on storage.upload)
+**Status**: Bug fix applied — 2026-09-27 (fetch → arrayBuffer upload pattern)
+
+### Bug Fix — Switch to fetch → arrayBuffer upload pattern (Supabase-recommended RN pattern) — 2026-09-27
+
+**Root cause**: `supabase.storage.from('beta-videos').upload(fileName, { uri, type, name } as any, { contentType })` uploads something to Storage but the resulting object contains corrupted video bytes — the file is not playable on playback. The `{ uri, type, name } as any` object pattern hands a plain JS object to the Supabase JS client which does not read the local file bytes correctly in all RN environments, producing a valid-looking but unplayable artifact.
+
+**Fix**:
+
+- `src/modules/mod-beta-video/beta-video-service.ts`:
+  - Replaced the `{ uri, type, name } as any` upload body with the Supabase-recommended React Native pattern:
+    ```ts
+    const response = await fetch(input.localVideoUri);
+    const arrayBuffer = await response.arrayBuffer();
+    const { error: storageError } = await supabase.storage
+      .from('beta-videos')
+      .upload(fileName, arrayBuffer, { contentType, upsert: false });
+    ```
+  - `fetch(localUri)` in React Native reads the local file correctly.
+  - `.arrayBuffer()` returns raw binary bytes — no base64 encoding, no Blob conversion.
+  - Passing `ArrayBuffer` directly to Supabase Storage is the officially recommended React Native upload path.
+  - Removed `as any` cast and associated eslint-disable comment — no longer needed with `ArrayBuffer`.
+  - Updated file-level doc comment to describe the new upload strategy.
+
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`:
+  - Added `global fetch` mock (`mockFetch`) at module scope via `(globalThis as Record<string, unknown>).fetch = mockFetch`.
+  - Added `arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(8))` to the `mockFetch` response in `beforeEach` of the `uploadBetaVideo` describe block.
+  - Updated happy-path `storageBucket.upload` assertion: second arg changed from `expect.objectContaining({ uri, type, name })` to `expect.any(ArrayBuffer)`; third arg `expect.objectContaining({ contentType: 'video/mp4' })` unchanged.
+  - Updated test comments in all three `uploadBetaVideo` tests to reflect the new upload approach.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors (pre-existing TS2352 in `mod-send-logging/__tests__/send-service.test.ts` unaffected; 0 errors in any mod-beta-video file)
+- `npm test -- --watchAll=false`: PASS — 325 tests, 27 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- Git scope check: only `src/modules/mod-beta-video/beta-video-service.ts` and `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` modified by this fix. Pre-existing dirty files not touched. PASS.
+- Judgment-based checklist items:
+  - No AC logic changed — this is a pure upload mechanism fix: PASS
+  - `contentType` already derived correctly from URI extension; no new hardcoded values: PASS
+  - `as any` cast fully removed — no longer needed; TypeScript strict mode satisfied without exception: PASS
+  - No new dependencies introduced: PASS
+  - No gold-plating: PASS
 
 ### Bug Fix — StorageApiError mime type: add contentType options to storage.upload — 2026-09-27
 

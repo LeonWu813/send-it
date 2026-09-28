@@ -6,6 +6,9 @@
  *
  * AC-032: one BetaVideo attached to exactly one route (route_id).
  * AC-036: upload progress reported via onProgress callback.
+ *
+ * Upload pattern: fetch(localUri) → arrayBuffer() → supabase.storage.upload(ArrayBuffer).
+ * fetch is mocked globally; arrayBuffer returns a fixed 8-byte buffer.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -16,6 +19,10 @@ jest.mock('../../../lib/supabase', () => ({
     },
   },
 }));
+
+// Mock global fetch for the fetch → arrayBuffer upload pattern.
+const mockFetch = jest.fn();
+(globalThis as Record<string, unknown>).fetch = mockFetch;
 
 import { supabase } from '../../../lib/supabase';
 import {
@@ -161,6 +168,11 @@ describe('getThumbnailSignedUrl', () => {
 describe('uploadBetaVideo', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Default fetch mock: returns a response whose arrayBuffer() resolves to 8 raw bytes.
+    // This satisfies the fetch → arrayBuffer → upload(ArrayBuffer) pattern.
+    mockFetch.mockResolvedValue({
+      arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(8)),
+    });
   });
 
   function makeStorageMock({
@@ -186,7 +198,7 @@ describe('uploadBetaVideo', () => {
 
   it('AC-032: uploads video then inserts row with route_id (Phase 1 — no separate thumbnail upload)', async () => {
     // Phase 1: only the video is uploaded; thumbnail_url is set to the video path.
-    // Upload uses the RN { uri, type, name } object — no fetch/blob conversion.
+    // Upload uses fetch(localUri) → arrayBuffer() → supabase.storage.upload(ArrayBuffer).
     const storageBucket = makeStorageMock();
     (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
 
@@ -211,22 +223,18 @@ describe('uploadBetaVideo', () => {
     expect(progressCalls.length).toBeGreaterThan(0);
     expect(progressCalls[progressCalls.length - 1].percent).toBe(100);
     // Phase 1: exactly one Storage upload call (video only — no separate thumbnail).
-    // The upload body is a { uri, type, name } RN file object (no blob conversion).
+    // Second arg is the raw ArrayBuffer from arrayBuffer(); third arg carries contentType.
     expect(storageBucket.upload).toHaveBeenCalledTimes(1);
     expect(storageBucket.upload).toHaveBeenCalledWith(
       expect.stringMatching(/\.mp4$/),
-      expect.objectContaining({
-        uri: 'file:///path/to/video.mp4',
-        type: 'video/mp4',
-        name: expect.stringMatching(/\.mp4$/),
-      }),
+      expect.any(ArrayBuffer),
       expect.objectContaining({ contentType: 'video/mp4' }),
     );
   });
 
   it('throws (no cleanup needed) when video upload fails', async () => {
     // Phase 1: only one upload — if it fails, nothing was stored, no cleanup needed.
-    // Upload uses the RN { uri, type, name } object — no fetch/blob conversion.
+    // Upload uses fetch(localUri) → arrayBuffer() → supabase.storage.upload(ArrayBuffer).
     const storageBucket = {
       upload: jest.fn().mockResolvedValue({ data: null, error: new Error('upload failed') }),
       remove: jest.fn().mockResolvedValue({ data: null, error: null }),
@@ -250,7 +258,7 @@ describe('uploadBetaVideo', () => {
   });
 
   it('throws and cleans up video artifact when row insert fails', async () => {
-    // Upload uses the RN { uri, type, name } object — no fetch/blob conversion.
+    // Upload uses fetch(localUri) → arrayBuffer() → supabase.storage.upload(ArrayBuffer).
     const storageBucket = {
       upload: jest.fn().mockResolvedValue({ data: {}, error: null }),
       remove: jest.fn().mockResolvedValue({ data: null, error: null }),

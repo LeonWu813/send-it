@@ -10,9 +10,11 @@
  * - AC-032: one BetaVideo row attached to exactly one Route (route_id FK).
  * - AC-035: codec validation is caller-side; this service inserts only after
  *   the caller has verified H.264/AAC/MP4 conformance.
- * - Storage upload: uses the React Native { uri, type, name } object pattern
- *   (no fetch/blob conversion) so the Supabase JS client delegates to RN's
- *   native file transport — avoids the fragile uriToBlob fetch→arrayBuffer path.
+ * - Storage upload: uses the Supabase-recommended React Native pattern —
+ *   fetch(localUri) → .arrayBuffer() → upload(ArrayBuffer). This reads the
+ *   local file as raw binary (no base64 encoding, no Blob conversion) and
+ *   passes the ArrayBuffer directly to the Supabase JS Storage client, which
+ *   is the officially recommended upload path for React Native.
  */
 
 import { supabase } from '../../lib/supabase';
@@ -73,11 +75,11 @@ export async function uploadBetaVideo(
     // thumbnail Storage upload is performed — thumbnail_url is set to the video's
     // storage path so it remains a valid retrievable URL.
     //
-    // Upload strategy: pass a { uri, type, name } object directly to the Supabase
-    // JS client. React Native's fetch internally treats this as a native file
-    // reference (no JS-side base64 encoding or blob conversion). This is more
-    // reliable on the iOS simulator and on-device than the fetch→arrayBuffer→Blob
-    // path, which can fail silently in some RN environments.
+    // Upload strategy (Supabase-recommended React Native pattern):
+    //   1. fetch(localUri) — React Native's fetch reads the local file correctly.
+    //   2. .arrayBuffer()  — gives raw binary bytes; no base64 encoding, no Blob.
+    //   3. upload(ArrayBuffer) — Supabase JS Storage client accepts ArrayBuffer
+    //      directly; this is the officially documented RN upload path.
     onProgress?.({ percent: 10, phase: 'video' });
 
     const ext = input.localVideoUri.split('.').pop() ?? 'mp4';
@@ -86,20 +88,15 @@ export async function uploadBetaVideo(
       ? 'video/quicktime'
       : 'video/mp4';
 
+    const response = await fetch(input.localVideoUri);
+    const arrayBuffer = await response.arrayBuffer();
+
     const { error: storageError } = await supabase.storage
       .from(BETA_VIDEO_BUCKET)
-      .upload(
-        fileName,
-        {
-          uri: input.localVideoUri,
-          type: contentType,
-          name: fileName,
-        } as any, // eslint-disable-line @typescript-eslint/no-explicit-any -- RN file object pattern; Supabase JS client accepts { uri, type, name } in React Native environments
-        {
-          contentType, // forces the correct MIME type on the Storage API request regardless of what the RN fetch layer infers
-          upsert: false,
-        },
-      );
+      .upload(fileName, arrayBuffer, {
+        contentType,
+        upsert: false,
+      });
 
     if (storageError) {
       console.error('[uploadBetaVideo] storage error:', storageError);
