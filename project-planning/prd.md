@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 14
+**Status**: [SUBSTANTIVE] — Revision 15
 **Date**: 2026-09-28
-**Revision**: 14
+**Revision**: 15
 
 ---
 
@@ -46,6 +46,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 - A user-editable free-text route name is out of scope for Phase 1 — a route's display name is composed automatically from its grade and hold color (with optional section label), not entered by the submitter.
 - A dedicated saved-routes surface on the Profile or Home tab is out of scope for Phase 1 — saved routes are surfaced only in the browse flow (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list); a saved-routes list view is backlog for a later phase.
 - A "project" ascent style is out of scope — Phase 1 supports exactly three ascent styles (flash, top, attempt); the historical `project` value is removed from the UI and the database enum.
+- A public/shared send-record visibility toggle is out of scope for Phase 1 — all sends are private (`is_private = true`).
 - Cities other than Taipei and New Taipei are out of scope for Phase 1 (Taoyuan, Hsinchu, Taichung, Kaohsiung, Yilan, Tainan are backlog for a later phase).
 - Top-rope-only gyms are excluded from the Phase 1 seed directory (Camp4 達文西攀岩館 and Wusa 攀岩館 are excluded on this basis).
 - In-app admin tooling is out of scope for Phase 1 — Supabase Studio is the sole admin surface.
@@ -73,7 +74,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 **I want** to log a send (route + style + attempts + optional note) in under 30 seconds and ≤4 taps from a known route page,
 **so that** logging doesn't interrupt my climbing rhythm.
 
-**Acceptance Criteria**: AC-010, AC-011, AC-012, AC-014, AC-127, AC-128, AC-129, AC-130
+**Acceptance Criteria**: AC-010, AC-011, AC-012, AC-014, AC-127, AC-128, AC-129, AC-130, AC-131, AC-132
 
 ---
 
@@ -548,6 +549,10 @@ The data flow for the two most important loops:
 
 **AC-014** (new): The system shall restrict the ascent style selector to the fixed three-value enum {flash, top, attempt}. The `project` style is removed — it is not selectable in the UI and is not a valid value in the `ascent_style` database enum. Any historical ascent previously logged with `project` shall be treated as `attempt` (see §9 Data Model migration note).
 
+**AC-131** (new): The log-send form shall not display a route grade section. The route's grade is shown on the route detail screen before the form is opened; it is not repeated inside the log-send form. (Note: AC-011 governs the absence of a grade input field; AC-131 additionally removes the read-only grade display.)
+
+**AC-132** (new): The log-send form shall not present a "set as private" (設為私人) toggle. All send records logged in Phase 1 are private: the system shall set `is_private = true` on every ascent insert. The `is_private` column remains in the schema (no migration), but it is not user-controllable in Phase 1.
+
 ---
 
 ### MOD-005 (Beta Video) Acceptance Criteria
@@ -732,6 +737,10 @@ Ascent (a "log")
  - id, user_id (FK User), route_id (FK Route),
    style (ascent_style enum: flash | top | attempt), attempts,
    note, logged_at, is_private
+   -- is_private is ALWAYS true in Phase 1 — the system sets it on every insert;
+   -- it is NOT user-controllable (no "set as private" toggle in the log-send
+   -- form, per AC-132). The column is retained in the schema (no migration) for
+   -- Phase 2, when a public/shared visibility toggle may be introduced.
    -- grade is NOT stored per-log; always read from route.grade at display time
    -- The 'project' ascent style is REMOVED. ascent_style has exactly three
    -- values (flash | top | attempt). See migration note below.
@@ -786,6 +795,7 @@ Block  (App Store Guideline 1.2 requirement)
 - All tables are guarded by Supabase Row-Level Security policies.
 - `SavedGym` is the join table backing the multi-gym saved list (it replaces the removed single `User.home_gym_id`). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved gyms.
 - `SavedRoute` is the join table backing the saved-routes bookmark (US-021, AC-046/AC-047). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved routes. `route_id` is `ON DELETE CASCADE` so a saved-route row disappears if the underlying route is deleted (e.g. a withdrawn pending route). **This is a new join table and requires Tech Lead architecture review (table placement/ownership, RLS policy set, grants) before Doc-Sync/Engineering implements it** — mirror the confirmed `saved_gyms` design (composite PK, dual `ON DELETE CASCADE`, own-rows-only SELECT/INSERT/DELETE RLS, no UPDATE, explicit grants).
+- **`Ascent.is_private` is always `true` in Phase 1** (AC-132): the system sets it on every ascent insert; it is not user-controllable and there is no "set as private" toggle in the log-send form. The column is retained in the schema (no migration) so a public/shared visibility toggle can be introduced in Phase 2.
 - A route's **display name is composed, not stored** (AC-045): it is derived at display time from `grade` + `color_tag` (+ `section_label` when present), e.g. "V3 Blue" / "V3 Blue (Cave)". There is no free-text route-name column and no user-editable route name.
 - **`ascent_style` enum change — `project` removed (requires Tech Lead architecture review).** PostgreSQL does not support dropping a value from an existing enum type directly. The migration must: (1) create a new `ascent_style` enum containing exactly `flash | top | attempt` (without `project`); (2) migrate any existing rows whose style is `project` to `attempt`; (3) alter the `ascents.style` column to the new enum type and drop the old enum. This is a data-model migration with data backfill and enum swap — **it requires Tech Lead architecture review before Doc-Sync/Engineering implements it** (safe migration ordering, transaction boundaries, and the PG restriction that a newly created type + column swap + old-type drop must be sequenced correctly, consistent with the project's established two-file enum-migration convention).
 - The `Route.match_key` is a Postgres `GENERATED ALWAYS AS ... STORED` column. Uniqueness of active routes is enforced at the database level by a partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` — not only in application code — so that reused tape colors after a wall reset don't collide with historical retired routes.
