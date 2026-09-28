@@ -2,7 +2,49 @@
 
 ## Engineering Progress
 
-**Status**: Bug fix applied — 2026-09-27 (expo-file-system base64 → Uint8Array upload, iOS corruption fix)
+**Status**: Bug fix applied — 2026-09-28 (expo-file-system File class migration, SDK 57 readAsStringAsync removal)
+
+### Bug Fix — expo-file-system File.bytes() migration (SDK 57 readAsStringAsync removal) — 2026-09-28
+
+**Root cause**: `readAsStringAsync` imported from `expo-file-system` was removed in SDK 54+ and throws at runtime with the message: "Method readAsStringAsync imported from 'expo-file-system' is deprecated. You can migrate to the new filesystem API using 'File' and 'Directory' classes or import the legacy API from 'expo-file-system/legacy'." The previous fix (commit ee0e6c0) used `import * as FileSystem from 'expo-file-system'` with `FileSystem.readAsStringAsync()` — that API was moved out of the main package and now throws instead of warning.
+
+**Fix**:
+
+- `src/modules/mod-beta-video/beta-video-service.ts`:
+  - Replaced `import * as FileSystem from 'expo-file-system'` with `import { File as ExpoFile } from 'expo-file-system'`.
+  - Replaced the base64 + atob + Uint8Array loop read block with: `const expoFile = new ExpoFile(input.localVideoUri); const uint8Array = await expoFile.bytes();`. `File.bytes()` returns a Uint8Array directly — no base64 detour needed.
+  - Updated file-level doc comment "Storage upload" rule to describe the new `File.bytes()` strategy.
+  - Updated `uploadBetaVideo` JSDoc upload strategy description.
+
+- `__mocks__/expo-file-system.js`:
+  - Replaced the bare legacy-only mock with a mock that exposes both the new `File` class (with `jest.fn()` methods including `bytes`, `text`, `base64`, `exists`, `delete`) and a `Directory` class, alongside the legacy function stubs.
+  - Added `__esModule: true` and a `mockBytes` export so tests can control `bytes` return values.
+  - `File.prototype.bytes` is assigned as a shared `jest.fn()` so `jest.spyOn(ExpoFile.prototype, 'bytes')` works.
+
+- `package.json` Jest `moduleNameMapper`:
+  - Kept as `^expo-file-system$` (NOT `^expo-file-system(/legacy)?$`). The `/legacy` variant must NOT be added: `jest-expo`'s setup.js calls `jest.mock('expo-file-system/legacy', factory)` which registers its factory under the resolved mock file key. If both `expo-file-system` and `expo-file-system/legacy` map to the same file, jest-expo's legacy factory pollutes the module cache for the non-legacy path, causing `File` to be `undefined` in tests.
+
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`:
+  - Replaced `import * as FileSystem from 'expo-file-system'` with `import * as ExpoFileSystem from 'expo-file-system'`.
+  - Added `const ExpoFile = (ExpoFileSystem as any).File` accessor (namespace import needed because Babel CJS interop does not reliably expose named class exports under `import { File }` when the mock uses `module.exports = { File, ... }`).
+  - In `uploadBetaVideo` `beforeEach`: replaced `(FileSystem.readAsStringAsync as jest.Mock).mockResolvedValue('dGVzdA==')` with `jest.spyOn(ExpoFile.prototype, 'bytes').mockResolvedValue(new Uint8Array([116, 101, 115, 116]))`.
+  - Updated comments in all three `uploadBetaVideo` test cases to reflect `File.bytes()` strategy.
+  - Happy-path upload assertion still checks `expect.any(Uint8Array)` as second argument — already correct.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npm test -- --watchAll=false`: PASS — 325 tests, 27 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (10/10)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- Git scope check: only `src/modules/mod-beta-video/beta-video-service.ts`, `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`, `__mocks__/expo-file-system.js` modified. `package.json` unchanged from HEAD (moduleNameMapper pattern kept as `^expo-file-system$`). PASS.
+- Judgment-based checklist items:
+  - No AC logic changed — this is a pure upload mechanism fix for SDK 57 API removal: PASS
+  - `File.bytes()` is the documented SDK 57+ API for reading local files as binary: PASS
+  - `jest-expo` moduleNameMapper collision investigated and avoided by keeping separate patterns for `expo-file-system` vs `expo-file-system/legacy`: PASS
+  - `ExpoFile` accessed via namespace import in test to work around Babel CJS interop class export limitation: PASS
+  - No gold-plating: PASS
 
 ### Bug Fix — expo-file-system base64 → Uint8Array upload (iOS corruption fix) — 2026-09-27
 
