@@ -187,6 +187,14 @@ export default function BetaVideoReelViewer({
   // always reference the latest `goToNext` / `handleDismiss`.
   const panRef = useRef(
     PanResponder.create({
+      // Capture phase — runs before native components (e.g. VideoView/UIKit) claim
+      // the gesture. This is required on iOS because VideoView is a native UIKit
+      // component that wins the touch in the bubble phase before RN responders fire.
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponderCapture: (_evt, gs) =>
+        Math.abs(gs.dy) > Math.abs(gs.dx),
+      // Bubble phase — kept as fallback for non-native-view contexts.
+      onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_evt, gs) =>
         Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
       onPanResponderRelease: (_evt, gs) => {
