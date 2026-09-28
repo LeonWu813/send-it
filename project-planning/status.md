@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: bb9849e28b3eb757a72e0c811567f896a2ac0f31
+commit: 3b048fcf731d0c52de0af4e62f34c298bf2102a4
 timestamp: 2026-09-28T00:00:00Z
 ```
 
@@ -107,6 +107,93 @@ timestamp: 2026-09-28T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-09-28 — change (Rev 13: MOD-005 beta-video grid + fullscreen reel viewer, AC-033 revised / AC-038 / AC-039)
+
+**Context**: PRD Revision 13 [SUBSTANTIVE] changes how a route's beta videos are browsed and played on RouteDetailScreen: from inline players (current `BetaVideoSection` → one `BetaVideoPlayer` per video) to a 3-column thumbnail grid (AC-038) that opens a fullscreen, portrait, auto-playing, swipe-navigable reel viewer (AC-039). AC-033 revised to reference the grid+viewer. No new module, no new data-model table, no new dependency *required* (see below). Advisory only — no source, spec, or PRD files changed here. Findings grounded in the shipped code: `BetaVideoSection.tsx`, `BetaVideoPlayer.tsx` (uses `expo-video` `VideoView` + `useVideoPlayer`), `beta-video-service.ts` (`fetchBetaVideosForRoute` orders `created_at DESC`), `BetaVideoUploader.tsx` (uses RN `<Modal>`), `RouteDetailScreen.tsx` (mounts `BetaVideoSection` as the sole MOD-005 entry point), `app.json` (`"orientation": "portrait"` app-wide), `package.json` (expo SDK 57; `expo-video ~57.0.5`; **no** gesture-handler / reanimated / screen-orientation), and `node_modules/expo-video/build/VideoView.types.d.ts` (fullscreen API surface). Doc-Sync carries the decisions/conventions into the MOD-005 spec + production.md; Engineering implements in MOD-005 `change`-mode work.
+
+The seven questions in the brief map to six architectural decisions. Headline: **all six are implementable with zero new native dependencies and no native rebuild** — the app is already portrait-locked and the swipe reel is built with RN built-ins.
+
+---
+
+#### Q1 — Portrait lock: NO new dependency; already satisfied app-wide. Do NOT add `expo-screen-orientation`.
+
+- **`app.json` sets `"orientation": "portrait"` globally** (confirmed, line 6; `expo.ios.supportsTablet: false`). The entire app is already locked to portrait at the native manifest level. There is no landscape state to lock away.
+- Therefore AC-039's "portrait-orientation viewer" is **satisfied for free** — the custom fullscreen modal (Q2) renders in portrait because the app cannot rotate. `expo-screen-orientation` is **not** needed, so **no `npx expo install`, no native rebuild** for orientation.
+- **Do NOT** use `expo-video`'s native OS-fullscreen `fullscreenOptions.orientation: 'portrait'` for this either — see Q2/Q4: native OS fullscreen forces native controls and its own dismiss chrome and cannot host the custom swipe-up-to-next-video behavior AC-039 requires. Orientation is handled by the app-wide lock, not by the video primitive.
+- **Constraint for Doc-Sync/Engineer**: the viewer must not attempt to programmatically lock/unlock orientation; it inherits portrait from the app config. If a future phase ever allows landscape elsewhere, the viewer would then need an explicit lock — flag as a Phase-2 concern only, not Phase 1.
+
+#### Q2 — Modal player architecture: a custom RN `<Modal>` full-screen overlay owned by MOD-005. NOT a new navigator screen, NOT a global AppShell overlay.
+
+- **Recommend a new MOD-005 component `BetaVideoReelViewer.tsx` rendered as a React Native `<Modal>`** (`animationType="fade"` or `"slide"`, `presentationStyle="overFullScreen"`, `statusBarTranslucent`), mounted from within `BetaVideoSection` (or the new grid component). Rationale:
+  1. **Precedent already in the module**: `BetaVideoUploader.tsx` already uses RN `<Modal>` (lines 31/219/236) for its progress overlay — the pattern is proven in MOD-005 and needs no new dependency (RN `Modal` is core).
+  2. **Fits the custom navigation model**: this project uses view-state-machine navigators (`GymNavigator`/`RouteNavigator`), not React Navigation *screens* — there is no route-catalog stack "screen" abstraction to push a viewer onto cleanly, and adding one would drag MOD-005's viewer into MOD-003's navigator ownership. A self-contained `<Modal>` keeps the viewer entirely inside MOD-005 and mounted over whatever hosts the grid, matching the module boundary (MOD-005 owns playback; MOD-003 only hosts `BetaVideoSection`).
+  3. **A global AppShell overlay is wrong**: the viewer is route-scoped and MOD-005-owned; hoisting it to the app shell (MOD-012) would leak MOD-005 playback state into the shell and violate the cross-module boundary. Reject.
+- **Ownership stays clean**: RouteDetailScreen (MOD-003) already imports only `BetaVideoSection` (the MOD-005 public entry point, confirmed line 45/510). The grid and the reel `<Modal>` both live inside MOD-005; MOD-003's host screen is unchanged. No MOD-003 code change is needed for this AC.
+- **State**: the currently-open video index is a `useState<number | null>` in the grid/section component (null = closed, N = viewer open at index N). This mirrors the state-machine-per-component convention. `<Modal visible={openIndex !== null}>`.
+
+#### Q3 — Per-route ordered playlist for swipe-to-next: reuse `fetchBetaVideosForRoute`; define oldest-first order explicitly in the spec.
+
+- `fetchBetaVideosForRoute(routeId)` already returns the full set ordered `created_at DESC` (newest-first, confirmed service line 41). `BetaVideoSection` already holds this as `betaVideos: SignedBetaVideo[]` in state. **The viewer reuses this exact in-memory array — no new fetch, no new query.** Swipe-to-next walks the array by index.
+- **Ordering decision — must be pinned in the spec, do not leave to implementation**: AC-039 says "swipe up → next video for this route" but does not define order. Two reasonable orders exist (newest-first as currently fetched, vs. oldest-first = natural chronological/upload order). **Recommend the viewer presents videos in the same order the grid displays them** so swipe order matches visual grid order (top-left → right → down). Decision: **grid renders newest-first (the array as fetched, `created_at DESC`), and the viewer swipes in that same array order** — tapping grid cell *i* opens the viewer at index *i*, swipe-up → *i+1*, and index order == grid order. This keeps grid and reel consistent (the real UX requirement) and requires no re-sort. The "oldest-first natural upload order" alternative would force the grid and viewer to disagree unless the grid is also re-sorted — more work for no benefit. Flag for Doc-Sync to write the explicit rule: **grid order == viewer swipe order == `fetchBetaVideosForRoute` order (`created_at DESC`); tap index maps 1:1 to viewer start index.**
+- **Boundary of navigation**: swipe-up at the last index is a no-op (AC-039: "next video ... when one exists"); swipe-up beyond the end does nothing (do not wrap). Swipe-down at any index dismisses. Pin both edges in the spec.
+- **Newly-uploaded video**: `handleUploadSuccess` already prepends the new video to the front of the array (`[new, ...prev]`, section line 96). Since the grid is newest-first, a just-uploaded video correctly appears at grid index 0 and viewer index 0 — consistent, no special-casing.
+
+#### Q4 — expo-video fullscreen: do NOT use native OS fullscreen. Size `VideoView` to fill the modal.
+
+- `expo-video`'s `VideoView` **does** expose native fullscreen: `fullscreenOptions` (with `orientation: 'portrait'` available), imperative `ref.enterFullscreen()/exitFullscreen()`, and `onFullscreenEnter/Exit` callbacks (confirmed in `VideoView.types.d.ts` / `VideoView.d.ts`). **But native OS fullscreen is the wrong tool for AC-039** because:
+  1. Its type doc states *"native controls are always enabled in fullscreen mode"* and *"the bottom bar is always visible in fullscreen mode to allow users to exit"* — the OS chrome owns dismissal and cannot host a custom swipe-up-to-next-video gesture.
+  2. On Android *"the JS runtime is paused when the VideoView is in fullscreen mode"* — swipe handling would be dead (iOS-only Phase 1, but this signals native fullscreen is a closed player, not a composable surface).
+- **Recommendation — achieve the "fullscreen effect" by sizing a plain `VideoView` to fill the modal**, not by calling `enterFullscreen()`. Inside `BetaVideoReelViewer`'s `<Modal>`: a full-screen `View` (`flex: 1`, dark/black background, `insets` for safe area) containing a `VideoView` sized `{ width: '100%', height: '100%' }` with `contentFit="contain"`. This is the same primitive `BetaVideoPlayer` already uses (line 111-116) — the component is package-agnostic and the migration is a re-layout, not a rewrite (Tech Lead already approved that component's design as sound in the 2026-09-25 review).
+- **Auto-play (AC-039)**: create the player with `useVideoPlayer(currentUrl, p => { p.loop = false; })` and call `player.play()` on mount / on index change. Note `BetaVideoPlayer` today defers play until a tap; the viewer should auto-play immediately (AC-039 "auto-plays the tapped video").
+- **Native controls**: `nativeControls` may stay `true` inside the viewer (scrub bar is fine) — it does not conflict with swipe gestures as long as the swipe responder is on an overlay/margin area, not over the control bar. Engineer's layout call; flag the overlap pitfall (Q5).
+- **Player lifecycle across swipes**: recommend one `useVideoPlayer` whose `source` is `replaceAsync`'d (or the player recreated) when `openIndex` changes, rather than N mounted players — one active player at a time avoids N simultaneous decoders. Document in the spec; engineer picks `player.replace()` vs. remount.
+
+#### Q5 — Swipe gesture: use RN built-in `PanResponder`. Do NOT add `react-native-gesture-handler`.
+
+- **`react-native-gesture-handler` is not installed** (confirmed — not in `package.json`, not in `node_modules`), and neither is `reanimated`. Adding it is a **native dependency + native rebuild + a root `GestureHandlerRootView` wrap** — a disproportionate cost for two one-axis swipes.
+- **Recommend RN core `PanResponder`** on the viewer's container. The gesture set is minimal and vertical-only: `onMoveShouldSetPanResponder` returns true when `|dy| > |dx|` and `|dy|` exceeds a small threshold; on release, if `dy < -SWIPE_THRESHOLD` → advance to next (if exists); if `dy > +SWIPE_THRESHOLD` → dismiss. This is well within `PanResponder`'s comfort zone and needs no native code, no rebuild, and no root provider.
+- **Also provide a non-gesture dismiss**: AC-039 requires "swipe down **or** tapping a back control" — render an explicit back/close button (e.g. an `Ionicons` "chevron-down"/"close" pinned top-left within `insets.top`), so dismissal works even if the swipe is missed. RN `<Modal onRequestClose>` should also route to dismiss (Android back; harmless on iOS-only Phase 1). The back control is the accessibility fallback for the swipe — do not ship swipe as the only dismiss path.
+- **Gesture/controls overlap pitfall** (flag for spec): if `nativeControls` is on, keep the `PanResponder` on a transparent overlay outside the control bar's hit area (e.g. the top region / side margins), or the scrub bar and the swipe will fight. Alternatively disable `nativeControls` in the viewer and rely on auto-play + swipe + back button. Engineer's call; document the chosen approach.
+
+#### Q6 — Thumbnail storage: Phase 1 grid cells show the placeholder over a neutral fill; do NOT extract frames now.
+
+- **`thumbnail_url` is a video storage path, not an image** (confirmed service line 126: `thumbnail_url: videoPath`; PM Rev 10 ruling + AC-031 Phase 1 simplification). `BetaVideoPlayer` already signs it and passes it to `<Image source={{uri}}>`, which will fail to render a still (a `.mp4`/`.mov` path is not a decodable image) — today it silently falls back to the placeholder `View` (player lines 87-96). The 3-column grid inherits the same limitation.
+- **This is a known, already-ruled Phase 1 state, not a new problem**: PM Rev 10 explicitly deferred true frame extraction (`expo-video-thumbnails` / `ffmpeg-kit`) to Phase 2. **Do not add a frame-extraction dependency for this change** — that would reopen a settled scope decision and add a native dependency + rebuild.
+- **Recommendation for AC-038 grid cells (Phase 1)**: each cell renders the video-camera icon overlay (AC-038 explicitly requires it, top-left) over a **neutral themed placeholder fill** (reuse `styles.thumbnailPlaceholder`, `theme.colors.textDisabled`), attempting the `<Image>` but expecting it to fall back. Because AC-038 already mandates the camera-icon overlay, the cell is visually meaningful even with no real still — the icon *is* the "this is a video" affordance. So the placeholder-thumbnail limitation is cosmetically absorbed by the AC-038 design. Spec should state: **Phase 1 grid cell = neutral placeholder fill + mandatory camera-icon overlay (AC-038); a real still frame arrives with Phase 2 frame extraction.** No behavior is blocked.
+- **Do NOT** special-case by trying to render the first video frame inline in the grid (would mount N `VideoView`s = N decoders on one screen — a performance and battery problem, exactly what a thumbnail grid exists to avoid). Cells are `<Image>`/placeholder only; the `VideoView` exists only inside the reel viewer.
+
+---
+
+#### Concerns (must address during the Rev 13 change work)
+
+- **Do not build the reel viewer as OS-native `expo-video` fullscreen** — it forces native controls + its own dismiss chrome and cannot host swipe-up-to-next (Q4). The viewer must be a custom RN `<Modal>` with a modal-filling `VideoView`. Using `enterFullscreen()` would make AC-039's swipe navigation impossible.
+- **Do not add `expo-screen-orientation`, `react-native-gesture-handler`, or any frame-extraction library for this change** — all three would trigger a native dependency install + native rebuild (per the project's native-build-gate convention) for functionality already covered by the app-wide portrait lock (Q1), RN `PanResponder` (Q5), and the settled Phase 1 placeholder-thumbnail ruling (Q6). Adding any of them expands scope and reopens a prior decision.
+- **Grid order and viewer swipe order must be identical and pinned in the spec** (Q3) — tap index → viewer start index must be 1:1, and swipe order must equal grid render order (`created_at DESC`), or tapping the 3rd cell and swiping will jump unpredictably. This is a correctness requirement, not a preference.
+- **One active `VideoView`/player at a time** (Q4) — the grid must not mount `VideoView`s (Q6); the viewer must not stack a new player per swipe without releasing the prior source. N live decoders on one screen risks the ≤3s cold-start / smooth-scroll NFR and battery. Use `<Image>`/placeholder cells + a single reused player in the modal.
+- **Swipe must not be the only dismiss path** (Q5/AC-039) — ship the explicit back control too; swipe-down is the gesture, the back button is the accessible fallback.
+
+#### Recommendations
+
+- Build a MOD-005 `BetaVideoReelViewer.tsx` as an RN `<Modal>` (proven pattern — `BetaVideoUploader` already uses `<Modal>`); it fills the screen with a single `VideoView` (`contentFit="contain"`, auto-play on open/index-change), reuses the `betaVideos` array already in `BetaVideoSection` state, and is opened by `useState<number|null>` set from a grid cell tap.
+- Replace the inline `BetaVideoPlayer`-per-video render in `BetaVideoSection` with a 3-column thumbnail grid (AC-038): `<Image>`/placeholder cell + mandatory top-left camera-icon overlay; tap sets the open index.
+- Swipe with RN `PanResponder` (vertical-only: up = next-if-exists no-wrap, down = dismiss) + an explicit back/close control; keep gestures off the native-controls hit area.
+- Portrait is inherited from `app.json` `"orientation": "portrait"` — add nothing for orientation.
+- Keep the Phase 1 placeholder thumbnail (PM Rev 10); real still frames are Phase 2. `BetaVideoPlayer` may be retained for the activity feed (AC-034, MOD-006 embeds it inline) — this change is scoped to the RouteDetailScreen surface (AC-033/038/039); confirm with Doc-Sync whether AC-034 feed playback stays inline (it does — AC-034 unchanged).
+
+#### Approved (looks solid as-is)
+
+- The `expo-video` `VideoView` + `useVideoPlayer` primitive is the right, SDK-57-aligned playback core (already migrated off `expo-av` in the 2026-09-25 review); the reel viewer reuses it with a full-screen layout — a re-layout, not a new dependency.
+- `fetchBetaVideosForRoute` already returns the complete, ordered per-route set the swipe playlist needs — no new query, no new RPC, no schema change. The playlist is pure client-side array indexing over data already in memory.
+- MOD-005 module boundary is preserved: RouteDetailScreen (MOD-003) hosts only `BetaVideoSection`; the grid and reel viewer live entirely inside MOD-005. No MOD-003 code change is required for AC-033/038/039.
+- No data-model change: `beta_videos` rows are unchanged; this is purely a client presentation change.
+
+#### Proposed Shared Conventions (for Doc-Sync to carry into production.md)
+
+- **Custom fullscreen media viewers use an RN `<Modal>` with a screen-filling primitive, not the media library's native OS-fullscreen** — when a fullscreen viewer needs custom in-viewer gestures or navigation (e.g. swipe-to-next), size the player/image to fill an RN `<Modal>` (`presentationStyle="overFullScreen"`) rather than calling the library's `enterFullscreen()`, which imposes non-overridable native controls/dismiss chrome and (on some platforms) pauses the JS runtime. Native OS fullscreen is only for a plain single-clip player with no custom in-viewer interaction.
+- **Prefer RN built-in `PanResponder` for simple one-axis swipe/dismiss gestures** — do not add `react-native-gesture-handler` (a native dependency requiring a rebuild + root provider) for gestures expressible with core `PanResponder` (single-axis swipe, threshold-based dismiss/advance). Reserve gesture-handler for genuinely complex multi-touch/reanimated interactions. Always pair a dismiss gesture with an explicit on-screen control as the accessible fallback.
+- **Orientation is owned by the app manifest, not per-screen** — Phase 1 is globally portrait-locked via `app.json` `"orientation": "portrait"`; components must not programmatically lock/unlock orientation and must not rely on a media library's per-view fullscreen orientation option to enforce portrait. Any future per-screen orientation need is an explicit, separately-reviewed change.
+- **Thumbnail grids never mount video players per cell** — a grid/list of videos renders `<Image>`/placeholder cells (with an affordance icon), never one `VideoView` per cell; instantiate at most one active video player at a time (in the opened viewer). This protects the cold-start / scroll-performance NFRs and battery.
 
 ### Review — 2026-09-25 — blocker (iOS build failure: expo-av EXEventEmitter.h not found, MOD-005)
 
