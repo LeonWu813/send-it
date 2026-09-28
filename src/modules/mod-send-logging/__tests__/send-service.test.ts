@@ -17,7 +17,7 @@ jest.mock('../../../lib/supabase', () => ({
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
-import { deleteAscent, fetchMyAscentsForRoute, fetchUserAchievements, loadAscentsForRoute, logAscent } from '../send-service';
+import { deleteAscent, fetchMyAscentsForRoute, fetchUserAchievements, loadAscentsForRoute, logAscent, summarizeAscents } from '../send-service';
 import type { Ascent, AscentWithProfile } from '../types';
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
@@ -452,5 +452,65 @@ describe('deleteAscent', () => {
     await expect(deleteAscent('ascent-001')).rejects.toThrow(
       'Failed to delete your send. Please try again.',
     );
+  });
+});
+
+// ── summarizeAscents ──────────────────────────────────────────────────────────
+
+describe('summarizeAscents', () => {
+  it('returns { sends: 0, attempts: 0 } for an empty array', () => {
+    expect(summarizeAscents([])).toEqual({ sends: 0, attempts: 0 });
+  });
+
+  it('counts flash and top as sends; attempt is not a send', () => {
+    const ascents: AscentWithProfile[] = [
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'flash', attempts: 1 },
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'top',   attempts: 3 },
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'attempt', attempts: 5 },
+    ];
+
+    const result = summarizeAscents(ascents);
+
+    expect(result.sends).toBe(2);           // flash + top = 2 sends
+    expect(result.attempts).toBe(9);        // 1 + 3 + 5 = 9 total attempts
+  });
+
+  it('sums the attempts column across all ascents regardless of style', () => {
+    const ascents: AscentWithProfile[] = [
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'flash',   attempts: 1 },
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'attempt', attempts: 7 },
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'top',     attempts: 2 },
+    ];
+
+    expect(summarizeAscents(ascents).attempts).toBe(10);
+  });
+
+  it('treats null/undefined attempts as 0 (graceful null handling)', () => {
+    const ascents: AscentWithProfile[] = [
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- testing null tolerance
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'top',   attempts: null as any },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- testing undefined tolerance
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'flash', attempts: undefined as any },
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'attempt', attempts: 4 },
+    ];
+
+    const result = summarizeAscents(ascents);
+
+    // null + undefined are treated as 0; only 4 from the attempt row contributes
+    expect(result.attempts).toBe(4);
+    // flash and top still count as sends
+    expect(result.sends).toBe(2);
+  });
+
+  it('returns sends: 0 when all ascents have style attempt', () => {
+    const ascents: AscentWithProfile[] = [
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'attempt', attempts: 2 },
+      { ...MOCK_ASCENT_WITH_PROFILE, style: 'attempt', attempts: 3 },
+    ];
+
+    const result = summarizeAscents(ascents);
+
+    expect(result.sends).toBe(0);
+    expect(result.attempts).toBe(5);
   });
 });

@@ -6,7 +6,7 @@
  * user selects a route via RouteSearchScreen.
  *
  * Form fields:
- *   - style selector (flash / top / attempt / project)
+ *   - style selector (flash / top / attempt)
  *   - attempts number input (min 1; locked to 1 when style = flash)
  *   - date (defaults to today)
  *   - note (optional text, private — shown only to the owner)

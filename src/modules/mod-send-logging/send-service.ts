@@ -188,6 +188,26 @@ export async function fetchMyAscentsForRoute(
 }
 
 /**
+ * Derive send-summary counts from an already-fetched ascent array.
+ *
+ * AC-127: Sends = count of ascents where style is 'flash' or 'top'.
+ *         Attempts = sum of the attempts column across all ascents.
+ * Client-side aggregation only — no RPC. Used by MOD-003 RouteDetailScreen.
+ */
+export function summarizeAscents(ascents: AscentWithProfile[]): {
+  sends: number;
+  attempts: number;
+} {
+  let sends = 0;
+  let attempts = 0;
+  for (const a of ascents) {
+    if (a.style === 'flash' || a.style === 'top') sends++;
+    attempts += a.attempts ?? 0;
+  }
+  return { sends, attempts };
+}
+
+/**
  * Load all visible ascents for a route, most recent first.
  *
  * Returns the current user's own ascents (including private) plus all public
