@@ -85,12 +85,31 @@ interface BetaVideoSectionProps {
    * The upload flow itself remains owned by MOD-005 (this component).
    */
   onRegisterUploadLauncher?: (launcher: () => void) => void;
+  /**
+   * AC-134: Route name displayed in Row 2 of the reel viewer overlay.
+   * Passed through to BetaVideoReelViewer.
+   */
+  routeName?: string;
+  /**
+   * AC-134: Gym name displayed in Row 2 of the reel viewer overlay.
+   * Passed through to BetaVideoReelViewer.
+   */
+  gymName?: string;
+  /**
+   * AC-136: Called when the user taps Row 2 in the reel viewer. Receives the
+   * route_id of the current video. Omit when the host screen is already the
+   * route detail screen (tap becomes a no-op).
+   */
+  onNavigateToRoute?: (routeId: string) => void;
 }
 
 export default function BetaVideoSection({
   routeId,
   session,
   onRegisterUploadLauncher,
+  routeName,
+  gymName,
+  onNavigateToRoute,
 }: BetaVideoSectionProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -329,6 +348,9 @@ export default function BetaVideoSection({
         visible={openIndex !== null}
         onDismiss={() => { setOpenIndex(null); }}
         session={session}
+        routeName={routeName}
+        gymName={gymName}
+        onNavigateToRoute={onNavigateToRoute}
       />
     </View>
   );

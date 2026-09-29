@@ -436,6 +436,8 @@ export default function RouteDetailScreen({
         routeId={route.id}
         session={session}
         onRegisterUploadLauncher={handleRegisterUploadLauncher}
+        routeName={routeName}
+        gymName={gymName}
       />
 
       {/* ── AC-126: Added date footer ─────────────────────────────────────── */}

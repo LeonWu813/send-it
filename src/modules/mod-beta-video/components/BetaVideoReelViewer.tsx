@@ -89,6 +89,22 @@ export interface BetaVideoReelViewerProps {
   onDismiss: () => void;
   /** Authenticated session — used to check if current video belongs to the viewer (AC-139). */
   session: Session;
+  /**
+   * AC-134: Route name shown in Row 2 of the bottom-left overlay.
+   * Combined with gymName as "{routeName} · {gymName}".
+   */
+  routeName?: string;
+  /**
+   * AC-134: Gym name shown in Row 2 of the bottom-left overlay.
+   * Combined with routeName as "{routeName} · {gymName}".
+   */
+  gymName?: string;
+  /**
+   * AC-136: Called when the user taps Row 2 (route · gym label).
+   * Receives the route_id of the current video. Omit (or pass undefined)
+   * when the user is already on the route detail screen — tap is a no-op.
+   */
+  onNavigateToRoute?: (routeId: string) => void;
 }
 
 // ── MarqueeText — pure-JS translateX marquee for overflowing text (AC-137) ────
@@ -222,6 +238,9 @@ export default function BetaVideoReelViewer({
   visible,
   onDismiss,
   session,
+  routeName,
+  gymName,
+  onNavigateToRoute,
 }: BetaVideoReelViewerProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
@@ -248,6 +267,8 @@ export default function BetaVideoReelViewer({
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
   // ID of the video currently being reported (button loading state).
   const [reportingId, setReportingId] = useState<string | null>(null);
+  // Error message shown when a report RPC call fails (AC-139).
+  const [reportError, setReportError] = useState<string | null>(null);
 
   // ── Video player ─────────────────────────────────────────────────────────
   const player = useVideoPlayer(null, (p) => {
@@ -281,6 +302,7 @@ export default function BetaVideoReelViewer({
     setSignedUrl(null);
     setUrlLoading(true);
     setUrlError(false);
+    setReportError(null);
 
     getVideoSignedUrl(video.video_url)
       .then((url) => {
@@ -304,6 +326,12 @@ export default function BetaVideoReelViewer({
   }, [currentIndex, visible]);
 
   // ── Navigation helpers ────────────────────────────────────────────────────
+
+  // Ref that always reflects the latest currentIndex — used in stable PanResponder
+  // callbacks (goToPrevOrClose) to avoid stale-closure issues.
+  const currentIndexRef = useRef(currentIndex);
+  useEffect(() => { currentIndexRef.current = currentIndex; }, [currentIndex]);
+
   const goToNext = useCallback((): void => {
     setCurrentIndex((prev) => {
       if (prev < videos.length - 1) return prev + 1;
@@ -312,8 +340,20 @@ export default function BetaVideoReelViewer({
   }, [videos.length]);
 
   /**
-   * AC-039: swiping down or pressing the close button dismisses the viewer.
-   * Dismissal is unconditional — always dismisses regardless of current index.
+   * AC-039 (revised): swiping down goes to the previous video when index > 0,
+   * or dismisses the viewer when already at index 0.
+   */
+  const goToPrevOrClose = useCallback((): void => {
+    if (currentIndexRef.current > 0) {
+      setCurrentIndex((prev) => prev - 1);
+    } else {
+      player.pause();
+      onDismiss();
+    }
+  }, [player, onDismiss]);
+
+  /**
+   * AC-039: pressing the close button always dismisses the viewer from any position.
    */
   const handleDismiss = useCallback((): void => {
     player.pause();
@@ -321,9 +361,12 @@ export default function BetaVideoReelViewer({
   }, [player, onDismiss]);
 
   // ── PanResponder (vertical-only swipe, Tech Lead decision 5) ─────────────
+
   const goToNextRef = useRef(goToNext);
+  const goToPrevOrCloseRef = useRef(goToPrevOrClose);
   const handleDismissRef = useRef(handleDismiss);
   useEffect(() => { goToNextRef.current = goToNext; }, [goToNext]);
+  useEffect(() => { goToPrevOrCloseRef.current = goToPrevOrClose; }, [goToPrevOrClose]);
   useEffect(() => { handleDismissRef.current = handleDismiss; }, [handleDismiss]);
 
   const panRef = useRef(
@@ -336,7 +379,7 @@ export default function BetaVideoReelViewer({
         Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
       onPanResponderRelease: (_evt, gs) => {
         if (gs.dy < -SWIPE_THRESHOLD) goToNextRef.current();
-        else if (gs.dy > SWIPE_THRESHOLD) handleDismissRef.current();
+        else if (gs.dy > SWIPE_THRESHOLD) goToPrevOrCloseRef.current();
       },
     }),
   );
@@ -344,16 +387,16 @@ export default function BetaVideoReelViewer({
   // ── Report handler (AC-140) ───────────────────────────────────────────────
   const handleReport = useCallback(async (videoId: string): Promise<void> => {
     setReportingId(videoId);
+    setReportError(null);
     try {
       await reportBetaVideo(videoId);
       setReportedIds((prev) => new Set(prev).add(videoId));
     } catch {
-      // Error is surfaced via the button label reset (reportingId cleared in finally).
-      // A production app would show a toast here; for now silent recovery.
+      setReportError(t('betaVideo.reel.reportError'));
     } finally {
       setReportingId(null);
     }
-  }, []);
+  }, [t]);
 
   const currentVideo = videos[currentIndex];
 
@@ -416,6 +459,14 @@ export default function BetaVideoReelViewer({
           </View>
         ) : null}
 
+        {/*
+         * AC-134: Gradient scrim — covers the bottom quarter of the video area so
+         * the overlay text (poster identity, route·gym label) is legible.
+         * expo-linear-gradient is not installed; we simulate the scrim with a
+         * semi-transparent View using theme.colors.overlay (no hardcoded hex).
+         */}
+        <View style={styles.gradientScrim} pointerEvents="none" />
+
         {/* Gesture-capture overlay — sits ABOVE the VideoView to intercept swipe
             gestures. panHandlers are spread on this View. All tappable controls
             (close button, sidebar) are children of this View. */}
@@ -449,7 +500,7 @@ export default function BetaVideoReelViewer({
                 { bottom: insets.bottom + 16 },
               ]}
             >
-              {/* Left column: poster identity (AC-134) + caption (AC-137) */}
+              {/* Left column: poster identity (AC-134) */}
               <View style={styles.infoColumn}>
 
                 {/* Row 1: avatar + display_name (AC-135: no-op tap in Phase 1) */}
@@ -464,14 +515,30 @@ export default function BetaVideoReelViewer({
                   </Text>
                 </View>
 
-                {/* Row 2: caption (marquee if overflow) */}
-                {currentVideo.caption ? (
-                  <MarqueeText
-                    text={currentVideo.caption}
-                    containerWidth={INFO_COLUMN_WIDTH}
-                    style={styles.captionText}
-                    testID="reel-caption"
-                  />
+                {/*
+                 * AC-134 / AC-136: Row 2 — "{routeName} · {gymName}".
+                 * Only rendered when at least one of routeName or gymName is provided.
+                 * Wrapped in a Pressable; tapping navigates to the route detail
+                 * screen (AC-136). onNavigateToRoute is undefined when the user is
+                 * already on the route detail screen — tap is a no-op in that case.
+                 */}
+                {(routeName != null || gymName != null) ? (
+                  <Pressable
+                    onPress={() => {
+                      if (onNavigateToRoute && currentVideo.route_id) {
+                        onNavigateToRoute(currentVideo.route_id);
+                      }
+                    }}
+                    accessibilityRole={onNavigateToRoute ? 'button' : 'text'}
+                    testID="reel-route-gym-label"
+                  >
+                    <MarqueeText
+                      text={[routeName, gymName].filter(Boolean).join(' · ')}
+                      containerWidth={INFO_COLUMN_WIDTH}
+                      style={styles.captionText}
+                      testID="reel-route-gym-text"
+                    />
+                  </Pressable>
                 ) : null}
               </View>
 
@@ -524,6 +591,16 @@ export default function BetaVideoReelViewer({
                         : t('betaVideo.reel.report')}
                     </Text>
                   </Pressable>
+                ) : null}
+
+                {/* AC-139: report error text (shown below report button on failure) */}
+                {reportError ? (
+                  <Text
+                    style={styles.reportErrorText}
+                    testID="reel-report-error"
+                  >
+                    {reportError}
+                  </Text>
                 ) : null}
               </View>
             </View>
@@ -629,6 +706,27 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: theme.colors.textInverse,
       fontSize: theme.fontSize.md,
       textAlign: 'center',
+    },
+    /**
+     * AC-134: Gradient scrim simulation — covers the bottom 30% of the video
+     * area with a semi-transparent overlay so the poster-identity and route·gym
+     * text is legible against the raw video pixels.
+     * expo-linear-gradient is not installed; we use theme.colors.overlay (no
+     * hardcoded hex colour) on a tall View pinned to the bottom.
+     */
+    gradientScrim: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: '35%',
+      backgroundColor: theme.colors.overlay,
+    },
+    reportErrorText: {
+      color: theme.colors.error,
+      fontSize: theme.fontSize.xs,
+      textAlign: 'center',
+      marginTop: theme.spacing.xs,
     },
   });
 }

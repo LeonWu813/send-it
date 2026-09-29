@@ -8,7 +8,8 @@
  *
  * Covers:
  * - Swipe up increments index (advances to next video).
- * - Swipe down at any index calls onDismiss (AC-039: dismiss always).
+ * - Swipe down at index 0 calls onDismiss (AC-039 revised: dismiss when at first video).
+ * - Swipe down at index > 0 goes to previous video (AC-039 revised: no longer dismiss-always).
  * - Swipe up at last index is a no-op (does not wrap).
  * - Close/back button calls onDismiss.
  * - Loading indicator while signed URL is being fetched.
@@ -252,7 +253,7 @@ describe('BetaVideoReelViewer', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it('AC-039: swipe down at index > 0 calls onDismiss (dismiss always, no prev navigation)', async () => {
+  it('AC-039 (revised): swipe down at index > 0 navigates to previous video (does not dismiss)', async () => {
     const onDismiss = jest.fn();
 
     render(
@@ -265,10 +266,15 @@ describe('BetaVideoReelViewer', () => {
     });
 
     await act(async () => {
-      simulateSwipe(80); // swipe down at index 2 → must dismiss (AC-039)
+      simulateSwipe(80); // swipe down at index 2 → must go to index 1 (prev), not dismiss
     });
 
-    expect(onDismiss).toHaveBeenCalledTimes(1);
+    // Counter should show "2 / 3" after going to previous
+    await waitFor(() => {
+      expect(screen.getByText('2 / 3')).toBeTruthy();
+    });
+    // onDismiss must NOT have been called — user is still in the reel
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
   it('resets to initialIndex when visible toggles back to true', async () => {
@@ -303,15 +309,23 @@ describe('BetaVideoReelViewer', () => {
     expect(mockGetVideoSignedUrl).not.toHaveBeenCalled();
   });
 
-  it('shows caption for current video', async () => {
+  it('AC-134: shows route·gym label in Row 2 when routeName and gymName are provided', async () => {
     render(
-      <BetaVideoReelViewer {...BASE_PROPS} initialIndex={0} />,
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        initialIndex={0}
+        routeName="5.11a Blue"
+        gymName="Sender Gym"
+      />,
       renderOptions(),
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('reel-caption')).toBeTruthy();
+      expect(screen.getByTestId('reel-route-gym-label')).toBeTruthy();
     });
+
+    const textEl = screen.getByTestId('reel-route-gym-text');
+    expect(textEl.props.children).toBe('5.11a Blue · Sender Gym');
   });
 
   it('calls getVideoSignedUrl with the video_url of the current video', async () => {
