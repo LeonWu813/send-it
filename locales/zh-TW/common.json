@@ -60,14 +60,17 @@
   },
   "settings": {
     "title": "設定",
-    "language": "語言",
-    "theme": "外觀",
-    "themeSystem": "跟隨系統",
-    "themeLight": "淺色",
-    "themeDark": "深色",
-    "signOut": "登出",
-    "privacyPolicy": "隱私政策",
-    "termsOfService": "服務條款"
+    "language": {
+      "title": "語言",
+      "en": "English",
+      "zhTW": "繁體中文"
+    },
+    "appearance": {
+      "title": "外觀",
+      "system": "跟隨系統",
+      "light": "淺色",
+      "dark": "深色"
+    }
   },
   "gymDirectory": {
     "title": "岩館",

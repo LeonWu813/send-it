@@ -22,11 +22,12 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useState } from 'react';
 
+import SettingsScreen from '../mod-localization-theme/screens/SettingsScreen';
 import { useSession } from './hooks/useSession';
 import EditProfileScreen from './screens/EditProfileScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
-type ProfileView = 'profile' | 'editProfile';
+type ProfileView = 'profile' | 'editProfile' | 'settings';
 
 interface ProfileNavigatorProps {
   /** The active Supabase session, threaded from AppShell. */
@@ -63,11 +64,16 @@ export default function ProfileNavigator({
     );
   }
 
+  if (view === 'settings') {
+    return <SettingsScreen onBack={() => setView('profile')} />;
+  }
+
   return (
     <ProfileScreen
       session={session}
       isActive={isActive}
       onNavigateEditProfile={() => setView('editProfile')}
+      onNavigateSettings={() => setView('settings')}
       onNavigateToRoute={onNavigateToRoute}
     />
   );

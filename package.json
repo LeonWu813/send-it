@@ -42,7 +42,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "jest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "check:i18n": "node scripts/check-i18n-completeness.js"
   },
   "jest": {
     "preset": "jest-expo",

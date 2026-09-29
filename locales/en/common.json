@@ -60,14 +60,17 @@
   },
   "settings": {
     "title": "Settings",
-    "language": "Language",
-    "theme": "Appearance",
-    "themeSystem": "System",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "signOut": "Sign Out",
-    "privacyPolicy": "Privacy Policy",
-    "termsOfService": "Terms of Service"
+    "language": {
+      "title": "Language",
+      "en": "English",
+      "zhTW": "繁體中文"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    }
   },
   "gymDirectory": {
     "title": "Gyms",

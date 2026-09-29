@@ -20,6 +20,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
+import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -40,6 +41,8 @@ import { useSession } from '../hooks/useSession';
 interface ProfileScreenProps {
   session: Session;
   onNavigateEditProfile: () => void;
+  /** Callback to navigate to the Settings screen (AC-091, AC-092). */
+  onNavigateSettings?: () => void;
   /** True when the Profile tab is the active tab. Used to trigger refetch on
    *  tab focus (AC-062) — the keep-alive pattern means the component never
    *  remounts on tab switch, so we increment refetchKey when isActive flips
@@ -56,6 +59,7 @@ interface ProfileScreenProps {
 export default function ProfileScreen({
   session: _session,
   onNavigateEditProfile,
+  onNavigateSettings,
   isActive = false,
   onNavigateToRoute,
 }: ProfileScreenProps): React.JSX.Element {
@@ -96,6 +100,21 @@ export default function ProfileScreen({
   // the FlatList rather than requiring a wrapping ScrollView.
   const profileHeader = (
     <View style={styles.headerContainer}>
+      {/* Settings gear icon (top-right) */}
+      {onNavigateSettings ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.settingsButton,
+            pressed && styles.settingsButtonPressed,
+          ]}
+          onPress={onNavigateSettings}
+          accessibilityRole="button"
+          accessibilityLabel={t('settings.title')}
+        >
+          <Ionicons name="settings-outline" size={24} color={theme.colors.textSecondary} />
+        </Pressable>
+      ) : null}
+
       {/* Avatar + display name + bio (AC-116) */}
       <View style={styles.header}>
         {profile?.avatar_url ? (
@@ -197,6 +216,20 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: topInset + theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.md,
+    },
+    settingsButton: {
+      position: 'absolute',
+      top: topInset + theme.spacing.md,
+      right: theme.spacing.md,
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: theme.borderRadius.full,
+      zIndex: 1,
+    },
+    settingsButtonPressed: {
+      backgroundColor: theme.colors.surface,
     },
     header: {
       alignItems: 'center',
