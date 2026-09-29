@@ -571,7 +571,7 @@ export default function BetaVideoReelViewer({
            * means the container itself passes through non-interactive touches
            * to Layer 2, while Pressable children still capture their own taps.
            */}
-          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+          <View style={[StyleSheet.absoluteFill, styles.overlayPadding]} pointerEvents="box-none">
 
             {/* ── Close button (AC-133) — top-left, always visible ─────────── */}
             <Pressable
@@ -811,6 +811,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       fontSize: theme.fontSize.xs,
       textAlign: 'center',
       marginTop: theme.spacing.xs,
+    },
+    overlayPadding: {
+      paddingTop: 50,
+      paddingBottom: 50,
     },
   });
 }
