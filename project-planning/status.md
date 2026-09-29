@@ -3,15 +3,17 @@
 ## Last Action
 
 ```
-agent: qa-mod-beta-video
-mode: verify
-module: mod-beta-video
-result: bugs-found
-commit: 46157682e9b4a89b9bf425cd83213860d9f137a0
-timestamp: 2026-09-28T00:00:00Z
+agent: pm
+mode: change
+module: n/a
+result: success
+commit: PLACEHOLDER_COMMIT
+timestamp: 2026-09-29T01:54:36Z
 ```
 
 ## PM Updates
+
+- **2026-09-28 [TRIVIAL]** — AC-133 close/back control icon confirmed as `Ionicons chevron-back` (the `<` chevron) per the literal spec text. Implementation updated from `close` (X) to `chevron-back` by the engineer. No functional change — the dismiss behavior is identical; this is a spec interpretation, not a PRD change. `prd.md` NOT edited (no Revision bump); no Doc-Sync required. No module-boundary, dependency, or phase-plan impact; no new module.
 
 - **2026-09-28 [SUBSTANTIVE]** — Reel viewer UI + one-tap beta-video report flow (PRD Revision 16). Leon directly approved the exact drafted edits for immediate write. **Tech Lead review required BEFORE Doc-Sync** (migration for two new `beta_videos` columns + a new `video_reports` table + RLS + a cross-user `is_reported` write via SECURITY DEFINER RPC + feed-visibility composition). PRD Status line `[SUBSTANTIVE] — Revision 16`; `**Revision**` bumped 15 → 16; Date 2026-09-28. Changes:
   - **§2 Non-Goals** — added: no admin push/email notification for beta-video reports in Phase 1; admin reviews reported videos manually in Supabase Studio only; video reports are explicitly excluded from the AC-085 6-hourly email digest (which remains `Report`-table only).
