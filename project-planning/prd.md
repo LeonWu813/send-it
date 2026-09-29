@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 15
+**Status**: [SUBSTANTIVE] — Revision 16
 **Date**: 2026-09-28
-**Revision**: 15
+**Revision**: 16
 
 ---
 
@@ -39,6 +39,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 - Comments on sends or beta videos are out of scope for Phase 1 (revisit in Phase 2 only if community asks and moderation tooling is ready).
 - Likes on plain send logs (non-beta) are out of scope for Phase 1.
 - Push notifications for events other than beta-video likes are out of scope for Phase 1 (expanded in Phase 2).
+- No admin push or email notification for beta-video reports in Phase 1 — the admin reviews reported videos manually in Supabase Studio only. Video reports are explicitly excluded from the AC-085 6-hourly email digest, which remains `Report`-table only (user-profile and beta-video content reports filed via AC-080), and does not include the `VideoReport` table.
 - Offline send queueing is out of scope for Phase 1 — Phase 1 must show a clear error message rather than silently fail (planned for Phase 2).
 - User-created gyms are out of scope for Phase 1 — missing gyms are captured via a "request a gym" form only.
 - User-editable grade overrides are out of scope for Phase 1 — the gym's posted grade is the source of truth.
@@ -106,7 +107,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to open the route detail page and watch all beta videos inline without leaving the app,
 **so that** I can study sequences on the wall.
 
-**Acceptance Criteria**: AC-033, AC-034, AC-038, AC-039
+**Acceptance Criteria**: AC-033, AC-034, AC-038, AC-039, AC-133, AC-134, AC-135, AC-136, AC-137, AC-138
 
 ---
 
@@ -193,10 +194,12 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 ### US-015: Report inappropriate content
 
 **As a** user who saw an inappropriate beta video or user profile,
-**I want** to report the content or user with a category and optional note,
+**I want** to report the content or user,
 **so that** the admin can review and take action (App Store Guideline 1.2 requirement).
 
-**Acceptance Criteria**: AC-080, AC-081
+For a **user profile** report, I choose a category and add an optional note (AC-080). For a **beta video** report, a single tap on the report icon files the report immediately with no category or note (AC-139/AC-140) and the video is hidden from everyone until an admin reviews it (AC-141).
+
+**Acceptance Criteria**: AC-080, AC-081, AC-139, AC-140, AC-141, AC-142, AC-143
 
 ---
 
@@ -339,9 +342,9 @@ The data flow for the two most important loops:
 
 ### MOD-005: Beta Video
 
-**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, and inline playback on route detail pages and the activity feed.
+**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report).
 
-**User Stories**: US-004, US-005
+**User Stories**: US-004, US-005, US-015
 
 **Dependencies**: MOD-001, MOD-003
 
@@ -379,7 +382,7 @@ The data flow for the two most important loops:
 
 ### MOD-009: Moderation (Report & Block)
 
-**Purpose**: Provide report submission (with category + optional note) for beta videos and user profiles, block/unblock actions, and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio.
+**Purpose**: Provide user-profile report submission (with category + optional note), block/unblock actions, and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio. Beta-video reporting is owned by MOD-005 (the one-tap report flow, AC-139/AC-140), not MOD-009.
 
 **User Stories**: US-015, US-016
 
@@ -423,7 +426,7 @@ The data flow for the two most important loops:
 
 **Modules**: MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012
 
-**Scope summary**: iOS-only React Native + Expo app. Auth (Email + Apple + Google). Admin-curated gym directory seeded with Taipei/New Taipei branch-level rows (top-rope-only gyms excluded). Route submission with match-before-create using fixed hold/tape color enum, V-scale grade forced across all gyms; routes carry a composed display name (grade + color + optional section label). Route bookmarking in the browse flow (bookmark on route detail, read-only saved indicator on the gym route list). Send logging (no offline queue — error message on failure) with a three-value ascent style (flash, top, attempt). Beta video upload (60 sec cap, client-side compression, client-generated thumbnail). Follow + chronological activity feed. Beta-video likes with APNs push notifications + preference toggle. Profile history + basic stats with per-send achievement icons. Report + Block (App Store 1.2 compliance). English + zh-TW (device-locale default, zh-TW fallback, Settings toggle). Light + Dark mode (OS preference + Settings override). PostHog analytics. Admin surface = Supabase Studio only. Video hosting = Supabase Storage.
+**Scope summary**: iOS-only React Native + Expo app. Auth (Email + Apple + Google). Admin-curated gym directory seeded with Taipei/New Taipei branch-level rows (top-rope-only gyms excluded). Route submission with match-before-create using fixed hold/tape color enum, V-scale grade forced across all gyms; routes carry a composed display name (grade + color + optional section label). Route bookmarking in the browse flow (bookmark on route detail, read-only saved indicator on the gym route list). Send logging (no offline queue — error message on failure) with a three-value ascent style (flash, top, attempt). Beta video upload (60 sec cap, client-side compression, client-generated thumbnail). Follow + chronological activity feed. Beta-video likes with APNs push notifications + preference toggle. Profile history + basic stats with per-send achievement icons. Report + Block (App Store 1.2 compliance) — user-profile reports (category + note) plus one-tap beta-video reports that hide the video pending admin review. English + zh-TW (device-locale default, zh-TW fallback, Settings toggle). Light + Dark mode (OS preference + Settings override). PostHog analytics. Admin surface = Supabase Studio only. Video hosting = Supabase Storage.
 
 **Milestone**: All Phase 1 acceptance criteria pass on a production Supabase project and a TestFlight build; the seeded gym directory (branch-level Taipei/New Taipei, excluding Camp4 達文西攀岩館 and Wusa 攀岩館) is loaded and every gym has a verified address and map pin; the App Store submission passes Guideline 1.2 review with Report and Block flows functional.
 
@@ -575,7 +578,31 @@ The data flow for the two most important loops:
 
 **AC-038** (new): The route detail screen shall display the route's beta videos as a three-column grid. Each grid cell shall show only the video's thumbnail image with a small video-camera icon overlaid in the top-left corner, and no other metadata. Tapping a cell opens the fullscreen beta-video viewer (AC-039) for that video.
 
-**AC-039** (new): Tapping a beta-video thumbnail on the route detail screen shall open a fullscreen, portrait-orientation video viewer that auto-plays the tapped video. Within the viewer, swiping up shall advance to the next beta video for that route when one exists; swiping down or tapping a back control shall dismiss the viewer and return to the route detail screen. The viewer navigates only within the set of beta videos for the current route.
+**AC-039** (revised): Tapping a beta-video thumbnail on the route detail screen shall open a fullscreen, portrait-orientation video viewer that auto-plays the tapped video. Within the viewer, swiping up shall advance to the next beta video for that route when one exists. Swiping down shall go to the previous beta video when a previous video exists, and otherwise (when the current video is the first in the set) shall dismiss the viewer and return to the route detail screen. Tapping the back control shall always dismiss the viewer and return to the route detail screen, from any position in the set. The viewer navigates only within the set of beta videos for the current route.
+
+**AC-133** (new): The fullscreen beta-video viewer shall display a back control (a `<` chevron) fixed in the top-left corner that remains continuously visible and functional across every video in the reel, including while and after swiping to the next or previous video. The back control shall not unmount, disappear, or lose its tap target during or after a swipe transition.
+
+**AC-134** (new): The fullscreen beta-video viewer shall display a bottom-left overlay, rendered over a gradient scrim for legibility, containing two rows: Row 1 — a small circular avatar (from the poster's `avatar_url`; placeholder circle if absent) and the poster's `display_name`; Row 2 — the composed string `{route_name} · {gym_name}`.
+
+**AC-135** (new): In the bottom-left overlay, tapping Row 1 (avatar + `display_name`) shall be a no-op in Phase 1; the profile destination is deferred to a future module.
+
+**AC-136** (new): In the bottom-left overlay, tapping Row 2 (`{route_name} · {gym_name}`) shall navigate the user to the route detail screen for that video's route and dismiss the viewer.
+
+**AC-137** (new): When the Row 2 text is wider than its container, the viewer shall auto-scroll it with a marquee animation implemented purely in JavaScript (React Native `Animated`); no new native package shall be introduced for the marquee. When the text fits, no animation runs.
+
+**AC-138** (new): The fullscreen beta-video viewer's right sidebar shall contain exactly two action icons: the like icon with like count (AC-052), and the report icon (AC-139). The viewer shall not display share, download, comment, three-dot-menu, or any other action icons, and shall not display a bottom comment bar.
+
+**AC-139** (new): The report icon in the right sidebar shall be shown only for beta videos the current user did not upload; it shall be hidden for the current user's own videos. It shall also be hidden (or permanently disabled and non-interactive) for any video where `report_dismissed = true`.
+
+**AC-140** (new): Tapping the report icon on a beta video shall, in a single action: (1) set `beta_videos.is_reported = true` on that video's row via a SECURITY DEFINER RPC (so the reporter can flip a field on a row they do not own), and (2) insert exactly one row into the `video_reports` table capturing `beta_video_id`, `reporter_id`, and `reported_at`. No category or note is collected.
+
+**AC-141** (new): A beta video with `is_reported = true` and `report_dismissed = false` shall be hidden from every user everywhere it is surfaced — route detail grid (AC-038), fullscreen viewer (AC-039), and activity feed (AC-051) — until an admin sets `report_dismissed = true`.
+
+**AC-142** (new): The `fetchBetaVideosForRoute` query and any equivalent beta-video listing query shall exclude rows where `is_reported = true AND report_dismissed = false`.
+
+**AC-143** (new): When an admin sets `beta_videos.report_dismissed = true` (via Supabase Studio), the video shall become visible again to all users on the next fetch, and the report affordance for that video shall be permanently hidden for all users (AC-139), preventing further reports.
+
+**AC-144** (new): The `fetchBetaVideosForRoute` result shall include the poster's `display_name` and `avatar_url` joined from the user record, so the viewer overlay (AC-134) can render poster identity without a second round-trip.
 
 ---
 
@@ -625,7 +652,7 @@ The data flow for the two most important loops:
 
 ### MOD-009 (Moderation — Report & Block) Acceptance Criteria
 
-**AC-080**: The system shall allow a user to report a beta video or a user profile with a category (e.g., inappropriate, spam, harassment, other) and an optional note, and persist the report to the `Report` table for admin review in Supabase Studio.
+**AC-080** (revised): The system shall allow a user to report a **user profile** with a category (e.g., inappropriate, spam, harassment, other) and an optional note, and persist the report to the `Report` table for admin review in Supabase Studio. (Beta-video reporting is not handled here — it is handled by the AC-140 one-tap flow in MOD-005, which writes to `beta_videos.is_reported` + the `VideoReport` table with no category or note.)
 
 **AC-081**: The system shall show the reporter a confirmation state after a successful report submission and shall not require admin action to complete the report flow.
 
@@ -635,7 +662,7 @@ The data flow for the two most important loops:
 
 **AC-084**: The system shall apply block hiding symmetrically — the blocker's beta videos, sends, and profile shall also be hidden from the blocked user's feed and route pages, in addition to hiding the blocked user's content from the blocker (App Store Guideline 1.2 requirement).
 
-**AC-085**: The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window.
+**AC-085**: The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window. This digest covers the `Report` table only (user-profile and beta-video content reports filed via AC-080); it does not include the `VideoReport` table (beta-video reports filed via AC-140), which the admin reviews manually in Supabase Studio.
 
 ---
 
@@ -747,7 +774,33 @@ Ascent (a "log")
 
 BetaVideo
  - id, route_id (FK Route), user_id (FK User),
-   video_url, thumbnail_url, duration_seconds, caption, created_at
+   video_url, thumbnail_url, duration_seconds, caption, created_at,
+   is_reported (boolean NOT NULL DEFAULT false),
+   report_dismissed (boolean NOT NULL DEFAULT false)
+   -- is_reported: set true via a SECURITY DEFINER RPC when any user files a
+   --   one-tap report (AC-140). The reporter does not own the row, so the flip
+   --   must go through a SECURITY DEFINER RPC, not a direct UPDATE.
+   -- report_dismissed: set true only by an admin via Supabase Studio (AC-143),
+   --   which un-hides the video for all users and permanently hides the report
+   --   affordance (AC-139), preventing further reports.
+   -- Visibility rule (AC-141/AC-142): a row with is_reported = true AND
+   --   report_dismissed = false is hidden from every user everywhere it is
+   --   surfaced (route detail grid, fullscreen viewer, activity feed).
+   --   Requires a migration to add the two new columns.
+
+VideoReport  (beta-video one-tap reports — App Store Guideline 1.2)
+ - id (uuid PK),
+   beta_video_id (uuid NOT NULL, FK beta_videos(id) ON DELETE CASCADE),
+   reporter_id (uuid NOT NULL, FK users(id)),
+   reported_at (timestamptz NOT NULL DEFAULT now())
+ - Unique: (beta_video_id, reporter_id) — prevents duplicate reports from the
+   same user on the same video.
+   -- Written by the AC-140 one-tap report flow (no category, no note).
+   -- RLS: authenticated users may INSERT their own rows (reporter_id = auth.uid()).
+   -- Reviewed manually by the admin in Supabase Studio; NOT included in the
+   --   AC-085 6-hourly email digest (which covers the Report table only).
+   -- Coexists with the Report table (Report = user-profile + category/note
+   --   reports via AC-080; VideoReport = beta-video one-tap reports via AC-140).
 
 Follow
  - follower_id (FK User), followee_id (FK User), created_at
@@ -784,6 +837,8 @@ Report  (App Store Guideline 1.2 requirement)
    note (nullable),
    status (open | reviewed | actioned | dismissed),
    created_at, reviewed_at (nullable)
+   -- Phase 1: used for user-profile reports (AC-080). Beta-video reports are
+   --   filed to the VideoReport table via the AC-140 one-tap flow, not here.
 
 Block  (App Store Guideline 1.2 requirement)
  - blocker_user_id (FK User), blocked_user_id (FK User), created_at
@@ -797,6 +852,7 @@ Block  (App Store Guideline 1.2 requirement)
 - `SavedRoute` is the join table backing the saved-routes bookmark (US-021, AC-046/AC-047). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved routes. `route_id` is `ON DELETE CASCADE` so a saved-route row disappears if the underlying route is deleted (e.g. a withdrawn pending route). **This is a new join table and requires Tech Lead architecture review (table placement/ownership, RLS policy set, grants) before Doc-Sync/Engineering implements it** — mirror the confirmed `saved_gyms` design (composite PK, dual `ON DELETE CASCADE`, own-rows-only SELECT/INSERT/DELETE RLS, no UPDATE, explicit grants).
 - **`Ascent.is_private` is always `true` in Phase 1** (AC-132): the system sets it on every ascent insert; it is not user-controllable and there is no "set as private" toggle in the log-send form. The column is retained in the schema (no migration) so a public/shared visibility toggle can be introduced in Phase 2.
 - A route's **display name is composed, not stored** (AC-045): it is derived at display time from `grade` + `color_tag` (+ `section_label` when present), e.g. "V3 Blue" / "V3 Blue (Cave)". There is no free-text route-name column and no user-editable route name.
+- **Beta-video reporting — two new `beta_videos` columns + a new `VideoReport` table (requires Tech Lead architecture review).** The one-tap report flow (AC-139–AC-143) adds `is_reported boolean NOT NULL DEFAULT false` and `report_dismissed boolean NOT NULL DEFAULT false` to `beta_videos` (a **migration** is required for the two new columns), and a new `video_reports` table (`id`, `beta_video_id` FK ON DELETE CASCADE, `reporter_id` FK, `reported_at`, unique on `(beta_video_id, reporter_id)`). This requires Tech Lead architecture review before Doc-Sync/Engineering implements it, covering: (1) the migration for the two new `beta_videos` columns; (2) RLS on `video_reports` (authenticated users INSERT own rows, `reporter_id = auth.uid()`); (3) the cross-user `is_reported` write, which a reporter who does not own the row cannot do via a direct UPDATE — it requires a **SECURITY DEFINER RPC** (AC-140) that flips `is_reported` and inserts the `VideoReport` row in one action; (4) coexistence of the existing `Report` table (user-profile + category/note reports, AC-080) and the new `VideoReport` table (beta-video one-tap reports, AC-140); (5) the `fetchBetaVideosForRoute` filter (exclude `is_reported = true AND report_dismissed = false`, AC-142) and the join for poster `display_name` + `avatar_url` (AC-144); (6) composition of the same visibility rule into the MOD-006 activity-feed RPC (AC-141).
 - **`ascent_style` enum change — `project` removed (requires Tech Lead architecture review).** PostgreSQL does not support dropping a value from an existing enum type directly. The migration must: (1) create a new `ascent_style` enum containing exactly `flash | top | attempt` (without `project`); (2) migrate any existing rows whose style is `project` to `attempt`; (3) alter the `ascents.style` column to the new enum type and drop the old enum. This is a data-model migration with data backfill and enum swap — **it requires Tech Lead architecture review before Doc-Sync/Engineering implements it** (safe migration ordering, transaction boundaries, and the PG restriction that a newly created type + column swap + old-type drop must be sequenced correctly, consistent with the project's established two-file enum-migration convention).
 - The `Route.match_key` is a Postgres `GENERATED ALWAYS AS ... STORED` column. Uniqueness of active routes is enforced at the database level by a partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` — not only in application code — so that reused tape colors after a wall reset don't collide with historical retired routes.
 - `DeviceToken` uses Expo Push under the hood; APNs is the transport for iOS in Phase 1. Android tokens land here in Phase 2.
@@ -812,11 +868,12 @@ Block  (App Store Guideline 1.2 requirement)
 - **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions), with RLS policies on every user-writable table. No custom backend server in Phase 1.
 - **Saved gyms**: The `saved_gyms` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-gyms list.
 - **Saved routes**: The `saved_routes` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-routes list. Saved routes are surfaced only in the browse flow (bookmark toggle on the route detail screen; read-only saved indicator on the gym route list) — Phase 1 provides no dedicated saved-routes list surface.
+- **Beta-video reports**: The `video_reports` table requires RLS such that an authenticated user may INSERT only their own rows (`reporter_id = auth.uid()`). The `is_reported` flag on `beta_videos` is set by a **SECURITY DEFINER RPC** (AC-140), because the reporter does not own the video row and cannot flip the flag via a direct UPDATE. `report_dismissed` is admin-only (set via Supabase Studio). Every beta-video listing (`fetchBetaVideosForRoute`, the activity-feed RPC, the fullscreen viewer set) must exclude rows where `is_reported = true AND report_dismissed = false` (AC-141/AC-142). There is no admin push or email notification for beta-video reports in Phase 1 — the admin reviews the `VideoReport` table manually in Supabase Studio; the AC-085 email digest covers the `Report` table only.
 - **Auth**: Email, Apple Sign-In, and Google Sign-In. Apple Sign-In is required by the App Store since Google Sign-In is offered.
 - **Push notifications**: APNs via Expo Push. Phase 1 fires for beta-video likes only, and only when the recipient's `NotificationPreference.beta_video_like` is true. A settings screen exposes the toggle.
 - **Offline tolerance**: Phase 1 does **not** queue sends offline. On any network failure, the user sees a clear error message and can retry. Offline queue is Phase 2.
-- **Report/Flag & Block**: Required in Phase 1 for App Store Guideline 1.2 compliance. Reports and blocks are user-actioned; admin review of reports happens in Supabase Studio. Block hiding is symmetric (see AC-084).
-- **Report alerting (operational, Phase 1)**: A scheduled Edge Function runs every 6 hours and emails the admin (wu.tsan@northeastern.edu) a digest of open reports older than 12 hours, so the solo operator can act within the App Store Guideline 1.2 response window without polling Supabase Studio (see AC-085).
+- **Report/Flag & Block**: Required in Phase 1 for App Store Guideline 1.2 compliance. Reports and blocks are user-actioned; admin review of reports happens in Supabase Studio. Block hiding is symmetric (see AC-084). Beta-video reports are one-tap (AC-140) and immediately hide the reported video from all users until an admin dismisses the report (AC-141/AC-143).
+- **Report alerting (operational, Phase 1)**: A scheduled Edge Function runs every 6 hours and emails the admin (wu.tsan@northeastern.edu) a digest of open reports older than 12 hours, so the solo operator can act within the App Store Guideline 1.2 response window without polling Supabase Studio (see AC-085). This digest covers the `Report` table (user-profile + category/note reports via AC-080) only; beta-video one-tap reports (the `VideoReport` table, AC-140) are reviewed manually in Supabase Studio and are not part of the digest.
 - **Localization**: English and Traditional Chinese (zh-TW) in Phase 1. Default language: device locale, with zh-TW fallback for any non-English locale. Settings screen exposes a language toggle. Message catalogs must be complete (no missing keys) at ship.
 - **Theming**: Light and Dark mode in Phase 1. Follows OS appearance by default; Settings exposes a three-state override (System / Light / Dark).
 - **Admin tooling**: Supabase Studio only for Phase 1. All gym CRUD, gym-request review, report review, user block/ban, and near-duplicate route merges are performed by the admin (Leon) via Supabase Studio. No in-app admin UI.
@@ -864,9 +921,10 @@ Block  (App Store Guideline 1.2 requirement)
 Most previously-open questions were resolved during PRD confirmation. Remaining items:
 
 - **`ascent_style` enum migration safety**: Removing the `project` value is not a direct enum drop in PostgreSQL — it requires creating a new three-value enum, backfilling existing `project` rows to `attempt`, swapping the `ascents.style` column type, and dropping the old enum. Risk: an incorrectly sequenced migration fails on PG15 (enum create/use/drop ordering) or leaves orphaned `project` values. Mitigation: Tech Lead to specify the exact migration ordering (consistent with the project's two-file enum-migration convention) and the backfill `UPDATE` before Engineering implements; Engineer to verify with a local `supabase db reset`.
+- **Beta-video report visibility composition**: The AC-141/AC-142 rule (hide `is_reported = true AND report_dismissed = false` everywhere) must be applied consistently across the route-detail grid, the fullscreen viewer set, and the MOD-006 activity-feed RPC. Risk: a listing path forgets the filter and a reported video leaks to users, or the SECURITY DEFINER RPC over-grants (lets a reporter flip fields beyond `is_reported`). Mitigation: Tech Lead to specify the SECURITY DEFINER RPC's exact scope (flip `is_reported` + insert one `VideoReport` row only), the RLS on `video_reports`, and the single shared filter clause reused by every beta-video listing (including the feed RPC) before Engineering implements. There is no admin alert for these reports in Phase 1 (Studio-only manual review) — residual risk that a reported video sits hidden but un-reviewed; acceptable for Phase 1 because a reported video is hidden from all users while it waits.
 - **Video hosting migration operational readiness**: The Supabase Storage → Cloudflare Stream migration trigger (cost > US$25/mo OR storage > 20 GB) has no documented runbook yet. Risk: hitting the trigger mid-Phase-1 without a rehearsed migration path. Mitigation: Tech Lead to specify a migration runbook (dual-write vs. batch backfill, URL rewriting strategy) during architecture review, even though the migration itself is expected in Phase 2.
 - **Tape color reuse collisions**: Two genuinely different routes at the same gym with the same grade + color could collide even after match-before-create, because the fixed 9-color enum plus common grade reuse guarantees occasional overlap. This also affects the composed route display name (AC-045): two same-grade/same-color routes render with the same name unless disambiguated by `section_label`. Mitigation: `section_label` disambiguator is already in the schema and is appended to the display name when present; it may need to become a required tiebreaker in Phase 2 based on real data.
-- **Admin bandwidth for reports**: With Supabase Studio as the only report review surface, response time depends on operator (Leon) checking Studio. Mitigation adopted (AC-085): a scheduled Edge Function emails Leon a 6-hourly digest of open reports older than 12 hours. Residual risk: App Store may still expect a faster in-app moderation queue; a lightweight in-app admin surface is held in the Phase 2 slot if review flags it.
+- **Admin bandwidth for reports**: With Supabase Studio as the only report review surface, response time depends on operator (Leon) checking Studio. Mitigation adopted (AC-085): a scheduled Edge Function emails Leon a 6-hourly digest of open reports older than 12 hours. Note: this digest covers the `Report` table (user-profile reports) only; beta-video one-tap reports (`VideoReport`, AC-140) have no email alert in Phase 1 and are reviewed manually in Studio — but because a reported video is immediately hidden from all users (AC-141), the response-window risk is lower for video reports than for the profile reports the digest covers. Residual risk: App Store may still expect a faster in-app moderation queue; a lightweight in-app admin surface is held in the Phase 2 slot if review flags it.
 - **APNs deliverability tail**: The AC-056 target of ≥95% delivery within 30 seconds depends on Expo Push + APNs latency and on device state. Needs measurement post-launch — if the tail is worse than expected, revisit push architecture in Phase 2.
 - **App Store Guideline 1.2 review outcome**: Report + Block are implemented, but App Store review is not deterministic. Risk: additional moderation requirements surface during review (e.g., faster response SLA, in-app moderation queue). Mitigation: keep Phase 2 slot available for a lightweight in-app admin surface if needed.
 - **Cold start for routes at newly-seeded gyms**: Routes start empty per gym until users submit. Mitigation: Leon to personally seed routes at a few gyms + a few beta videos before opening to beta users.
@@ -876,7 +934,7 @@ Most previously-open questions were resolved during PRD confirmation. Remaining 
 
 ## 13. Roadmap
 
-1. **Phase 1 (MVP, iOS, Taipei + New Taipei)** — Auth (Email + Apple + Google), curated branch-level gym directory, route submission with match-before-create + fixed color enum + V-scale + composed route display name, route bookmarking in the browse flow, send logging with clear error on network failure and a three-value ascent style (flash/top/attempt), beta video (60 sec + client compression + client thumbnail) via Supabase Storage, follow + activity feed, beta-video likes with APNs push + preference toggle, profile history + basic stats with per-send achievement icons, Report + Block (App Store 1.2), English + zh-TW (device-locale default, Settings toggle), Light + Dark (OS default, Settings override), PostHog analytics, Supabase Studio admin only.
+1. **Phase 1 (MVP, iOS, Taipei + New Taipei)** — Auth (Email + Apple + Google), curated branch-level gym directory, route submission with match-before-create + fixed color enum + V-scale + composed route display name, route bookmarking in the browse flow, send logging with clear error on network failure and a three-value ascent style (flash/top/attempt), beta video (60 sec + client compression + client thumbnail) via Supabase Storage with a fullscreen portrait reel viewer and one-tap video reporting, follow + activity feed, beta-video likes with APNs push + preference toggle, profile history + basic stats with per-send achievement icons, Report + Block (App Store 1.2 — user-profile category reports plus one-tap video reports), English + zh-TW (device-locale default, Settings toggle), Light + Dark (OS default, Settings override), PostHog analytics, Supabase Studio admin only.
 2. **Phase 2 (Community depth + Android)** — Android build, offline send queue, expanded push notifications, comments (conditional), retire/reset voting workflow, ascent pyramid visualization, "suggest an edit" gym flow, dedicated saved-routes list surface, Cloudflare Stream video migration (if trigger hit in Phase 1), beta-video thumbnail frame extraction (Phase 1 uses a placeholder thumbnail), lightweight in-app moderation surface if needed for App Store follow-up.
 3. **Phase 3 (Gym partnerships)** — Gym-claimed profiles, official route-setter publishing, gym-facing analytics, optional gym subscription monetization (climber app stays free).
 
