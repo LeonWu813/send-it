@@ -535,7 +535,7 @@ export default function BetaVideoReelViewer({
           {signedUrl && !urlError ? (
             <VideoView
               player={player}
-              style={StyleSheet.absoluteFill}
+              style={styles.videoView}
               contentFit="contain"
               nativeControls={false}
               testID="beta-video-reel-video-view"
@@ -610,10 +610,7 @@ export default function BetaVideoReelViewer({
               <View
                 style={[
                   styles.bottomRow,
-                  // Use insets.bottom when available; fall back to 34px (iPhone
-                  // home indicator height) in case the SafeAreaProvider context
-                  // does not propagate a non-zero inset inside the Modal.
-                  { bottom: (insets.bottom || 34) + theme.spacing.md },
+                  { bottom: 110 + (insets.bottom ?? 0) },
                 ]}
               >
                 {/* Left column: poster identity (AC-134) */}
@@ -735,6 +732,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     fullscreen: {
       flex: 1,
       backgroundColor: VIDEO_VIEWER_BG,
+    },
+    videoView: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 110,
     },
     centeredOverlay: {
       position: 'absolute',
