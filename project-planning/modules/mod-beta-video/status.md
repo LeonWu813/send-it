@@ -1825,3 +1825,274 @@ Implementation is confined to the specified ACs. No features beyond the spec. No
 - AC-039 (revised swipe-down): FAIL
 
 Next: `claude --agent engineer-mod-beta-video` to fix the 4 reported bugs. Separately: `claude --agent pm` to clarify AC-133 icon identity (X vs chevron).
+
+---
+
+## QA Run 9 — Regression — 2026-09-28
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after QA Run 8 — 4 implementation bugs + 1 PM spec clarification resolved)
+**Re-verifying**: Fix 1 (AC-134/AC-136: Row 2 route·gym label + props), Fix 2 (AC-134: gradient scrim), Fix 3 (AC-039 revised: swipe-down previous/dismiss split), Fix 4 (AC-139: reportError surfaced), Fix 5 (AC-133: chevron-back icon)
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npx jest --testPathPattern="mod-beta-video" --passWithNoTests --watchAll=false`: PASS — 66 tests, 5 suites, 0 failures
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- Pre-existing `act()` console warnings (Icon state updates in BetaVideoPlayer, BetaVideoUploader) — unchanged from prior QA runs; not introduced by this fix; all suites pass.
+
+---
+
+### Fix 1 — AC-134/AC-136: Row 2 route·gym label — REGRESSION PASS
+
+**Original QA Run 8 failure**: Row 2 rendered `currentVideo.caption` via `MarqueeText`; no `routeName`/`gymName` props on `BetaVideoReelViewer`; no navigation callback.
+
+Static verification of `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`:
+
+**Props** — PASS
+`BetaVideoReelViewerProps` (lines 81–108) now includes:
+- `routeName?: string` — shown in Row 2
+- `gymName?: string` — shown in Row 2
+- `onNavigateToRoute?: (routeId: string) => void` — called when Row 2 is tapped
+
+**Row 2 render** — PASS
+Lines 525–542: guarded by `(routeName != null || gymName != null) ? (...) : null`. When the guard passes, renders a `Pressable` wrapping a `MarqueeText` whose `text` prop is `[routeName, gymName].filter(Boolean).join(' · ')`. Tap handler calls `onNavigateToRoute?.(currentVideo.route_id)`. Caption is no longer displayed in Row 2.
+
+**Omit guard** — PASS
+When both `routeName` and `gymName` are absent (both `null` or `undefined`), the `(routeName != null || gymName != null)` condition is false and the Row 2 element is not rendered. Correct per spec.
+
+**BetaVideoSection.tsx prop pass-through** — PASS
+`BetaVideoSectionProps` (lines 88–103) includes `routeName?: string`, `gymName?: string`, `onNavigateToRoute?: (routeId: string) => void`. `BetaVideoReelViewer` call site at lines 345–354 passes all three: `routeName={routeName}`, `gymName={gymName}`, `onNavigateToRoute={onNavigateToRoute}`.
+
+**RouteDetailScreen.tsx wiring** — PASS
+`RouteDetailScreen` (lines 439–440) passes `routeName={routeName}` and `gymName={gymName}` to `BetaVideoSection`. `routeName` is derived at line 264 via `formatRouteName(route.grade, route.color_tag, route.section_label, t)`. `gymName` is a string prop on `RouteDetailScreen` itself (line 80, 89). `onNavigateToRoute` is intentionally absent from the `RouteDetailScreen` call site — the comment at line 100–103 of `BetaVideoSection` says "Omit when the host screen is already the route detail screen — tap becomes a no-op." This is correct per spec AC-136: the user is already on the route detail screen, so the nav callback need not fire.
+
+REGRESSION PASS AC-134/AC-136: Row 2 now renders `{routeName} · {gymName}` in `MarqueeText` inside a `Pressable`; tapping calls `onNavigateToRoute?.(currentVideo.route_id)`; Row 2 omitted when both props absent; `BetaVideoSection` passes the props through; `RouteDetailScreen` supplies `routeName` and `gymName`.
+
+---
+
+### Fix 2 — AC-134: Gradient scrim — REGRESSION PASS
+
+**Original QA Run 8 failure**: No LinearGradient or equivalent scrim behind the poster overlay.
+
+Static verification of `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`:
+
+**Scrim View** — PASS
+Line 468: `<View style={styles.gradientScrim} pointerEvents="none" />` — renders inside the outermost `fullscreen` container, above the `VideoView`.
+
+**Style** — PASS
+`gradientScrim` in `makeStyles` (lines 717–724):
+- `position: 'absolute'` — bottom-anchored overlay
+- `left: 0, right: 0, bottom: 0` — covers the full width, pinned to the bottom
+- `height: '35%'` — covers the bottom 35% of the screen
+- `backgroundColor: theme.colors.overlay` — no hardcoded hex or rgba; uses the theme token
+
+**`pointerEvents="none"`** — PASS
+The `pointerEvents="none"` prop is present on the scrim View (line 468), so it does not intercept touches that should reach the gesture layer or overlay Pressables below it.
+
+REGRESSION PASS AC-134 gradient scrim: bottom-anchored `position:'absolute'` View covers the bottom portion of the screen; `theme.colors.overlay` used (no hardcoded color); `pointerEvents="none"` present.
+
+---
+
+### Fix 3 — AC-039 revised: Swipe-down previous/dismiss split — REGRESSION PASS
+
+**Original QA Run 8 failure**: Swipe-down always dismissed (regression introduced by QA Run 6 fix that misread Tech Lead Decision 3). Correct behavior per revised AC-039: `dy > +50` at `index > 0` → previous; at `index === 0` → dismiss.
+
+Static verification of `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`:
+
+**`goToPrevOrClose`** — PASS
+Lines 346–353: `if (currentIndexRef.current > 0) { setCurrentIndex((prev) => prev - 1); } else { player.pause(); onDismiss(); }`. Reads the current index via the stable ref (not a stale closure). At index > 0: decrements. At index 0: pauses and dismisses.
+
+**`goToPrevOrCloseRef`** — PASS
+Lines 366–370: `goToPrevOrCloseRef` updated in a `useEffect` keyed on `goToPrevOrClose`. The PanResponder release handler at line 383 calls `goToPrevOrCloseRef.current()` for `dy > SWIPE_THRESHOLD`.
+
+**Swipe-up unchanged** — PASS
+Line 381: `if (gs.dy < -SWIPE_THRESHOLD) goToNextRef.current()` — swipe-up still advances to next (no-op at last index per `goToNext`'s guard `if (prev < videos.length - 1)`).
+
+**Back button always dismisses** — PASS
+`handleDismiss` at lines 358–361 unconditionally calls `player.pause(); onDismiss()`. Used by the close `Pressable` at line 479 (`onPress={handleDismiss}`) and `Modal.onRequestClose` at line 425. Back button always dismisses from any position per spec.
+
+REGRESSION PASS AC-039 revised swipe-down: `dy > SWIPE_THRESHOLD` at `index > 0` → previous; at `index === 0` → dismiss. Swipe-up at last index is a no-op. Back button always dismisses. Matches the revised AC-039 spec exactly.
+
+---
+
+### Fix 4 — AC-139: reportError surfaced on RPC failure — REGRESSION PASS
+
+**Original QA Run 8 failure**: `handleReport` catch block silently discarded errors; `betaVideo.reel.reportError` i18n key was never displayed.
+
+Static verification of `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`:
+
+**`reportError` state** — PASS
+Line 271: `const [reportError, setReportError] = useState<string | null>(null);` — dedicated error state for report failures.
+
+**`handleReport` catch block** — PASS
+Lines 393–396:
+```
+} catch {
+  setReportError(t('betaVideo.reel.reportError'));
+}
+```
+On RPC failure, `setReportError` is called with the i18n string `betaVideo.reel.reportError` (which resolves to "Could not report. Try again." in English per the locale file). The catch block no longer silently discards the error.
+
+**`reportError` rendered** — PASS
+Lines 597–603: `{reportError ? (<Text style={styles.reportErrorText} testID="reel-report-error">{reportError}</Text>) : null}` — the error Text element is rendered near the report button in the right sidebar when `reportError` is non-null.
+
+**`reportError` cleared on index change** — PASS
+Line 305 (inside the `currentIndex`/`visible` effect): `setReportError(null)` is called at the start of each video load. When the viewer advances to a different video, the error state is cleared.
+
+**i18n key present** — PASS (already confirmed in QA Run 8)
+`locales/en/common.json`: `betaVideo.reel.reportError = "Could not report. Try again."`
+`locales/zh-TW/common.json`: `betaVideo.reel.reportError = "回報失敗，請再試一次"`
+
+REGRESSION PASS AC-139 reportError: catch block calls `setReportError(t('betaVideo.reel.reportError'))`; `Text` element renders the error near the report button; error cleared when index changes.
+
+---
+
+### Fix 5 — AC-133: Close button uses chevron-back — REGRESSION PASS
+
+**Original QA Run 8 spec clarification**: PM confirmed `chevron-back` is the required icon per the literal AC-133 spec text. Engineer updated from `name="close"` to `name="chevron-back"`.
+
+Static verification of `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`:
+
+**Close button icon** — PASS
+Line 483: `<Ionicons name="chevron-back" size={24} color={theme.colors.textInverse} />` — `name="close"` (X icon) is absent. `chevron-back` (`<` chevron) is used, matching the AC-133 spec text "a back control (a `<` chevron)". The `name="close"` string does not appear anywhere in the file.
+
+**Dismiss behavior unchanged** — PASS
+The `Pressable` at line 476 still calls `handleDismiss` on press. `handleDismiss` pauses the player and calls `onDismiss()`. Behavior is correct regardless of icon identity.
+
+**Persistent and always visible** — PASS
+The close button is inside the `StyleSheet.absoluteFill` gesture-capture View. It has `position: 'absolute', left: 16, top: insets.top + 12` and never unmounts while the Modal is visible.
+
+REGRESSION PASS AC-133: `Ionicons name="chevron-back"` confirmed. `name="close"` absent. Dismiss behavior correct.
+
+---
+
+### Spot-check Regression — AC-030 through AC-038, AC-140 through AC-144
+
+**AC-030** — PASS (unaffected)
+`validateDuration()` in `BetaVideoUploader.tsx` unchanged. `MAX_DURATION_SECONDS = 60`. Duration gate unaffected by any Rev 16 changes.
+
+**AC-031** — PASS (unaffected)
+Phase 1 placeholder thumbnail unchanged. Single `storage.upload` with `contentType: 'video/mp4'`. `thumbnail_url = videoPath`.
+
+**AC-032** — PASS (unaffected)
+`route_id` threading from `BetaVideoSection` → `BetaVideoUploader` → `uploadBetaVideo` → DB insert is unchanged.
+
+**AC-033** — PASS (unaffected)
+In-app playback via grid + fullscreen viewer. No external links.
+
+**AC-034** — PASS (unaffected)
+`BetaVideoPlayer` component exposure unchanged. MOD-006 integration is a pre-existing dependency gap.
+
+**AC-035** — PASS (unaffected)
+`validateVideoFormat()` unchanged. MP4 and MOV accepted; HEVC/AVI/MKV rejected.
+
+**AC-036** — PASS (unaffected)
+Progress overlay in `BetaVideoUploader` and `BetaVideoSection` (AC-130 mode) unchanged.
+
+**AC-037** — PASS (unaffected)
+`BetaVideoSection` entry point and `RouteDetailScreen` integration unchanged.
+
+**AC-038** — PASS (unaffected)
+Three-column grid. All colors themed (`theme.colors.surface`, `theme.colors.overlay`, `theme.colors.textInverse`). Camera icon overlay. `betaVideo.grid.openVideo` i18n key present.
+
+**AC-039 swipe-up** — PASS (unaffected)
+`goToNext` still advances index at non-last positions; no-op at last index. Unchanged.
+
+**Audio pauses on dismiss** — PASS
+`handleDismiss` calls `player.pause()` before `onDismiss()` (line 359–360). `useEffect` cleanup at line 279–282 calls `player.pause()` on unmount. `useEffect` at lines 284–288 calls `player.pause()` when `visible` becomes `false`. Three-layer pause coverage retained.
+
+**`replaceAsync` (not `replace`)** — PASS
+Line 312: `void player.replaceAsync({ uri: url }).then(() => { if (!cancelled) player.play(); })`. No deprecated `player.replace()` call. Unchanged from prior fix.
+
+**No hardcoded hex in functional code** — PASS
+`VIDEO_VIEWER_BG = '#000000'` named constant (not inline). All style entries in `makeStyles` use `theme.*` tokens. `PosterAvatar` uses `theme.colors.overlay` and `theme.colors.textInverse`. Scrim uses `theme.colors.overlay`. No inline hex literals or rgba strings in JSX or `StyleSheet.create`.
+
+**No inline English strings** — PASS
+`useTranslation('common')` at line 246. All user-facing strings use `t(...)`: `t('betaVideo.reel.close')`, `t('betaVideo.loadError')`, `t('betaVideo.reel.anonymous')`, `t('betaVideo.reel.like')`, `t('betaVideo.reel.report')`, `t('betaVideo.reel.reported')`, `t('betaVideo.reel.reportError')`. No inline English strings in JSX.
+
+**No new native packages** — PASS
+No `expo-screen-orientation`, `react-native-gesture-handler`, `react-native-marquee`, `expo-linear-gradient`, or any new native dependency. MarqueeText uses pure-JS `Animated`. PanResponder from RN core. Gradient scrim is a themed `View`.
+
+**AC-140** — PASS (unaffected)
+`handleReport` still calls `reportBetaVideo(videoId)` → `supabase.rpc('report_beta_video', { p_beta_video_id: videoId })`. On success, `reportedIds` Set updated.
+
+**AC-141/AC-142** — PASS (unaffected)
+`fetchBetaVideosForRoute` still uses `.or('is_reported.eq.false,report_dismissed.eq.true')`.
+
+**AC-143** — PASS (unaffected)
+`isDismissed = currentVideo.report_dismissed` check hides report button for admin-dismissed videos.
+
+**AC-144** — PASS (unaffected)
+`fetchBetaVideosForRoute` still joins `users!beta_videos_user_id_fkey(display_name, avatar_url)` and flattens to top-level fields.
+
+---
+
+### Integration Checks
+
+**Cross-module import rule** — PASS
+`RouteDetailScreen.tsx` imports only `BetaVideoSection` from `mod-beta-video`. No internal `screens/` or `components/` imported from MOD-005 outside its directory.
+
+**Supabase client singleton** — PASS
+`beta-video-service.ts` imports from `../../lib/supabase`; no `createClient()` at call sites; no `service_role` key in client code.
+
+**i18n completeness** — PASS
+All `betaVideo.reel.*` keys present in both locales: `close`, `like`, `report`, `reported`, `reportError`, `anonymous`. All previously verified keys (`betaVideo.grid.openVideo`, `betaVideo.loadError`) still present.
+
+**Safe area insets** — PASS
+`useSafeAreaInsets()` applied to close button (`top: insets.top + 12`) and bottom row (`bottom: insets.bottom + 16`). Unchanged.
+
+---
+
+### Open Items (carried forward — non-blocking)
+
+**SPEC DOC GAP — production.md Video Pipeline Convention not yet updated for PRD Rev 12** (Doc-Sync task, not a blocker)
+
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker — carried from QA Run 4)
+
+---
+
+### Verdict
+
+**PASS** — All 5 QA Run 8 fixes verified. No new regressions detected.
+
+**Fix 1 — AC-134/AC-136 (Route·gym label)**: `routeName`, `gymName`, `onNavigateToRoute` props present on `BetaVideoReelViewer`; Row 2 renders `[routeName, gymName].filter(Boolean).join(' · ')` in `MarqueeText` inside `Pressable`; tap calls `onNavigateToRoute?.(currentVideo.route_id)`; row omitted when both absent; `BetaVideoSection` passes props through; `RouteDetailScreen` supplies `routeName` and `gymName`. PASS.
+
+**Fix 2 — AC-134 (Gradient scrim)**: `position:'absolute'` `View` covering bottom 35% of screen; `theme.colors.overlay` (no hardcoded color); `pointerEvents="none"`. PASS.
+
+**Fix 3 — AC-039 revised (Swipe-down)**: `goToPrevOrClose` at `index > 0` → previous; at `index === 0` → dismiss. Back button always dismisses. Swipe-up at last index is a no-op. PASS.
+
+**Fix 4 — AC-139 (reportError surfaced)**: catch block calls `setReportError(t('betaVideo.reel.reportError'))`; `Text` element renders the error near the report button; cleared on index change. PASS.
+
+**Fix 5 — AC-133 (chevron-back)**: `Ionicons name="chevron-back"` confirmed at close button; `name="close"` absent. PASS.
+
+**Full AC status:**
+- AC-030: PASS — 60-second duration cap enforced before upload
+- AC-031: PASS — Phase 1 placeholder thumbnail compliant per PM ruling (PRD Revision 10)
+- AC-032: PASS — one BetaVideo row attached to exactly one route
+- AC-033: PASS — inline playback via grid + fullscreen viewer, no external links
+- AC-034: PASS — BetaVideoPlayer component exposed for MOD-006 embedding (pre-existing dependency gap)
+- AC-035: PASS — MP4 and MOV containers accepted; codec/extension rejection enforced
+- AC-036: PASS — progress overlay 0-100%, blocks interaction during upload
+- AC-037: PASS — "Add Beta Video" entry point visible on route detail screen, route context pre-attached
+- AC-038: PASS — three-column grid; camera-icon overlay top-left; no VideoView per cell; all colors themed
+- AC-039: PASS — fullscreen portrait viewer; auto-play; swipe-up → next (no wrap at last); swipe-down → previous (index > 0) or dismiss (index = 0); back button always dismisses; audio pauses on dismiss; replaceAsync used
+- AC-133: PASS — chevron-back icon; persistent, never unmounts or loses tap target
+- AC-134: PASS — Row 1 (avatar + display_name); Row 2 (route·gym label in Pressable); gradient scrim with theme.colors.overlay and pointerEvents="none"
+- AC-135: PASS — Row 1 tap is a no-op in Phase 1
+- AC-136: PASS — Row 2 tap calls onNavigateToRoute?.(route_id); no-op on RouteDetailScreen (prop absent)
+- AC-137: PASS — pure-JS MarqueeText (translateX loop); applied to route·gym label; no new native package
+- AC-138: PASS — sidebar has exactly two icons: like (heart-outline) + report (flag-outline/flag)
+- AC-139: PASS — report button hidden for own videos and admin-dismissed videos; reportError i18n string surfaced on RPC failure
+- AC-140: PASS — reportBetaVideo RPC called; success state tracked; loading state shown
+- AC-141/AC-142: PASS — `.or('is_reported.eq.false,report_dismissed.eq.true')` canonical exclusion predicate
+- AC-143: PASS — admin-dismissed videos visible again on next fetch; report button permanently hidden
+- AC-144: PASS — poster display_name + avatar_url joined and flattened to top-level fields
+
+**MOD-005 is PASS and ready for human QA.**
