@@ -1363,3 +1363,148 @@ MOD-012 was fully implemented across prior sessions. This session performed a fi
 | Full suite no regressions (378/378) | PASS |
 
 **Result: READY FOR QA**
+
+---
+
+### QA Run 9 — 2026-09-29
+
+**Workflow**: functional-test (new QA session — re-verification of all ACs after final engineering self-check)
+
+**Context**: Engineer performed a final verification session on 2026-09-29, confirmed all artifacts present, and reported READY FOR QA. This run independently re-verifies all ACs against the spec and current source.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output
+- `npx jest --testPathPattern="mod-home" --passWithNoTests`: PASS — 17 tests, 2 suites, 0 failures
+- `npx jest --passWithNoTests`: PASS — 378 tests, 29 suites, 0 failures (no regressions in full suite)
+
+---
+
+#### AC-110: Persistent bottom tab bar — three icon-only tabs, Home default
+
+PASS — `AppShell.tsx`: `useState<TabKey>('home')` initializes to `'home'` (Home is default after login). `TabBar.tsx` defines exactly 3 tabs (`home`, `gyms`, `profile`) with icon-only `Pressable` elements (Ionicons, no text labels). `accessibilityRole="tab"` and `accessibilityState.selected` set per tab. TabBar test confirms 3 role="tab" elements. `App.tsx` renders `AppShell` as the authenticated shell with `SafeAreaProvider` at root.
+
+---
+
+#### AC-111: Home screen renders three sections in order — Banners, Saved Gyms, Following Climbers
+
+PASS — `HomeScreen.tsx` JSX renders sections in exactly this order: (1) Banners section (`{BANNERS.length > 0 && ...}`), (2) Saved Gyms section, (3) Following Climbers section. Order is fixed in JSX and not runtime-permutable.
+
+---
+
+#### AC-112: Banners section — up to 3 static hardcoded banner cards in horizontal scroll; hidden if empty
+
+PASS — `src/lib/banners.ts` defines `BANNERS` with exactly 3 entries (banner-1, banner-2, banner-3). Each card renders `Image` + overlay `Text` in a horizontal `ScrollView`. Section is wrapped in `{BANNERS.length > 0 && ...}` — hidden when array is empty. Banner title strings use i18n keys (`home.banners.competition`, `home.banners.newRoutes`, `home.banners.community`), not inline literals. Test (AC-112) verifies banner renders when BANNERS is non-empty.
+
+---
+
+#### AC-113: Saved Gyms section — horizontal scroll strip with gym photo_url + name; "View All" navigates to gym list
+
+PASS — Saved gyms strip is a horizontal `ScrollView`. Each gym renders an `Image` (photo_url, with null-check placeholder `View`) and `Text` (name). "View All" `Pressable` calls `onViewAllGyms()`, which in `AppShell` calls `setSelectedGymId(undefined)` and `setActiveTab('gyms')` — switching to GymNavigator (gym list). Test verifies "View All" press fires `onViewAllGyms`, and gym names render in the strip.
+
+---
+
+#### AC-114: Tapping a gym in the Saved Gyms strip navigates to the gym's detail screen
+
+PASS — Each gym chip is a `Pressable` with `onPress={() => onSelectGym(gym.id)}`. `AppShell.handleSelectGym` sets `selectedGymId(gymId)`, increments `gymNavKey`, and switches `activeTab` to `'gyms'`. `GymNavigator` receives `initialGymId={selectedGymId}` and `gymNavKey={gymNavKey}`; its `useEffect([gymNavKey])` calls `setView({ name: 'detail', gymId: initialGymId })` when `initialGymId` is truthy. Deep-link into the specific gym's detail screen is implemented. Test verifies `onSelectGym` fires with the correct gym ID on chip press.
+
+Note: Prior spec ambiguity between AC-114 text and the Phase 1 Notes was resolved — the Engineer implemented the full deep-link, which satisfies AC-114 as written.
+
+---
+
+#### AC-115: When no saved gyms, display "Tap the bookmark on any gym to save it."
+
+PASS — When `savedGyms.length === 0` and `!savedGymsLoading`, renders `t('home.savedGyms.empty')`. `locales/en/common.json` line 259: `"empty": "Tap the bookmark on any gym to save it."` — trailing period present, matching spec exactly. Test asserts `screen.getByText('Tap the bookmark on any gym to save it.')`.
+
+---
+
+#### AC-123: Following Climbers section — horizontal scroll strip, avatar + display name, tap navigates to climber's profile
+
+PASS — `fetchFollowing(session.user.id)` called on mount and on `isActive` flip to true (same focus-refetch pattern as saved gyms). When `followingUsers.length > 0`, renders a horizontal `ScrollView` of `Pressable` chips, each containing an `Image` (avatar_url, with null-check placeholder `View`) and `Text` (display_name). `onPress={() => onSelectClimber(user.id)}` is wired; `AppShell.handleSelectClimber` sets `targetUserId`, rendering `UserProfileScreen` (from `mod-social-feed/UserProfileNavigator` — public module-root entry point) in an `absoluteFill` overlay with `zIndex: 10`. Overlay dismissed via `onBack` → `handleClimberProfileBack` → `setTargetUserId(null)`. Tests verify: strip renders "Alice Chen"/"Bob Lin", `fetchFollowing` called with `'user-001'`, `onSelectClimber` fires with `'user-002'` on chip press.
+
+---
+
+#### AC-124: When following no one, display appropriate empty state
+
+PASS — When `followingUsers.length === 0` and `!followingLoading`, renders `t('home.following.empty')`. `locales/en/common.json`: `"empty": "Follow climbers to see their activity"`. Test asserts this string renders. Empty state is appropriate per spec ("an appropriate empty state").
+
+---
+
+#### Additional Checks
+
+**Keep-alive mount strategy (spec requirement):**
+PASS — `AppShell.tsx` renders all three tab subtrees simultaneously. Inactive tabs apply `styles.hidden` (`display: 'none'`). No conditional unmount used. `flex: 0` explicitly avoided (documented in code comment). Spec requirement satisfied.
+
+**isActive / focus-refetch (spec requirement):**
+PASS — `HomeScreen.tsx` has two `useEffect` hooks each for saved gyms and following: one fires on initial mount (`[loadSavedGyms]` / `[loadFollowing]`), one fires when `isActive` flips to true (`[isActive, loadSavedGyms]` / `[isActive, loadFollowing]`). Tests verify both initial load and focus-triggered refetch. `AppShell` passes `isActive={activeTab === 'home'}` to `HomeNavigator` → `HomeScreen`.
+
+**Bottom safe area — TabBar:**
+PASS — `TabBar.tsx` accepts `bottomInset` prop from `AppShell` (`insets.bottom`). Applies `paddingBottom: bottomInset + theme.spacing.sm`. Matches production.md "Bottom Safe Area for Pinned Bottom Bars" convention.
+
+**Top safe area — HomeScreen:**
+PASS — `HomeScreen.tsx` calls `useSafeAreaInsets()`, passes `insets.top` to `makeStyles(theme, insets.top)`. `contentContainerStyle.paddingTop = topInset + theme.spacing.md`. Matches production.md "Screen Layout & Safe Area Insets" convention.
+
+**Cross-module import rule:**
+PASS — `AppShell.tsx` imports: `GymNavigator` from `../mod-gym-directory/GymNavigator` (module root), `ProfileNavigator` from `../mod-auth-profile/ProfileNavigator` (module root), `UserProfileScreen` from `../mod-social-feed/UserProfileNavigator` (module-root re-export, not from `screens/`). `HomeScreen.tsx` imports: `fetchSavedGymIds` from `../../mod-gym-directory/gym-service` (public service), `fetchFollowing` from `../../mod-social-feed/social-feed-service` (public service), `FollowingUser` from `../../mod-social-feed/types` (public type). No imports from any module's `screens/` or `components/` subdirectories. `src/modules/mod-social-feed/UserProfileNavigator.tsx` exists and contains `export { default } from './screens/UserProfileScreen';`.
+
+**i18n completeness (EN and zh-TW):**
+PASS — All `home.*` keys present in both locales:
+- EN `home.banners.competition` = "Competition", `home.banners.newRoutes` = "New Routes", `home.banners.community` = "Community"
+- EN `home.savedGyms.title` = "Saved Gyms", `home.savedGyms.viewAll` = "View All", `home.savedGyms.empty` = "Tap the bookmark on any gym to save it."
+- EN `home.following.title` = "Following", `home.following.empty` = "Follow climbers to see their activity"
+- zh-TW: matching keys present with `home.savedGyms.title` = "已收藏岩館", `home.savedGyms.empty` = "點擊岩館的書籤圖示來收藏" (using "岩館" not "體育館"), `home.following.title` = "追蹤中", `home.following.empty` = "追蹤攀岩者以查看他們的動態"
+- `i18n.test.ts` passes as part of the 378-test run.
+
+**No hardcoded hex colors:**
+PASS — All colors in `HomeScreen.tsx`, `TabBar.tsx`, and `AppShell.tsx` use `theme.colors.*` tokens. `borderRadius: 28` is a layout integer (circular avatar), not a color token. No `#RRGGBB` literals found.
+
+**No inline string literals in components:**
+PASS — All user-facing strings use `t('home.*')` i18n keys. No raw string literals in render paths.
+
+**Migration correctness (`20260924000002_mod_012_home.sql`):**
+PASS — Table DDL with composite PK `(user_id, gym_id)`. `user_id` FK references `public.users(id)` with `ON DELETE CASCADE` and `DEFAULT auth.uid()`. `gym_id` FK references `public.gyms(id)` with `ON DELETE CASCADE`. `ALTER TABLE public.saved_gyms ENABLE ROW LEVEL SECURITY` present. Three RLS policies: `saved_gyms_select_own` (SELECT, `USING auth.uid() = user_id`), `saved_gyms_insert_own` (INSERT, `WITH CHECK auth.uid() = user_id`), `saved_gyms_delete_own` (DELETE, `USING auth.uid() = user_id`). `GRANT SELECT, INSERT, DELETE ON public.saved_gyms TO authenticated` — no UPDATE, no anon. All spec requirements met.
+
+**Spec HTML template comments:**
+PASS — No `<!-- ... -->` template comments in spec.md.
+
+**Gold-plating check:**
+PASS — Implementation is scoped to exactly what the spec requires. No additional sections, navigators, or UI elements beyond AC-110 through AC-124.
+
+**TypeScript strict mode:**
+PASS — `npx tsc --noEmit` exits 0 with no output. No unguarded `any` in mod-home source files.
+
+---
+
+### Summary — QA Run 9
+
+| AC / Check | Result |
+|---|---|
+| AC-110: Three-tab bar, Home default | PASS |
+| AC-111: Three sections in order | PASS |
+| AC-112: Banners horizontal scroll; hidden when empty | PASS |
+| AC-113: Saved Gyms strip + View All | PASS |
+| AC-114: Gym chip tap deep-links to gym detail | PASS |
+| AC-115: Empty state exact copy with period | PASS |
+| AC-123: Following strip, Pressable chips, tap-to-navigate | PASS |
+| AC-124: Following empty state | PASS |
+| Keep-alive mount (`display: 'none'`) | PASS |
+| isActive focus-refetch (saved gyms + following) | PASS |
+| Bottom safe area — TabBar | PASS |
+| Top safe area — HomeScreen (`useSafeAreaInsets`) | PASS |
+| Cross-module import rule | PASS |
+| i18n EN + zh-TW complete | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Migration: DDL, FKs+CASCADE, RLS enabled, 3 policies, GRANT | PASS |
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-home" --passWithNoTests` | PASS — 17 tests, 2 suites |
+| `npx jest --passWithNoTests` | PASS — 378 tests, 29 suites |
+| Gold-plating check | PASS |
+| Spec template comments | PASS |
+
+**Result: ALL PASS — MOD-012 QA complete**
+
+All 8 acceptance criteria pass. All automated checks pass. No regressions in the full 378-test suite. TypeScript clean. Implementation fully conforms to the spec and production.md shared conventions.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
