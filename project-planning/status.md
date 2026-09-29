@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: eab003f9b9366abe904e1a76f597df6d137d5065
+commit: 032183555b97e208da805219b8497bc0a3a4c99d
 timestamp: 2026-09-28T00:00:00Z
 ```
 
@@ -131,6 +131,174 @@ timestamp: 2026-09-28T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-09-28 — change (Rev 16: MOD-005 reel viewer overlay + one-tap beta-video report flow — AC-133–AC-144, AC-039/AC-080 revised)
+
+**Context**: PRD Revision 16 [SUBSTANTIVE] adds the reel-viewer identity overlay + JS marquee (AC-133–AC-138), the one-tap beta-video report flow (AC-139–AC-143), the `fetchBetaVideosForRoute` join (AC-144), revises AC-039 (swipe-down = previous-or-dismiss) and AC-080 (user-profile-only), and shifts beta-video reporting from MOD-009 to MOD-005. PM flagged six items for mandatory Tech Lead review **before Doc-Sync**: (1) migration for the two new `beta_videos` columns; (2) RLS on `video_reports`; (3) SECURITY DEFINER RPC scope for AC-140; (4) `Report`/`VideoReport` coexistence; (5) the single shared exclusion filter reused by `fetchBetaVideosForRoute` (AC-142) and the MOD-006 feed RPC (AC-141); (6) the poster `display_name`+`avatar_url` join (AC-144). Advisory only — no source, migration, spec, or PRD files changed here. Findings grounded in the shipped code: `20260924000005_mod_005_beta_video.sql` (beta_videos DDL — **`user_id` FK targets `auth.users(id)`, not `public.users(id)`**), `20260924000006_mod_006_social_feed.sql` (`get_activity_feed` SECURITY INVOKER RPC — `video_items` CTE has no report filter today), `beta-video-service.ts` (`fetchBetaVideosForRoute` — explicit column select, no join, no filter), `mod-beta-video/types.ts` (`BetaVideo` interface), `20260923000002_mod_003_route_approval_schema.sql` (the shipped `submit_route` SECURITY DEFINER pattern), and `production.md` §"SECURITY DEFINER RPCs". Doc-Sync carries the decisions/conventions into the MOD-005/MOD-006/MOD-009 specs + production.md; Engineering implements in `change`-mode work.
+
+Headline: **one blocking prerequisite** — `beta_videos.user_id` currently references `auth.users(id)`, so PostgREST's embedded join `select('*, users(display_name, avatar_url)')` for AC-144 will NOT work until the FK is repointed to `public.users(id)`. Everything else is a clean, additive, single-migration change with an established RPC pattern to copy.
+
+---
+
+#### Q1 — Migration filename + file grouping: ONE new file, both columns + the table + the RPC together.
+
+- **Next filename**: following the shipped `YYYYMMDDNNNNNN_mod_NNN_<slug>.sql` convention and the existing MOD-005 file (`20260924000005_mod_005_beta_video.sql`), the new migration should be dated after the latest shipped migration (`20260924000007_mod_007_notifications.sql`). Recommended name: **`20260928000001_mod_005_video_reports.sql`** (use the current date `20260928`; keep `mod_005` since MOD-005 now owns beta-video reporting per the Rev 16 boundary shift). Migrations are immutable and ordered by filename — do not edit the existing `20260924000005` file; this is a new forward migration.
+- **One file, not two.** Put all four DDL objects in this single migration, in this order: (1) `ALTER TABLE public.beta_videos ADD COLUMN is_reported ... ADD COLUMN report_dismissed ...`; (2) the FK repoint (Q6 — drop the `auth.users` FK, add the `public.users` FK); (3) `CREATE TABLE public.video_reports ...` + RLS + grants; (4) the `report_beta_video` SECURITY DEFINER RPC + grants. Rationale: they are one logical feature, none is subject to the PG15 ADD-VALUE in-transaction restriction (that rule is enum-only — see the Rev 9 review), and keeping them together makes the report feature apply atomically on `supabase db reset`. This is NOT the two-file enum case.
+- **Two `ALTER TABLE ADD COLUMN` are safe in one transaction** — adding columns with a constant `DEFAULT false NOT NULL` is a metadata-only operation on PG11+ (no table rewrite), fast even on a populated `beta_videos`. Existing rows get `is_reported = false, report_dismissed = false`, which is the correct "not reported" state.
+
+#### Q2 — SECURITY DEFINER RPC for AC-140: confirmed, with the exact signature + body below. Idempotent, own-scope, minimal writes.
+
+- **Confirmed signature (refined)**: `report_beta_video(p_beta_video_id uuid) RETURNS void`. Takes only the video id — **never** a `reporter_id` parameter (production.md §"SECURITY DEFINER RPCs": "Never accept `user_id` as a parameter — always derive from `auth.uid()`"). The reporter is `auth.uid()` inside the function.
+- **Exact recommended body** (mirrors the shipped `submit_route` pattern — `LANGUAGE plpgsql`, `SECURITY DEFINER`, `SET search_path = public`, EXECUTE granted to `authenticated` only, revoked from `anon`/`public`):
+  ```sql
+  CREATE OR REPLACE FUNCTION public.report_beta_video(p_beta_video_id UUID)
+  RETURNS VOID
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+  SET search_path = public
+  AS $$
+  DECLARE
+    v_owner UUID;
+  BEGIN
+    -- Must be authenticated
+    IF auth.uid() IS NULL THEN
+      RAISE EXCEPTION 'Not authenticated';
+    END IF;
+
+    -- Video must exist; capture owner to forbid self-report (AC-139: report
+    -- affordance is hidden for own videos — enforce server-side too, defense in depth)
+    SELECT user_id INTO v_owner FROM public.beta_videos WHERE id = p_beta_video_id;
+    IF v_owner IS NULL THEN
+      RAISE EXCEPTION 'Beta video not found';
+    END IF;
+    IF v_owner = auth.uid() THEN
+      RAISE EXCEPTION 'Cannot report your own video';
+    END IF;
+
+    -- (1) Insert exactly one report row; idempotent on the unique (beta_video_id, reporter_id)
+    INSERT INTO public.video_reports (beta_video_id, reporter_id)
+    VALUES (p_beta_video_id, auth.uid())
+    ON CONFLICT (beta_video_id, reporter_id) DO NOTHING;
+
+    -- (2) Flip the flag — the ONLY field this RPC writes on beta_videos
+    UPDATE public.beta_videos
+      SET is_reported = TRUE
+      WHERE id = p_beta_video_id;
+  END;
+  $$;
+
+  REVOKE EXECUTE ON FUNCTION public.report_beta_video(UUID) FROM anon, public;
+  GRANT  EXECUTE ON FUNCTION public.report_beta_video(UUID) TO authenticated;
+  ```
+- **Scope is deliberately minimal** (addresses the §12 over-grant risk): the RPC writes exactly two things — one `video_reports` row and `beta_videos.is_reported = TRUE`. It must **never** touch `report_dismissed` (admin-only, Studio-only per AC-143) or any other `beta_videos` column. Do not add a general "update beta_videos" DEFINER function; keep this single-purpose.
+- **Idempotency**: `ON CONFLICT ... DO NOTHING` on the `(beta_video_id, reporter_id)` unique key makes a double-tap / retry a no-op (no duplicate report row, `is_reported` stays true). This matches the AC-140 "insert exactly one row" requirement and the project's idempotency posture (cf. the MOD-007 notification unique constraint).
+- **RLS on `video_reports`** (Q2 continued): enable RLS from the creating migration (project convention). Policies:
+  - **INSERT own rows only**: `WITH CHECK (reporter_id = auth.uid())` — AC-140/§10 NFR. Grant `INSERT` to `authenticated`.
+  - **SELECT**: recommend **no SELECT policy for `authenticated`** (do not grant SELECT to `authenticated`). Regular users never need to read `video_reports` — the client only needs the `is_reported`/`report_dismissed` flags on `beta_videos` (which drive AC-139 affordance visibility). The admin reads `video_reports` in Supabase Studio via the service role, which bypasses RLS. Keeping SELECT closed avoids leaking who reported what. **Note**: the DEFINER RPC's `INSERT ... ON CONFLICT` needs no SELECT policy because it runs as the function owner (DEFINER), not the caller.
+  - **No UPDATE, no DELETE** grants/policies — reports are immutable once filed (Studio/service-role can delete out-of-band if ever needed).
+  - Grant: `GRANT INSERT ON public.video_reports TO authenticated;` only. Do **not** grant SELECT/UPDATE/DELETE.
+
+#### Q3 — `fetchBetaVideosForRoute` join + filter: exact query change below. BLOCKED on the Q6 FK repoint for the join.
+
+- **Current query** (`beta-video-service.ts:37-41`): explicit column select, `.eq('route_id', routeId)`, `.order('created_at', {ascending:false})`. No join, no report filter.
+- **Exact change** — add the two new columns, the embedded users join, and the exclusion filter:
+  ```ts
+  const { data, error } = await supabase
+    .from('beta_videos')
+    .select(
+      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, ' +
+      'is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)'
+    )
+    .eq('route_id', routeId)
+    .not('is_reported', 'eq', true)                 // see filter note below
+    .order('created_at', { ascending: false });
+  ```
+- **The exclusion filter — express it as `is_reported = false OR report_dismissed = true`** (equivalently: exclude `is_reported = true AND report_dismissed = false`, AC-142). PostgREST cannot express an `AND`-inside-`OR` negation as cleanly as SQL, so use the `.or()` form for correctness:
+  ```ts
+  .or('is_reported.eq.false,report_dismissed.eq.true')
+  ```
+  This returns rows that are either not reported, OR reported-but-admin-dismissed (visible again per AC-143). Do NOT use a bare `.eq('is_reported', false)` — that would permanently hide admin-dismissed videos, violating AC-143. **This exact predicate is the single shared exclusion filter (Q5).**
+- **The embedded join `users(display_name, avatar_url)` requires an FK from `beta_videos.user_id` to `public.users(id)`** — which does NOT exist today (Q6). Until the FK is repointed, PostgREST returns an error like `Could not find a relationship between 'beta_videos' and 'users'`. Use the explicit FK hint `users!beta_videos_user_id_fkey(...)` after the repoint names the constraint `beta_videos_user_id_fkey` (Q6). **This join is BLOCKED on Q6 — it is the one hard prerequisite in this change.**
+- **Result shape note for the service/type**: PostgREST returns the embedded relation as a nested object `users: { display_name, avatar_url }` (or `null`). The service should flatten it to top-level `display_name` / `avatar_url` on the returned `BetaVideo` (AC-144 says the *result* includes them) so the viewer (AC-134) reads `video.display_name` directly. Flatten in `fetchBetaVideosForRoute` after the query; do not leak the nested `users` object to the UI.
+
+#### Q4 — MOD-006 feed RPC: `get_activity_feed`'s `video_items` CTE has NO report filter today. Add the same predicate.
+
+- **Confirmed**: `get_activity_feed` (`20260924000006_mod_006_social_feed.sql:233-253`) currently selects beta videos with only the follow/block/privacy composition and `JOIN ... bv.route_id` — **no `is_reported`/`report_dismissed` filter**. Post-migration, without a change, a reported-and-undismissed video would leak into the feed, violating AC-141.
+- **Exact change**: add a `WHERE` clause to the `video_items` CTE mirroring the shared filter:
+  ```sql
+  -- in video_items CTE, after the JOINs:
+  WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)
+  ```
+  (The `ascent_items` CTE needs no change — ascents are not reportable in Phase 1.)
+- **Ownership**: `get_activity_feed` is MOD-006-owned. This is a **coordinated cross-module change** — MOD-005 owns the two new columns + the report RPC (its migration); MOD-006 owns the feed-RPC edit. The feed-RPC change must ship in a **MOD-006 migration** (`CREATE OR REPLACE FUNCTION public.get_activity_feed(...)` with the added `WHERE`), NOT inside the MOD-005 `video_reports` migration — keep each module's owned object in its own module's migration. **Migration ordering**: the MOD-006 feed-RPC change references `bv.is_reported`/`bv.report_dismissed`, so it must run AFTER the MOD-005 migration that adds those columns. Since the MOD-005 migration is dated `20260928000001`, name the MOD-006 change with a later filename, e.g. `20260928000002_mod_006_feed_exclude_reported.sql`. Flag both engineers (MOD-005 and MOD-006) and the ordering dependency for Doc-Sync.
+- **The filter predicate is identical** to the `fetchBetaVideosForRoute` filter (Q3/Q5) — pin it as one canonical clause in production.md so the two paths cannot drift.
+
+#### Q5 — Single shared exclusion filter: pin `is_reported = false OR report_dismissed = true` as the ONE canonical beta-video visibility predicate.
+
+- Both surfaces (the client `fetchBetaVideosForRoute` and the server `get_activity_feed` RPC) must use the **same** predicate: **a beta video is visible iff `is_reported = false OR report_dismissed = true`** (equivalently: hidden iff `is_reported = true AND report_dismissed = false`, AC-141/AC-142).
+- **Cannot be literally one shared function** (one is PostgREST client-side, the other is SQL in a Postgres RPC), so pin it as a **named convention in production.md** with both concrete forms (the PostgREST `.or('is_reported.eq.false,report_dismissed.eq.true')` and the SQL `WHERE (is_reported = FALSE OR report_dismissed = TRUE)`), so any future beta-video listing path (e.g. a profile grid, a search) copies the exact predicate. This is the §12 "a listing path forgets the filter and a reported video leaks" mitigation.
+- **The fullscreen viewer set (AC-039/AC-141) needs no separate filter** — the viewer reuses the in-memory array from `fetchBetaVideosForRoute` (per the Rev 13 review, Q3), so once the fetch excludes reported videos, the grid and the swipe reel are both correct automatically. No extra work for the viewer.
+
+#### Q6 — BLOCKING PREREQUISITE: repoint `beta_videos.user_id` FK from `auth.users(id)` to `public.users(id)` so AC-144's PostgREST join works.
+
+- **The problem**: `beta_videos.user_id` currently `REFERENCES auth.users(id)` (migration `20260924000005` line 28). PostgREST embedded joins (`select('*, users(...)')`) only resolve when there is an FK between the two tables *in the exposed schema* (`public`). There is no FK from `beta_videos` to `public.users`, so AC-144's join cannot be expressed as an embedded resource — it would error at runtime.
+- **Why this is safe**: `public.users.id` is itself `REFERENCES auth.users(id)` (MOD-001 migration line 20) with the SAME UUID as the auth user. Every `beta_videos.user_id` value already equals a `public.users.id` value (a user cannot have a beta video without a profile row). So repointing the FK to `public.users(id)` is value-preserving — no data migration, no orphan risk.
+- **The fix** (in the Q1 migration, before the `fetchBetaVideosForRoute` join can work):
+  ```sql
+  ALTER TABLE public.beta_videos
+    DROP CONSTRAINT beta_videos_user_id_fkey;
+  ALTER TABLE public.beta_videos
+    ADD CONSTRAINT beta_videos_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+  ```
+  (Verify the existing constraint name with `\d beta_videos`; PostgreSQL auto-names it `beta_videos_user_id_fkey`, which the `users!beta_videos_user_id_fkey(...)` hint in Q3 relies on. Keep the name stable.)
+- **This matches the established convention**: every *other* user-owned `public` table that participates in feed/profile joins already references `public.users(id)` — `ascents.user_id`, `follows.follower_id/followee_id`, `saved_gyms.user_id`, `saved_routes.user_id`, `notifications.*`. `beta_videos.user_id` (and `reactions.user_id`) targeting `auth.users` are the outliers. Repointing `beta_videos` aligns it with the convention AND unblocks AC-144. (Do not repoint `reactions` in this change — out of scope; note it as a latent inconsistency for a future cleanup only.)
+- **`video_reports.reporter_id` FK**: per the PRD (§9) it `REFERENCES users(id)` — target **`public.users(id)`** to match the convention (not `auth.users`). `beta_video_id` `REFERENCES public.beta_videos(id) ON DELETE CASCADE` (so reports vanish if the video is deleted, matching the PRD).
+
+#### Q7 — Marquee (AC-137): confirmed pure-JS `Animated`, NO new native package. Report-icon visibility (AC-139): confirmed no extra query.
+
+- **AC-137 marquee — confirmed pure JS.** React Native's core `Animated` API (a JS/no-native-module primitive — already available, no install) drives a looped `Animated.timing` on a `translateX` of the Row-2 `<Text>` inside a clipped (`overflow: 'hidden'`) container `View`. Pattern: measure the text width via `onLayout` (or `onTextLayout`); if text width > container width, run `Animated.loop(Animated.timing(translateX, { toValue: -(textWidth - containerWidth), duration, useNativeDriver: true }))` (ping-pong or reset-to-start); if text fits, render static (no animation) per AC-137. `useNativeDriver: true` is fine for `translateX` (a transform) and keeps it off the JS thread without any native *package*. **This is consistent with the Rev 13 convention** "prefer RN built-ins; do not add native gesture/animation packages for simple effects" — no `reanimated`, no `react-native-marquee`, no native rebuild.
+- **AC-139 report-icon visibility — confirmed no additional query.** Both signals the viewer needs are already on the `BetaVideo` row after this change:
+  1. **Is the current user the owner?** Compare `video.user_id` to the current session user id (`session.user.id`) client-side. `user_id` is already selected. Hide the report icon when `video.user_id === currentUserId` (AC-139).
+  2. **Is `report_dismissed = true`?** Now selected on the row (Q3). Hide (or permanently disable) the report icon when `video.report_dismissed === true` (AC-139/AC-143).
+  No second round-trip: the current user id comes from the auth session already in context; `report_dismissed` and `user_id` come from the `fetchBetaVideosForRoute` result. Confirmed.
+- **Note on `is_reported` for own-viewer state**: after a user taps report, the local row should optimistically set `is_reported = true` so the icon updates immediately — but because the fetch filter (Q5) excludes `is_reported = true AND report_dismissed = false`, the reported video disappears from *everyone's* next fetch (AC-141), including the reporter's. For the reporter's current in-viewer session, the engineer may either (a) leave the video in the open reel until dismissed/re-fetched, or (b) advance/close the viewer after report. Flag as a UX detail for the MOD-005 spec (not an architecture concern); AC-141 governs the next-fetch hiding, which the filter already enforces.
+
+---
+
+#### Concerns (must address during the Rev 16 change work)
+
+- **BLOCKING: `beta_videos.user_id` must be repointed from `auth.users(id)` to `public.users(id)` before AC-144's join works** (Q6). This is the single hard prerequisite — the PostgREST embedded join `users(display_name, avatar_url)` cannot resolve without a `public`-schema FK. The repoint is value-preserving (no data migration) but must land in the same MOD-005 migration, ordered before anyone relies on the join. Without it, AC-144/AC-134 fail at runtime while unit tests (which mock Supabase) stay green — the same class of gap as the Rev 9 native-build issue.
+- **The report RPC must write exactly two things and never touch `report_dismissed`** (Q2). `report_dismissed` is admin-only (AC-143, Studio/service-role). A DEFINER function that could flip `report_dismissed` would let a reporter un-hide (or an over-broad function get abused). Keep `report_beta_video` single-purpose: one `video_reports` insert (idempotent) + `is_reported = TRUE`.
+- **The MOD-006 feed RPC MUST gain the exclusion filter** (Q4) — it has none today, so a reported video would leak into the feed post-migration (AC-141 violation). This is a coordinated MOD-006 migration (`CREATE OR REPLACE get_activity_feed` with the added `WHERE`), ordered AFTER the MOD-005 column-add migration. Both engineers + the ordering dependency must be routed.
+- **The exclusion predicate must be `is_reported = false OR report_dismissed = true`, not a bare `is_reported = false`** (Q3/Q5) — a bare equality would permanently hide admin-dismissed videos and violate AC-143 (dismissed videos must reappear). Pin the exact predicate as one canonical convention so the client filter and the feed RPC cannot drift.
+- **Do NOT add any native package for the marquee** (Q7) — AC-137 is explicit ("no new native package"), and RN core `Animated` covers it. No `reanimated`, no `react-native-marquee`.
+
+#### Recommendations
+
+- Create one MOD-005 migration `20260928000001_mod_005_video_reports.sql` containing, in order: (1) `ADD COLUMN is_reported`/`report_dismissed` (both `boolean NOT NULL DEFAULT false`); (2) the `beta_videos.user_id` FK repoint to `public.users(id)` (Q6); (3) `CREATE TABLE public.video_reports` (`id uuid PK DEFAULT gen_random_uuid()`, `beta_video_id uuid NOT NULL REFERENCES public.beta_videos(id) ON DELETE CASCADE`, `reporter_id uuid NOT NULL REFERENCES public.users(id)`, `reported_at timestamptz NOT NULL DEFAULT now()`, `UNIQUE (beta_video_id, reporter_id)`), RLS enabled, INSERT-own-rows policy (`reporter_id = auth.uid()`), `GRANT INSERT ... TO authenticated` only (no SELECT/UPDATE/DELETE); (4) the `report_beta_video(uuid)` SECURITY DEFINER RPC (Q2 body), `SET search_path = public`, EXECUTE granted to `authenticated`, revoked from `anon`/`public`.
+- Ship the MOD-006 feed-RPC change in a separate, later-dated MOD-006 migration (`20260928000002_mod_006_feed_exclude_reported.sql`) that `CREATE OR REPLACE`s `get_activity_feed` with `WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` in the `video_items` CTE. Ordered after the MOD-005 migration.
+- Update `fetchBetaVideosForRoute` (Q3): add `is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)` to the select, add `.or('is_reported.eq.false,report_dismissed.eq.true')`, and flatten the embedded `users` object to top-level `display_name`/`avatar_url` on the returned `BetaVideo`.
+- Extend the `BetaVideo` TS interface (`mod-beta-video/types.ts`, Q also implied): add `is_reported: boolean;`, `report_dismissed: boolean;`, `display_name: string | null;`, `avatar_url: string | null;`. (Keep them non-optional for the fields the query always returns; `display_name`/`avatar_url` are nullable because the join can yield nulls.)
+- Add a `reportBetaVideo(betaVideoId: string): Promise<void>` service function in `beta-video-service.ts` that calls `supabase.rpc('report_beta_video', { p_beta_video_id: betaVideoId })` — the client never does a direct `beta_videos` UPDATE for reporting.
+- AC-137 marquee: RN core `Animated` looped `translateX` on the Row-2 text inside an `overflow:'hidden'` container, gated on measured text-width > container-width; static when it fits.
+- AC-139 visibility: hide the report icon when `video.user_id === session.user.id` OR `video.report_dismissed === true` — both from data already in hand, no extra query.
+- Engineer verification: `supabase db reset` locally; confirm `\d beta_videos` shows the two new columns + the `public.users` FK; confirm `report_beta_video` sets `is_reported = true` + inserts one `video_reports` row and is a no-op on a second call (idempotent); confirm `fetchBetaVideosForRoute` returns the joined names and excludes an `is_reported=true, report_dismissed=false` row but returns an `is_reported=true, report_dismissed=true` row.
+
+#### Approved (looks solid as-is)
+
+- The PRD's `VideoReport`/`beta_videos`-columns/SECURITY DEFINER RPC design is architecturally sound and matches the shipped `submit_route` DEFINER pattern and the production.md SECURITY DEFINER conventions (`SET search_path = public`, derive from `auth.uid()`, `authenticated`-only EXECUTE). No design change needed — only the FK repoint (Q6) and the concrete filter/join specs above.
+- The `Report` (MOD-009 user-profile, category+note) and `video_reports` (MOD-005 one-tap, no category) coexistence is clean: they are separate tables with separate write paths and separate admin-review flows (Report → AC-085 email digest; video_reports → Studio manual). No shared schema, no conflict. The Rev 16 boundary shift (beta-video reporting MOD-009 → MOD-005) is consistent — MOD-009 has not shipped a migration yet, so nothing to un-build there.
+- The one-tap report affordance's visibility rules (AC-139) are fully derivable from the `beta_videos` row + the auth session — no extra query, consistent with the "no N+1, data already in hand" convention.
+- The additive migration (two `DEFAULT false` columns) is metadata-only on PG11+ — no table rewrite, safe on populated data; existing videos default to the correct "not reported" state.
+
+#### Proposed Shared Conventions (for Doc-Sync to carry into production.md)
+
+- **User-owned `public` tables that participate in PostgREST embedded joins or feed/profile joins must reference `public.users(id)`, not `auth.users(id)`.** PostgREST can only embed a related resource (`select('*, users(...)')`) when the FK targets a table in the exposed `public` schema. `public.users.id` mirrors `auth.users.id` (same UUID), so referencing `public.users(id)` is equivalent for integrity and additionally enables embedded joins. New user-owned tables should reference `public.users(id)`; when an existing table (e.g. `beta_videos`) needs an embedded user join, repoint its FK (value-preserving, no data migration).
+- **Beta-video visibility has one canonical exclusion predicate, reused verbatim by every listing path.** A beta video is visible iff `is_reported = false OR report_dismissed = true` (hidden iff `is_reported = true AND report_dismissed = false`). Client (PostgREST): `.or('is_reported.eq.false,report_dismissed.eq.true')`. Server (SQL, e.g. the feed RPC): `WHERE (is_reported = FALSE OR report_dismissed = TRUE)`. Never use a bare `is_reported = false` — it would permanently hide admin-dismissed videos and violate the re-appear-on-dismiss rule. Any new beta-video listing surface must copy this exact predicate.
+- **Cross-user field flips go through a single-purpose SECURITY DEFINER RPC that writes only the fields it must, derives the actor from `auth.uid()`, and is idempotent.** When a user must set a flag on a row they do not own (e.g. a reporter flipping `is_reported` on another user's video), expose a narrow `SECURITY DEFINER` RPC (`SET search_path = public`, EXECUTE to `authenticated` only, revoked from `anon`/`public`, no `user_id` parameter) that writes exactly the required field(s) plus its own audit row, guarded by `ON CONFLICT DO NOTHING` for idempotency and by explicit checks (e.g. forbid self-action, require the row to exist). Never widen a DEFINER function to a general table-update helper, and never let it touch admin-only fields (e.g. `report_dismissed` stays Studio/service-role only).
+- **Cross-module RPC edits ship in the owning module's migration, ordered after any prerequisite schema.** When one module (MOD-005) adds columns another module's RPC (MOD-006 `get_activity_feed`) must reference, the RPC change is a `CREATE OR REPLACE` in the owning module's own migration, filename-dated after the prerequisite column-add migration so `supabase db reset` applies them in dependency order. Do not edit another module's owned object inside your migration.
+- **Simple text-scroll/marquee animations use RN core `Animated` (`translateX` loop in an `overflow:'hidden'` container, gated on measured overflow), never a native marquee/animation package.** Extends the existing "prefer RN built-ins for simple effects; no native rebuild for a small UI behavior" convention to text-overflow marquee.
 
 ### Review — 2026-09-28 — change (Rev 14: MOD-003/MOD-004 route detail redesign — AC-125–AC-130, AC-011 revised)
 
