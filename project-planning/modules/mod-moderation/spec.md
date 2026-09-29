@@ -4,12 +4,14 @@
 **Module Name**: Moderation (Report & Block)
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-005, MOD-006
+**Last Synced from PRD Revision**: 16
+**Last Updated**: 2026-09-28
 
 ---
 
 ## Purpose
 
-Provide report submission (with category + optional note) for beta videos and user profiles, block/unblock actions, and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio.
+Provide user-profile report submission (with category + optional note), block/unblock actions, and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio. Beta-video reporting is owned by MOD-005 (the one-tap report flow, AC-139/AC-140), not MOD-009.
 
 ---
 
@@ -17,23 +19,26 @@ Provide report submission (with category + optional note) for beta videos and us
 
 App Store Guideline 1.2 requires that apps with user-generated content provide (1) a mechanism for users to flag objectionable content, (2) a mechanism to block abusive users, and (3) a developer commitment to act on objectionable content within 24 hours. Send It implements both Report and Block in Phase 1. Block is **symmetric**: when user A blocks user B, B's content is hidden from A's feed and route pages, AND A's content is hidden from B's feed and route pages. This symmetric hiding is explicitly required by App Store Guideline 1.2 and is codified in AC-082 and AC-084. Follow is also blocked: a blocked user cannot follow the blocker and vice versa. The report alerting pipeline uses a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted within the App Store Guideline 1.2 response window without having to poll Supabase Studio. Admin review and actioning of reports and user bans happens exclusively in Supabase Studio in Phase 1.
 
+**Scope clarification (Rev 16)**: AC-080 is now scoped to **user-profile reports only**. Beta-video reporting was moved to MOD-005 in PRD Revision 16: the one-tap beta-video report flow (AC-139/AC-140) writes to `beta_videos.is_reported` and the `video_reports` table (no category or note), and is entirely owned and implemented by MOD-009 does not implement the `VideoReport` table or the `report_beta_video` RPC. The `Report` table (this module) and the `VideoReport` table (MOD-005) coexist as separate tables with separate write paths and separate admin-review flows: `Report` → AC-085 email digest; `video_reports` → Studio manual review only.
+
 **Non-goals for this module:**
 - In-app admin moderation UI (Supabase Studio only for Phase 1; a lightweight in-app admin surface is held in the Phase 2 slot if App Store review requires it).
 - Automated content removal without admin review.
 - Community-driven retire/reset voting (Phase 2).
+- Beta-video reporting (owned by MOD-005 — the `VideoReport` table and `report_beta_video` RPC are MOD-005's responsibility).
 
 ---
 
 ## Related User Stories
 
-- **US-015**: Report inappropriate content
+- **US-015**: Report inappropriate content (user-profile reports only — the AC-080 category+note flow; beta-video reports are owned by MOD-005)
 - **US-016**: Block another user
 
 ---
 
 ## Acceptance Criteria Covered
 
-**AC-080**: The system shall allow a user to report a beta video or a user profile with a category (e.g., inappropriate, spam, harassment, other) and an optional note, and persist the report to the `Report` table for admin review in Supabase Studio.
+**AC-080** (revised): The system shall allow a user to report a **user profile** with a category (e.g., inappropriate, spam, harassment, other) and an optional note, and persist the report to the `Report` table for admin review in Supabase Studio. (Beta-video reporting is not handled here — it is handled by the AC-140 one-tap flow in MOD-005, which writes to `beta_videos.is_reported` + the `VideoReport` table with no category or note.)
 
 **AC-081**: The system shall show the reporter a confirmation state after a successful report submission and shall not require admin action to complete the report flow.
 
@@ -43,7 +48,7 @@ App Store Guideline 1.2 requires that apps with user-generated content provide (
 
 **AC-084**: The system shall apply block hiding symmetrically — the blocker's beta videos, sends, and profile shall also be hidden from the blocked user's feed and route pages, in addition to hiding the blocked user's content from the blocker (App Store Guideline 1.2 requirement).
 
-**AC-085**: The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window.
+**AC-085**: The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window. This digest covers the `Report` table only (user-profile reports filed via AC-080); it does not include the `VideoReport` table (beta-video one-tap reports filed via AC-140), which the admin reviews manually in Supabase Studio.
 
 ---
 
@@ -58,12 +63,15 @@ none
 ```
 Report  (App Store Guideline 1.2 requirement)
  - id, reporter_user_id (FK User),
-   target_type (beta_video | user),
+   target_type (user),
    target_id,
    category (inappropriate | spam | harassment | other),
    note (nullable),
    status (open | reviewed | actioned | dismissed),
    created_at, reviewed_at (nullable)
+   -- Phase 1: used for user-profile reports only (AC-080).
+   -- Beta-video reports are filed to the VideoReport table (owned by MOD-005)
+   --   via the AC-140 one-tap flow, not here.
 
 Block  (App Store Guideline 1.2 requirement)
  - blocker_user_id (FK User), blocked_user_id (FK User), created_at
@@ -76,12 +84,12 @@ All tables guarded by Supabase Row-Level Security policies. `Report` rows are in
 
 ## Input / Output Contract
 
-**Inputs (report submission):**
-- `target_type` (beta_video | user), `target_id`
+**Inputs (user-profile report submission):**
+- `target_type = user`, `target_id`
 - `category` (inappropriate | spam | harassment | other), `note` (optional)
 - Authenticated user session (MOD-001)
 
-**Outputs (report submission):**
+**Outputs (user-profile report submission):**
 - `Report` row inserted with `status = open`
 - Confirmation state shown to reporter immediately (no admin action required for the user-facing flow)
 
@@ -107,6 +115,7 @@ All tables guarded by Supabase Row-Level Security policies. `Report` rows are in
 
 **Outputs (scheduled report digest):**
 - Email sent to wu.tsan@northeastern.edu listing all `Report` rows where `status = open` AND `created_at < now() - interval '12 hours'`
+- Covers the `Report` table only; does not include `VideoReport` rows (AC-085)
 - Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`)
 
 ---
@@ -116,10 +125,11 @@ All tables guarded by Supabase Row-Level Security policies. `Report` rows are in
 - **Block symmetry (AC-082 + AC-084)**: Block hiding is symmetric — both directions must be enforced. When user A blocks user B: A's feed hides B's content (AC-082), AND B's feed hides A's content (AC-084). This applies to: activity feed (MOD-006), route pages (MOD-003 + MOD-005), and follow flows (MOD-006). The `Block` table stores only one direction `(blocker_user_id, blocked_user_id)`, but the MOD-006 feed RPC and any filtering logic must check both directions symmetrically.
 - **Follow prevention (AC-083)**: The follow action in MOD-006 must check the `Block` table in both directions before allowing a Follow INSERT. If any block exists between the two users, the follow must be prevented.
 - **Report confirmation (AC-081)**: The reporter sees a confirmation state immediately after submission; they do not wait for admin review. Admin review happens asynchronously in Supabase Studio.
-- **Report alerting Edge Function (AC-085)**: A scheduled Edge Function runs every 6 hours. It queries `Report` rows with `status = open` AND `created_at < now() - interval '12 hours'` and sends an email digest to wu.tsan@northeastern.edu. The Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`). The email body should list: report ID, target type, target ID, category, reporter user ID, created_at for each qualifying report.
+- **Report alerting Edge Function (AC-085)**: A scheduled Edge Function runs every 6 hours. It queries `Report` rows with `status = open` AND `created_at < now() - interval '12 hours'` and sends an email digest to wu.tsan@northeastern.edu. The Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`). The email body should list: report ID, target type, target ID, category, reporter user ID, created_at for each qualifying report. This digest covers the `Report` table only — the `VideoReport` table (beta-video one-tap reports, AC-140) is reviewed manually by the admin in Supabase Studio and is not included in the digest.
 - **Admin review in Supabase Studio**: Report status transitions (`open → reviewed | actioned | dismissed`) and user bans are performed by the admin via Supabase Studio. No in-app admin UI in Phase 1.
-- **Category enum**: `{inappropriate, spam, harassment, other}` — no free-text category. A free-text note field is optional.
-- **Target types**: Reports can be filed against `target_type = beta_video` or `target_type = user`. The `target_id` references the corresponding `BetaVideo.id` or `User.id`.
+- **Category enum (user-profile reports)**: `{inappropriate, spam, harassment, other}` — no free-text category. A free-text note field is optional.
+- **Target type (user-profile reports)**: Reports filed via this module are always `target_type = user`. The `Report` table schema retains the `target_type` column for schema forward-compatibility, but in Phase 1 all reports through this module's flow are user-profile reports.
+- **`VideoReport` table and `report_beta_video` RPC are owned by MOD-005**: MOD-009 does not implement them. The beta-video one-tap report flow (AC-139/AC-140) is entirely the responsibility of MOD-005.
 
 ---
 
@@ -129,4 +139,4 @@ All tables guarded by Supabase Row-Level Security policies. `Report` rows are in
 - Automated content removal without admin review.
 - Community-driven retire/reset voting workflow (Phase 2).
 - Blocking gyms or routes (Phase 1 only supports blocking users).
-- Reports on plain send logs (Phase 1 reports are only on beta videos and user profiles).
+- Beta-video reporting: the `VideoReport` table and the `report_beta_video` SECURITY DEFINER RPC are owned by MOD-005, not MOD-009. AC-080 in this module is user-profile-only.

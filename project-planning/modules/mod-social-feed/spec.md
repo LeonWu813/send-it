@@ -4,6 +4,8 @@
 **Module Name**: Social Graph & Feed
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-004, MOD-005
+**Last Synced from PRD Revision**: 16
+**Last Updated**: 2026-09-28
 
 ---
 
@@ -49,7 +51,7 @@ Climbers connected to the local Taiwan scene want to follow friends and strong l
 
 ## Integration Points
 
-none
+**Coordinated change with MOD-005 (Rev 16)**: The `get_activity_feed` RPC's `video_items` CTE must add a `WHERE` clause to exclude reported-and-not-dismissed beta videos from the feed (AC-141). This change ships in a MOD-006 migration ordered after the MOD-005 migration that adds the `is_reported` and `report_dismissed` columns.
 
 ---
 
@@ -84,11 +86,12 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 **Inputs (feed query):**
 - Authenticated user session (determines `follower_id`)
 - Pagination cursor / offset
-- The `SECURITY INVOKER` Postgres RPC composes: followees ∩ (not blocked by current user, not blocking current user) ∩ (public profiles OR followers_only profiles where current user is a follower)
+- The `SECURITY INVOKER` Postgres RPC composes: followees ∩ (not blocked by current user, not blocking current user) ∩ (public profiles OR followers_only profiles where current user is a follower) ∩ (beta videos not hidden by report filter)
 
 **Outputs (feed query):**
 - Chronological list of `Ascent` and `BetaVideo` rows from qualifying followed users
 - Each item includes enough data to render: route info, grade (read from Route.grade), send style/attempts or video thumbnail/url, user display name + avatar
+- Beta videos with `is_reported = true AND report_dismissed = false` are excluded (AC-141)
 
 **Inputs (like / unlike):**
 - `target_type = beta_video`, `target_id`, authenticated session
@@ -103,6 +106,7 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 ## Key Implementation Notes
 
 - **Feed RPC is a hard requirement**: The activity feed must be implemented as a `SECURITY INVOKER` Postgres RPC that composes Follow ∩ (¬Block, symmetric) ∩ privacy. A raw `SELECT` from the client on the `Ascent` or `BetaVideo` table with a WHERE clause is not permitted for the feed. RLS is the security fence; the RPC is the composition layer. This is required because implementing the full intersection purely in RLS is expensive at scale and hard to maintain.
+- **Report exclusion filter in feed RPC (AC-141 — Rev 16 coordinated change)**: The `get_activity_feed` RPC's `video_items` CTE must add `WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` to exclude reported-and-not-dismissed beta videos. This change ships in a MOD-006 migration (`20260928000002_mod_006_feed_exclude_reported.sql`) ordered after `20260928000001_mod_005_video_reports.sql` (the MOD-005 migration that adds the `is_reported` and `report_dismissed` columns). The `ascent_items` CTE needs no change — ascents are not reportable in Phase 1. The exact predicate is the canonical beta-video exclusion filter; use `WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` — never a bare `is_reported = false`, which would permanently hide admin-dismissed videos and violate AC-143.
 - **Symmetric block in feed**: The feed must exclude activity from users who have blocked the current user AND users the current user has blocked (both directions). The `Block` table is owned by MOD-009; MOD-006 reads it as a dependency.
 - **Privacy filter in feed**: Activity from users with `privacy_setting = followers_only` only appears in the feed of their followers. This check must be part of the RPC composition, not an application-layer filter after fetching.
 - **Like idempotency**: The `Reaction` unique constraint `(user_id, target_type, target_id)` enforces that each user can like each beta video at most once. The database constraint is the source of truth — do not rely on client-side checks alone.

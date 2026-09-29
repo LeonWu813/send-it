@@ -2,7 +2,7 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 14 (2026-09-28)
+**Last synced from PRD**: rev 16 (2026-09-28)
 **Last Updated**: 2026-09-28
 
 ---
@@ -253,6 +253,26 @@ When a screen needs both a raw per-item list and a summary of the same single-ow
 ### Relocated Cross-Module Entry Points Are Removed from the Old Location
 
 When an AC relocates an action entry point (e.g. moving log-send and upload-beta-video into a dedicated action row), the prior affordance must be removed from its old host so exactly one entry path exists. Two entry points to the same flow is a defect, not redundancy. Where the entry point renders in one module's screen but launches another module's flow, the button lives in the host screen and the flow stays owned by the flow's module (host-screen/owning-module split), coordinated across both engineers.
+
+### User-Owned Tables That Participate in PostgREST Joins Reference public.users
+
+User-owned `public` tables that participate in PostgREST embedded joins or feed/profile joins must reference `public.users(id)`, not `auth.users(id)`. PostgREST can only embed a related resource (`select('*, users(...)')`) when the FK targets a table in the exposed `public` schema. `public.users.id` mirrors `auth.users.id` (same UUID), so referencing `public.users(id)` is equivalent for integrity and additionally enables embedded joins. New user-owned tables should reference `public.users(id)`; when an existing table (e.g. `beta_videos`) needs an embedded user join, repoint its FK (value-preserving, no data migration).
+
+### Beta-Video Visibility Has One Canonical Exclusion Predicate
+
+A beta video is visible iff `is_reported = false OR report_dismissed = true` (hidden iff `is_reported = true AND report_dismissed = false`). This predicate must be reused verbatim by every listing path — never use a bare `is_reported = false`, which would permanently hide admin-dismissed videos and violate the re-appear-on-dismiss rule (AC-143). Concrete forms: Client (PostgREST): `.or('is_reported.eq.false,report_dismissed.eq.true')`. Server (SQL, e.g. the feed RPC): `WHERE (is_reported = FALSE OR report_dismissed = TRUE)`. Any new beta-video listing surface (route detail grid, fullscreen viewer set, activity feed RPC, future profile grid, search) must copy this exact predicate.
+
+### Cross-User Field Flips Use a Single-Purpose SECURITY DEFINER RPC
+
+When a user must set a flag on a row they do not own (e.g. a reporter flipping `is_reported` on another user's video), expose a narrow `SECURITY DEFINER` RPC (`SET search_path = public`, EXECUTE to `authenticated` only, revoked from `anon`/`public`, no `user_id` parameter) that writes exactly the required field(s) plus its own audit row, guarded by `ON CONFLICT DO NOTHING` for idempotency and by explicit checks (e.g. forbid self-action, require the row to exist). Never widen a DEFINER function to a general table-update helper, and never let it touch admin-only fields (e.g. `report_dismissed` is Studio/service-role only and must never be writable by the RPC).
+
+### Cross-Module RPC Edits Ship in the Owning Module's Migration
+
+When one module (e.g. MOD-005) adds columns another module's RPC (e.g. MOD-006 `get_activity_feed`) must reference, the RPC change is a `CREATE OR REPLACE` in the owning module's own migration, filename-dated after the prerequisite column-add migration so `supabase db reset` applies them in dependency order. Do not edit another module's owned object inside your migration.
+
+### RN-Core Marquee for Text-Overflow Scroll
+
+Simple text-scroll/marquee animations use RN core `Animated` (`translateX` loop in an `overflow:'hidden'` container, gated on measured overflow — `onLayout` or `onTextLayout` to compare text width against container width), never a native marquee/animation package. Extends the existing "prefer RN built-ins for simple effects; no native rebuild for a small UI behavior" convention to text-overflow marquee.
 
 ### TypeScript Strict Mode
 

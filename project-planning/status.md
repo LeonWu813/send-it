@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 032183555b97e208da805219b8497bc0a3a4c99d
+commit: 58f34dc9b6734cac6afe6b2f924db90ee81bd894
 timestamp: 2026-09-28T00:00:00Z
 ```
 
@@ -1187,6 +1187,29 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 **AMBIGUITY markers added:** none
 **CONFLICT markers added:** none
 **verify-sync.sh:** Skipped — trivial passthrough per skill routing rules.
+
+### Sync Report — Delta Sync — 2026-09-28
+
+**Sync type:** delta
+**PRD Revision:** 16
+**PM Update reference:** 2026-09-28 [SUBSTANTIVE] — Reel viewer UI + one-tap beta-video report flow (PRD Revision 16)
+**Files modified:**
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced bumped to 16; Purpose expanded (reel viewer + one-tap report); US-015 added to Related User Stories; AC-039 revised (swipe-down = previous-or-dismiss); AC-133 through AC-144 added to Acceptance Criteria Covered; Integration Points updated (added coordinated MOD-006 note); Data Model updated (added is_reported/report_dismissed columns to BetaVideo, new VideoReport table); Input/Output Contract updated (report inputs/outputs added, playback inputs updated for joined fields); Key Implementation Notes updated (new "Reel Viewer Overlay, Report Flow, and Data Join — Tech Lead Decisions (Rev 16)" section with migration, RPC, filter, join, TypeScript types, marquee, report-icon visibility, and MOD-006 coordination details); Out of Scope updated (user-profile reports and admin alert for video reports noted)
+- `project-planning/modules/mod-social-feed/spec.md` — Last Synced bumped to 16; Integration Points updated (coordinated change with MOD-005 added); Input/Output Contract updated (feed query outputs note report exclusion); Key Implementation Notes updated (Report exclusion filter note added for AC-141)
+- `project-planning/modules/mod-moderation/spec.md` — Last Synced bumped to 16; Purpose updated (beta-video reporting now MOD-005; scope explicitly user-profile-only); Context updated (scope clarification paragraph added, VideoReport/report_beta_video ownership noted); Related User Stories updated (US-015 scoped to user-profile only); AC-080 revised (user-profile only, note added about beta-video reporting being MOD-005); AC-085 updated (digest covers Report table only, not VideoReport); Data Model updated (Report target_type scoped to user; clarification comment added); Input/Output Contract updated (inputs/outputs scoped to user-profile; digest output updated); Key Implementation Notes updated (VideoReport/RPC ownership noted); Out of Scope updated (beta-video reporting explicitly called out)
+- `project-planning/production.md` — Last synced bumped to rev 16; Five new Shared Conventions added: "User-Owned Tables That Participate in PostgREST Joins Reference public.users", "Beta-Video Visibility Has One Canonical Exclusion Predicate", "Cross-User Field Flips Use a Single-Purpose SECURITY DEFINER RPC", "Cross-Module RPC Edits Ship in the Owning Module's Migration", "RN-Core Marquee for Text-Overflow Scroll"
+**Files created:** none
+**Module removals noted:** none
+**AMBIGUITY markers added:** none
+**AMBIGUITY markers resolved:** none
+**CONFLICT markers added:** none
+**verify-sync.sh result:** 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content.
+- Check 1 PASS: all MOD-IDs in prd.md have a Module Map entry and spec.md.
+- Check 2 PASS: all spec.md files have a corresponding Module Map entry.
+- Check 3 PASS: all Tech Stack entries from prd.md appear in production.md.
+- Check 4 FAIL (pre-existing script bug): awk range `/^## Related User Stories/,/^## /` terminates immediately on the start line because `^## ` matches `## Related User Stories`. All specs have correct Related User Stories headings and US-IDs in the right place — the script cannot extract the section content. Pre-existing bug; not introduced by this sync.
+- Check 5 PASS: no unlogged AMBIGUITY markers.
+- Check 6 FAIL (pre-existing script bug): script over-matches "phase" content from PRD sections beyond §7 (including §11 Seed Gym Table and other sections with "Phase 1" references), extracting false positives as "phase names" that are not in the Phase Plan section. Phase Plan section is correctly written with Phase 1/2/3 content. Pre-existing bug; not introduced by this sync.
 
 ## Skill Recommendations
 
