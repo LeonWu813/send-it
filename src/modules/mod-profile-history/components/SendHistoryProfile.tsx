@@ -2,12 +2,14 @@
  * SendHistoryProfile — embeddable profile history + stats surface.
  *
  * This is the public entry point for MOD-008 embedded in the Profile tab
- * (ProfileScreen, MOD-001). It wraps ProfileHistoryScreen for mounting
- * inside a ScrollView-based profile page.
+ * (ProfileScreen, MOD-001). It wraps ProfileHistoryScreen and owns the
+ * FlatList as the scroll container — the caller must NOT wrap this in a
+ * ScrollView (that nests a vertical FlatList inside a vertical ScrollView,
+ * which triggers the VirtualizedList warning and breaks scroll).
  *
- * When standalone = false (default), it is embedded inline inside
- * ProfileScreen's ScrollView. The screen itself provides top-inset handling,
- * so we do NOT apply topInset here to avoid double padding.
+ * Instead, the caller passes any content that should appear above the list
+ * via the `listHeaderComponent` prop — ProfileHistoryScreen prepends it
+ * inside the FlatList's ListHeaderComponent so everything scrolls together.
  *
  * AC-062: refetchKey — the parent ProfileScreen can bump this number after
  * a new ascent is logged (from MOD-004 LogSend flow) so stats recalculate
@@ -28,6 +30,18 @@ interface SendHistoryProfileProps {
    * Parent should bump this after any new ascent is inserted (AC-062).
    */
   refetchKey?: number;
+  /**
+   * Optional element prepended above the stats panel and filter bar inside
+   * the FlatList's ListHeaderComponent. Use this to pass profile-header
+   * content (avatar, display name, bio, action buttons) from the host screen
+   * so that it scrolls with the list rather than nesting a ScrollView.
+   */
+  listHeaderComponent?: React.ReactElement;
+  /**
+   * Optional element rendered as the FlatList's ListFooterComponent.
+   * Use this to pass footer content (e.g. Logout button) from the host screen.
+   */
+  listFooterComponent?: React.ReactElement;
 }
 
 /**
@@ -40,12 +54,16 @@ export default function SendHistoryProfile({
   userId,
   isOwnProfile,
   refetchKey = 0,
+  listHeaderComponent,
+  listFooterComponent,
 }: SendHistoryProfileProps): React.JSX.Element {
   return (
     <ProfileHistoryScreen
       userId={userId}
       isOwnProfile={isOwnProfile}
       refetchKey={refetchKey}
+      extraListHeader={listHeaderComponent}
+      extraListFooter={listFooterComponent}
     />
   );
 }

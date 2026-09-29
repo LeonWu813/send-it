@@ -50,6 +50,19 @@ interface ProfileHistoryScreenProps {
    * Parent increments it after a new ascent is logged.
    */
   refetchKey?: number;
+  /**
+   * Optional element rendered above the stats panel and filter bar inside
+   * ListHeaderComponent. Allows the host screen (MOD-001 ProfileScreen) to
+   * pass profile-header content so it scrolls with the FlatList instead of
+   * requiring a wrapping ScrollView (which would cause a VirtualizedList
+   * nesting warning).
+   */
+  extraListHeader?: React.ReactElement;
+  /**
+   * Optional element rendered as the FlatList's ListFooterComponent.
+   * Allows the host screen to inject footer content (e.g. Logout button).
+   */
+  extraListFooter?: React.ReactElement;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -58,11 +71,16 @@ export default function ProfileHistoryScreen({
   userId,
   isOwnProfile,
   refetchKey = 0,
+  extraListHeader,
+  extraListFooter,
 }: ProfileHistoryScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  // When extraListHeader is provided, the host element already applies the
+  // top-inset padding inside its container. Pass 0 so we don't double-pad.
+  const topInsetForStyles = extraListHeader !== undefined ? 0 : insets.top;
+  const styles = makeStyles(theme, topInsetForStyles);
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -142,10 +160,11 @@ export default function ProfileHistoryScreen({
     );
   }
 
-  // ── List header (stats panel + filter bar) ─────────────────────────────────
+  // ── List header (optional host content + stats panel + filter bar) ───────────
 
   const ListHeader = (
     <View>
+      {extraListHeader ?? null}
       {stats !== null && <StatsPanel stats={stats} />}
       <FilterBar
         filters={filters}
@@ -173,6 +192,7 @@ export default function ProfileHistoryScreen({
       renderItem={({ item }) => <AscentHistoryItem item={item} />}
       ListHeaderComponent={ListHeader}
       ListEmptyComponent={ListEmpty}
+      ListFooterComponent={extraListFooter ?? null}
       showsVerticalScrollIndicator={false}
     />
   );

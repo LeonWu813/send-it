@@ -679,3 +679,48 @@ None. All previously-passing items continue to pass. No new failures introduced 
 **New regressions: 0**
 
 **MOD-001 is ready for human QA sign-off.**
+
+---
+
+## Engineering Progress — Bugfix — 2026-09-29 (VirtualizedList nested in ScrollView)
+
+**Root cause confirmed**: `ProfileScreen.tsx` used a vertical `ScrollView` as its root container. Inside it, `SendHistoryProfile` → `ProfileHistoryScreen` → `FlatList`. Nesting a vertical `FlatList` inside a vertical `ScrollView` triggers the React Native VirtualizedList-in-ScrollView warning and breaks scroll behavior.
+
+**Fix applied — three files changed**:
+
+1. `src/modules/mod-profile-history/components/SendHistoryProfile.tsx`:
+   - Added `listHeaderComponent?: React.ReactElement` prop — passed through as `extraListHeader` to `ProfileHistoryScreen`.
+   - Added `listFooterComponent?: React.ReactElement` prop — passed through as `extraListFooter` to `ProfileHistoryScreen`.
+   - Updated file-level comment to document the scroll architecture contract.
+
+2. `src/modules/mod-profile-history/screens/ProfileHistoryScreen.tsx`:
+   - Added `extraListHeader?: React.ReactElement` prop — prepended before stats panel and filter bar inside `ListHeaderComponent`.
+   - Added `extraListFooter?: React.ReactElement` prop — passed as `ListFooterComponent` on the `FlatList`.
+   - Added `topInsetForStyles` calculation: when `extraListHeader` is provided, pass `0` instead of `insets.top` to `makeStyles` to avoid double top-padding (the host element already applies the inset inside `headerContainer`).
+
+3. `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`:
+   - Removed `ScrollView` as root container; replaced with `View style={styles.root}`.
+   - Removed `ScrollView` from the React Native import list.
+   - Extracted profile header JSX (avatar, display name, bio, Edit Profile button) into local `const profileHeader` with its own `headerContainer` style carrying `paddingTop: topInset + theme.spacing.md`.
+   - Extracted logout/error JSX into local `const profileFooter` with its own `footerContainer` style.
+   - Passes `listHeaderComponent={profileHeader}` and `listFooterComponent={profileFooter}` to `SendHistoryProfile`.
+   - Handles the `profile?.id` null case: renders `profileHeader` + `profileFooter` directly (no list) when the profile is not yet loaded.
+   - Removed `scrollContent` style (was `contentContainerStyle` on the `ScrollView`); replaced with `headerContainer` and `footerContainer`.
+
+**Self-check results**:
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 399 tests, 31 suites, all pass |
+| `ScrollView` removed from `ProfileScreen.tsx` imports and JSX | PASS |
+| No double top-padding: `topInsetForStyles = 0` when `extraListHeader` provided | PASS |
+| `profileHeader` carries `paddingTop: topInset + theme.spacing.md` via `headerContainer` | PASS |
+| All AC-116/117/118/119 behaviors preserved — same JSX, just restructured | PASS |
+| No inline string literals introduced | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No new dependencies outside production.md tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| Git scope — `SendHistoryProfile.tsx` and `ProfileHistoryScreen.tsx` changes are cross-module but explicitly within scope of this bugfix per coordinator invocation (pre-existing uncommitted changes to `.env.example`, `setup.md`, migrations, `tsconfig.json` are carry-overs from before this session) | ACCEPTABLE |
+
+**Result: READY FOR QA**

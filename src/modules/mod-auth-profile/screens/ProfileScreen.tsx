@@ -3,13 +3,20 @@
  *
  * Displays the current user's profile: avatar, display name, bio.
  * Exposes an Edit Profile entry point (AC-117) and a Logout control (AC-119).
- * Embeds a placeholder for the MOD-008 send history surface (AC-118).
+ * Embeds the MOD-008 send history surface (AC-118).
  *
  * AC-116: shows display name, avatar, bio.
  * AC-117: "Edit Profile" navigates to EditProfileScreen.
- * AC-118: send history section — placeholder until MOD-008 ships.
- * AC-119: Logout button at the bottom ends the session and returns to
- *          signed-out state (handled by the AuthNavigator via onAuthStateChange).
+ * AC-118: send history section via MOD-008 SendHistoryProfile.
+ * AC-119: Logout button ends the session and returns to signed-out state
+ *          (handled by the AuthNavigator via onAuthStateChange).
+ *
+ * Scroll architecture: SendHistoryProfile owns the FlatList as the sole
+ * scroll container. The profile header (avatar, name, bio, Edit Profile
+ * button) is passed as `listHeaderComponent` and the Logout button is
+ * passed as `listFooterComponent` so they scroll with the list. This
+ * avoids nesting a vertical FlatList inside a vertical ScrollView, which
+ * triggers the VirtualizedList-nested-in-ScrollView warning.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -19,7 +26,6 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -78,11 +84,11 @@ export default function ProfileScreen({
     }
   }
 
-  return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.scrollContent}
-    >
+  // ── Profile header (AC-116 + AC-117) ────────────────────────────────────────
+  // Passed as listHeaderComponent to SendHistoryProfile so it scrolls with
+  // the FlatList rather than requiring a wrapping ScrollView.
+  const profileHeader = (
+    <View style={styles.headerContainer}>
       {/* Avatar + display name + bio (AC-116) */}
       <View style={styles.header}>
         {profile?.avatar_url ? (
@@ -116,18 +122,14 @@ export default function ProfileScreen({
           {t('profile.editProfile')}
         </Text>
       </Pressable>
+    </View>
+  );
 
-      {/* Send history section (AC-118) — MOD-008 SendHistoryProfile */}
-      {profile?.id ? (
-        <View style={styles.sendHistorySection}>
-          <SendHistoryProfile
-            userId={profile.id}
-            isOwnProfile
-            refetchKey={refetchKey}
-          />
-        </View>
-      ) : null}
-
+  // ── Profile footer (AC-119) ───────────────────────────────────────────────
+  // Passed as listFooterComponent to SendHistoryProfile so the Logout button
+  // appears after the send history list and scrolls with it.
+  const profileFooter = (
+    <View style={styles.footerContainer}>
       {/* Error message */}
       {errorMessage ? (
         <Text style={styles.errorText}>{errorMessage}</Text>
@@ -151,7 +153,28 @@ export default function ProfileScreen({
           <Text style={styles.logoutButtonText}>{t('profile.logout')}</Text>
         )}
       </Pressable>
-    </ScrollView>
+    </View>
+  );
+
+  // ── Root: View (no ScrollView) — FlatList inside SendHistoryProfile scrolls ──
+  return (
+    <View style={styles.root}>
+      {profile?.id ? (
+        <SendHistoryProfile
+          userId={profile.id}
+          isOwnProfile
+          refetchKey={refetchKey}
+          listHeaderComponent={profileHeader}
+          listFooterComponent={profileFooter}
+        />
+      ) : (
+        // Profile not yet loaded — show header and footer without history list.
+        <>
+          {profileHeader}
+          {profileFooter}
+        </>
+      )}
+    </View>
   );
 }
 
@@ -162,10 +185,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    scrollContent: {
+    headerContainer: {
       paddingTop: topInset + theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.xl,
+      paddingBottom: theme.spacing.md,
     },
     header: {
       alignItems: 'center',
@@ -214,18 +237,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.primary,
     },
-    sendHistorySection: {
-      marginBottom: theme.spacing.lg,
-    },
-    sectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.sm,
-    },
-    sendHistoryPlaceholder: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
+    footerContainer: {
+      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.xl,
     },
     errorText: {
       fontSize: theme.fontSize.sm,
@@ -239,7 +254,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       borderColor: theme.colors.error,
       alignItems: 'center',
       justifyContent: 'center',
-      marginTop: theme.spacing.md,
     },
     logoutButtonPressed: {
       backgroundColor: theme.colors.surface,
