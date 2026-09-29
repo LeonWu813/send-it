@@ -299,13 +299,13 @@ export default function BetaVideoReelViewer({
 
   useEffect(() => {
     return () => {
-      player.pause();
+      try { player.pause(); } catch { /* native object may be already deallocated */ }
     };
   }, [player]);
 
   useEffect(() => {
     if (!visible) {
-      player.pause();
+      try { player.pause(); } catch { /* native object may be already deallocated */ }
     }
   }, [visible, player]);
 
@@ -332,7 +332,9 @@ export default function BetaVideoReelViewer({
         setSignedUrl(url);
         setUrlLoading(false);
         void player.replaceAsync({ uri: url }).then(() => {
-          if (!cancelled) player.play();
+          if (!cancelled) try { player.play(); } catch { /* native object may be already deallocated */ }
+        }).catch(() => {
+          if (!cancelled) setUrlError(true);
         });
       })
       .catch(() => {
@@ -369,7 +371,7 @@ export default function BetaVideoReelViewer({
     if (currentIndexRef.current > 0) {
       setCurrentIndex((prev) => prev - 1);
     } else {
-      player.pause();
+      try { player.pause(); } catch { /* native object may be already deallocated */ }
       onDismiss();
     }
   }, [player, onDismiss]);
@@ -378,7 +380,7 @@ export default function BetaVideoReelViewer({
    * AC-039: pressing the close button always dismisses the viewer from any position.
    */
   const handleDismiss = useCallback((): void => {
-    player.pause();
+    try { player.pause(); } catch { /* native object may be already deallocated */ }
     onDismiss();
   }, [player, onDismiss]);
 
@@ -434,9 +436,9 @@ export default function BetaVideoReelViewer({
         // Toggle play/pause on the current video.
         if (Math.abs(dy) < 10 && Math.abs(dx) < 10) {
           if (playerRef.current.playing) {
-            playerRef.current.pause();
+            try { playerRef.current.pause(); } catch { /* native object may be already deallocated */ }
           } else {
-            playerRef.current.play();
+            try { playerRef.current.play(); } catch { /* native object may be already deallocated */ }
           }
           return; // do not process swipe logic
         }
