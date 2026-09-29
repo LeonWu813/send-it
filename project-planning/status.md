@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-moderation
-mode: verify
-module: mod-moderation
-result: bugs-found
-commit: 02f1350eac74b851bfcd20da614dcbca0612a84f
+agent: tech-lead
+mode: review
+module: n/a
+result: success
+commit: d150e53f9f196324996eb377d91607ca9945c193
 timestamp: 2026-09-29T00:00:00Z
 ```
 
@@ -133,6 +133,21 @@ timestamp: 2026-09-29T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-09-29 — change (setup.md secret-name correction, line 140)
+
+**Context**: QA flagged a documentation error in `project-planning/setup.md`. Setup-doc correction only — no PRD change, no Doc-Sync, no source/migration changes. Advisory scope: setup.md is Tech Lead-owned.
+
+**Concerns** (must address before proceeding):
+- (resolved) `setup.md` line 140 instructed `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...`. Supabase reserves the `SUPABASE_*` prefix for its own runtime-injected variables; a secret stored under that name is unreachable from Edge Functions. Every other reference in the project (`.env.example`, `production.md`, the `report-digest` Edge Function) already uses the unprefixed `SERVICE_ROLE_KEY`. The setup doc was the lone divergent copy and would have caused a runtime failure at first invocation despite a successful `supabase secrets set`.
+
+**Recommendations**:
+- None beyond the fix. The corrected name now matches the rest of the project, so the whole codebase is consistent on `SERVICE_ROLE_KEY`.
+
+**Approved**:
+- Fix applied: line 140 now reads `supabase secrets set SERVICE_ROLE_KEY=your-service-role-key`. Single-line change, no other edits to setup.md.
+
+---
 
 ### Review — 2026-09-28 — change (Rev 16: MOD-005 reel viewer overlay + one-tap beta-video report flow — AC-133–AC-144, AC-039/AC-080 revised)
 

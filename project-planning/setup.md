@@ -12,64 +12,42 @@ Verified on this machine (2026-09-19):
 
 | Tool | Installed | Required by PRD | Status |
 |------|-----------|-----------------|--------|
-| macOS | 26.5.2 | any recent | OK |
-| Node.js | v24.14.1 | **18 LTS or 20 LTS** (Expo SDK 51+) | **Mismatch — see step 1** |
-| npm | 11.11.0 | any recent | OK |
-| git | 2.51.0 | any recent | OK |
-| Xcode (full IDE) | not installed | required for iOS builds | **Missing — see step 2** |
-| Expo CLI | not installed | required | Install in step 3 |
-| EAS CLI | not installed | required for TestFlight | Install in step 3 |
-| Supabase CLI | not installed | required for migrations + Edge Functions | Install in step 3 |
+| macOS | 26.5.2 | any recent | ✅ OK |
+| Node.js | v20.20.2 (nvm) | 18 LTS or 20 LTS | ✅ OK — `.nvmrc` pinned to 20 |
+| npm | 11.11.0 | any recent | ✅ OK |
+| git | 2.51.0 | any recent | ✅ OK |
+| Xcode (full IDE) | 26.6 (Build 17F113) | required for iOS builds | ✅ OK |
+| CocoaPods | not installed | required for Expo prebuild | ⏳ Install in step 2 |
+| EAS CLI | not installed | required for TestFlight | ⏳ Install in step 3 |
+| Supabase CLI | not installed | required for migrations + Edge Functions | ⏳ Install in step 3 |
 
 ---
 
-## 1. Node.js — install a supported LTS
+## 1. Node.js ✅ DONE
 
-Node 24 is newer than Expo SDK 51's officially supported range (Node 18 LTS or Node 20 LTS). React Native tooling and some Expo modules may fail or emit warnings on Node 24. Install Node 20 LTS and use it as the default for this project.
+Node 20 LTS (v20.20.2) is installed via nvm and set as the project default. `.nvmrc` is pinned to `20` in the project root. No action needed.
 
-Recommended: install [`fnm`](https://github.com/Schniz/fnm) or `nvm` and pin the project to Node 20.
-
+To confirm in any new shell:
 ```bash
-# fnm example
-brew install fnm
-fnm install 20
-fnm use 20
-node --version   # should print v20.x
+cd /Users/tsan/Desktop/MacBookPro/send-it
+nvm use   # picks up .nvmrc automatically
+node --version   # v20.20.2
 ```
-
-Then, from the project root, create `.nvmrc`:
-
-```bash
-echo "20" > .nvmrc
-```
-
-(This will be picked up by both `nvm` and `fnm`.)
-
-**Do not proceed until `node --version` returns a `v20.x` line inside this project directory.**
 
 ---
 
-## 2. Xcode (full IDE) + Command Line Tools
+## 2. Xcode (full IDE) + CocoaPods
 
-Only the Command Line Tools are currently installed. Building a runnable iOS app (simulator or device) requires the full Xcode IDE from the Mac App Store.
+Xcode 26.6 (Build 17F113) is installed and `xcode-select` points to Xcode.app. ✅
 
-1. Install **Xcode 15.4+** from the Mac App Store (~7 GB download).
-2. Open Xcode once and accept the license.
-3. Point the active developer directory at Xcode.app:
+**One remaining step — install CocoaPods** (required when Expo prebuild generates the native iOS project):
 
-   ```bash
-   sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-   xcodebuild -version   # should print Xcode 15.x
-   ```
+```bash
+sudo gem install cocoapods
+pod --version
+```
 
-4. Install CocoaPods (required when Expo prebuild generates native iOS project):
-
-   ```bash
-   sudo gem install cocoapods
-   pod --version
-   ```
-
-5. Install the iOS Simulator runtime from Xcode → Settings → Platforms if not present.
+Then install the iOS Simulator runtime if not already present: **Xcode → Settings → Platforms → add iOS simulator**.
 
 ---
 
@@ -88,14 +66,20 @@ supabase --version
 
 ---
 
-## 4. Apple Developer account
+## 4. Apple Developer account — DEFERRED
 
-Required before you can push to TestFlight or use APNs.
+**Decision (2026-09-19):** Defer until ready for physical device testing or TestFlight beta. The $99/year membership is not needed during simulator-based development.
 
-1. Enroll at https://developer.apple.com/programs/ (US$99/year).
-2. Note your Team ID (Settings → Membership).
-3. Create an App ID and provisioning profile — EAS Build can do this automatically in step 9, so you don't need to do it manually now.
-4. For APNs: create an **APNs Auth Key** (Keys → +). Download the `.p8` file — you can only download it once. You'll upload this to Expo in step 8.
+**Join when you hit one of these triggers:**
+- Want to test on a real iPhone
+- Ready to invite beta testers via TestFlight
+- Submitting to the App Store
+
+When you do join:
+1. Enroll at https://developer.apple.com/programs/ (US$99/year)
+2. Note your Team ID (Settings → Membership)
+3. Create an APNs Auth Key (Keys → +) — download the `.p8` once and store safely
+4. Upload the `.p8` to Expo (see step 8)
 
 ---
 
@@ -115,7 +99,7 @@ npx create-expo-app@latest . --template blank-typescript
 ## 6. Create the Supabase project
 
 1. Sign up / log in at https://app.supabase.com.
-2. Create a new project. Region: **Southeast Asia (Singapore)** — closest to Taiwan for lowest latency.
+2. Create a new project. Region: **Northeast Asia (Tokyo)** — closer to Taiwan (~2,100 km vs Singapore's ~3,200 km), lower latency for your users.
 3. Choose a strong DB password and store it in your password manager (you rarely need it — the anon and service_role keys are what the app and Edge Functions use).
 4. Wait for the project to finish provisioning (~2 min).
 5. From Settings → API, copy:
@@ -142,25 +126,22 @@ npx create-expo-app@latest . --template blank-typescript
 
 ---
 
-## 8. Expo push credentials
+## 8. Expo push credentials — PARTIALLY DEFERRED
 
-1. Sign up / log in at https://expo.dev.
-2. Create an Expo organization and a project called `send-it`.
-3. Upload your Apple APNs Auth Key (`.p8` from step 4):
+APNs credential upload requires the Apple Developer account (step 4, deferred). Do the non-APNs parts now:
 
-   ```bash
-   eas login
-   eas credentials
-   # follow prompts: iOS → Production → Push Notifications → Set up
-   ```
-
-4. Create an Expo access token (Account Settings → Access Tokens). This is used by the Edge Function to call Expo's push send API server-side.
-5. Store the access token as a Supabase secret (do NOT put it in `.env`):
+1. Sign up / log in at https://expo.dev
+2. Create an Expo organization and a project called `send-it`
+3. Create an Expo access token (Account Settings → Access Tokens)
+4. Store the access token as a Supabase secret:
 
    ```bash
    supabase secrets set EXPO_ACCESS_TOKEN=your-expo-access-token
-   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+   supabase secrets set SERVICE_ROLE_KEY=your-service-role-key
    ```
+
+**Defer until Apple Developer account is active:**
+- `eas credentials` APNs `.p8` upload (iOS → Production → Push Notifications → Set up)
 
 ---
 
