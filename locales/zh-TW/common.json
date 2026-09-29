@@ -327,6 +327,41 @@
       "updatePreferenceFailed": "更新通知偏好設定失敗，請再試一次。"
     }
   },
+  "profileHistory": {
+    "stats": {
+      "totalSends": "完攀",
+      "streak": "連續天數",
+      "streakUnit": "天",
+      "highestGrade": "最高難度",
+      "noGrade": "—",
+      "chartTitle": "各難度完攀數",
+      "chartA11y": "顯示各難度完攀次數的長條圖"
+    },
+    "filter": {
+      "gym": "岩館",
+      "grade": "難度",
+      "date": "日期",
+      "gymA11y": "依岩館篩選",
+      "gradeA11y": "依難度篩選",
+      "dateA11y": "依日期範圍篩選",
+      "clearGym": "清除岩館篩選",
+      "clearGrade": "清除難度篩選",
+      "clearDate": "清除日期篩選",
+      "allGyms": "所有岩館",
+      "allGrades": "所有難度",
+      "allTime": "所有時間",
+      "last7Days": "最近 7 天",
+      "last30Days": "最近 30 天",
+      "last90Days": "最近 90 天",
+      "thisYear": "今年"
+    },
+    "empty": "尚無完攀紀錄。",
+    "hiddenTitle": "個人頁面為私人",
+    "hiddenBody": "追蹤這位攀岩者以查看其完攀紀錄。",
+    "errors": {
+      "loadFailed": "載入紀錄失敗，請再試一次。"
+    }
+  },
   "common": {
     "loading": "載入中…",
     "retry": "重試",

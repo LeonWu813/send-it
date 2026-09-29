@@ -27,6 +27,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
+import { SendHistoryProfile } from '../../mod-profile-history';
 import { signOut } from '../auth-service';
 import { useSession } from '../hooks/useSession';
 
@@ -102,11 +103,15 @@ export default function ProfileScreen({
         </Text>
       </Pressable>
 
-      {/* Send history section (AC-118) — placeholder until MOD-008 ships */}
-      <View style={styles.sendHistorySection}>
-        <Text style={styles.sectionTitle}>{t('profile.sendHistory')}</Text>
-        {/* TODO: replace with MOD-008 SendHistoryProfile component when MOD-008 ships */}
-      </View>
+      {/* Send history section (AC-118) — MOD-008 SendHistoryProfile */}
+      {profile?.id ? (
+        <View style={styles.sendHistorySection}>
+          <SendHistoryProfile
+            userId={profile.id}
+            isOwnProfile
+          />
+        </View>
+      ) : null}
 
       {/* Error message */}
       {errorMessage ? (

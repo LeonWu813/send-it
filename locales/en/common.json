@@ -327,6 +327,41 @@
       "updatePreferenceFailed": "Failed to update notification preferences. Please try again."
     }
   },
+  "profileHistory": {
+    "stats": {
+      "totalSends": "Sends",
+      "streak": "Streak",
+      "streakUnit": "days",
+      "highestGrade": "Top Grade",
+      "noGrade": "—",
+      "chartTitle": "SENDS BY GRADE",
+      "chartA11y": "Bar chart showing send count per grade"
+    },
+    "filter": {
+      "gym": "Gym",
+      "grade": "Grade",
+      "date": "Date",
+      "gymA11y": "Filter by gym",
+      "gradeA11y": "Filter by grade",
+      "dateA11y": "Filter by date range",
+      "clearGym": "Clear gym filter",
+      "clearGrade": "Clear grade filter",
+      "clearDate": "Clear date filter",
+      "allGyms": "All Gyms",
+      "allGrades": "All Grades",
+      "allTime": "All Time",
+      "last7Days": "Last 7 Days",
+      "last30Days": "Last 30 Days",
+      "last90Days": "Last 90 Days",
+      "thisYear": "This Year"
+    },
+    "empty": "No sends recorded yet.",
+    "hiddenTitle": "Profile is Private",
+    "hiddenBody": "Follow this climber to see their send history.",
+    "errors": {
+      "loadFailed": "Failed to load history. Please try again."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",
