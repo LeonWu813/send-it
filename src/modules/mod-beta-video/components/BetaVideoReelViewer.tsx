@@ -399,16 +399,20 @@ export default function BetaVideoReelViewer({
 
   const panRef = useRef(
     PanResponder.create({
-      // Do NOT use onStartShouldSetPanResponderCapture — that was stealing
-      // every touch before child Pressables could respond (Bug 1 fix).
-      // Layer 3 (gesture-capture View) has no children, so no Pressable
-      // competition exists; we only need movement-based capture here.
-      onMoveShouldSetPanResponderCapture: (_evt, gs) =>
-        Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
+      // Do NOT capture on start — this would steal taps from Pressables in Layer 4.
+      onStartShouldSetPanResponder: () => false,
+      onStartShouldSetPanResponderCapture: () => false,
+
+      // Capture on directional vertical move — this beats native VideoView on swipes.
+      // The 10px threshold prevents accidental capture on taps or horizontal scrolls.
+      // onMoveShouldSetPanResponderCapture fires after the first move event (not on
+      // tap-start), so single taps are never captured.
       onMoveShouldSetPanResponder: (_evt, gs) =>
-        Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
+        Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onMoveShouldSetPanResponderCapture: (_evt, gs) =>
+        Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
       onPanResponderMove: (_evt, gs) => {
-        // Track finger movement for the swipe animation (Bug 3).
+        // Track finger movement for the swipe animation.
         dragY.setValue(gs.dy);
       },
       onPanResponderRelease: (_evt, gs) => {
@@ -451,6 +455,10 @@ export default function BetaVideoReelViewer({
           // Threshold not crossed — snap back to resting position.
           Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
         }
+      },
+      onPanResponderTerminate: () => {
+        // Another responder (e.g. a system gesture) took over — snap back.
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
       },
     }),
   );
@@ -593,7 +601,10 @@ export default function BetaVideoReelViewer({
               <View
                 style={[
                   styles.bottomRow,
-                  { bottom: insets.bottom + theme.spacing.md },
+                  // Use insets.bottom when available; fall back to 34px (iPhone
+                  // home indicator height) in case the SafeAreaProvider context
+                  // does not propagate a non-zero inset inside the Modal.
+                  { bottom: (insets.bottom || 34) + theme.spacing.md },
                 ]}
               >
                 {/* Left column: poster identity (AC-134) */}
