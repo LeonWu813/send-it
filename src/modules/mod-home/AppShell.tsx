@@ -34,7 +34,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -86,6 +86,11 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
    *  in a row after navigating back to the list. */
   const [selectedGymId, setSelectedGymId] = useState<string | undefined>(undefined);
   const [gymNavKey, setGymNavKey] = useState(0);
+  /** Route deep-link state: when the user taps a route card in the profile
+   *  history surface, we switch to the Gyms tab and pass the routeId to
+   *  GymNavigator so it opens the route detail screen directly. */
+  const [routeDeepLinkId, setRouteDeepLinkId] = useState<string | undefined>(undefined);
+  const [routeNavKey, setRouteNavKey] = useState(0);
   const insets = useSafeAreaInsets();
 
   function handleViewAllGyms(): void {
@@ -106,6 +111,14 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     // Open the climber's profile as a modal-style overlay (AC-123).
     setTargetUserId(userId);
   }
+
+  const handleNavigateToRoute = useCallback((routeId: string): void => {
+    // Increment routeNavKey so GymNavigator's useEffect fires on every tap,
+    // even if the same route is tapped twice after the user navigated back.
+    setRouteDeepLinkId(routeId);
+    setRouteNavKey((k) => k + 1);
+    setActiveTab('gyms');
+  }, []);
 
   function handleClimberProfileBack(): void {
     setTargetUserId(null);
@@ -131,12 +144,18 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             session={session}
             initialGymId={selectedGymId}
             gymNavKey={gymNavKey}
+            routeDeepLinkId={routeDeepLinkId}
+            routeNavKey={routeNavKey}
           />
         </View>
 
         {/* Tab 3 — Profile */}
         <View style={[styles.tabContent, activeTab !== 'profile' && styles.hidden]}>
-          <ProfileNavigator session={session} isActive={activeTab === 'profile'} />
+          <ProfileNavigator
+            session={session}
+            isActive={activeTab === 'profile'}
+            onNavigateToRoute={handleNavigateToRoute}
+          />
         </View>
       </View>
 

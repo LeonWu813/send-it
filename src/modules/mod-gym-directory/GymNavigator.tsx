@@ -31,7 +31,14 @@ type GymView =
   | { name: 'list' }
   | { name: 'detail'; gymId: string }
   | { name: 'request' }
-  | { name: 'routes'; gymId: string; gymName: string };
+  | { name: 'routes'; gymId: string; gymName: string }
+  /**
+   * Direct route deep-link view: shows RouteNavigator initialized to a specific
+   * route's detail screen without knowing the gym context upfront. gymId/gymName
+   * are empty strings; RouteDetailScreen fetches the route's own data and uses
+   * gymName for display only (the back button goes to the Gyms list).
+   */
+  | { name: 'route-direct'; routeId: string; routeNavKey: number };
 
 interface GymNavigatorProps {
   session: Session;
@@ -42,12 +49,23 @@ interface GymNavigatorProps {
    *  fires even when the same gym is tapped twice after navigating back. */
   initialGymId?: string;
   gymNavKey?: number;
+  /**
+   * When provided, the navigator opens directly on the route detail screen
+   * for this route ID. Used by AppShell when the user taps a route card in
+   * the MOD-008 profile history surface.
+   * `routeNavKey` is incremented on every tap so the useEffect fires even
+   * when the same route is tapped twice after navigating back.
+   */
+  routeDeepLinkId?: string;
+  routeNavKey?: number;
 }
 
 export default function GymNavigator({
   session,
   initialGymId,
   gymNavKey,
+  routeDeepLinkId,
+  routeNavKey,
 }: GymNavigatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
@@ -67,6 +85,15 @@ export default function GymNavigator({
       setView({ name: 'detail', gymId: initialGymId });
     }
   }, [gymNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-link to a specific route detail from MOD-008 profile history.
+  // routeNavKey is the trigger; routeDeepLinkId is the payload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (routeDeepLinkId) {
+      setView({ name: 'route-direct', routeId: routeDeepLinkId, routeNavKey: routeNavKey ?? 0 });
+    }
+  }, [routeNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function navigateToDetail(gymId: string): void {
     setView({ name: 'detail', gymId });
@@ -108,6 +135,16 @@ export default function GymNavigator({
           gymName={view.gymName}
           session={session}
           onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}
+        />
+      )}
+      {view.name === 'route-direct' && (
+        <RouteNavigator
+          gymId=""
+          gymName=""
+          session={session}
+          onBackToGym={navigateToList}
+          initialRouteId={view.routeId}
+          routeNavKey={view.routeNavKey}
         />
       )}
     </View>

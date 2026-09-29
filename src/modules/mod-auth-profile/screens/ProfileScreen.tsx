@@ -45,12 +45,18 @@ interface ProfileScreenProps {
    *  remounts on tab switch, so we increment refetchKey when isActive flips
    *  from false to true. */
   isActive?: boolean;
+  /**
+   * Callback invoked when the user taps a route card in the send history
+   * surface. Switches to the Gyms tab and opens the route detail screen.
+   */
+  onNavigateToRoute?: (routeId: string) => void;
 }
 
 export default function ProfileScreen({
   session: _session,
   onNavigateEditProfile,
   isActive = false,
+  onNavigateToRoute,
 }: ProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -166,6 +172,7 @@ export default function ProfileScreen({
           refetchKey={refetchKey}
           listHeaderComponent={profileHeader}
           listFooterComponent={profileFooter}
+          onNavigateToRoute={onNavigateToRoute}
         />
       ) : (
         // Profile not yet loaded — show header and footer without history list.

@@ -65,14 +65,19 @@ describe('StatsPanel', () => {
     expect(getAllByText('—').length).toBeGreaterThanOrEqual(1);
   });
 
-  it('renders a bar row for every grade in GRADE_ORDER', () => {
+  it('renders a bar row only for grades with count > 0', () => {
+    // VB gets count=0 (index 0), all others get count=index (> 0).
     const sends_by_grade = GRADE_ORDER.map((g, i) => ({ grade: g, count: i }));
     const stats = buildStats({ sends_by_grade });
-    const { getAllByText } = render(<StatsPanel stats={stats} />, { wrapper: Wrapper });
+    const { getAllByText, queryByText } = render(<StatsPanel stats={stats} />, { wrapper: Wrapper });
 
-    for (const grade of GRADE_ORDER) {
+    // Grades with count > 0 should appear in the chart.
+    for (const grade of GRADE_ORDER.slice(1)) {
       expect(getAllByText(grade).length).toBeGreaterThanOrEqual(1);
     }
+
+    // VB (count = 0) should NOT appear in the chart.
+    expect(queryByText('VB')).toBeNull();
   });
 
   it('renders a zero-send state without crashing (all counts 0)', () => {

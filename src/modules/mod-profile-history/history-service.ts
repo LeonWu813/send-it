@@ -151,12 +151,17 @@ export async function fetchProfileStats(userId: string): Promise<ProfileStats> {
  * A route grouped from multiple ascent rows.
  * Only routes with at least one flash or top are included.
  * `best_style` prefers flash over top; `most_recent_date` is the latest logged_at.
+ *
+ * Raw fields (grade, color_tag, section_label) are stored instead of a
+ * pre-formatted route_name string so the display component can compose the
+ * localized label using i18n at render time.
  */
 export interface RouteCard {
   route_id: string;
-  route_name: string;
-  gym_name: string;
   grade: string;
+  color_tag: string | null;
+  section_label: string | null;
+  gym_name: string;
   best_style: 'flash' | 'top';
   most_recent_date: string;
 }
@@ -182,9 +187,10 @@ export function groupToRouteCards(ascents: HistoryAscent[]): RouteCard[] {
     if (!existing) {
       map.set(a.route_id, {
         route_id:         a.route_id,
-        route_name:       a.route_name,
-        gym_name:         a.gym_name,
         grade:            a.grade,
+        color_tag:        a.color_tag ?? null,
+        section_label:    a.section_label ?? null,
+        gym_name:         a.gym_name,
         best_style:       a.style as 'flash' | 'top',
         most_recent_date: a.logged_at,
       });

@@ -18,7 +18,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
@@ -39,6 +39,14 @@ interface RouteNavigatorProps {
   gymName: string;
   session: Session;
   onBackToGym: () => void;
+  /**
+   * When provided, the navigator jumps directly to the detail view for this
+   * route on mount (or whenever routeNavKey changes). Used by the deep-link
+   * flow from MOD-008 profile history route cards.
+   */
+  initialRouteId?: string;
+  /** Increment to re-trigger the deep-link navigation even for the same route. */
+  routeNavKey?: number;
 }
 
 export default function RouteNavigator({
@@ -46,11 +54,24 @@ export default function RouteNavigator({
   gymName,
   session,
   onBackToGym,
+  initialRouteId,
+  routeNavKey,
 }: RouteNavigatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
 
   const [view, setView] = useState<RouteView>({ name: 'list' });
+
+  // Deep-link: when routeNavKey changes, navigate directly to the specified
+  // route's detail screen. Mirrors the gymNavKey pattern in GymNavigator.
+  // initialRouteId is read inside the effect but intentionally omitted from
+  // deps — routeNavKey is the trigger; initialRouteId is the payload.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialRouteId) {
+      setView({ name: 'detail', routeId: initialRouteId });
+    }
+  }, [routeNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function navigateToDetail(routeId: string): void {
     setView({ name: 'detail', routeId });

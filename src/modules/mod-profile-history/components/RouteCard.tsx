@@ -13,6 +13,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../../lib/theme';
@@ -46,8 +47,14 @@ function formatDate(isoString: string): string {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function RouteCard({ card, onPress }: RouteCardProps): React.JSX.Element {
+  const { t } = useTranslation('common');
   const { theme } = useTheme();
   const styles = makeStyles(theme);
+
+  // Build localized display name: "{grade} {LocalizedColor} ({section_label}?)"
+  const colorLabel = card.color_tag ? t(`routeCatalog.colors.${card.color_tag}`) : '';
+  const sectionSuffix = card.section_label ? ` (${card.section_label})` : '';
+  const displayName = `${card.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionSuffix}`;
 
   const styleTagText = card.best_style === 'flash' ? 'Flash' : 'Send';
   const styleTagStyle = [
@@ -68,7 +75,7 @@ export default function RouteCard({ card, onPress }: RouteCardProps): React.JSX.
       {/* Top row: route name + style tag */}
       <View style={styles.topRow}>
         <Text style={styles.routeName} numberOfLines={1}>
-          {card.route_name || card.grade}
+          {displayName}
         </Text>
         <View style={styleTagStyle}>
           <Text style={styleTagTextStyle}>{styleTagText}</Text>

@@ -196,7 +196,8 @@ export default function ProfileHistoryScreen({
             accessibilityState={{ selected: isActive }}
           >
             <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-              {tab === 'all' ? t('profileHistory.filter.allGrades') : tab}
+              {/* "All" is hardcoded by design — intentional exception to i18n */}
+              {tab === 'all' ? 'All' : tab}
             </Text>
           </Pressable>
         );

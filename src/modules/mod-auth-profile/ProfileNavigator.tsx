@@ -33,11 +33,17 @@ interface ProfileNavigatorProps {
   session: Session;
   /** True when the Profile tab is the active tab (keep-alive pattern). */
   isActive?: boolean;
+  /**
+   * Callback invoked when the user taps a route card in the profile history
+   * surface. Switches to the Gyms tab and opens the route detail screen.
+   */
+  onNavigateToRoute?: (routeId: string) => void;
 }
 
 export default function ProfileNavigator({
   session,
   isActive = false,
+  onNavigateToRoute,
 }: ProfileNavigatorProps): React.JSX.Element {
   const [view, setView] = useState<ProfileView>('profile');
   const { profile } = useSession();
@@ -61,6 +67,7 @@ export default function ProfileNavigator({
       session={session}
       isActive={isActive}
       onNavigateEditProfile={() => setView('editProfile')}
+      onNavigateToRoute={onNavigateToRoute}
     />
   );
 }

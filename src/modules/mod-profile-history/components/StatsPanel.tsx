@@ -38,7 +38,7 @@ export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Elemen
   const { theme } = useTheme();
   const styles = makeStyles(theme);
 
-  const maxCount = Math.max(...stats.sends_by_grade.map((g) => g.count), 1);
+  const maxCount = Math.max(...stats.sends_by_grade.filter((g) => g.count > 0).map((g) => g.count), 1);
 
   return (
     <View style={styles.container}>
@@ -71,7 +71,7 @@ export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Elemen
         <>
           <Text style={styles.chartTitle}>{t('profileHistory.stats.chartTitle')}</Text>
           <View style={styles.chart} accessibilityLabel={t('profileHistory.stats.chartA11y')}>
-            {stats.sends_by_grade.map(({ grade, count }) => {
+            {stats.sends_by_grade.filter(({ count }) => count > 0).map(({ grade, count }) => {
               const barWidth = Math.max(
                 BAR_MIN_WIDTH,
                 Math.round((count / maxCount) * BAR_TRACK_WIDTH),
@@ -84,7 +84,6 @@ export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Elemen
                       style={[
                         styles.bar,
                         { width: barWidth },
-                        count === 0 && styles.barEmpty,
                       ]}
                     />
                   </View>
