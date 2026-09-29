@@ -1880,3 +1880,77 @@ None. All items PASS.
 | No gold-plating | PASS |
 
 **Overall verdict: PASS. All AC-125 through AC-130 verified. No regressions on any previously passing AC. MOD-003 ready for human QA.**
+
+---
+
+## Engineering Progress — Remove leftover 完攀紀錄 inline section (2026-09-28)
+
+**Scope**: Cleanup bugfix — remove the inline ascent list section from `RouteDetailScreen` that was superseded by the AC-127 summary cards + AC-129 `SendHistoryDetailScreen`.
+
+### What was removed
+
+The `ascentSectionRoot` `<View>` block and all its contents:
+- Section title text node (`sends.ascentsSectionTitle` = "完攀紀錄")
+- `ascentsLoading` / `ascentsError` inline UI (spinner, error message + retry button, empty-state text)
+- The `myAscents.map(...)` rendering of individual ascent rows (style badge, attempts, date, display name, note, private indicator, delete button)
+
+Also removed (no longer needed):
+- `ascentsLoading` and `ascentsError` state variables
+- Loading/error management in `fetchMyAscents` callback (now a simple try/catch; failure is non-fatal — summary cards show 0)
+- `handleDeleteAscent` callback and its `Alert.alert` delete flow
+- `getStyleBadgeColor` helper function
+- `FLASH_BADGE_COLOR` constant
+- `deleteAscent` import from `send-service`
+- `AscentStyle` type import from `mod-send-logging/types`
+- `Alert` from `react-native` imports
+- All ascent-section-only styles from `makeStyles` (19 style entries removed): `ascentSectionRoot`, `ascentSectionTitle`, `ascentsLoader`, `ascentsErrorContainer`, `ascentsErrorText`, `ascentsRetryButton`, `ascentsRetryButtonText`, `ascentsEmptyText`, `ascentRow`, `ascentRowHeader`, `styleBadge`, `deleteButton`, `styleBadgeText`, `ascentMeta`, `attemptsText`, `dateText`, `usernameText`, `noteContainer`, `noteText`, `privateIndicator`
+
+### What was kept
+
+- `myAscents` state — still drives `summarizeAscents(myAscents)` for the AC-127 two-column summary cards
+- `fetchMyAscents` callback — still called on mount and after a successful log send (`handleLogSendSuccess`) to keep the summary cards up to date
+- `fetchMyAscentsForRoute`, `summarizeAscents`, `AscentWithProfile` imports — all still used
+- `ascentsLoading` / `ascentsError` removed from `fetchMyAscents` since summary card counts are best-effort (fail = show 0)
+
+### Self-check (2026-09-28)
+
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false` — 366 tests, 29 suites, 0 failures
+- PASS: No other module files touched
+- PASS: No gold-plating — strictly confined to removing the leftover section
+
+**Commit**: `fix(mod-route-catalog): remove leftover 完攀紀錄 inline section (replaced by summary cards + detail screen)` (`e4327c3`)
+
+
+---
+
+## QA Human QA — 2026-09-28
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-09-28
+**Workflow**: human QA (on-device verification by Leon)
+**Overall verdict**: PASS — no bugs found. Module complete.
+
+---
+
+### Acceptance Criteria Verified on Device
+
+| AC | Description | Result |
+|----|-------------|--------|
+| AC-125 | Route detail: large route name (26 sp), gym name subtitle beneath, "岩館" section label absent | PASS |
+| AC-126 | Route detail: added-date footer at bottom using `routeCatalog.detail.addedDate` | PASS |
+| AC-127 | Two-column send-summary cards (Sends = flash\|top count, Attempts = sum) via `summarizeAscents` | PASS |
+| AC-128 | Tapping either summary card navigates to Send History Detail screen | PASS |
+| AC-129 | Send History Detail screen: lists user's ascent records; back returns to route detail (not list) | PASS |
+| AC-130 | Two action buttons below summary ("Record Send", "Upload Beta Video"); old log-send button in ascent-section header absent | PASS |
+| AC-011 revised | Log-send form does not display or accept a route grade field | PASS |
+| AC-131 | Log-send form does not display a grade section (no read-only grade display) | PASS |
+| AC-132 | Log-send form has no "set as private" toggle; all sends are always private (`is_private = true`) | PASS |
+
+### Navigation Verification
+
+- Send History Detail back control returns to route detail view, not to the route list. PASS.
+
+### Notes
+
+No bugs found. All acceptance criteria confirmed correct on device. Module complete.
