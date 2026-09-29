@@ -1558,3 +1558,270 @@ No import in any mod-beta-video file.
 - AC-039: PASS — fullscreen portrait viewer; auto-play on open; swipe-up → next (no wrap at last); swipe-down → dismiss unconditionally; back button accessible fallback; i18n on error state; VIDEO_VIEWER_BG named constant; safe area insets applied
 
 **MOD-005 is PASS and ready for human QA.** All 10 ACs (AC-030 through AC-039) pass automated and static verification.
+
+---
+
+## QA Run 8 — Regression + Rev 16 Verification — 2026-09-28
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after Rev 16 implementation — reel viewer overlay, video report flow, data join)
+**Scope**: AC-133 through AC-144 (new), revised AC-039, plus regression check of AC-030 through AC-038
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors
+- `npx jest --testPathPattern="mod-beta-video" --passWithNoTests --watchAll=false`: PASS — 66 tests, 5 suites, 0 failures
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (includes AC-142 `.or()` predicate test, AC-140 `reportBetaVideo` RPC tests)
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (includes AC-133, AC-134, AC-139, AC-140 tests)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+- Pre-existing `act()` console warnings (Icon state updates in BetaVideoUploader, BetaVideoPlayer) — unchanged from prior QA runs; not introduced by Rev 16; all suites pass.
+
+---
+
+### Migration — `supabase/migrations/20260928000001_mod_005_video_reports.sql`
+
+**`is_reported` + `report_dismissed` columns on `beta_videos`** — PASS
+`ALTER TABLE public.beta_videos ADD COLUMN IF NOT EXISTS is_reported boolean NOT NULL DEFAULT false, ADD COLUMN IF NOT EXISTS report_dismissed boolean NOT NULL DEFAULT false;` — both columns present, correct types, NOT NULL with DEFAULT false.
+
+**FK repoint — `beta_videos_user_id_fkey` → `public.users(id)`** — PASS
+`DROP CONSTRAINT IF EXISTS beta_videos_user_id_fkey` then `ADD CONSTRAINT beta_videos_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE`. Correctly re-targets `public.users(id)` for the AC-144 PostgREST embedded join.
+
+**`video_reports` table** — PASS
+`CREATE TABLE IF NOT EXISTS public.video_reports` with `id uuid PK DEFAULT gen_random_uuid()`, `beta_video_id uuid NOT NULL REFERENCES public.beta_videos(id) ON DELETE CASCADE`, `reporter_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE`, `reported_at timestamptz NOT NULL DEFAULT now()`, `UNIQUE (beta_video_id, reporter_id)` constraint. RLS enabled. INSERT policy `reporter_id = auth.uid()`. `GRANT INSERT ON public.video_reports TO authenticated` (no SELECT/UPDATE/DELETE). Correct.
+
+**`report_beta_video` RPC** — PASS
+`CREATE OR REPLACE FUNCTION public.report_beta_video(p_beta_video_id uuid) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public`. `search_path = public` is present (required for SECURITY DEFINER). Body: derives reporter from `v_reporter_id := auth.uid()` (never accepts reporter_id as parameter). Guards: `NULL` auth → `RAISE EXCEPTION 'not_authenticated'`; video not found → `RAISE EXCEPTION 'video_not_found'`; self-report → `RAISE EXCEPTION 'cannot_report_own_video'`. Idempotent `INSERT INTO video_reports ... ON CONFLICT (beta_video_id, reporter_id) DO NOTHING`. Sets `is_reported = true` on the video. Never touches `report_dismissed`. `REVOKE EXECUTE ... FROM anon, public; GRANT EXECUTE ... TO authenticated`. All correct.
+
+---
+
+### Types — `src/modules/mod-beta-video/types.ts`
+
+**New `BetaVideo` fields** — PASS
+`is_reported: boolean`, `report_dismissed: boolean`, `display_name: string | null`, `avatar_url: string | null` all present with correct types and doc comments referencing the correct ACs.
+
+---
+
+### Service — `src/modules/mod-beta-video/beta-video-service.ts`
+
+**`fetchBetaVideosForRoute` select includes new columns** — PASS
+Select string: `'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)'` — includes all new columns and the embedded join.
+
+**Canonical exclusion predicate** — PASS
+`.or('is_reported.eq.false,report_dismissed.eq.true')` — matches the spec exactly, not a bare `is_reported = false`. Verified in test: `selectChain.or` called with `'is_reported.eq.false,report_dismissed.eq.true'`.
+
+**Embedded join** — PASS
+`users!beta_videos_user_id_fkey(display_name, avatar_url)` present in the select string. The FK repoint in the migration makes this resolvable by PostgREST.
+
+**Join flatten** — PASS
+`return (data ?? []).map((row: any) => ({ ...row, display_name: row.users?.display_name ?? null, avatar_url: row.users?.avatar_url ?? null })) as BetaVideo[]` — flattens the nested `users` object to top-level fields. No `users` object leaks to the UI. Test verifies `result[0].display_name === 'Test Climber'`.
+
+**Newest-first order preserved** — PASS
+`.order('created_at', { ascending: false })` unchanged.
+
+**`uploadBetaVideo` returns include `display_name: null, avatar_url: null`** — PASS
+`return { ...data, display_name: null, avatar_url: null } as BetaVideo` — satisfies the updated `BetaVideo` type without a second round-trip.
+
+**`reportBetaVideo` function** — PASS
+`export async function reportBetaVideo(videoId: string): Promise<void>` exists and calls `supabase.rpc('report_beta_video', { p_beta_video_id: videoId })`. Test confirms RPC called with correct argument and resolves. Error path throws a user-facing error message.
+
+---
+
+### Reel Viewer — `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`
+
+**`session: Session` prop** — PASS
+`session: Session` in `BetaVideoReelViewerProps`. Passed from `BetaVideoSection.tsx` line 331.
+
+**`onDismiss` prop (renamed from `onClose`)** — PASS
+Prop is `onDismiss: () => void`. `BetaVideoSection` wires `onDismiss={() => { setOpenIndex(null); }}`.
+
+**AC-133 — Close button** — PARTIAL PASS / SPEC NOTE
+The close button (testID `beta-video-reel-close`) is fixed at `position: 'absolute', left: 16, top: insets.top + 12` inside the gesture-capture View and renders on every video. It never unmounts or loses its tap target during swipes (the View always renders when the Modal is visible). It calls `handleDismiss` which pauses the player and invokes `onDismiss`. Functional requirements of AC-133 (persistent, always visible, always tappable) are satisfied.
+
+SPEC NOTE: AC-133 specifies the back control icon as a `<` chevron (`<` chevron). The implementation uses `Ionicons name="close"` (an X/close icon), not a chevron. The AC-133 text says "a back control (a `<` chevron)" and Tech Lead Decision 5 also says "explicit back/close control (`<` chevron)". The icon is functionally equivalent but visually deviates from the spec. This is a cosmetic spec compliance issue — not a functional regression.
+`SPEC NOTE AC-133: Input=[close button icon], Actual=[Ionicons name="close" — an X icon], Expected=[a < chevron per AC-133 spec text "a back control (a < chevron)"]. Cosmetic deviation; dismiss behavior is correct. Escalate to PM to confirm whether icon identity is a hard requirement or a cosmetic spec clarification.`
+
+**AC-134 — Poster identity overlay (Row 1)** — PASS
+Row 1: `PosterAvatar` component renders `<Image testID="reel-poster-avatar" />` when `avatar_url` is non-null; renders initial-letter placeholder circle when null (`testID="reel-poster-avatar-placeholder"`). `display_name` rendered via `{currentVideo.display_name ?? t('betaVideo.reel.anonymous')}` with `testID="reel-poster-name"`. Both avatar paths tested.
+
+**AC-134 — Gradient scrim** — FAIL
+`FAIL AC-134: Input=[poster overlay rendered over video], Actual=[no gradient scrim — the infoColumn and bottomRow use positional styling only (position: 'absolute', bottom: insets.bottom + 16); no LinearGradient or any gradient component used], Expected=[overlay rendered over a gradient scrim for legibility per AC-134: "rendered over a gradient scrim for legibility"]. The overlay text is visible only because the video content happens to be dark; no legibility guarantee is provided.`
+- File: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — no LinearGradient import or usage anywhere in the file.
+- Routing: implementation bug → Engineer (add a bottom gradient scrim, e.g. using `expo-linear-gradient`'s `LinearGradient` or a React Native `View` with a translucent gradient background behind the infoColumn content).
+
+**AC-134 / AC-136 — Row 2 content** — FAIL
+`FAIL AC-134/AC-136: Input=[viewer overlay Row 2], Actual=[Row 2 renders currentVideo.caption via MarqueeText — caption text, not route/gym info], Expected=[Row 2 renders the composed string {route_name} · {gym_name} per AC-134. AC-136 requires tapping Row 2 to navigate to the route detail screen — no tap handler exists on Row 2, and route_name/gym_name are not fields on BetaVideo or props on BetaVideoReelViewer].`
+- File: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` lines 467–475 — `Row 2: caption (marquee if overflow)` renders `currentVideo.caption`, not `{route_name} · {gym_name}`.
+- `BetaVideo` type (`src/modules/mod-beta-video/types.ts`) contains no `route_name` or `gym_name` fields.
+- `BetaVideoReelViewerProps` contains no `routeName` or `gymName` or navigation callback props.
+- Routing: implementation bug → Engineer. Engineer must: (a) add `route_name` and `gym_name` to `BetaVideo` type and `fetchBetaVideosForRoute` join/select; (b) add a navigation callback prop to `BetaVideoReelViewerProps`; (c) render `{route_name} · {gym_name}` in Row 2 with a `Pressable` that calls the nav callback on tap; (d) wire the nav callback from `BetaVideoSection` / `RouteDetailScreen`.
+
+**AC-135 — Row 1 tap is a no-op in Phase 1** — PASS
+The poster row (Row 1) has no `onPress` handler; it is a plain `View`, not a `Pressable`. Tapping it is a no-op. Correct per AC-135.
+
+**AC-136 — Row 2 tapping navigates to route detail** — FAIL
+See AC-134/AC-136 failure above. No navigation is implemented for Row 2.
+
+**AC-137 — Marquee** — PARTIAL PASS (wrong content)
+The `MarqueeText` component itself is correctly implemented: pure-JS `Animated.loop` with `translateX`, gated on `onTextLayout` measured text width vs container width, no new native package. However, the marquee is applied to `caption` in Row 2, not to `{route_name} · {gym_name}` as required by AC-137 (which says "When the Row 2 text is wider than its container, the viewer shall auto-scroll it with a marquee"). The marquee mechanism is correct but applied to the wrong content. This is subsumed by the AC-134/AC-136 bug above.
+
+**AC-138 — Right sidebar — exactly two icons** — PASS
+Right sidebar renders: (1) like icon (`heart-outline`, placeholder count `0`, not tappable — `testID="reel-like-button"`) and (2) report button (`flag-outline` / `flag`, `testID="reel-report-button"`) when visible. No share, download, comment, three-dot-menu, or other icons. No bottom comment bar. Exactly two action icons. Correct.
+
+**AC-139 — Report button visibility** — PASS
+`showReportButton = !isOwnVideo && !isDismissed` where `isOwnVideo = currentVideo.user_id === session.user.id` and `isDismissed = currentVideo.report_dismissed`. Both conditions correctly evaluated. Tests confirm: report button present for another user's video; absent for own video; absent when `report_dismissed = true`.
+
+**AC-139 — Report error surfaced via i18n key** — FAIL
+`FAIL AC-139/AC-140: Input=[reportBetaVideo RPC returns an error], Actual=[catch block silently discards the error with a comment "A production app would show a toast here; for now silent recovery." — betaVideo.reel.reportError is defined in both locale files but never used in the component], Expected=[on error, show betaVideo.reel.reportError i18n string per engineering self-check which listed "On error: shows betaVideo.reel.reportError i18n string (or similar)"].`
+- File: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` lines 350–353: `catch { // Error is surfaced via the button label reset... }` — `reportError` key defined at `locales/en/common.json betaVideo.reel.reportError = "Could not report. Try again."` is never called.
+- The engineering self-check in status.md Engineering Progress listed "On error: shows betaVideo.reel.reportError i18n string (or similar)" as an implemented AC-139 item, but the code does not do this.
+- Routing: implementation bug → Engineer (show the `betaVideo.reel.reportError` i18n string on catch, e.g. via local `reportError` state displayed in the sidebar or a toast).
+
+**AC-140 — Report flow** — PASS (RPC call and success state)
+`handleReport` calls `reportBetaVideo(videoId)` → `supabase.rpc('report_beta_video', { p_beta_video_id: videoId })`. On success, `reportedIds` Set updated; button label switches to `t('betaVideo.reel.reported')`; button disabled. Loading state shown via `ActivityIndicator` while in flight. All tested.
+
+**AC-039 (revised) — Swipe-down behavior** — FAIL (spec regression from QA Run 6 fix)
+`FAIL AC-039: Input=[user swipes down (dy > +50) while viewing video at currentIndex > 0], Actual=[viewer is dismissed — onDismiss called immediately, no navigation to previous video], Expected=[viewer navigates to the previous beta video per AC-039 revised text: "Swiping down shall go to the previous beta video when a previous video exists, and otherwise (when the current video is the first in the set) shall dismiss the viewer"].`
+
+The AC-039 revised spec text (PRD Revision 16, confirmed in status.md PM Updates line 18: "swipe down = previous video when a previous video exists, else dismiss") requires swipe-down → previous when `currentIndex > 0`. The current implementation (`handleDismiss` unconditionally on all swipe-downs) was introduced by QA Run 6 bug fix which misread Tech Lead Decision 3. Tech Lead Decision 3 states: "Swipe-up at the last index is a no-op... swipe-down at index 0 dismisses" — it describes one specific case (index 0) and is consistent with the AC-039 spec text; it does not mandate always-dismiss behavior for all swipe-downs.
+
+The original implementation removed in QA Run 6 (`goToPrevOrClose` returning `prev - 1` when `prev > 0`, dismissing at `prev === 0`) was spec-compliant. The QA Run 6 fix broke spec compliance.
+
+- File: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` lines 307–321 and 337–339.
+- Routing: implementation bug → Engineer (restore the previous/dismiss split on swipe-down: `dy > SWIPE_THRESHOLD && currentIndex > 0` → go to previous; `dy > SWIPE_THRESHOLD && currentIndex === 0` → dismiss).
+
+**Overlay `pointerEvents="box-none"`** — PASS (architecture satisfies intent)
+The gesture-capture View (`StyleSheet.absoluteFill` with `panHandlers`) absorbs touch events as the gesture layer. Pressable children (close button, report button) remain independently tappable because they are Pressable descendants — Pressable components handle their own touch events regardless of parent gesture capture. The architecture comment mentions `pointerEvents="box-none"` as a description of the overlay pattern, but the actual implementation (gesture View → Pressable children) achieves the same result without needing explicit `box-none`. No functional gap.
+
+---
+
+### i18n Verification
+
+**`locales/en/common.json` — `betaVideo.reel.*` keys** — PASS
+Keys present: `close`, `like`, `report`, `reported`, `reportError`, `anonymous`. All six keys confirmed.
+
+**`locales/zh-TW/common.json` — `betaVideo.reel.*` keys** — PASS
+Same six keys present with Traditional Chinese values: `關閉`, `按讚`, `檢舉`, `已回報`, `回報失敗，請再試一次`, `匿名`. Correct.
+
+**`betaVideo.reel.reportError` — unused in component** — see FAIL under AC-139 above.
+
+---
+
+### Regression Check — AC-030 through AC-038
+
+**AC-030** — PASS (unaffected)
+`validateDuration()` in `BetaVideoUploader.tsx` unchanged. `MAX_DURATION_SECONDS = 60`.
+
+**AC-031** — PASS (unaffected)
+Phase 1 placeholder thumbnail unchanged. Single `storage.upload` call. `thumbnail_url = videoPath`.
+
+**AC-032** — PASS (unaffected)
+`route_id` threading from `BetaVideoSection` → `BetaVideoUploader` → `uploadBetaVideo` unchanged. DB insert still includes `route_id`.
+
+**AC-033** — PASS (unaffected)
+In-app playback via grid + fullscreen viewer. No external links.
+
+**AC-034** — PASS (unaffected)
+`BetaVideoPlayer` component exposure unchanged. MOD-006 integration is a pre-existing dependency gap.
+
+**AC-035** — PASS (unaffected)
+`validateVideoFormat()` unchanged. MP4 and MOV accepted; HEVC, AVI, MKV rejected.
+
+**AC-036** — PASS (unaffected)
+Progress overlay in `BetaVideoUploader` unchanged. AC-130 mode progress modal in `BetaVideoSection` unchanged.
+
+**AC-037** — PASS (unaffected)
+`BetaVideoSection` entry point unchanged.
+
+**AC-038** — PASS (unaffected from QA Run 7 baseline)
+Three-column FlatList grid. All colors themed. Camera icon overlay. No VideoView per cell. `betaVideo.grid.openVideo` i18n key present.
+
+---
+
+### AC-141 / AC-142 / AC-143 Verification
+
+**AC-141/AC-142 — Visibility filter** — PASS
+`fetchBetaVideosForRoute` uses `.or('is_reported.eq.false,report_dismissed.eq.true')` — reported-undismissed rows excluded from the query result. Server-side enforcement (RLS + RPC) prevents reported videos appearing in the grid or viewer.
+
+**AC-143 — Admin-dismissed videos visible again** — PASS
+The `.or('is_reported.eq.false,report_dismissed.eq.true')` predicate returns rows where `report_dismissed = true` even when `is_reported = true`, re-surfacing admin-dismissed videos on the next fetch. Report button hidden for these videos via `isDismissed = currentVideo.report_dismissed` check.
+
+**AC-144 — Poster identity join** — PASS
+`fetchBetaVideosForRoute` select includes `users!beta_videos_user_id_fkey(display_name, avatar_url)`. Join result flattened to top-level. `uploadBetaVideo` returns `display_name: null, avatar_url: null` to satisfy the type.
+
+---
+
+### Integration Checks
+
+**Cross-module import rule** — PASS
+`RouteDetailScreen.tsx` imports only `BetaVideoSection` from `mod-beta-video`. No internal components imported from MOD-005 outside its directory.
+
+**Supabase client singleton** — PASS
+`beta-video-service.ts` imports from `../../lib/supabase`; no `createClient()` calls; no `service_role` key in client code.
+
+**No new native packages** — PASS
+No `react-native-gesture-handler`, no `expo-screen-orientation`, no `react-native-marquee`, no new native dependency. MarqueeText uses pure-JS `Animated`. PanResponder from RN core.
+
+**No expo-screen-orientation** — PASS
+No import in any mod-beta-video file.
+
+**No `enterFullscreen()`** — PASS
+`VideoView` used without `enterFullscreen()`. Player fills modal via `{ width: '100%', height: '100%' }`.
+
+**Safe area insets** — PASS
+`useSafeAreaInsets()` applied to close button (`top: insets.top + 12`) and bottom row (`bottom: insets.bottom + 16`).
+
+**No hardcoded hex in new Rev 16 code** — PASS
+`VIDEO_VIEWER_BG = '#000000'` is a named module-level constant (not an inline literal). `PosterAvatar` uses `theme.colors.overlay` and `theme.colors.textInverse`. No inline hex values.
+
+**Gold-plating check** — PASS (with one note)
+Implementation is confined to the specified ACs. No features beyond the spec. Note: `BetaVideoSection` also implements AC-130 (`onRegisterUploadLauncher` prop) which is referenced in the spec Integration Points — not gold-plating.
+
+---
+
+### Open Items (carried forward)
+
+**SPEC DOC GAP — production.md Video Pipeline Convention not yet updated for PRD Rev 12** (Doc-Sync task, not a blocker)
+**SPEC DOC GAP — Library choice not confirmed in spec.md** (Doc-Sync task, not a blocker — carried from QA Run 4)
+
+---
+
+### Verdict
+
+**BUGS FOUND** — 4 implementation bugs, 1 spec clarification needed.
+
+**Implementation bugs (all → Engineer):**
+
+1. **AC-134 / AC-136 — Row 2 renders caption instead of `{route_name} · {gym_name}`**
+   `BetaVideoReelViewer.tsx` lines 467–475: Row 2 displays `currentVideo.caption` via `MarqueeText`. The spec requires `{route_name} · {gym_name}`. Neither `route_name` nor `gym_name` exists in `BetaVideo` type or viewer props. AC-136 (tap Row 2 → navigate to route detail) is also unimplemented. This is a substantial gap requiring data model, service, and component changes.
+
+2. **AC-134 — No gradient scrim behind overlay**
+   `BetaVideoReelViewer.tsx`: no `LinearGradient` or equivalent. AC-134 requires "rendered over a gradient scrim for legibility."
+
+3. **AC-039 — Swipe-down always dismisses instead of go-to-previous at index > 0**
+   Current: `handleDismiss` called unconditionally. Spec: swipe-down at `index > 0` → previous; swipe-down at `index === 0` → dismiss. The AC-039 revised text is unambiguous. This is a regression introduced by the QA Run 6 fix which misread Tech Lead Decision 3.
+
+4. **AC-139 — `betaVideo.reel.reportError` i18n key defined but never surfaced on RPC error**
+   `BetaVideoReelViewer.tsx` lines 350–353: catch block silently discards errors. The engineering self-check claimed error surfacing as an implemented item but the code does not display the `reportError` string.
+
+**Spec clarification (escalate to PM):**
+
+5. **AC-133 — Close button icon: `close` (X) vs `<` chevron**
+   `BetaVideoReelViewer.tsx` line 432 uses `Ionicons name="close"`. AC-133 spec text specifies "a back control (a `<` chevron)". This may be an intentional design choice (X vs chevron for a video reel) or a spec gap. PM to confirm whether the X icon is acceptable or a `<` chevron is required.
+
+**Previously passing ACs — regression status:**
+- AC-030, AC-031, AC-032, AC-033, AC-034, AC-035, AC-036, AC-037, AC-038: all PASS (no regressions)
+- AC-140, AC-141, AC-142, AC-143, AC-144: PASS
+- AC-133 (functional): PASS; icon identity: spec clarification pending
+- AC-134 (Row 1, avatar): PASS; (gradient scrim): FAIL; (Row 2): FAIL
+- AC-135: PASS
+- AC-136: FAIL (subsumed by AC-134/Row 2 bug)
+- AC-137 (marquee mechanism): PASS; (wrong content — caption instead of route/gym): FAIL (subsumed by AC-134 bug)
+- AC-138: PASS
+- AC-139 (visibility): PASS; (error surfacing): FAIL
+- AC-039 (revised swipe-down): FAIL
+
+Next: `claude --agent engineer-mod-beta-video` to fix the 4 reported bugs. Separately: `claude --agent pm` to clarify AC-133 icon identity (X vs chevron).
