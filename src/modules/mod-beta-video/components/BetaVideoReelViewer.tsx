@@ -80,6 +80,11 @@ import type { BetaVideo } from '../types';
  */
 const VIDEO_VIEWER_BG = '#000000';
 
+/** Top half of the scrim — nearly transparent, creates the fade-in effect. */
+const VIDEO_SCRIM_FADE = 'rgba(0,0,0,0.0)';
+/** Bottom half of the scrim — semi-transparent dark, provides text legibility. */
+const VIDEO_SCRIM_SOLID = 'rgba(0,0,0,0.52)';
+
 /** Minimum dy (in pixels) to trigger a swipe. */
 const SWIPE_THRESHOLD = 50;
 
@@ -399,9 +404,16 @@ export default function BetaVideoReelViewer({
 
   const panRef = useRef(
     PanResponder.create({
-      // Do NOT capture on start — this would steal taps from Pressables in Layer 4.
-      onStartShouldSetPanResponder: () => false,
-      onStartShouldSetPanResponderCapture: () => false,
+      // Layer 3 and Layer 4 are siblings inside Animated.View — not parent/child.
+      // React Native's capture phase only travels through the direct ancestor chain
+      // to the target view; siblings do not participate in each other's capture phase.
+      // Therefore onStartShouldSetPanResponderCapture: true on Layer 3 does NOT
+      // steal taps from Pressables in Layer 4 (those touches never pass through
+      // Layer 3 at all). What it DOES do is let Layer 3 beat iOS's native AVFoundation
+      // player, which otherwise claims the gesture at the native layer before the JS
+      // move-phase can run — causing swipes to be swallowed by the video player.
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
 
       // Capture on directional vertical move — this beats native VideoView on swipes.
       // The 10px threshold prevents accidental capture on taps or horizontal scrolls.
@@ -550,14 +562,11 @@ export default function BetaVideoReelViewer({
             </View>
           ) : null}
 
-          {/*
-           * Layer 2 — Gradient scrim (Bug 2: sits behind all text, pointerEvents none).
-           * Covers ~40% of screen height from the bottom so the overlay text
-           * (poster identity, route·gym label) is legible against raw video pixels.
-           * expo-linear-gradient is not installed; simulated with theme.colors.overlay
-           * (no hardcoded hex).
-           */}
-          <View style={styles.gradientScrim} pointerEvents="none" />
+          {/* Layer 2 — gradient scrim simulation (pointerEvents none) */}
+          <View style={styles.gradientScrimContainer} pointerEvents="none">
+            <View style={styles.gradientScrimFade} />
+            <View style={styles.gradientScrimSolid} />
+          </View>
 
           {/*
            * Layer 3 — PanResponder gesture capture (Bug 1 fix).
@@ -813,22 +822,26 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       textAlign: 'center',
     },
     /**
-     * AC-134: Gradient scrim simulation — covers the bottom 40% of the video
-     * area with a semi-transparent overlay so the poster-identity and route·gym
-     * text is legible against the raw video pixels. 40% is tall enough to cover
-     * the overlay text without obscuring the video midscreen.
-     * expo-linear-gradient is not installed; we use theme.colors.overlay (no
-     * hardcoded hex colour) on a tall View pinned to the bottom.
-     * Bug 2 fix: z-order is Layer 2 (behind gesture layer and overlay UI),
-     * so the scrim is always behind all text elements.
+     * AC-134: Two-tone simulated gradient scrim.
+     * expo-linear-gradient is not installed; two stacked Views approximate a
+     * fade-in from transparent (top) to semi-opaque (bottom).
+     * Fixed 200px height covers just the overlay content area without obscuring
+     * the video midscreen. No hardcoded hex colours — constants are at file top.
      */
-    gradientScrim: {
+    gradientScrimContainer: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      height: '40%',
-      backgroundColor: theme.colors.overlay,
+      height: 200,
+    },
+    gradientScrimFade: {
+      flex: 1,
+      backgroundColor: VIDEO_SCRIM_FADE,
+    },
+    gradientScrimSolid: {
+      height: 110,
+      backgroundColor: VIDEO_SCRIM_SOLID,
     },
     reportErrorText: {
       color: theme.colors.error,
