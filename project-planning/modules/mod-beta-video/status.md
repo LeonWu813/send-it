@@ -2134,3 +2134,30 @@ All `betaVideo.reel.*` keys present in both locales: `close`, `like`, `report`, 
 - AC-144: PASS — poster display_name + avatar_url joined and flattened to top-level fields
 
 **MOD-005 is PASS and ready for human QA.**
+
+---
+
+## QA Run 9 — Human QA — PASS — 2026-09-28
+
+**QA agent**: qa-mod-beta-video
+**Mode**: human-qa
+**Date**: 2026-09-28
+
+All acceptance criteria confirmed passing on device by the user (2026-09-28):
+
+- **AC-038** — PASS: 3-column grid renders correctly on device
+- **AC-039 revised** — PASS: swipe up → next video; swipe down → previous video or dismiss; slide animation present
+- **AC-133** — PASS: chevron-back close button (top-left) tappable and functional
+- **AC-134** — PASS: poster avatar + display name overlay and route · gym label render correctly
+- **AC-135** — PASS: like placeholder (heart icon + count 0) present; not tappable
+- **AC-136** — PASS: route label tappable; no-op on route detail screen (prop absent)
+- **AC-137** — PASS: marquee animation activates on overflow
+- **AC-138–AC-140** — PASS: report button hidden on own videos and dismissed videos; tap → reported state
+- **AC-141–AC-144** — PASS: full report flow confirmed; visibility filter working; migrations applied to Supabase
+- **Tap-to-pause/resume** — PASS: video pauses and resumes on tap
+- **Upload flow (regression)** — PASS: upload flow unchanged; no regression
+- **player.pause() crash** — RESOLVED: ERR_NATIVE_SHARED_OBJECT_NOT_FOUND no longer occurs
+
+### Verdict
+
+**Human QA — PASS. Module complete.**
