@@ -31,10 +31,13 @@ type ProfileView = 'profile' | 'editProfile';
 interface ProfileNavigatorProps {
   /** The active Supabase session, threaded from AppShell. */
   session: Session;
+  /** True when the Profile tab is the active tab (keep-alive pattern). */
+  isActive?: boolean;
 }
 
 export default function ProfileNavigator({
   session,
+  isActive = false,
 }: ProfileNavigatorProps): React.JSX.Element {
   const [view, setView] = useState<ProfileView>('profile');
   const { profile } = useSession();
@@ -56,6 +59,7 @@ export default function ProfileNavigator({
   return (
     <ProfileScreen
       session={session}
+      isActive={isActive}
       onNavigateEditProfile={() => setView('editProfile')}
     />
   );

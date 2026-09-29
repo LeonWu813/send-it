@@ -51,9 +51,14 @@ export default function AscentHistoryItem({
   const { theme } = useTheme();
   const styles = makeStyles(theme);
 
-  const routeLabel = item.section_label
-    ? `${item.grade} (${item.section_label})`
-    : item.grade;
+  // Build route label per production.md Route Display Name Format:
+  // "{grade} {LocalizedColor}" with section in parentheses when present.
+  // e.g. "V3 Blue (Cave)"
+  const colorLabel = item.color_tag
+    ? t(`routeCatalog.colors.${item.color_tag}`)
+    : '';
+  const sectionLabel = item.section_label ? ` (${item.section_label})` : '';
+  const routeLabel = `${item.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionLabel}`;
 
   return (
     <View style={styles.row} accessibilityRole="none">

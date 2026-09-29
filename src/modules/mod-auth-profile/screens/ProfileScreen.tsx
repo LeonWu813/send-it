@@ -13,7 +13,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -34,11 +34,17 @@ import { useSession } from '../hooks/useSession';
 interface ProfileScreenProps {
   session: Session;
   onNavigateEditProfile: () => void;
+  /** True when the Profile tab is the active tab. Used to trigger refetch on
+   *  tab focus (AC-062) — the keep-alive pattern means the component never
+   *  remounts on tab switch, so we increment refetchKey when isActive flips
+   *  from false to true. */
+  isActive?: boolean;
 }
 
 export default function ProfileScreen({
   session: _session,
   onNavigateEditProfile,
+  isActive = false,
 }: ProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -48,6 +54,14 @@ export default function ProfileScreen({
   const { profile } = useSession();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // AC-062: Increment refetchKey each time the Profile tab becomes active so
+  // SendHistoryProfile re-fetches stats even though the component never
+  // unmounts (keep-alive display:none pattern in AppShell).
+  const [refetchKey, setRefetchKey] = useState(0);
+  useEffect(() => {
+    if (isActive) setRefetchKey((prev) => prev + 1);
+  }, [isActive]);
 
   async function handleLogout(): Promise<void> {
     setIsSigningOut(true);
@@ -109,6 +123,7 @@ export default function ProfileScreen({
           <SendHistoryProfile
             userId={profile.id}
             isOwnProfile
+            refetchKey={refetchKey}
           />
         </View>
       ) : null}

@@ -136,7 +136,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
 
         {/* Tab 3 — Profile */}
         <View style={[styles.tabContent, activeTab !== 'profile' && styles.hidden]}>
-          <ProfileNavigator session={session} />
+          <ProfileNavigator session={session} isActive={activeTab === 'profile'} />
         </View>
       </View>
 

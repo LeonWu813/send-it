@@ -93,11 +93,12 @@ export default function ProfileHistoryScreen({
       // Determine visibility: if privacy blocked, the RPC returns zeros.
       // We detect this by checking: non-own profile + zero total sends + empty history.
       // The server enforces privacy — if access is denied, RPC returns zero rows.
+      // A non-follower of a followers_only profile cannot be distinguished from a
+      // profile with genuinely zero sends by the row count alone; we treat this
+      // case as hidden so the client renders the privacy banner rather than an
+      // empty list (AC-064). Own-profile views never hit this branch.
       if (!isOwnProfile && statsData.total_sends === 0 && historyData.length === 0) {
-        // Ambiguous: could be hidden OR genuinely empty. We show the data as-is.
-        // The privacy banner is shown by the parent (ProfileScreen) based on
-        // the user's privacy_setting — MOD-008 just renders what the server returns.
-        setVisibility('visible');
+        setVisibility('hidden');
       } else {
         setVisibility('visible');
       }
@@ -128,6 +129,15 @@ export default function ProfileHistoryScreen({
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{errorMessage}</Text>
+      </View>
+    );
+  }
+
+  if (visibility === 'hidden') {
+    return (
+      <View style={styles.hiddenContainer}>
+        <Text style={styles.hiddenTitle}>{t('profileHistory.hiddenTitle')}</Text>
+        <Text style={styles.hiddenBody}>{t('profileHistory.hiddenBody')}</Text>
       </View>
     );
   }
@@ -206,6 +216,26 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: theme.spacing.lg,
     },
     emptyText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+    },
+    hiddenContainer: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: theme.colors.background,
+      paddingTop: topInset + theme.spacing.md,
+      paddingHorizontal: theme.spacing.xl,
+    },
+    hiddenTitle: {
+      fontSize: theme.fontSize.lg,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: theme.spacing.sm,
+    },
+    hiddenBody: {
       fontSize: theme.fontSize.md,
       color: theme.colors.textSecondary,
       textAlign: 'center',
