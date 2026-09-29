@@ -31,10 +31,10 @@ interface SendHistoryProfileProps {
    */
   refetchKey?: number;
   /**
-   * Optional element prepended above the stats panel and filter bar inside
-   * the FlatList's ListHeaderComponent. Use this to pass profile-header
-   * content (avatar, display name, bio, action buttons) from the host screen
-   * so that it scrolls with the list rather than nesting a ScrollView.
+   * Optional element prepended above the stats panel inside the FlatList's
+   * ListHeaderComponent. Use this to pass profile-header content (avatar,
+   * display name, bio, action buttons) from the host screen so that it
+   * scrolls with the list rather than nesting a ScrollView.
    */
   listHeaderComponent?: React.ReactElement;
   /**
@@ -42,6 +42,11 @@ interface SendHistoryProfileProps {
    * Use this to pass footer content (e.g. Logout button) from the host screen.
    */
   listFooterComponent?: React.ReactElement;
+  /**
+   * Optional callback invoked when the user taps a route card.
+   * Phase 1 no-op: pass undefined from the host screen.
+   */
+  onNavigateToRoute?: (routeId: string) => void;
 }
 
 /**
@@ -56,6 +61,7 @@ export default function SendHistoryProfile({
   refetchKey = 0,
   listHeaderComponent,
   listFooterComponent,
+  onNavigateToRoute,
 }: SendHistoryProfileProps): React.JSX.Element {
   return (
     <ProfileHistoryScreen
@@ -64,6 +70,7 @@ export default function SendHistoryProfile({
       refetchKey={refetchKey}
       extraListHeader={listHeaderComponent}
       extraListFooter={listFooterComponent}
+      onNavigateToRoute={onNavigateToRoute}
     />
   );
 }

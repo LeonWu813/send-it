@@ -52,8 +52,8 @@ export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Elemen
         <View style={styles.statDivider} />
 
         <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.current_streak}</Text>
-          <Text style={styles.statLabel}>{t('profileHistory.stats.streak')}</Text>
+          <Text style={styles.statValue}>{stats.accumulated_days}</Text>
+          <Text style={styles.statLabel}>{t('profileHistory.stats.accumulatedDays')}</Text>
         </View>
 
         <View style={styles.statDivider} />
@@ -66,31 +66,35 @@ export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Elemen
         </View>
       </View>
 
-      {/* ── Bar chart ────────────────────────────────────────────────────── */}
-      <Text style={styles.chartTitle}>{t('profileHistory.stats.chartTitle')}</Text>
-      <View style={styles.chart} accessibilityLabel={t('profileHistory.stats.chartA11y')}>
-        {stats.sends_by_grade.map(({ grade, count }) => {
-          const barWidth = Math.max(
-            BAR_MIN_WIDTH,
-            Math.round((count / maxCount) * BAR_TRACK_WIDTH),
-          );
-          return (
-            <View key={grade} style={styles.barRow}>
-              <Text style={styles.gradeLabel}>{grade}</Text>
-              <View style={styles.barTrack}>
-                <View
-                  style={[
-                    styles.bar,
-                    { width: barWidth },
-                    count === 0 && styles.barEmpty,
-                  ]}
-                />
-              </View>
-              <Text style={styles.barCount}>{count}</Text>
-            </View>
-          );
-        })}
-      </View>
+      {/* ── Bar chart — only shown when there are sends ─────────────────── */}
+      {stats.total_sends > 0 && (
+        <>
+          <Text style={styles.chartTitle}>{t('profileHistory.stats.chartTitle')}</Text>
+          <View style={styles.chart} accessibilityLabel={t('profileHistory.stats.chartA11y')}>
+            {stats.sends_by_grade.map(({ grade, count }) => {
+              const barWidth = Math.max(
+                BAR_MIN_WIDTH,
+                Math.round((count / maxCount) * BAR_TRACK_WIDTH),
+              );
+              return (
+                <View key={grade} style={styles.barRow}>
+                  <Text style={styles.gradeLabel}>{grade}</Text>
+                  <View style={styles.barTrack}>
+                    <View
+                      style={[
+                        styles.bar,
+                        { width: barWidth },
+                        count === 0 && styles.barEmpty,
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.barCount}>{count}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      )}
     </View>
   );
 }

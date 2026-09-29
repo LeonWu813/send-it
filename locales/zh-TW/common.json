@@ -330,8 +330,7 @@
   "profileHistory": {
     "stats": {
       "totalSends": "完攀",
-      "streak": "連續天數",
-      "streakUnit": "天",
+      "accumulatedDays": "累積天數",
       "highestGrade": "最高難度",
       "noGrade": "—",
       "chartTitle": "各難度完攀數",

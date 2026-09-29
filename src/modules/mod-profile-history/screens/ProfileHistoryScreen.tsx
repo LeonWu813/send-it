@@ -1,12 +1,15 @@
 /**
  * ProfileHistoryScreen — send history + stats for a user profile.
  *
- * AC-060: filterable send history (gym, grade, date range).
- * AC-061: stats panel (total sends, sends-by-grade bar chart, streak, highest grade).
+ * AC-061: stats panel (total sends, sends-by-grade bar chart, accumulated days,
+ *         highest grade). Bar chart hidden when total_sends = 0.
  * AC-062: stats recalculate immediately after a new send is logged (via
- *          refetchKey prop — parent bumps it when MOD-004 logs a new ascent).
+ *         refetchKey prop — parent bumps it when MOD-004 logs a new ascent).
  * AC-064: followers_only privacy gate (server-side via RPC; client shows
- *          hidden state when RPC returns zero rows due to privacy).
+ *         hidden state when RPC returns zero rows due to privacy).
+ *
+ * History is grouped into route cards by route_id. Grade tabs above the list
+ * allow filtering by grade. FilterBar has been removed.
  *
  * Can render for the current user (own profile) or another user (other profile
  * subject to privacy). The `isOwnProfile` flag skips privacy checks for self.
@@ -19,6 +22,8 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -26,17 +31,16 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
-import AscentHistoryItem from '../components/AscentHistoryItem';
-import FilterBar from '../components/FilterBar';
+import RouteCard from '../components/RouteCard';
 import StatsPanel from '../components/StatsPanel';
 import {
-  fetchHistoryGyms,
   fetchProfileHistory,
   fetchProfileStats,
+  groupToRouteCards,
 } from '../history-service';
-import type { GymSummary } from '../history-service';
-import type { HistoryAscent, HistoryFilters, HistoryVisibility, ProfileStats } from '../types';
-import { EMPTY_FILTERS } from '../types';
+import type { RouteCard as RouteCardData } from '../history-service';
+import type { HistoryAscent, HistoryVisibility, ProfileStats } from '../types';
+import { GRADE_ORDER } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -51,7 +55,7 @@ interface ProfileHistoryScreenProps {
    */
   refetchKey?: number;
   /**
-   * Optional element rendered above the stats panel and filter bar inside
+   * Optional element rendered above the stats panel inside
    * ListHeaderComponent. Allows the host screen (MOD-001 ProfileScreen) to
    * pass profile-header content so it scrolls with the FlatList instead of
    * requiring a wrapping ScrollView (which would cause a VirtualizedList
@@ -63,6 +67,11 @@ interface ProfileHistoryScreenProps {
    * Allows the host screen to inject footer content (e.g. Logout button).
    */
   extraListFooter?: React.ReactElement;
+  /**
+   * Optional callback invoked when the user taps a route card.
+   * Phase 1 no-op: pass undefined from the host screen.
+   */
+  onNavigateToRoute?: (routeId: string) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -73,6 +82,7 @@ export default function ProfileHistoryScreen({
   refetchKey = 0,
   extraListHeader,
   extraListFooter,
+  onNavigateToRoute,
 }: ProfileHistoryScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -84,10 +94,9 @@ export default function ProfileHistoryScreen({
 
   // ── State ──────────────────────────────────────────────────────────────────
 
-  const [filters, setFilters] = useState<HistoryFilters>(EMPTY_FILTERS);
-  const [history, setHistory] = useState<HistoryAscent[]>([]);
+  const [activeGrade, setActiveGrade] = useState<string>('all');
+  const [ascents, setAscents] = useState<HistoryAscent[]>([]);
   const [stats, setStats] = useState<ProfileStats | null>(null);
-  const [gyms, setGyms] = useState<GymSummary[]>([]);
   const [visibility, setVisibility] = useState<HistoryVisibility>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -98,23 +107,16 @@ export default function ProfileHistoryScreen({
     setErrorMessage(null);
 
     try {
-      const [historyData, statsData, gymsData] = await Promise.all([
-        fetchProfileHistory(userId, filters),
+      const [historyData, statsData] = await Promise.all([
+        fetchProfileHistory(userId),
         fetchProfileStats(userId),
-        fetchHistoryGyms(userId),
       ]);
 
-      setHistory(historyData);
+      setAscents(historyData);
       setStats(statsData);
-      setGyms(gymsData);
 
       // Determine visibility: if privacy blocked, the RPC returns zeros.
       // We detect this by checking: non-own profile + zero total sends + empty history.
-      // The server enforces privacy — if access is denied, RPC returns zero rows.
-      // A non-follower of a followers_only profile cannot be distinguished from a
-      // profile with genuinely zero sends by the row count alone; we treat this
-      // case as hidden so the client renders the privacy banner rather than an
-      // empty list (AC-064). Own-profile views never hit this branch.
       if (!isOwnProfile && statsData.total_sends === 0 && historyData.length === 0) {
         setVisibility('hidden');
       } else {
@@ -126,9 +128,9 @@ export default function ProfileHistoryScreen({
       setErrorMessage(message);
       setVisibility('error');
     }
-  }, [userId, filters, isOwnProfile, t]);
+  }, [userId, isOwnProfile, t]);
 
-  // Refetch on mount, filter change, or when parent bumps refetchKey (AC-062).
+  // Refetch on mount or when parent bumps refetchKey (AC-062).
   useEffect(() => {
     void loadData();
   }, [loadData, refetchKey]);
@@ -160,20 +162,58 @@ export default function ProfileHistoryScreen({
     );
   }
 
-  // ── List header (optional host content + stats panel + filter bar) ───────────
+  // ── Grade tabs + route card data ───────────────────────────────────────────
+
+  const routeCards: RouteCardData[] = groupToRouteCards(ascents);
+
+  const uniqueGrades = [...new Set(routeCards.map((c) => c.grade))].sort(
+    (a, b) => GRADE_ORDER.indexOf(a as typeof GRADE_ORDER[number]) - GRADE_ORDER.indexOf(b as typeof GRADE_ORDER[number]),
+  );
+  const tabs = ['all', ...uniqueGrades];
+
+  const filtered: RouteCardData[] =
+    activeGrade === 'all'
+      ? routeCards
+      : routeCards.filter((c) => c.grade === activeGrade);
+
+  // ── Grade tab bar ──────────────────────────────────────────────────────────
+
+  const GradeTabBar = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.tabRow}
+      contentContainerStyle={styles.tabRowContent}
+    >
+      {tabs.map((tab) => {
+        const isActive = tab === activeGrade;
+        return (
+          <Pressable
+            key={tab}
+            style={[styles.tab, isActive && styles.tabActive]}
+            onPress={() => setActiveGrade(tab)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: isActive }}
+          >
+            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+              {tab === 'all' ? t('profileHistory.filter.allGrades') : tab}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+
+  // ── List header (optional host content + stats panel + grade tabs) ───────────
 
   const ListHeader = (
     <View>
       {extraListHeader ?? null}
       {stats !== null && <StatsPanel stats={stats} />}
-      <FilterBar
-        filters={filters}
-        gyms={gyms}
-        onFiltersChange={(updated) => setFilters(updated)}
-      />
       <Text style={styles.sectionTitle}>
         {t('profile.sendHistory')}
       </Text>
+      {GradeTabBar}
     </View>
   );
 
@@ -187,9 +227,11 @@ export default function ProfileHistoryScreen({
     <FlatList
       style={styles.root}
       contentContainerStyle={styles.contentContainer}
-      data={history}
-      keyExtractor={(item) => item.ascent_id}
-      renderItem={({ item }) => <AscentHistoryItem item={item} />}
+      data={filtered}
+      keyExtractor={(item) => item.route_id}
+      renderItem={({ item }) => (
+        <RouteCard card={item} onPress={onNavigateToRoute} />
+      )}
       ListHeaderComponent={ListHeader}
       ListEmptyComponent={ListEmpty}
       ListFooterComponent={extraListFooter ?? null}
@@ -230,6 +272,34 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textPrimary,
       paddingHorizontal: theme.spacing.lg,
       marginBottom: theme.spacing.sm,
+    },
+    tabRow: {
+      flexGrow: 0,
+      marginBottom: theme.spacing.md,
+    },
+    tabRowContent: {
+      gap: theme.spacing.sm,
+      paddingHorizontal: theme.spacing.lg,
+    },
+    tab: {
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      borderRadius: theme.borderRadius.full,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
+      backgroundColor: theme.colors.surface,
+    },
+    tabActive: {
+      borderColor: theme.colors.primary,
+      backgroundColor: theme.colors.primary,
+    },
+    tabText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
+    tabTextActive: {
+      color: theme.colors.textInverse,
+      fontWeight: theme.fontWeight.medium,
     },
     emptyContainer: {
       paddingHorizontal: theme.spacing.lg,

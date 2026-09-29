@@ -25,7 +25,7 @@ function Wrapper({ children }: { children: React.ReactNode }): React.JSX.Element
 function buildStats(overrides: Partial<ProfileStats> = {}): ProfileStats {
   return {
     total_sends: 10,
-    current_streak: 3,
+    accumulated_days: 3,
     highest_grade: 'V5',
     sends_by_grade: GRADE_ORDER.map((g) => ({ grade: g, count: 0 })),
     ...overrides,
@@ -42,8 +42,8 @@ describe('StatsPanel', () => {
     expect(getByText('42')).toBeTruthy();
   });
 
-  it('renders current streak value', () => {
-    const stats = buildStats({ current_streak: 7 });
+  it('renders accumulated days value', () => {
+    const stats = buildStats({ accumulated_days: 7 });
     const { getByText } = render(<StatsPanel stats={stats} />, { wrapper: Wrapper });
 
     expect(getByText('7')).toBeTruthy();
@@ -78,7 +78,7 @@ describe('StatsPanel', () => {
   it('renders a zero-send state without crashing (all counts 0)', () => {
     const stats = buildStats({
       total_sends: 0,
-      current_streak: 0,
+      accumulated_days: 0,
       highest_grade: null,
       sends_by_grade: GRADE_ORDER.map((g) => ({ grade: g, count: 0 })),
     });

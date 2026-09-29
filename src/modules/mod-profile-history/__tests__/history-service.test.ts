@@ -19,7 +19,9 @@ import {
   fetchHistoryGyms,
   fetchProfileHistory,
   fetchProfileStats,
+  groupToRouteCards,
 } from '../history-service';
+import type { HistoryAscent } from '../types';
 import { GRADE_ORDER } from '../types';
 
 // ── Typed mock helpers ────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ describe('fetchProfileHistory', () => {
       {
         ascent_id: 'asc-001',
         route_id: 'route-001',
+        route_name: 'Blue Overhang',
         gym_id: 'gym-001',
         gym_name: 'Test Gym',
         grade: 'V3',
@@ -58,18 +61,15 @@ describe('fetchProfileHistory', () => {
       Promise.resolve({ data: rawRows, error: null }) as unknown as ReturnType<typeof supabase.rpc>,
     );
 
-    const result = await fetchProfileHistory(MOCK_USER_ID, {
-      gym_id: null,
-      grade: null,
-      date_from: null,
-      date_to: null,
-    });
+    const result = await fetchProfileHistory(MOCK_USER_ID);
 
     expect(result).toHaveLength(1);
     expect(result[0].ascent_id).toBe('asc-001');
+    expect(result[0].route_name).toBe('Blue Overhang');
     expect(result[0].grade).toBe('V3');
     expect(result[0].gym_name).toBe('Test Gym');
     expect(result[0].style).toBe('top');
+    // All filter params must be null — filters removed from this call
     expect(mockRpc).toHaveBeenCalledWith(
       'get_profile_history',
       expect.objectContaining({
@@ -87,12 +87,7 @@ describe('fetchProfileHistory', () => {
       Promise.resolve({ data: null, error: null }) as unknown as ReturnType<typeof supabase.rpc>,
     );
 
-    const result = await fetchProfileHistory(MOCK_USER_ID, {
-      gym_id: null,
-      grade: null,
-      date_from: null,
-      date_to: null,
-    });
+    const result = await fetchProfileHistory(MOCK_USER_ID);
 
     expect(result).toEqual([]);
   });
@@ -102,12 +97,7 @@ describe('fetchProfileHistory', () => {
       Promise.resolve({ data: [], error: null }) as unknown as ReturnType<typeof supabase.rpc>,
     );
 
-    const result = await fetchProfileHistory(MOCK_USER_ID, {
-      gym_id: null,
-      grade: null,
-      date_from: null,
-      date_to: null,
-    });
+    const result = await fetchProfileHistory(MOCK_USER_ID);
 
     expect(result).toEqual([]);
   });
@@ -121,37 +111,24 @@ describe('fetchProfileHistory', () => {
     );
 
     await expect(
-      fetchProfileHistory(MOCK_USER_ID, {
-        gym_id: null,
-        grade: null,
-        date_from: null,
-        date_to: null,
-      }),
+      fetchProfileHistory(MOCK_USER_ID),
     ).rejects.toThrow('Failed to load send history. Please try again.');
   });
 
-  it('passes filter params through to the RPC', async () => {
+  it('always passes null filter params regardless of call site', async () => {
     mockRpc.mockReturnValueOnce(
       Promise.resolve({ data: [], error: null }) as unknown as ReturnType<typeof supabase.rpc>,
     );
 
-    await fetchProfileHistory(
-      MOCK_USER_ID,
-      {
-        gym_id: 'gym-001',
-        grade: 'V5',
-        date_from: '2026-01-01T00:00:00Z',
-        date_to: '2026-09-30T23:59:59Z',
-      },
-    );
+    await fetchProfileHistory(MOCK_USER_ID);
 
     expect(mockRpc).toHaveBeenCalledWith(
       'get_profile_history',
       expect.objectContaining({
-        p_gym_id: 'gym-001',
-        p_grade: 'V5',
-        p_date_from: '2026-01-01T00:00:00Z',
-        p_date_to: '2026-09-30T23:59:59Z',
+        p_gym_id: null,
+        p_grade: null,
+        p_date_from: null,
+        p_date_to: null,
       }),
     );
   });
@@ -171,7 +148,7 @@ describe('fetchProfileStats', () => {
         { grade: 'V3', count: 3 },
         { grade: 'V5', count: 2 },
       ],
-      current_streak: 3,
+      accumulated_days: 3,
       highest_grade: 'V5',
     };
 
@@ -182,7 +159,7 @@ describe('fetchProfileStats', () => {
     const result = await fetchProfileStats(MOCK_USER_ID);
 
     expect(result.total_sends).toBe(5);
-    expect(result.current_streak).toBe(3);
+    expect(result.accumulated_days).toBe(3);
     expect(result.highest_grade).toBe('V5');
 
     // sends_by_grade must include ALL grades in canonical order
@@ -208,7 +185,7 @@ describe('fetchProfileStats', () => {
     const result = await fetchProfileStats(MOCK_USER_ID);
 
     expect(result.total_sends).toBe(0);
-    expect(result.current_streak).toBe(0);
+    expect(result.accumulated_days).toBe(0);
     expect(result.highest_grade).toBeNull();
     expect(result.sends_by_grade).toHaveLength(GRADE_ORDER.length);
     result.sends_by_grade.forEach((g) => {
@@ -232,7 +209,7 @@ describe('fetchProfileStats', () => {
     const rpcData = {
       total_sends: 2,
       sends_by_grade: JSON.stringify([{ grade: 'V2', count: 2 }]),
-      current_streak: 1,
+      accumulated_days: 1,
       highest_grade: 'V2',
     };
 
@@ -249,7 +226,7 @@ describe('fetchProfileStats', () => {
     const rpcData = {
       total_sends: 0,
       sends_by_grade: null,
-      current_streak: 0,
+      accumulated_days: 0,
       highest_grade: null,
     };
 
@@ -346,5 +323,94 @@ describe('fetchHistoryGyms', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('Valid Gym');
+  });
+});
+
+// ── groupToRouteCards ─────────────────────────────────────────────────────────
+
+describe('groupToRouteCards', () => {
+  function makeAscent(overrides: Partial<HistoryAscent>): HistoryAscent {
+    return {
+      ascent_id: 'asc-001',
+      route_id: 'route-001',
+      route_name: 'Test Route',
+      gym_id: 'gym-001',
+      gym_name: 'Test Gym',
+      grade: 'V3',
+      color_tag: 'blue',
+      section_label: null,
+      style: 'top',
+      attempts: 1,
+      note: null,
+      logged_at: '2026-09-15T10:00:00Z',
+      is_private: false,
+      ...overrides,
+    };
+  }
+
+  it('groups multiple sends to same route into one card', () => {
+    const ascents = [
+      makeAscent({ ascent_id: 'asc-001', style: 'top', logged_at: '2026-09-01T10:00:00Z' }),
+      makeAscent({ ascent_id: 'asc-002', style: 'top', logged_at: '2026-09-15T10:00:00Z' }),
+    ];
+
+    const result = groupToRouteCards(ascents);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].route_id).toBe('route-001');
+    expect(result[0].best_style).toBe('top');
+    expect(result[0].most_recent_date).toBe('2026-09-15T10:00:00Z');
+  });
+
+  it('prefers flash over top for best_style', () => {
+    const ascents = [
+      makeAscent({ ascent_id: 'asc-001', style: 'top', logged_at: '2026-09-01T10:00:00Z' }),
+      makeAscent({ ascent_id: 'asc-002', style: 'flash', logged_at: '2026-09-10T10:00:00Z' }),
+    ];
+
+    const result = groupToRouteCards(ascents);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].best_style).toBe('flash');
+  });
+
+  it('excludes attempt-only routes', () => {
+    const ascents = [
+      makeAscent({ ascent_id: 'asc-001', style: 'attempt' }),
+    ];
+
+    const result = groupToRouteCards(ascents);
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('produces separate cards for different routes', () => {
+    const ascents = [
+      makeAscent({ ascent_id: 'asc-001', route_id: 'route-001', route_name: 'Route A', grade: 'V3' }),
+      makeAscent({ ascent_id: 'asc-002', route_id: 'route-002', route_name: 'Route B', grade: 'V5' }),
+    ];
+
+    const result = groupToRouteCards(ascents);
+
+    expect(result).toHaveLength(2);
+    const routeIds = result.map((c) => c.route_id);
+    expect(routeIds).toContain('route-001');
+    expect(routeIds).toContain('route-002');
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(groupToRouteCards([])).toEqual([]);
+  });
+
+  it('skips attempts even when mixed with sends for the same route', () => {
+    const ascents = [
+      makeAscent({ ascent_id: 'asc-001', style: 'attempt' }),
+      makeAscent({ ascent_id: 'asc-002', style: 'top' }),
+    ];
+
+    const result = groupToRouteCards(ascents);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].best_style).toBe('top');
   });
 });

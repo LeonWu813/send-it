@@ -330,8 +330,7 @@
   "profileHistory": {
     "stats": {
       "totalSends": "Sends",
-      "streak": "Streak",
-      "streakUnit": "days",
+      "accumulatedDays": "Days Climbed",
       "highestGrade": "Top Grade",
       "noGrade": "—",
       "chartTitle": "SENDS BY GRADE",

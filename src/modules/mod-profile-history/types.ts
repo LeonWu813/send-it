@@ -28,6 +28,8 @@ export type VGrade = (typeof GRADE_ORDER)[number];
 export interface HistoryAscent {
   ascent_id: string;
   route_id: string;
+  /** Route display name from routes.name. */
+  route_name: string;
   gym_id: string;
   gym_name: string;
   /** Grade string from routes.grade — never stored on ascents. */
@@ -60,8 +62,8 @@ export interface ProfileStats {
   total_sends: number;
   /** Send count per grade, ordered VB → V10. Grades with zero sends are included. */
   sends_by_grade: GradeCount[];
-  /** Consecutive calendar days ending today with ≥1 send. */
-  current_streak: number;
+  /** Total distinct calendar days on which the user recorded ≥1 flash or top. */
+  accumulated_days: number;
   /** Highest V-grade sent, or null if no sends recorded. */
   highest_grade: string | null;
 }

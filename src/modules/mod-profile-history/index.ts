@@ -21,8 +21,9 @@ export {
   fetchHistoryGyms,
   fetchProfileHistory,
   fetchProfileStats,
+  groupToRouteCards,
 } from './history-service';
-export type { GymSummary } from './history-service';
+export type { GymSummary, RouteCard } from './history-service';
 
 // ── Public components ──────────────────────────────────────────────────────────
 export { default as SendHistoryProfile } from './components/SendHistoryProfile';

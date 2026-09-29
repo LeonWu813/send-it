@@ -12,45 +12,44 @@ import { supabase } from '../../lib/supabase';
 import type {
   GradeCount,
   HistoryAscent,
-  HistoryFilters,
   ProfileStats,
 } from './types';
 import { GRADE_ORDER } from './types';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-/** Default page size for history queries. */
-const DEFAULT_PAGE_SIZE = 50;
+/** Default page size for history queries. Fetches all ascents for route-card grouping. */
+const DEFAULT_PAGE_SIZE = 500;
 
 // ── History fetch ──────────────────────────────────────────────────────────────
 
 /**
- * Fetch paginated send history for a user via the `get_profile_history` RPC.
+ * Fetch all send history for a user via the `get_profile_history` RPC.
  *
  * Privacy: server-side enforcement inside the RPC. If the target user has
  * `followers_only` privacy and the caller is not a follower, returns [].
  *
  * Grade is joined from routes.grade inside the RPC — never stored on ascents.
+ * Filters are not applied — all ascents are returned for client-side grouping
+ * into route cards.
  *
  * @param userId   UUID of the profile being viewed.
- * @param filters  Optional filter values (gym, grade, date range).
- * @param limit    Page size (default 50).
+ * @param limit    Page size (default 500).
  * @param offset   Pagination offset (default 0).
  * @returns        Array of HistoryAscent rows, most-recent-first.
  * @throws {Error} with a user-facing message on failure.
  */
 export async function fetchProfileHistory(
   userId: string,
-  filters: HistoryFilters,
   limit: number = DEFAULT_PAGE_SIZE,
   offset: number = 0,
 ): Promise<HistoryAscent[]> {
   const { data, error } = await supabase.rpc('get_profile_history', {
     p_user_id:   userId,
-    p_gym_id:    filters.gym_id   ?? null,
-    p_grade:     filters.grade    ?? null,
-    p_date_from: filters.date_from ?? null,
-    p_date_to:   filters.date_to  ?? null,
+    p_gym_id:    null,
+    p_grade:     null,
+    p_date_from: null,
+    p_date_to:   null,
     p_limit:     limit,
     p_offset:    offset,
   });
@@ -65,6 +64,7 @@ export async function fetchProfileHistory(
   return (data as any[]).map((row): HistoryAscent => ({
     ascent_id:    row.ascent_id   as string,
     route_id:     row.route_id    as string,
+    route_name:   (row.route_name ?? '') as string,
     gym_id:       row.gym_id      as string,
     gym_name:     row.gym_name    as string,
     grade:        row.grade       as string,
@@ -107,7 +107,7 @@ export async function fetchProfileStats(userId: string): Promise<ProfileStats> {
     total_sends: number | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON column
     sends_by_grade: any;
-    current_streak: number | null;
+    accumulated_days: number | null;
     highest_grade: string | null;
   } | null;
 
@@ -138,11 +138,67 @@ export async function fetchProfileStats(userId: string): Promise<ProfileStats> {
   }));
 
   return {
-    total_sends:    row?.total_sends    ?? 0,
+    total_sends:      row?.total_sends      ?? 0,
     sends_by_grade,
-    current_streak: row?.current_streak ?? 0,
-    highest_grade:  row?.highest_grade  ?? null,
+    accumulated_days: row?.accumulated_days ?? 0,
+    highest_grade:    row?.highest_grade    ?? null,
   };
+}
+
+// ── Route card grouping ────────────────────────────────────────────────────────
+
+/**
+ * A route grouped from multiple ascent rows.
+ * Only routes with at least one flash or top are included.
+ * `best_style` prefers flash over top; `most_recent_date` is the latest logged_at.
+ */
+export interface RouteCard {
+  route_id: string;
+  route_name: string;
+  gym_name: string;
+  grade: string;
+  best_style: 'flash' | 'top';
+  most_recent_date: string;
+}
+
+/**
+ * Groups a flat list of HistoryAscent rows into per-route RouteCard objects.
+ *
+ * - Skips ascents with style = 'attempt'.
+ * - flash beats top when both styles exist for the same route.
+ * - most_recent_date is the latest logged_at across all sends for the route.
+ *
+ * @param ascents  Flat list of HistoryAscent rows from fetchProfileHistory.
+ * @returns        Deduplicated list of RouteCard objects.
+ */
+export function groupToRouteCards(ascents: HistoryAscent[]): RouteCard[] {
+  const map = new Map<string, RouteCard>();
+  const stylePriority = (s: string): number => (s === 'flash' ? 2 : 1);
+
+  for (const a of ascents) {
+    if (a.style !== 'flash' && a.style !== 'top') continue;
+
+    const existing = map.get(a.route_id);
+    if (!existing) {
+      map.set(a.route_id, {
+        route_id:         a.route_id,
+        route_name:       a.route_name,
+        gym_name:         a.gym_name,
+        grade:            a.grade,
+        best_style:       a.style as 'flash' | 'top',
+        most_recent_date: a.logged_at,
+      });
+    } else {
+      if (stylePriority(a.style) > stylePriority(existing.best_style)) {
+        existing.best_style = a.style as 'flash' | 'top';
+      }
+      if (a.logged_at > existing.most_recent_date) {
+        existing.most_recent_date = a.logged_at;
+      }
+    }
+  }
+
+  return Array.from(map.values());
 }
 
 // ── Gym list for filter picker ─────────────────────────────────────────────────
