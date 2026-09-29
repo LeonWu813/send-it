@@ -16,6 +16,8 @@
 -- no longer sends filter values (always passes NULL for all filter params).
 -- ─────────────────────────────────────────────────────────────────────────────
 
+DROP FUNCTION IF EXISTS public.get_profile_history(uuid, uuid, text, timestamp with time zone, timestamp with time zone, integer, integer);
+
 CREATE OR REPLACE FUNCTION public.get_profile_history(
   p_user_id   UUID,
   p_gym_id    UUID        DEFAULT NULL,
