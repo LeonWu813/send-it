@@ -92,3 +92,93 @@ Route: **Engineer** (update `setup.md` step 8 to use `SERVICE_ROLE_KEY`, not `SU
 
 1. **AC-083 (implementation bug)**: Follow prevention for blocked users is not enforced at the DB level. `follows_insert_own` RLS policy has no block check. Existing follows are not removed on block. Route to Engineer.
 2. **setup.md documentation error**: `setup.md` step 8 uses `SUPABASE_SERVICE_ROLE_KEY` (reserved prefix) instead of `SERVICE_ROLE_KEY`, which would cause `report-digest` Edge Function to fail to load its secret in a real Supabase deployment. Route to Engineer.
+
+---
+
+## QA Run 2 — Regression — 2026-09-29
+
+**QA agent**: qa-mod-moderation
+**Mode**: regression-test (re-verification after Engineer bug fix)
+**Bugs being re-verified**: AC-083 (follows INSERT policy had no block check; existing follows not removed on block) and setup.md documentation error (SUPABASE_SERVICE_ROLE_KEY → SERVICE_ROLE_KEY)
+**Automated test run**: 405 tests passed, 31 suites, exit 0
+**TypeScript check**: 0 errors
+
+---
+
+### AC-083 — Regression Verification
+
+**REGRESSION PASS AC-083**: Original failure scenario resolved. Migration `20260929000006_mod_009_fix_follows_block.sql` verified in full:
+
+**Follows INSERT policy (block prevention):**
+`follows_insert_own` is dropped (`DROP POLICY IF EXISTS "follows_insert_own" ON public.follows`) and recreated with a symmetric block check:
+```sql
+WITH CHECK (
+  auth.uid() = follower_id
+  AND NOT EXISTS (
+    SELECT 1 FROM public.blocks b
+    WHERE (b.blocker_user_id = follower_id AND b.blocked_user_id = followee_id)
+       OR (b.blocker_user_id = followee_id AND b.blocked_user_id = follower_id)
+  )
+)
+```
+Scenario A verified by logic inspection: user B attempts to follow user A after A blocks B. `blocks` contains `(blocker_user_id=A, blocked_user_id=B)`. On B's follow INSERT: `follower_id=B`, `followee_id=A`. The NOT EXISTS sub-select finds a row matching the second OR branch (`blocker_user_id=A=followee_id`, `blocked_user_id=B=follower_id`). INSERT rejected. Correct.
+
+Scenario B verified by logic inspection: user A attempts to follow user B after A blocks B. `blocks` contains `(blocker_user_id=A, blocked_user_id=B)`. On A's follow INSERT: `follower_id=A`, `followee_id=B`. The NOT EXISTS sub-select finds a row matching the first OR branch (`blocker_user_id=A=follower_id`, `blocked_user_id=B=followee_id`). INSERT rejected. Both directions correctly prevented.
+
+**Trigger function (existing follow removal):**
+`remove_follows_on_block()` created as SECURITY DEFINER (required to bypass `follows` RLS on behalf of the blocking user). `SET search_path = public` prevents search-path injection. Logic:
+```sql
+DELETE FROM public.follows
+WHERE (follower_id = NEW.blocker_user_id AND followee_id = NEW.blocked_user_id)
+   OR (follower_id = NEW.blocked_user_id AND followee_id = NEW.blocker_user_id);
+```
+Deletes follows in both directions on block INSERT, satisfying the spec requirement "Any existing Follow relationship between blocker and blocked user is removed."
+
+**Trigger registration:**
+`trg_remove_follows_on_block` is `AFTER INSERT ON public.blocks FOR EACH ROW` — fires correctly after every new block row is committed, not before.
+
+`moderation-service.ts` `blockUser()` updated with a doc comment confirming the trigger handles follow removal server-side (no client-side delete needed). The INSERT into `blocks` still fires the trigger via the standard Supabase client call.
+
+**Ordering dependency** satisfied: migration `20260929000006` runs after `20260924000006_mod_006_social_feed.sql` (which created `follows` + the original `follows_insert_own`) and after `20260929000004_mod_009_moderation.sql` (which created `blocks` with the full schema). File sort order guarantees this.
+
+---
+
+### setup.md Documentation Error — Regression Verification
+
+**REGRESSION PASS setup.md**: Original failure resolved. `grep -n "SUPABASE_SERVICE_ROLE_KEY" project-planning/setup.md` returns no matches. Line 140 now reads `supabase secrets set SERVICE_ROLE_KEY=your-service-role-key` — correct per spec, `.env.example`, and `production.md`. No `SUPABASE_` prefix used.
+
+---
+
+### Re-verification of Previously Passing ACs
+
+**PASS AC-080** (re-verified): `reportUser()` in `moderation-service.ts` unchanged. RLS policy `reports_insert_own` in migration `20260929000004` unchanged. `ReportSheet.tsx` unchanged. Schema, i18n, and Input/Output Contract all intact. No regressions.
+
+**PASS AC-081** (re-verified): `ReportSheet.tsx` `confirmed` state logic unchanged. No new code paths introduced near this feature. No regressions.
+
+**PASS AC-082** (re-verified): `blocks` table schema, `blockUser()`, `unblockUser()`, and feed RPC symmetric filtering in `20260929000005` all unchanged. Migration `20260929000006` adds a trigger on `blocks` INSERT only — it does not alter the `blocks` table schema, the INSERT/DELETE policies, or the feed RPC. No regressions.
+
+**PASS AC-084** (re-verified): `get_activity_feed` (migration `20260929000005`) is untouched by the bug-fix migration. Both `qualifying_followees` NOT EXISTS filters and the defense-in-depth filters on `ascent_items` and `video_items` are intact. `fetchBlockedUserIds()` unchanged. No regressions.
+
+**PASS AC-085** (re-verified): `supabase/functions/report-digest/index.ts` unchanged. `SERVICE_ROLE_KEY` reading confirmed present. Fail-safe on missing config intact. Query covers `reports` table only. No regressions introduced by the bug-fix migration.
+
+---
+
+### Shared Convention Re-checks (adjacent code)
+
+Migration `20260929000006` is the only changed artifact besides the `blockUser()` doc comment. Verified:
+- No new source files introduced.
+- `remove_follows_on_block()` trigger function uses `SECURITY DEFINER SET search_path = public` — matches the pattern already established in the project for elevated-privilege functions.
+- `DROP POLICY IF EXISTS` is idempotent — safe to re-run migration in reset scenarios.
+- `DROP TRIGGER IF EXISTS` before `CREATE TRIGGER` — idempotent, no regression risk on re-run.
+- No gold-plating: migration adds only the two objects required to fix AC-083 (the revised policy and the trigger function + trigger).
+- No new tables, columns, or source files added by the fix.
+
+---
+
+### Summary — QA Run 2
+
+**Result**: PASS — all 5 acceptance criteria verified, no regressions
+
+1. **REGRESSION PASS AC-083**: Follow INSERT policy now rejects inserts when a block exists in either direction. Trigger `trg_remove_follows_on_block` exists and fires AFTER INSERT on `blocks`, removing existing follows in both directions server-side. Original failure scenario resolved.
+2. **REGRESSION PASS setup.md**: `SUPABASE_SERVICE_ROLE_KEY` entirely removed from `setup.md`; correct `SERVICE_ROLE_KEY` used at line 140.
+3. **AC-080, AC-081, AC-082, AC-084, AC-085**: All re-verified. No regressions introduced by the fix migration or doc-comment update.

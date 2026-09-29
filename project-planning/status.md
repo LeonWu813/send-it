@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
-module: n/a
+agent: qa-mod-moderation
+mode: regression
+module: mod-moderation
 result: success
-commit: d150e53f9f196324996eb377d91607ca9945c193
+commit: 90ad9475f1e4274f55481aa4749af40eea525618
 timestamp: 2026-09-29T00:00:00Z
 ```
 
