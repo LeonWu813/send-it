@@ -20,11 +20,10 @@
  * 4. No `enterFullscreen()` — VideoView fills the modal.
  * 5. PanResponder (vertical-only). Explicit close button as accessible fallback.
  * 6. Thumbnails: placeholder only — no VideoView per grid cell.
- * Rev 16: four-layer sibling architecture inside the animated content wrapper:
+ * Rev 16 (updated): three-layer sibling architecture inside the animated content wrapper:
  *   Layer 1 — VideoView (absoluteFill)
- *   Layer 2 — gradient scrim (absoluteFill, pointerEvents none)
- *   Layer 3 — PanResponder gesture capture (absoluteFill, no children)
- *   Layer 4 — interactive overlay UI (absoluteFill, pointerEvents box-none,
+ *   Layer 2 — PanResponder gesture capture (absoluteFill, no children)
+ *   Layer 3 — interactive overlay UI (absoluteFill, pointerEvents box-none,
  *              rendered last so its Pressable children win touch delivery)
  *
  * Gesture architecture:
@@ -79,11 +78,6 @@ import type { BetaVideo } from '../types';
  * inline literal satisfies the no-hardcoded-hex convention.
  */
 const VIDEO_VIEWER_BG = '#000000';
-
-/** Top half of the scrim — nearly transparent, creates the fade-in effect. */
-const VIDEO_SCRIM_FADE = 'rgba(0,0,0,0.0)';
-/** Bottom half of the scrim — semi-transparent dark, provides text legibility. */
-const VIDEO_SCRIM_SOLID = 'rgba(0,0,0,0.52)';
 
 /** Minimum dy (in pixels) to trigger a swipe. */
 const SWIPE_THRESHOLD = 50;
@@ -524,7 +518,7 @@ export default function BetaVideoReelViewer({
 
         {/*
          * Animated content wrapper (Bug 3 — swipe animation).
-         * All four layers are children of this wrapper so the entire content
+         * All three layers are children of this wrapper so the entire content
          * slides with the finger and animates off-screen on swipe-out.
          */}
         <Animated.View
@@ -535,7 +529,7 @@ export default function BetaVideoReelViewer({
           {signedUrl && !urlError ? (
             <VideoView
               player={player}
-              style={styles.videoView}
+              style={StyleSheet.absoluteFill}
               contentFit="contain"
               nativeControls={false}
               testID="beta-video-reel-video-view"
@@ -562,26 +556,20 @@ export default function BetaVideoReelViewer({
             </View>
           ) : null}
 
-          {/* Layer 2 — gradient scrim simulation (pointerEvents none) */}
-          <View style={styles.gradientScrimContainer} pointerEvents="none">
-            <View style={styles.gradientScrimFade} />
-            <View style={styles.gradientScrimSolid} />
-          </View>
-
           {/*
-           * Layer 3 — PanResponder gesture capture (Bug 1 fix).
+           * Layer 2 — PanResponder gesture capture (Bug 1 fix).
            * This View has NO children — it purely intercepts swipe gestures.
            * Without onStartShouldSetPanResponderCapture, it no longer steals
-           * tap events from sibling Pressables in Layer 4.
+           * tap events from sibling Pressables in Layer 3.
            */}
           <View style={StyleSheet.absoluteFill} {...panRef.current.panHandlers} />
 
           {/*
-           * Layer 4 — Interactive overlay UI (Bug 1 fix).
+           * Layer 3 — Interactive overlay UI (Bug 1 fix).
            * Rendered LAST (highest z-order) so its Pressable children receive
            * touches before the gesture layer below. pointerEvents="box-none"
            * means the container itself passes through non-interactive touches
-           * to Layer 3, while Pressable children still capture their own taps.
+           * to Layer 2, while Pressable children still capture their own taps.
            */}
           <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
 
@@ -610,7 +598,7 @@ export default function BetaVideoReelViewer({
               <View
                 style={[
                   styles.bottomRow,
-                  { bottom: 110 + (insets.bottom ?? 0) },
+                  { bottom: (insets.bottom || 34) + theme.spacing.md },
                 ]}
               >
                 {/* Left column: poster identity (AC-134) */}
@@ -733,13 +721,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       flex: 1,
       backgroundColor: VIDEO_VIEWER_BG,
     },
-    videoView: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 110,
-    },
     centeredOverlay: {
       position: 'absolute',
       top: 0,
@@ -824,28 +805,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       color: theme.colors.textInverse,
       fontSize: theme.fontSize.md,
       textAlign: 'center',
-    },
-    /**
-     * AC-134: Two-tone simulated gradient scrim.
-     * expo-linear-gradient is not installed; two stacked Views approximate a
-     * fade-in from transparent (top) to semi-opaque (bottom).
-     * Fixed 200px height covers just the overlay content area without obscuring
-     * the video midscreen. No hardcoded hex colours — constants are at file top.
-     */
-    gradientScrimContainer: {
-      position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: 200,
-    },
-    gradientScrimFade: {
-      flex: 1,
-      backgroundColor: VIDEO_SCRIM_FADE,
-    },
-    gradientScrimSolid: {
-      height: 110,
-      backgroundColor: VIDEO_SCRIM_SOLID,
     },
     reportErrorText: {
       color: theme.colors.error,
