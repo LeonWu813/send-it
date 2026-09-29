@@ -10,6 +10,8 @@
 -- AT TIME ZONE 'Asia/Taipei'.
 -- ──────────────────────────────────────────────────────────────────────────────
 
+DROP FUNCTION IF EXISTS public.get_profile_stats(uuid);
+
 CREATE OR REPLACE FUNCTION public.get_profile_stats(
   p_user_id UUID
 )
