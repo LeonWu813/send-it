@@ -34,17 +34,33 @@ const SIGNED_URL_EXPIRY = 3600;
  * @throws {Error} with a user-facing message on failure.
  */
 export async function fetchBetaVideosForRoute(routeId: string): Promise<BetaVideo[]> {
+  // AC-142 / AC-143: canonical exclusion predicate — visible iff not reported OR
+  // reported-but-admin-dismissed. A bare `is_reported = false` would permanently
+  // hide admin-dismissed videos (violates AC-143).
+  // AC-144: embedded join for poster identity (display_name, avatar_url).
+  // The join requires beta_videos_user_id_fkey to target public.users(id)
+  // (enforced by the 20260928000001 migration FK repoint).
   const { data, error } = await supabase
     .from('beta_videos')
-    .select('id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at')
+    .select(
+      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)',
+    )
     .eq('route_id', routeId)
+    .or('is_reported.eq.false,report_dismissed.eq.true')
     .order('created_at', { ascending: false });
 
   if (error) {
     throw new Error('Failed to load beta videos. Please try again.');
   }
 
-  return (data ?? []) as BetaVideo[];
+  // Flatten the embedded `users` object to top-level fields so the viewer
+  // (AC-134) reads `video.display_name` / `video.avatar_url` directly.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    display_name: row.users?.display_name ?? null,
+    avatar_url: row.users?.avatar_url ?? null,
+  })) as BetaVideo[];
 }
 
 /**
@@ -127,7 +143,7 @@ export async function uploadBetaVideo(
         duration_seconds: input.duration_seconds,
         caption: input.caption ?? null,
       })
-      .select('id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at')
+      .select('id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed')
       .single();
 
     if (insertError) {
@@ -138,7 +154,9 @@ export async function uploadBetaVideo(
 
     onProgress?.({ percent: 100, phase: 'saving' });
 
-    return data as BetaVideo;
+    // No join needed here (the uploader does not render poster overlay info).
+    // display_name and avatar_url are not insert columns — default to null.
+    return { ...data, display_name: null, avatar_url: null } as BetaVideo;
   } catch (error) {
     console.error('[uploadBetaVideo] error:', error);
     throw error;
@@ -181,5 +199,25 @@ export async function getThumbnailSignedUrl(storagePath: string): Promise<string
   }
 
   return data.signedUrl;
+}
+
+/**
+ * Report a beta video via the SECURITY DEFINER RPC `report_beta_video`.
+ *
+ * The RPC sets `beta_videos.is_reported = true` and inserts one `video_reports`
+ * row (idempotent via ON CONFLICT DO NOTHING). Throws if the caller is not
+ * authenticated, the video does not exist, or the caller is the video owner.
+ *
+ * AC-140: one-tap report flow — no category or note is collected.
+ * AC-139: ownership check is enforced server-side in the RPC (defense-in-depth).
+ *
+ * @param videoId  UUID of the beta video to report.
+ * @throws {Error} with a user-facing message on failure.
+ */
+export async function reportBetaVideo(videoId: string): Promise<void> {
+  const { error } = await supabase.rpc('report_beta_video', { p_beta_video_id: videoId });
+  if (error) {
+    throw new Error('Failed to report video. Please try again.');
+  }
 }
 

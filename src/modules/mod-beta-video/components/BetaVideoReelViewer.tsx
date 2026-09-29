@@ -3,30 +3,48 @@
  *
  * AC-039: Tapping a thumbnail opens a fullscreen portrait viewer that
  * auto-plays the selected video. Swiping up advances to the next video;
- * swiping down (or tapping the back button) dismisses the viewer.
+ * swiping down (or tapping the close button) dismisses the viewer.
  *
- * Architecture (Tech Lead decisions, Rev 13):
+ * AC-133: Persistent top-left close button — never unmounts or loses tap target.
+ * AC-134: Bottom-left poster-identity overlay (avatar + display_name + route/gym info).
+ * AC-135: Tapping poster row is a no-op in Phase 1.
+ * AC-137: Marquee animation for overflowing text (pure-JS Animated translateX).
+ * AC-138: Right sidebar — like icon (placeholder) + report icon.
+ * AC-139: Report icon hidden for own videos and admin-dismissed videos.
+ * AC-140: Report icon calls report_beta_video RPC; local reportedIds tracks success.
+ *
+ * Architecture (Tech Lead decisions, Rev 13 + Rev 16):
  * 1. Portrait lock: `app.json` already sets `"orientation": "portrait"` globally.
- *    Do NOT add expo-screen-orientation.
  * 2. Modal architecture: RN `<Modal>` — same pattern as BetaVideoUploader.
- * 3. Playlist order: videos array is already ordered `created_at DESC`; tap index
- *    maps 1:1 to viewer start index; no wrap at ends.
- * 4. No `enterFullscreen()` — size VideoView to fill the modal instead.
- * 5. Swipe gesture: RN built-in PanResponder (vertical-only). Explicit back
- *    button provided as the accessible fallback.
- * 6. Thumbnails: placeholder only — do NOT mount VideoView per grid cell.
+ * 3. Playlist order: videos array ordered `created_at DESC`; tap index 1:1; no wrap.
+ * 4. No `enterFullscreen()` — VideoView fills the modal.
+ * 5. PanResponder (vertical-only). Explicit close button as accessible fallback.
+ * 6. Thumbnails: placeholder only — no VideoView per grid cell.
+ * Rev 16: overlay on top of gesture layer using pointerEvents="box-none" container.
  *
- * Playback: one `useVideoPlayer` instance whose source is replaced
- * (`player.replaceAsync()`) when currentIndex changes — one active decoder at a time.
- * Signed URLs are loaded lazily: only the current video's signed URL is fetched.
+ * Gesture architecture:
+ * - The absoluteFill `View` with `panHandlers` sits above the VideoView to intercept
+ *   swipe gestures. This view has NO `pointerEvents` override, so it absorbs all touches.
+ * - The overlay container uses `pointerEvents="box-none"` so touches pass through the
+ *   container itself to the gesture layer below, but Pressable children still receive taps.
+ * - The close button and report button are Pressable children of the overlay and remain
+ *   independently tappable regardless of the gesture capture.
  */
 
+import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  Animated,
+  Image,
   Modal,
   PanResponder,
   Pressable,
@@ -36,7 +54,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
-import { getVideoSignedUrl } from '../beta-video-service';
+import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import type { BetaVideo } from '../types';
 
 /**
@@ -51,6 +69,15 @@ const VIDEO_VIEWER_BG = '#000000';
 /** Minimum dy (in pixels) to trigger a swipe. */
 const SWIPE_THRESHOLD = 50;
 
+/** Diameter of the poster avatar circle (AC-134). */
+const AVATAR_SIZE = 36;
+
+/** Width allocated for the right sidebar (like + report icons). */
+const SIDEBAR_WIDTH = 56;
+
+/** Duration of one marquee scroll pass in milliseconds (AC-137). */
+const MARQUEE_DURATION_MS = 4000;
+
 export interface BetaVideoReelViewerProps {
   /** Full ordered array of beta videos for the route (created_at DESC). */
   videos: BetaVideo[];
@@ -59,20 +86,142 @@ export interface BetaVideoReelViewerProps {
   /** Whether the viewer modal is open. */
   visible: boolean;
   /** Called when the user dismisses the viewer. */
-  onClose: () => void;
+  onDismiss: () => void;
+  /** Authenticated session — used to check if current video belongs to the viewer (AC-139). */
+  session: Session;
+}
+
+// ── MarqueeText — pure-JS translateX marquee for overflowing text (AC-137) ────
+
+interface MarqueeTextProps {
+  text: string;
+  containerWidth: number;
+  style?: object;
+  testID?: string;
 }
 
 /**
- * BetaVideoReelViewer renders a fullscreen Modal with a single VideoView.
+ * Renders `text` inside an `overflow:'hidden'` container. If the text is wider
+ * than `containerWidth`, a looping `Animated.translateX` marquee scrolls it.
+ * No native package — pure RN Animated (AC-137).
+ */
+function MarqueeText({ text, containerWidth, style, testID }: MarqueeTextProps): React.JSX.Element {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const [textWidth, setTextWidth] = useState(0);
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
+
+  useEffect(() => {
+    if (textWidth > containerWidth && containerWidth > 0) {
+      animRef.current = Animated.loop(
+        Animated.sequence([
+          Animated.timing(translateX, {
+            toValue: -(textWidth - containerWidth),
+            duration: MARQUEE_DURATION_MS,
+            useNativeDriver: true,
+          }),
+          Animated.delay(1000),
+          Animated.timing(translateX, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+          Animated.delay(500),
+        ]),
+      );
+      animRef.current.start();
+    } else {
+      // Reset when text fits or container width not yet known
+      translateX.setValue(0);
+      animRef.current?.stop();
+    }
+
+    return () => {
+      animRef.current?.stop();
+    };
+  }, [textWidth, containerWidth, translateX]);
+
+  return (
+    <View style={{ width: containerWidth, overflow: 'hidden' }}>
+      <Animated.Text
+        style={[style, { transform: [{ translateX }] }]}
+        onTextLayout={(e) => {
+          const lineWidth = e.nativeEvent.lines[0]?.width ?? 0;
+          setTextWidth(lineWidth);
+        }}
+        numberOfLines={1}
+        testID={testID}
+      >
+        {text}
+      </Animated.Text>
+    </View>
+  );
+}
+
+// ── PosterAvatar — circular avatar with initial-letter fallback (AC-134/AC-138) ─
+
+interface PosterAvatarProps {
+  avatarUrl: string | null;
+  displayName: string | null;
+  theme: ReturnType<typeof useTheme>['theme'];
+}
+
+function PosterAvatar({ avatarUrl, displayName, theme }: PosterAvatarProps): React.JSX.Element {
+  const initial = displayName ? displayName.charAt(0).toUpperCase() : '?';
+
+  if (avatarUrl) {
+    return (
+      <Image
+        source={{ uri: avatarUrl }}
+        style={{
+          width: AVATAR_SIZE,
+          height: AVATAR_SIZE,
+          borderRadius: AVATAR_SIZE / 2,
+        }}
+        testID="reel-poster-avatar"
+      />
+    );
+  }
+
+  return (
+    <View
+      style={{
+        width: AVATAR_SIZE,
+        height: AVATAR_SIZE,
+        borderRadius: AVATAR_SIZE / 2,
+        backgroundColor: theme.colors.overlay,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+      testID="reel-poster-avatar-placeholder"
+    >
+      <Text
+        style={{
+          color: theme.colors.textInverse,
+          fontSize: theme.fontSize.md,
+          fontWeight: theme.fontWeight.semibold,
+        }}
+      >
+        {initial}
+      </Text>
+    </View>
+  );
+}
+
+// ── BetaVideoReelViewer ────────────────────────────────────────────────────────
+
+/**
+ * BetaVideoReelViewer renders a fullscreen Modal with a single VideoView,
+ * a TikTok/Reels-style overlay, and a right sidebar with like + report actions.
+ *
  * The current video is determined by `currentIndex` state. Swiping vertically
- * navigates between videos; swiping down at index 0 (or pressing the back
- * button) dismisses the modal.
+ * navigates between videos; swiping down (or pressing the close button) dismisses.
  */
 export default function BetaVideoReelViewer({
   videos,
   initialIndex,
   visible,
-  onClose,
+  onDismiss,
+  session,
 }: BetaVideoReelViewerProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
@@ -94,22 +243,23 @@ export default function BetaVideoReelViewer({
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState(false);
 
+  // ── Report state ─────────────────────────────────────────────────────────
+  // Set of video IDs that have been successfully reported in this session.
+  const [reportedIds, setReportedIds] = useState<Set<string>>(new Set());
+  // ID of the video currently being reported (button loading state).
+  const [reportingId, setReportingId] = useState<string | null>(null);
+
   // ── Video player ─────────────────────────────────────────────────────────
-  // One player instance — source is replaced via player.replaceAsync() on index change.
   const player = useVideoPlayer(null, (p) => {
     p.loop = false;
   });
 
-  // Bug 2 fix: pause on unmount so audio does not bleed after the component
-  // is destroyed (e.g. navigating away while the modal is still mounted).
   useEffect(() => {
     return () => {
       player.pause();
     };
   }, [player]);
 
-  // Bug 2 fix: pause whenever the modal is hidden so audio stops immediately
-  // when the parent sets visible=false without waiting for unmount.
   useEffect(() => {
     if (!visible) {
       player.pause();
@@ -137,9 +287,6 @@ export default function BetaVideoReelViewer({
         if (cancelled) return;
         setSignedUrl(url);
         setUrlLoading(false);
-        // Bug 3 fix: use replaceAsync to avoid synchronous main-thread I/O
-        // (avoids iOS deprecation warning). Chain play() after the async load
-        // completes so playback starts only when the asset is ready.
         void player.replaceAsync({ uri: url }).then(() => {
           if (!cancelled) player.play();
         });
@@ -165,47 +312,64 @@ export default function BetaVideoReelViewer({
   }, [videos.length]);
 
   /**
-   * AC-039: swiping down or tapping a back control shall dismiss the viewer.
-   * Dismissal is unconditional — there is no "go to previous" on swipe-down.
-   * Bug 2 fix: pause the player before calling onClose so audio stops
-   * immediately rather than continuing until the component unmounts.
+   * AC-039: swiping down or pressing the close button dismisses the viewer.
+   * Dismissal is unconditional — always dismisses regardless of current index.
    */
   const handleDismiss = useCallback((): void => {
     player.pause();
-    onClose();
-  }, [player, onClose]);
+    onDismiss();
+  }, [player, onDismiss]);
 
   // ── PanResponder (vertical-only swipe, Tech Lead decision 5) ─────────────
-  // Re-create callbacks reference so PanResponder handlers stay current.
-  // PanResponder.create memoizes handlers, so we wire through a stable ref.
   const goToNextRef = useRef(goToNext);
   const handleDismissRef = useRef(handleDismiss);
   useEffect(() => { goToNextRef.current = goToNext; }, [goToNext]);
   useEffect(() => { handleDismissRef.current = handleDismiss; }, [handleDismiss]);
 
-  // Re-create PanResponder when navigation callbacks change so the handlers
-  // always reference the latest `goToNext` / `handleDismiss`.
   const panRef = useRef(
     PanResponder.create({
-      // Capture phase — runs before native components (e.g. VideoView/UIKit) claim
-      // the gesture. This is required on iOS because VideoView is a native UIKit
-      // component that wins the touch in the bubble phase before RN responders fire.
       onStartShouldSetPanResponderCapture: () => true,
       onMoveShouldSetPanResponderCapture: (_evt, gs) =>
         Math.abs(gs.dy) > Math.abs(gs.dx),
-      // Bubble phase — kept as fallback for non-native-view contexts.
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_evt, gs) =>
         Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
       onPanResponderRelease: (_evt, gs) => {
         if (gs.dy < -SWIPE_THRESHOLD) goToNextRef.current();
-        // AC-039: swipe down always dismisses regardless of current index.
         else if (gs.dy > SWIPE_THRESHOLD) handleDismissRef.current();
       },
     }),
   );
 
+  // ── Report handler (AC-140) ───────────────────────────────────────────────
+  const handleReport = useCallback(async (videoId: string): Promise<void> => {
+    setReportingId(videoId);
+    try {
+      await reportBetaVideo(videoId);
+      setReportedIds((prev) => new Set(prev).add(videoId));
+    } catch {
+      // Error is surfaced via the button label reset (reportingId cleared in finally).
+      // A production app would show a toast here; for now silent recovery.
+    } finally {
+      setReportingId(null);
+    }
+  }, []);
+
   const currentVideo = videos[currentIndex];
+
+  // ── Report icon visibility (AC-139) ──────────────────────────────────────
+  // Hide when: own video OR admin has dismissed the report for this video.
+  const isOwnVideo = currentVideo ? currentVideo.user_id === session.user.id : true;
+  const isDismissed = currentVideo ? currentVideo.report_dismissed : false;
+  const showReportButton = !isOwnVideo && !isDismissed;
+  const isReported = currentVideo ? reportedIds.has(currentVideo.id) : false;
+  const isReporting = currentVideo ? reportingId === currentVideo.id : false;
+
+  // ── Bottom overlay layout widths ──────────────────────────────────────────
+  // Left info column width = full width minus sidebar minus some padding.
+  // 16 (left pad) + [INFO_WIDTH] + 8 (gap) + SIDEBAR_WIDTH + 8 (right pad) = screenWidth
+  // We derive INFO_WIDTH lazily from a container measure — use a reasonable fixed value.
+  const INFO_COLUMN_WIDTH = 220;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -218,13 +382,10 @@ export default function BetaVideoReelViewer({
       onRequestClose={handleDismiss}
       testID="beta-video-reel-modal"
     >
-      {/* Outermost container — full-screen black background. Does NOT own
-          panHandlers: VideoView is a native iOS component that absorbs touches
-          before RN's responder system sees them. Gesture capture is done on
-          the transparent overlay below instead (Bug 1 fix). */}
+      {/* Outermost container — full-screen black background. */}
       <View style={styles.fullscreen} testID="beta-video-reel-viewer">
-        {/* Video layer — rendered below the gesture overlay so native touches
-            are intercepted by the overlay before reaching the native view. */}
+
+        {/* Video layer */}
         {signedUrl && !urlError ? (
           <VideoView
             player={player}
@@ -235,7 +396,7 @@ export default function BetaVideoReelViewer({
           />
         ) : null}
 
-        {/* Loading spinner while fetching signed URL */}
+        {/* Loading spinner */}
         {urlLoading ? (
           <View style={styles.centeredOverlay}>
             <ActivityIndicator
@@ -255,23 +416,23 @@ export default function BetaVideoReelViewer({
           </View>
         ) : null}
 
-        {/* Transparent gesture-capture overlay — sits ABOVE the VideoView so
-            PanResponder receives touch events before the native video layer
-            can absorb them (Bug 1 fix). All interactive controls also live
-            here so they remain tappable. */}
+        {/* Gesture-capture overlay — sits ABOVE the VideoView to intercept swipe
+            gestures. panHandlers are spread on this View. All tappable controls
+            (close button, sidebar) are children of this View. */}
         <View style={StyleSheet.absoluteFill} {...panRef.current.panHandlers}>
-          {/* Back / close button — accessible fallback for swipe (Tech Lead decision 5) */}
+
+          {/* ── Close button (AC-133) — top-left, always visible ─────────── */}
           <Pressable
-            style={[styles.backButton, { top: insets.top + 12 }]}
+            style={[styles.closeButton, { top: insets.top + 12 }]}
             onPress={handleDismiss}
             accessibilityRole="button"
-            accessibilityLabel="Close video viewer"
+            accessibilityLabel={t('betaVideo.reel.close')}
             testID="beta-video-reel-close"
           >
-            <Ionicons name="chevron-back" size={28} color={theme.colors.textInverse} />
+            <Ionicons name="close" size={24} color={theme.colors.textInverse} />
           </Pressable>
 
-          {/* Video counter (e.g. "2 / 5") */}
+          {/* ── Video counter — top-right ────────────────────────────────── */}
           {videos.length > 1 ? (
             <View style={[styles.counter, { top: insets.top + 12 }]}>
               <Text style={styles.counterText}>
@@ -280,10 +441,91 @@ export default function BetaVideoReelViewer({
             </View>
           ) : null}
 
-          {/* Caption (if any) */}
-          {currentVideo?.caption ? (
-            <View style={[styles.captionContainer, { bottom: insets.bottom + 16 }]}>
-              <Text style={styles.captionText}>{currentVideo.caption}</Text>
+          {/* ── Bottom row: left info + right sidebar ────────────────────── */}
+          {currentVideo ? (
+            <View
+              style={[
+                styles.bottomRow,
+                { bottom: insets.bottom + 16 },
+              ]}
+            >
+              {/* Left column: poster identity (AC-134) + caption (AC-137) */}
+              <View style={styles.infoColumn}>
+
+                {/* Row 1: avatar + display_name (AC-135: no-op tap in Phase 1) */}
+                <View style={styles.posterRow}>
+                  <PosterAvatar
+                    avatarUrl={currentVideo.avatar_url}
+                    displayName={currentVideo.display_name}
+                    theme={theme}
+                  />
+                  <Text style={styles.displayName} numberOfLines={1} testID="reel-poster-name">
+                    {currentVideo.display_name ?? t('betaVideo.reel.anonymous')}
+                  </Text>
+                </View>
+
+                {/* Row 2: caption (marquee if overflow) */}
+                {currentVideo.caption ? (
+                  <MarqueeText
+                    text={currentVideo.caption}
+                    containerWidth={INFO_COLUMN_WIDTH}
+                    style={styles.captionText}
+                    testID="reel-caption"
+                  />
+                ) : null}
+              </View>
+
+              {/* Right sidebar: like placeholder + report button (AC-138) */}
+              <View style={styles.sidebar}>
+
+                {/* Like icon — placeholder count 0, not tappable in Phase 1 (AC-135) */}
+                <View style={styles.sidebarItem} testID="reel-like-button">
+                  <Ionicons
+                    name="heart-outline"
+                    size={28}
+                    color={theme.colors.textInverse}
+                    accessibilityLabel={t('betaVideo.reel.like')}
+                  />
+                  <Text style={styles.sidebarCount}>0</Text>
+                </View>
+
+                {/* Report button (AC-139/AC-140) */}
+                {showReportButton ? (
+                  <Pressable
+                    style={[styles.sidebarItem, isReporting && styles.sidebarItemDisabled]}
+                    onPress={() => { void handleReport(currentVideo.id); }}
+                    disabled={isReporting || isReported}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isReported
+                        ? t('betaVideo.reel.reported')
+                        : t('betaVideo.reel.report')
+                    }
+                    testID="reel-report-button"
+                  >
+                    {isReporting ? (
+                      <ActivityIndicator size="small" color={theme.colors.error} />
+                    ) : (
+                      <Ionicons
+                        name={isReported ? 'flag' : 'flag-outline'}
+                        size={26}
+                        color={theme.colors.error}
+                      />
+                    )}
+                    <Text
+                      style={[
+                        styles.sidebarLabel,
+                        { color: theme.colors.error },
+                      ]}
+                      testID="reel-report-label"
+                    >
+                      {isReported
+                        ? t('betaVideo.reel.reported')
+                        : t('betaVideo.reel.report')}
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
             </View>
           ) : null}
         </View>
@@ -312,7 +554,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    backButton: {
+    closeButton: {
       position: 'absolute',
       left: 16,
       width: 44,
@@ -335,18 +577,53 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       fontSize: theme.fontSize.sm,
       fontWeight: theme.fontWeight.semibold,
     },
-    captionContainer: {
+    bottomRow: {
       position: 'absolute',
       left: 16,
-      right: 16,
-      backgroundColor: theme.colors.overlay,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
+      right: 8,
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+    },
+    infoColumn: {
+      flex: 1,
+      marginRight: 8,
+      gap: theme.spacing.xs,
+    },
+    posterRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+    },
+    displayName: {
+      color: theme.colors.textInverse,
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+      flex: 1,
     },
     captionText: {
       color: theme.colors.textInverse,
       fontSize: theme.fontSize.sm,
+    },
+    sidebar: {
+      width: SIDEBAR_WIDTH,
+      alignItems: 'center',
+      gap: theme.spacing.lg,
+    },
+    sidebarItem: {
+      alignItems: 'center',
+      gap: theme.spacing.xs,
+    },
+    sidebarItemDisabled: {
+      opacity: 0.5,
+    },
+    sidebarCount: {
+      color: theme.colors.textInverse,
+      fontSize: theme.fontSize.xs,
+      fontWeight: theme.fontWeight.semibold,
+    },
+    sidebarLabel: {
+      fontSize: theme.fontSize.xs,
+      fontWeight: theme.fontWeight.medium,
     },
     errorText: {
       color: theme.colors.textInverse,

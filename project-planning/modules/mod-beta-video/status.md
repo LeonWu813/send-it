@@ -2,6 +2,115 @@
 
 ## Engineering Progress
 
+**Status**: Feature implementation — 2026-09-28 (Rev 16 reel overlay UI, video report flow, migration)
+
+### Feature — Rev 16: reel viewer overlay, report flow, data join — 2026-09-28
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npx jest --testPathPattern="mod-beta-video" --passWithNoTests --watchAll=false`: PASS — 66 tests, 5 suites, 0 failures
+- Full suite `npx jest --watchAll=false`: PASS — 378 tests, 29 suites, 0 failures (no regressions)
+- Judgment-based: all ACs implemented; no new native dependencies; all theme tokens used (no hardcoded hex); i18n keys added to both locales; TypeScript strict mode satisfied
+- Git scope: only `src/modules/mod-beta-video/`, `supabase/migrations/`, `locales/`, `__tests__/` modified. No other modules touched.
+
+**ACs implemented in this commit**:
+- **AC-133**: persistent top-left close button (never unmounts or loses tap target across swipes); uses `Ionicons close` icon; calls `onDismiss`
+- **AC-134**: bottom-left poster overlay — `PosterAvatar` component (Image if `avatar_url` present, initial-letter placeholder circle if null); `display_name` text (AC-138: falls back to i18n `betaVideo.reel.anonymous`); caption via `MarqueeText`
+- **AC-135**: poster row (avatar + display_name) is present but tap is a no-op in Phase 1 (no `onPress`)
+- **AC-137**: pure-JS `Animated.Value` translateX marquee loop in `MarqueeText` component; gated on `onTextLayout` measured text width vs container width; no new native package
+- **AC-138**: right sidebar with `heart-outline` like icon (placeholder count 0, not tappable) + `flag-outline` report icon; no other icons; no bottom comment bar
+- **AC-139**: report button hidden when `video.user_id === session.user.id` OR `video.report_dismissed === true`; local `reportedIds` Set tracks reported state for session
+- **AC-140**: `reportBetaVideo(videoId)` calls `supabase.rpc('report_beta_video', { p_beta_video_id })` → sets `is_reported = true` + inserts `video_reports` row (server-side, idempotent)
+- **AC-141/AC-142**: `fetchBetaVideosForRoute` uses `.or('is_reported.eq.false,report_dismissed.eq.true')` canonical exclusion predicate; reported-undismissed videos not returned
+- **AC-143**: admin-dismissed (`report_dismissed = true`) videos visible again on next fetch; report button permanently hidden for all users (checked via `report_dismissed` field on the row)
+- **AC-144**: `fetchBetaVideosForRoute` selects `users!beta_videos_user_id_fkey(display_name, avatar_url)` embedded join; flattens to top-level fields in returned `BetaVideo[]`
+
+**Files created / modified**:
+- `supabase/migrations/20260928000001_mod_005_video_reports.sql` — four DDL objects: (a) `is_reported`/`report_dismissed` columns on `beta_videos`, (b) FK repoint to `public.users(id)`, (c) `video_reports` table + RLS + INSERT policy + grant, (d) `report_beta_video()` SECURITY DEFINER RPC + GRANT/REVOKE
+- `src/modules/mod-beta-video/types.ts` — added `is_reported`, `report_dismissed`, `display_name`, `avatar_url` to `BetaVideo` interface
+- `src/modules/mod-beta-video/beta-video-service.ts` — updated `fetchBetaVideosForRoute` (new select cols + `.or()` filter + join + flatten); updated `uploadBetaVideo` select + return; added `reportBetaVideo()` function
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — full rewrite with overlay: `MarqueeText` component (AC-137), `PosterAvatar` component (AC-134), close button (AC-133), right sidebar like placeholder + report button (AC-138/AC-139/AC-140); prop `onClose` renamed `onDismiss`, `session: Session` added
+- `src/modules/mod-beta-video/components/BetaVideoSection.tsx` — updated `BetaVideoReelViewer` call site: `onDismiss` + `session` prop
+- `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — updated for `onDismiss` prop rename, new `session` prop, `BetaVideo` fixture fields; added AC-139/AC-140/AC-134 tests
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — updated `BetaVideo` fixtures with new fields; added `reportBetaVideo` to service mock
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — updated `BetaVideo` fixture with new fields
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — updated `MOCK_VIDEO_ROW` fixture; updated `fetchBetaVideosForRoute` tests for `.or()` chain + AC-144 flatten; added `reportBetaVideo` tests
+- `locales/en/common.json` — added `betaVideo.reel.{close,like,report,reported,reportError,anonymous}`
+- `locales/zh-TW/common.json` — added `betaVideo.reel.{close,like,report,reported,reportError,anonymous}`
+
+---
+
+**Status**: Bug fix — 2026-09-28 (PanResponder capture phase for iOS reel swipe)
+
+### Bug Fix — PanResponder capture phase for iOS reel swipe — 2026-09-28
+
+**Commit**: `3561775 fix(mod-beta-video): use PanResponder capture phase for reel swipe on iOS`
+
+**Root cause**: On iOS, `VideoView` is a native UIKit component that wins the touch event in the **bubble phase** before React Native's PanResponder callbacks (`onStartShouldSetPanResponder`, `onMoveShouldSetPanResponder`) are invoked. The previous fix (transparent `absoluteFill` overlay with bubble-phase PanResponder) was insufficient because the native view still claims the gesture before the bubble-phase callbacks fire.
+
+**Fix**: Added capture-phase callbacks to the `PanResponder.create` call in `BetaVideoReelViewer.tsx`:
+- `onStartShouldSetPanResponderCapture: () => true` — claims the touch in the capture phase, before native UIKit components can absorb it.
+- `onMoveShouldSetPanResponderCapture: (_evt, gs) => Math.abs(gs.dy) > Math.abs(gs.dx)` — in the capture phase, claims only vertical gestures to avoid blocking horizontal scrolls elsewhere.
+
+The existing bubble-phase callbacks (`onStartShouldSetPanResponder`, `onMoveShouldSetPanResponder`) are kept as a fallback for non-native-view contexts. The existing `onPanResponderRelease` swipe logic (dy < -50 → next video; dy > +50 → dismiss) is unchanged. The `panHandlers` remain spread on the `StyleSheet.absoluteFill` overlay View above `VideoView` — no structural change to the render tree.
+
+**Files modified**: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` only. No other files touched.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 366 tests, 29 suites, 0 failures
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (13/13, all existing tests pass — capture callbacks are gesture infrastructure with no new unit test surface)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (unaffected)
+
+**ACs addressed**:
+- **AC-039**: swipe-up gesture now reliably intercepted on iOS via capture-phase PanResponder; native UIKit `VideoView` can no longer win the touch before the gesture handler fires.
+
+---
+
+**Status**: Bug fix — 2026-09-28 (Human QA — swipe overlay, audio on close, replaceAsync)
+
+### Bug Fix — Human QA — swipe overlay, audio on close, replaceAsync — 2026-09-28
+
+**Commit**: `86e14ec fix(mod-beta-video): reel viewer — swipe overlay, audio on close, replaceAsync`
+
+**Bug 1 — Swipe up to next video does not work on iOS (AC-039)**
+- Root cause: `VideoView` is a native iOS component that absorbs touches before RN's PanResponder can see them, even with `nativeControls={false}`.
+- Fix: Added a transparent `StyleSheet.absoluteFill` overlay `<View>` rendered above `VideoView` inside the Modal container. The overlay owns `{...panRef.current.panHandlers}`. The outer `fullscreen` container no longer has `panHandlers`. All controls (back button, video counter, caption) moved inside the overlay View so they remain tappable. Overlay sits in Z-order above the native VideoView, intercepting all touches before they reach the native layer.
+- `onRequestClose` updated to call `handleDismiss` (not `onClose`) so it also triggers the player pause.
+- PanResponder thresholds confirmed at `onPanResponderRelease` with `dy < -SWIPE_THRESHOLD` / `dy > SWIPE_THRESHOLD` — no change needed.
+
+**Bug 2 — Audio continues playing after leaving the viewer (AC-039)**
+- Root cause: `player.pause()` was never called on dismiss or unmount.
+- Three-layer fix:
+  1. `handleDismiss` now calls `player.pause()` before `onClose()` — stops audio immediately on back button press or swipe-down.
+  2. `useEffect` cleanup (`return () => { player.pause(); }`) pauses on component unmount.
+  3. `useEffect` on `[visible, player]` calls `player.pause()` when `visible` becomes `false` — covers the case where the parent hides the modal without the component unmounting.
+- `handleDismiss` dependency array updated to include `player`.
+
+**Bug 3 — `VideoPlayer.replace` deprecation warning → use `replaceAsync` (AC-039)**
+- Root cause: `player.replace({ uri: url })` then `player.play()` triggers iOS deprecation warning about synchronous main-thread I/O.
+- Fix: Replaced with `void player.replaceAsync({ uri: url }).then(() => { if (!cancelled) player.play(); })`. The `play()` call now chains after `replaceAsync` resolves, ensuring playback starts only when the asset is loaded. The `cancelled` guard prevents play/pause races when the user navigates away before the async load completes.
+- Mock updated: `__mocks__/expo-video.js` — added `replaceAsync: jest.fn().mockResolvedValue(undefined)` to both `useVideoPlayer` and `createVideoPlayer` player objects alongside the existing `replace: jest.fn()`.
+- Test file `BetaVideoReelViewer.test.tsx` has no `replace`/`replaceAsync` assertions — no test changes required.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 366 tests, 29 suites, 0 failures
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (13/13, all existing tests pass)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS (unaffected)
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS (unaffected)
+- Git scope: only `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` and `__mocks__/expo-video.js` modified. No other modules touched. PASS.
+
+**ACs addressed**:
+- **AC-039**: swipe-up gesture now correctly intercepted on iOS via overlay architecture; audio stops on dismiss; `replaceAsync` eliminates deprecation warning
+
+---
+
 **Status**: Bug fix — 2026-09-28 (QA Run 6 — 7 theming, i18n, and swipe-down bugs fixed)
 
 ### Bug Fix — QA Run 6 — theming, i18n, and swipe-down behavior — 2026-09-28

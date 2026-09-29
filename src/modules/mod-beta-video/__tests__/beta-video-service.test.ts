@@ -19,6 +19,7 @@ jest.mock('../../../lib/supabase', () => ({
     storage: {
       from: jest.fn(),
     },
+    rpc: jest.fn(),
   },
 }));
 
@@ -29,6 +30,7 @@ import {
   uploadBetaVideo,
   getVideoSignedUrl,
   getThumbnailSignedUrl,
+  reportBetaVideo,
 } from '../beta-video-service';
 import type { BetaVideo } from '../types';
 
@@ -49,6 +51,10 @@ const MOCK_VIDEO_ROW: BetaVideo = {
   duration_seconds: 30,
   caption: 'Nice heel hook sequence',
   created_at: '2026-09-24T10:00:00Z',
+  is_reported: false,
+  report_dismissed: false,
+  display_name: 'Test Climber',
+  avatar_url: null,
 };
 
 describe('fetchBetaVideosForRoute', () => {
@@ -57,10 +63,18 @@ describe('fetchBetaVideosForRoute', () => {
   });
 
   it('returns an array of BetaVideo rows on success', async () => {
+    // Supabase chain: select → eq → or → order
+    // The row returned by Supabase includes a nested `users` object which the
+    // service flattens to display_name / avatar_url at the top level (AC-144).
+    const rawRow = {
+      ...MOCK_VIDEO_ROW,
+      users: { display_name: 'Test Climber', avatar_url: null },
+    };
     const selectChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
-      order: jest.fn().mockResolvedValue({ data: [MOCK_VIDEO_ROW], error: null }),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [rawRow], error: null }),
     };
     (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
 
@@ -69,12 +83,16 @@ describe('fetchBetaVideosForRoute', () => {
     expect(result).toHaveLength(1);
     expect(result[0].route_id).toBe('route-001');
     expect(result[0].id).toBe('vid-001');
+    // AC-144: display_name and avatar_url flattened from nested users object
+    expect(result[0].display_name).toBe('Test Climber');
+    expect(result[0].avatar_url).toBeNull();
   });
 
   it('returns an empty array when there are no videos', async () => {
     const selectChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
       order: jest.fn().mockResolvedValue({ data: [], error: null }),
     };
     (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
@@ -84,10 +102,26 @@ describe('fetchBetaVideosForRoute', () => {
     expect(result).toHaveLength(0);
   });
 
+  it('AC-142: uses the canonical exclusion predicate to filter reported videos', async () => {
+    // Verify .or() is called with the canonical predicate (AC-142/AC-143).
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    await fetchBetaVideosForRoute('route-001');
+
+    expect(selectChain.or).toHaveBeenCalledWith('is_reported.eq.false,report_dismissed.eq.true');
+  });
+
   it('throws a user-facing error when Supabase returns an error', async () => {
     const selectChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
       order: jest.fn().mockResolvedValue({ data: null, error: new Error('DB error') }),
     };
     (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
@@ -286,5 +320,38 @@ describe('uploadBetaVideo', () => {
 
     // Cleanup: the video artifact should have been removed
     expect(storageBucket.remove).toHaveBeenCalled();
+  });
+});
+
+describe('reportBetaVideo', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('AC-140: calls supabase.rpc with report_beta_video and the correct video ID', async () => {
+    (mockSupabase.rpc as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+    await reportBetaVideo('vid-001');
+
+    expect(mockSupabase.rpc).toHaveBeenCalledWith('report_beta_video', {
+      p_beta_video_id: 'vid-001',
+    });
+  });
+
+  it('AC-140: resolves without throwing on RPC success', async () => {
+    (mockSupabase.rpc as jest.Mock).mockResolvedValue({ data: null, error: null });
+
+    await expect(reportBetaVideo('vid-001')).resolves.toBeUndefined();
+  });
+
+  it('throws a user-facing error when the RPC returns an error', async () => {
+    (mockSupabase.rpc as jest.Mock).mockResolvedValue({
+      data: null,
+      error: new Error('not_authenticated'),
+    });
+
+    await expect(reportBetaVideo('vid-001')).rejects.toThrow(
+      'Failed to report video',
+    );
   });
 });

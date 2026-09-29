@@ -16,6 +16,14 @@ export interface BetaVideo {
   duration_seconds: number;
   caption: string | null;
   created_at: string;
+  /** True when any user has filed a one-tap report via report_beta_video() RPC (AC-140). */
+  is_reported: boolean;
+  /** True when an admin has dismissed the report via Supabase Studio (AC-143). */
+  report_dismissed: boolean;
+  /** Poster's display name, joined from public.users via beta_videos_user_id_fkey (AC-144). */
+  display_name: string | null;
+  /** Poster's avatar URL, joined from public.users via beta_videos_user_id_fkey (AC-144). */
+  avatar_url: string | null;
 }
 
 /** Input payload for uploading a new beta video. */

@@ -327,7 +327,8 @@ export default function BetaVideoSection({
         videos={betaVideos}
         initialIndex={openIndex ?? 0}
         visible={openIndex !== null}
-        onClose={() => { setOpenIndex(null); }}
+        onDismiss={() => { setOpenIndex(null); }}
+        session={session}
       />
     </View>
   );

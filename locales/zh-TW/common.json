@@ -277,6 +277,14 @@
       "play": "播放 Beta 影片",
       "thumbnailAlt": "Beta 影片縮圖"
     },
+    "reel": {
+      "close": "關閉",
+      "like": "按讚",
+      "report": "檢舉",
+      "reported": "已回報",
+      "reportError": "回報失敗，請再試一次",
+      "anonymous": "匿名"
+    },
     "errors": {
       "loadFailed": "載入 Beta 影片失敗，請再試一次。",
       "uploadFailed": "上傳 Beta 影片失敗，請再試一次。",

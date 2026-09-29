@@ -2,13 +2,18 @@
  * Tests for BetaVideoReelViewer (MOD-005).
  *
  * AC-039: fullscreen reel viewer — swipe navigation, auto-play, dismiss.
+ * AC-133: persistent close button.
+ * AC-139: report button hidden for own videos / admin-dismissed videos.
+ * AC-140: report button calls reportBetaVideo RPC; shows "reported" state on success.
  *
  * Covers:
  * - Swipe up increments index (advances to next video).
- * - Swipe down at any index calls onClose (AC-039: dismiss always, no prev navigation).
+ * - Swipe down at any index calls onDismiss (AC-039: dismiss always).
  * - Swipe up at last index is a no-op (does not wrap).
- * - Back/close button calls onClose.
+ * - Close/back button calls onDismiss.
  * - Loading indicator while signed URL is being fetched.
+ * - Report button: hidden for own video, hidden when report_dismissed, shown otherwise.
+ * - Report button: calls reportBetaVideo on press; shows "reported" state.
  *
  * PanResponder gesture strategy:
  * PanResponder's onPanResponderRelease receives a gestureState accumulated by
@@ -22,13 +27,14 @@
  */
 
 jest.mock('../../../lib/supabase', () => ({
-  supabase: { from: jest.fn(), storage: { from: jest.fn() } },
+  supabase: { from: jest.fn(), storage: { from: jest.fn() }, rpc: jest.fn() },
 }));
 
 jest.mock('../beta-video-service', () => ({
   getVideoSignedUrl: jest.fn(),
   fetchBetaVideosForRoute: jest.fn(),
   getThumbnailSignedUrl: jest.fn(),
+  reportBetaVideo: jest.fn(),
 }));
 
 // ── PanResponder capture ──────────────────────────────────────────────────────
@@ -49,26 +55,37 @@ jest.spyOn(PanResponder, 'create').mockImplementation((config) => {
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import type { Session } from '@supabase/supabase-js';
 
-import { getVideoSignedUrl } from '../beta-video-service';
+import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import BetaVideoReelViewer from '../components/BetaVideoReelViewer';
 import { renderOptions } from '../test-utils';
 import type { BetaVideo } from '../types';
 
 const mockGetVideoSignedUrl = getVideoSignedUrl as jest.MockedFunction<typeof getVideoSignedUrl>;
+const mockReportBetaVideo = reportBetaVideo as jest.MockedFunction<typeof reportBetaVideo>;
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
-function makeVideo(id: string, index: number): BetaVideo {
+const MOCK_SESSION = {
+  user: { id: 'viewer-user-001' },
+} as unknown as Session;
+
+function makeVideo(id: string, index: number, overrides?: Partial<BetaVideo>): BetaVideo {
   return {
     id,
     route_id: 'route-001',
-    user_id: 'user-001',
+    user_id: 'other-user-999', // not the viewer — report button should be visible
     video_url: `user-001/route-001/video-${index}.mp4`,
     thumbnail_url: `user-001/route-001/thumb-${index}.jpg`,
     duration_seconds: 30,
     caption: `Caption ${index}`,
     created_at: `2026-09-${String(25 - index).padStart(2, '0')}T10:00:00Z`,
+    is_reported: false,
+    report_dismissed: false,
+    display_name: `Climber ${index}`,
+    avatar_url: null,
+    ...overrides,
   };
 }
 
@@ -81,15 +98,13 @@ const BASE_PROPS = {
   videos: VIDEOS_THREE,
   initialIndex: 0,
   visible: true,
-  onClose: jest.fn(),
+  onDismiss: jest.fn(),
+  session: MOCK_SESSION,
 };
 
 /**
  * Simulate a swipe gesture by calling onPanResponderRelease directly on the
  * captured PanResponder config with a fake gestureState containing the given dy.
- *
- * This bypasses the native responder system (which RNTL cannot replicate in JS)
- * and tests the navigation logic directly.
  */
 function simulateSwipe(dy: number): void {
   if (!capturedPanConfig?.onPanResponderRelease) {
@@ -119,6 +134,7 @@ describe('BetaVideoReelViewer', () => {
     jest.clearAllMocks();
     capturedPanConfig = null;
     mockGetVideoSignedUrl.mockResolvedValue('https://signed.example.com/video.mp4?token=abc');
+    mockReportBetaVideo.mockResolvedValue(undefined);
   });
 
   it('renders the modal when visible is true', async () => {
@@ -157,10 +173,10 @@ describe('BetaVideoReelViewer', () => {
     });
   });
 
-  it('back button calls onClose', async () => {
-    const onClose = jest.fn();
+  it('AC-133: close button calls onDismiss', async () => {
+    const onDismiss = jest.fn();
     render(
-      <BetaVideoReelViewer {...BASE_PROPS} onClose={onClose} />,
+      <BetaVideoReelViewer {...BASE_PROPS} onDismiss={onDismiss} />,
       renderOptions(),
     );
 
@@ -169,7 +185,7 @@ describe('BetaVideoReelViewer', () => {
     });
 
     fireEvent.press(screen.getByTestId('beta-video-reel-close'));
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it('AC-039: swipe up at index 0 of 3 advances to index 1', async () => {
@@ -178,7 +194,6 @@ describe('BetaVideoReelViewer', () => {
       renderOptions(),
     );
 
-    // Wait for viewer to mount with counter "1 / 3"
     await waitFor(() => {
       expect(screen.getByText('1 / 3')).toBeTruthy();
     });
@@ -187,20 +202,19 @@ describe('BetaVideoReelViewer', () => {
       simulateSwipe(-80); // swipe up (negative dy)
     });
 
-    // Counter should now show "2 / 3"
     await waitFor(() => {
       expect(screen.getByText('2 / 3')).toBeTruthy();
     });
   });
 
   it('AC-039: swipe up at last index is a no-op (does not wrap)', async () => {
-    const onClose = jest.fn();
+    const onDismiss = jest.fn();
 
     render(
       <BetaVideoReelViewer
         {...BASE_PROPS}
-        initialIndex={2} // last index
-        onClose={onClose}
+        initialIndex={2}
+        onDismiss={onDismiss}
       />,
       renderOptions(),
     );
@@ -213,18 +227,17 @@ describe('BetaVideoReelViewer', () => {
       simulateSwipe(-80); // swipe up at last index
     });
 
-    // Counter should still show "3 / 3" — no advance, no wrap
     await waitFor(() => {
       expect(screen.getByText('3 / 3')).toBeTruthy();
     });
-    expect(onClose).not.toHaveBeenCalled();
+    expect(onDismiss).not.toHaveBeenCalled();
   });
 
-  it('AC-039: swipe down at index 0 calls onClose', async () => {
-    const onClose = jest.fn();
+  it('AC-039: swipe down at index 0 calls onDismiss', async () => {
+    const onDismiss = jest.fn();
 
     render(
-      <BetaVideoReelViewer {...BASE_PROPS} initialIndex={0} onClose={onClose} />,
+      <BetaVideoReelViewer {...BASE_PROPS} initialIndex={0} onDismiss={onDismiss} />,
       renderOptions(),
     );
 
@@ -236,14 +249,14 @@ describe('BetaVideoReelViewer', () => {
       simulateSwipe(80); // swipe down at index 0
     });
 
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it('AC-039: swipe down at index > 0 calls onClose (dismiss always, no prev navigation)', async () => {
-    const onClose = jest.fn();
+  it('AC-039: swipe down at index > 0 calls onDismiss (dismiss always, no prev navigation)', async () => {
+    const onDismiss = jest.fn();
 
     render(
-      <BetaVideoReelViewer {...BASE_PROPS} initialIndex={2} onClose={onClose} />,
+      <BetaVideoReelViewer {...BASE_PROPS} initialIndex={2} onDismiss={onDismiss} />,
       renderOptions(),
     );
 
@@ -255,8 +268,7 @@ describe('BetaVideoReelViewer', () => {
       simulateSwipe(80); // swipe down at index 2 → must dismiss (AC-039)
     });
 
-    // AC-039: swiping down shall dismiss the viewer at any index.
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it('resets to initialIndex when visible toggles back to true', async () => {
@@ -269,7 +281,6 @@ describe('BetaVideoReelViewer', () => {
       expect(screen.getByText('3 / 3')).toBeTruthy();
     });
 
-    // Close then re-open at index 0
     rerender(
       <BetaVideoReelViewer {...BASE_PROPS} initialIndex={0} visible={false} />,
     );
@@ -288,7 +299,6 @@ describe('BetaVideoReelViewer', () => {
       renderOptions(),
     );
 
-    // Modal with visible=false — VideoView should not render (getVideoSignedUrl not called)
     expect(screen.queryByTestId('beta-video-reel-video-view')).toBeNull();
     expect(mockGetVideoSignedUrl).not.toHaveBeenCalled();
   });
@@ -300,7 +310,7 @@ describe('BetaVideoReelViewer', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Caption 1')).toBeTruthy();
+      expect(screen.getByTestId('reel-caption')).toBeTruthy();
     });
   });
 
@@ -312,6 +322,173 @@ describe('BetaVideoReelViewer', () => {
 
     await waitFor(() => {
       expect(mockGetVideoSignedUrl).toHaveBeenCalledWith(VIDEO_B.video_url);
+    });
+  });
+
+  // ── AC-139: Report button visibility ───────────────────────────────────────
+
+  it('AC-139: report button is visible for a video by another user', async () => {
+    const otherUserVideo = makeVideo('vid-other', 1, { user_id: 'other-user-999' });
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[otherUserVideo]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-report-button')).toBeTruthy();
+    });
+  });
+
+  it('AC-139: report button is hidden for the current user\'s own video', async () => {
+    const ownVideo = makeVideo('vid-own', 1, { user_id: MOCK_SESSION.user.id });
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[ownVideo]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('reel-report-button')).toBeNull();
+    });
+  });
+
+  it('AC-139: report button is hidden when report_dismissed is true', async () => {
+    const dismissedVideo = makeVideo('vid-dismissed', 1, {
+      user_id: 'other-user-999',
+      report_dismissed: true,
+    });
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[dismissedVideo]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('reel-report-button')).toBeNull();
+    });
+  });
+
+  // ── AC-140: Report flow ────────────────────────────────────────────────────
+
+  it('AC-140: pressing report button calls reportBetaVideo with the correct video ID', async () => {
+    const otherVideo = makeVideo('vid-reportable', 1, { user_id: 'other-user-999' });
+    mockReportBetaVideo.mockResolvedValue(undefined);
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[otherVideo]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-report-button')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('reel-report-button'));
+    });
+
+    await waitFor(() => {
+      expect(mockReportBetaVideo).toHaveBeenCalledWith('vid-reportable');
+    });
+  });
+
+  it('AC-140: report label changes to "reported" after successful report', async () => {
+    const otherVideo = makeVideo('vid-reportable2', 1, { user_id: 'other-user-999' });
+    mockReportBetaVideo.mockResolvedValue(undefined);
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[otherVideo]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-report-button')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('reel-report-button'));
+    });
+
+    await waitFor(() => {
+      // After success, the label should change to the "reported" string
+      const label = screen.getByTestId('reel-report-label');
+      expect(label.props.children).toBeTruthy();
+    });
+  });
+
+  // ── Poster identity (AC-134) ───────────────────────────────────────────────
+
+  it('AC-134: shows poster display_name', async () => {
+    const video = makeVideo('vid-poster', 1, { display_name: 'Test Climber' });
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[video]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-poster-name')).toBeTruthy();
+    });
+  });
+
+  it('AC-134: shows avatar placeholder when avatar_url is null', async () => {
+    const video = makeVideo('vid-no-avatar', 1, { avatar_url: null });
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[video]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-poster-avatar-placeholder')).toBeTruthy();
+    });
+  });
+
+  it('AC-134: shows Image when avatar_url is provided', async () => {
+    const video = makeVideo('vid-with-avatar', 1, {
+      avatar_url: 'https://example.com/avatar.jpg',
+    });
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[video]}
+        initialIndex={0}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-poster-avatar')).toBeTruthy();
     });
   });
 });

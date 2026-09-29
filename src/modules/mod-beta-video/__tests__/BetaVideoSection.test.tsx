@@ -18,6 +18,7 @@ jest.mock('../beta-video-service', () => ({
   fetchBetaVideosForRoute: jest.fn(),
   getVideoSignedUrl: jest.fn(),
   getThumbnailSignedUrl: jest.fn(),
+  reportBetaVideo: jest.fn(),
 }));
 
 jest.mock('expo-image-picker', () => ({
@@ -54,6 +55,10 @@ const MOCK_VIDEO: BetaVideo = {
   duration_seconds: 30,
   caption: 'Great heel hook',
   created_at: '2026-09-24T10:00:00Z',
+  is_reported: false,
+  report_dismissed: false,
+  display_name: 'Test Climber',
+  avatar_url: null,
 };
 
 const MOCK_VIDEO_2: BetaVideo = {
@@ -65,6 +70,10 @@ const MOCK_VIDEO_2: BetaVideo = {
   duration_seconds: 45,
   caption: 'Toe hook variation',
   created_at: '2026-09-23T10:00:00Z',
+  is_reported: false,
+  report_dismissed: false,
+  display_name: 'Test Climber 2',
+  avatar_url: null,
 };
 
 describe('BetaVideoSection', () => {

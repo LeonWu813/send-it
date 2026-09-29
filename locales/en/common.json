@@ -277,6 +277,14 @@
       "play": "Play beta video",
       "thumbnailAlt": "Beta video thumbnail"
     },
+    "reel": {
+      "close": "Close",
+      "like": "Like",
+      "report": "Report",
+      "reported": "Reported",
+      "reportError": "Could not report. Try again.",
+      "anonymous": "Anonymous"
+    },
     "errors": {
       "loadFailed": "Failed to load beta videos. Please try again.",
       "uploadFailed": "Failed to upload beta video. Please try again.",
