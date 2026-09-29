@@ -254,3 +254,15 @@ Human QA checklist:
 - Confirm no comment input, comment list, or comment count is visible anywhere in the app.
 - Confirm no like button appears on ascent (send log) items in the Feed.
 - Open a followers_only user's profile as a non-follower and confirm the privacy badge is shown.
+
+---
+
+## QA Note — Production Deployment — 2026-09-28
+
+**QA Agent**: qa-mod-social-feed
+**Date**: 2026-09-28
+**Type**: Production deployment confirmation (user-confirmed)
+
+Migration `20260928000002_mod_006_feed_exclude_reported.sql` applied to production Supabase instance. Feed report-exclusion filter active.
+
+**Context**: This migration ships the `CREATE OR REPLACE FUNCTION public.get_activity_feed(...)` update that adds `WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` to the `video_items` CTE — the AC-141 coordinated requirement. It is the MOD-006-owned half of the cross-module change described in the 2026-09-28 Tech Lead review (Q4), ordered after the MOD-005 migration `20260928000001_mod_005_video_reports.sql` which introduced the `is_reported` and `report_dismissed` columns on `beta_videos`. The feed-exclusion filter is now live; reported-but-not-dismissed beta videos will not appear in any user's activity feed.
