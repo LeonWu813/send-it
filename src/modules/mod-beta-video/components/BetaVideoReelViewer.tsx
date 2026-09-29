@@ -391,6 +391,12 @@ export default function BetaVideoReelViewer({
   useEffect(() => { goToPrevOrCloseRef.current = goToPrevOrClose; }, [goToPrevOrClose]);
   useEffect(() => { handleDismissRef.current = handleDismiss; }, [handleDismiss]);
 
+  // playerRef keeps a stable, always-current reference to `player` for use inside
+  // the PanResponder closure (created once via useRef — would otherwise see a
+  // stale closure over the initial player value).
+  const playerRef = useRef(player);
+  useEffect(() => { playerRef.current = player; }, [player]);
+
   // Keep a stable ref to videos.length so the PanResponder closure (created
   // once via useRef) always sees the latest count without being recreated.
   const videosLengthRef = useRef(videos.length);
@@ -422,7 +428,19 @@ export default function BetaVideoReelViewer({
         dragY.setValue(gs.dy);
       },
       onPanResponderRelease: (_evt, gs) => {
-        const { dy } = gs;
+        const { dy, dx } = gs;
+
+        // Tap detection: minimal displacement in both axes = tap, not a swipe.
+        // Toggle play/pause on the current video.
+        if (Math.abs(dy) < 10 && Math.abs(dx) < 10) {
+          if (playerRef.current.playing) {
+            playerRef.current.pause();
+          } else {
+            playerRef.current.play();
+          }
+          return; // do not process swipe logic
+        }
+
         if (dy < -SWIPE_THRESHOLD) {
           // Swipe up → next video (if one exists).
           if (currentIndexRef.current < videosLengthRef.current - 1) {
