@@ -119,7 +119,7 @@ export default function RouteNavigator({
           routeId={view.routeId}
           gymName={gymName}
           session={session}
-          onBack={navigateToList}
+          onBack={gymId ? navigateToList : onBackToGym}
           onViewSendHistory={navigateToSendHistory}
         />
       )}

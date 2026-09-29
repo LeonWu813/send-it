@@ -58,6 +58,12 @@ interface GymNavigatorProps {
    */
   routeDeepLinkId?: string;
   routeNavKey?: number;
+  /**
+   * Called when the user presses back from a route-direct deep-link view.
+   * When present, back from the route detail returns to the Profile tab instead
+   * of navigating to a gym-less route list. Provided by AppShell.
+   */
+  onBackToProfile?: () => void;
 }
 
 export default function GymNavigator({
@@ -66,6 +72,7 @@ export default function GymNavigator({
   gymNavKey,
   routeDeepLinkId,
   routeNavKey,
+  onBackToProfile,
 }: GymNavigatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
@@ -142,7 +149,7 @@ export default function GymNavigator({
           gymId=""
           gymName=""
           session={session}
-          onBackToGym={navigateToList}
+          onBackToGym={onBackToProfile ?? navigateToList}
           initialRouteId={view.routeId}
           routeNavKey={view.routeNavKey}
         />

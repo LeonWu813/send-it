@@ -146,6 +146,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             gymNavKey={gymNavKey}
             routeDeepLinkId={routeDeepLinkId}
             routeNavKey={routeNavKey}
+            onBackToProfile={() => { setActiveTab('profile'); }}
           />
         </View>
 
