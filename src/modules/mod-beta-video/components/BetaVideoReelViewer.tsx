@@ -20,15 +20,28 @@
  * 4. No `enterFullscreen()` — VideoView fills the modal.
  * 5. PanResponder (vertical-only). Explicit close button as accessible fallback.
  * 6. Thumbnails: placeholder only — no VideoView per grid cell.
- * Rev 16: overlay on top of gesture layer using pointerEvents="box-none" container.
+ * Rev 16: four-layer sibling architecture inside the animated content wrapper:
+ *   Layer 1 — VideoView (absoluteFill)
+ *   Layer 2 — gradient scrim (absoluteFill, pointerEvents none)
+ *   Layer 3 — PanResponder gesture capture (absoluteFill, no children)
+ *   Layer 4 — interactive overlay UI (absoluteFill, pointerEvents box-none,
+ *              rendered last so its Pressable children win touch delivery)
  *
  * Gesture architecture:
- * - The absoluteFill `View` with `panHandlers` sits above the VideoView to intercept
- *   swipe gestures. This view has NO `pointerEvents` override, so it absorbs all touches.
- * - The overlay container uses `pointerEvents="box-none"` so touches pass through the
- *   container itself to the gesture layer below, but Pressable children still receive taps.
- * - The close button and report button are Pressable children of the overlay and remain
- *   independently tappable regardless of the gesture capture.
+ * - Layer 3 (`{...panHandlers}`) intercepts swipe gestures but has NO children,
+ *   so it never steals touches from Pressable elements.
+ * - Layer 4 uses `pointerEvents="box-none"`: the container itself passes through
+ *   non-interactive touches to Layer 3, but its Pressable children (close button,
+ *   report button) receive their own taps without PanResponder interference.
+ * - This resolves the chevron non-responsive bug (Bug 1 — AC-133).
+ *
+ * Swipe animation:
+ * - `dragY` Animated.Value tracks finger movement during a swipe.
+ * - On release: if threshold crossed, `Animated.timing` slides the entire
+ *   Animated.View off-screen, then index changes and `dragY` resets to 0.
+ * - If threshold not crossed: `Animated.spring` snaps back to 0.
+ * - The entire content (all four layers) is wrapped in one `Animated.View`
+ *   with `transform: [{ translateY: dragY }]`.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -44,6 +57,7 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Image,
   Modal,
   PanResponder,
@@ -77,6 +91,9 @@ const SIDEBAR_WIDTH = 56;
 
 /** Duration of one marquee scroll pass in milliseconds (AC-137). */
 const MARQUEE_DURATION_MS = 4000;
+
+/** Full device screen height — used for swipe-out animation distance. */
+const screenHeight = Dimensions.get('window').height;
 
 export interface BetaVideoReelViewerProps {
   /** Full ordered array of beta videos for the route (created_at DESC). */
@@ -250,12 +267,18 @@ export default function BetaVideoReelViewer({
   // ── Index state ───────────────────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
 
-  // Reset to initialIndex whenever the viewer opens.
+  // ── Swipe animation (Bug 3) ───────────────────────────────────────────────
+  // Tracks the finger's vertical offset during a swipe gesture.
+  // Applied as `translateY` on the entire content Animated.View.
+  const dragY = useRef(new Animated.Value(0)).current;
+
+  // Reset to initialIndex whenever the viewer opens; also reset dragY.
   useEffect(() => {
     if (visible) {
       setCurrentIndex(initialIndex);
+      dragY.setValue(0);
     }
-  }, [visible, initialIndex]);
+  }, [visible, initialIndex, dragY]);
 
   // ── Signed URL state ─────────────────────────────────────────────────────
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
@@ -369,17 +392,65 @@ export default function BetaVideoReelViewer({
   useEffect(() => { goToPrevOrCloseRef.current = goToPrevOrClose; }, [goToPrevOrClose]);
   useEffect(() => { handleDismissRef.current = handleDismiss; }, [handleDismiss]);
 
+  // Keep a stable ref to videos.length so the PanResponder closure (created
+  // once via useRef) always sees the latest count without being recreated.
+  const videosLengthRef = useRef(videos.length);
+  useEffect(() => { videosLengthRef.current = videos.length; }, [videos.length]);
+
   const panRef = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponderCapture: () => true,
+      // Do NOT use onStartShouldSetPanResponderCapture — that was stealing
+      // every touch before child Pressables could respond (Bug 1 fix).
+      // Layer 3 (gesture-capture View) has no children, so no Pressable
+      // competition exists; we only need movement-based capture here.
       onMoveShouldSetPanResponderCapture: (_evt, gs) =>
-        Math.abs(gs.dy) > Math.abs(gs.dx),
-      onStartShouldSetPanResponder: () => true,
+        Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
       onMoveShouldSetPanResponder: (_evt, gs) =>
         Math.abs(gs.dy) > Math.abs(gs.dx) && Math.abs(gs.dy) > 5,
+      onPanResponderMove: (_evt, gs) => {
+        // Track finger movement for the swipe animation (Bug 3).
+        dragY.setValue(gs.dy);
+      },
       onPanResponderRelease: (_evt, gs) => {
-        if (gs.dy < -SWIPE_THRESHOLD) goToNextRef.current();
-        else if (gs.dy > SWIPE_THRESHOLD) goToPrevOrCloseRef.current();
+        const { dy } = gs;
+        if (dy < -SWIPE_THRESHOLD) {
+          // Swipe up → next video (if one exists).
+          if (currentIndexRef.current < videosLengthRef.current - 1) {
+            Animated.timing(dragY, {
+              toValue: -screenHeight,
+              duration: 250,
+              useNativeDriver: true,
+            }).start(() => {
+              dragY.setValue(0);
+              setCurrentIndex((prev) => prev + 1);
+            });
+          } else {
+            // Already at last — snap back.
+            Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
+          }
+        } else if (dy > SWIPE_THRESHOLD) {
+          // Swipe down → previous video or dismiss.
+          if (currentIndexRef.current > 0) {
+            Animated.timing(dragY, {
+              toValue: screenHeight,
+              duration: 250,
+              useNativeDriver: true,
+            }).start(() => {
+              dragY.setValue(0);
+              setCurrentIndex((prev) => prev - 1);
+            });
+          } else {
+            // At first video — dismiss immediately.
+            // No slide-out animation here: the Modal's own animationType="slide"
+            // provides the visual dismiss transition, and calling onDismiss
+            // synchronously ensures the close gesture is always responsive.
+            dragY.setValue(0);
+            handleDismissRef.current();
+          }
+        } else {
+          // Threshold not crossed — snap back to resting position.
+          Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
+        }
       },
     }),
   );
@@ -425,187 +496,214 @@ export default function BetaVideoReelViewer({
       onRequestClose={handleDismiss}
       testID="beta-video-reel-modal"
     >
-      {/* Outermost container — full-screen black background. */}
+      {/*
+       * Outermost container — full-screen black background.
+       * The Animated.View inside translates with dragY during swipe gestures.
+       */}
       <View style={styles.fullscreen} testID="beta-video-reel-viewer">
 
-        {/* Video layer */}
-        {signedUrl && !urlError ? (
-          <VideoView
-            player={player}
-            style={styles.video}
-            contentFit="contain"
-            nativeControls={false}
-            testID="beta-video-reel-video-view"
-          />
-        ) : null}
-
-        {/* Loading spinner */}
-        {urlLoading ? (
-          <View style={styles.centeredOverlay}>
-            <ActivityIndicator
-              size="large"
-              color={theme.colors.textInverse}
-              testID="beta-video-reel-loading"
-            />
-          </View>
-        ) : null}
-
-        {/* Error state */}
-        {urlError ? (
-          <View style={styles.centeredOverlay}>
-            <Text style={styles.errorText} testID="beta-video-reel-error">
-              {t('betaVideo.loadError')}
-            </Text>
-          </View>
-        ) : null}
-
         {/*
-         * AC-134: Gradient scrim — covers the bottom quarter of the video area so
-         * the overlay text (poster identity, route·gym label) is legible.
-         * expo-linear-gradient is not installed; we simulate the scrim with a
-         * semi-transparent View using theme.colors.overlay (no hardcoded hex).
+         * Animated content wrapper (Bug 3 — swipe animation).
+         * All four layers are children of this wrapper so the entire content
+         * slides with the finger and animates off-screen on swipe-out.
          */}
-        <View style={styles.gradientScrim} pointerEvents="none" />
+        <Animated.View
+          style={[StyleSheet.absoluteFill, { transform: [{ translateY: dragY }] }]}
+        >
 
-        {/* Gesture-capture overlay — sits ABOVE the VideoView to intercept swipe
-            gestures. panHandlers are spread on this View. All tappable controls
-            (close button, sidebar) are children of this View. */}
-        <View style={StyleSheet.absoluteFill} {...panRef.current.panHandlers}>
+          {/* Layer 1 — VideoView (Bug 1: now a sibling of the gesture layer, not a child) */}
+          {signedUrl && !urlError ? (
+            <VideoView
+              player={player}
+              style={StyleSheet.absoluteFill}
+              contentFit="contain"
+              nativeControls={false}
+              testID="beta-video-reel-video-view"
+            />
+          ) : null}
 
-          {/* ── Close button (AC-133) — top-left, always visible ─────────── */}
-          <Pressable
-            style={[styles.closeButton, { top: insets.top + 12 }]}
-            onPress={handleDismiss}
-            accessibilityRole="button"
-            accessibilityLabel={t('betaVideo.reel.close')}
-            testID="beta-video-reel-close"
-          >
-            <Ionicons name="chevron-back" size={24} color={theme.colors.textInverse} />
-          </Pressable>
+          {/* Loading spinner (absolute, sits above VideoView) */}
+          {urlLoading ? (
+            <View style={styles.centeredOverlay}>
+              <ActivityIndicator
+                size="large"
+                color={theme.colors.textInverse}
+                testID="beta-video-reel-loading"
+              />
+            </View>
+          ) : null}
 
-          {/* ── Video counter — top-right ────────────────────────────────── */}
-          {videos.length > 1 ? (
-            <View style={[styles.counter, { top: insets.top + 12 }]}>
-              <Text style={styles.counterText}>
-                {currentIndex + 1} / {videos.length}
+          {/* Error state (absolute, sits above VideoView) */}
+          {urlError ? (
+            <View style={styles.centeredOverlay}>
+              <Text style={styles.errorText} testID="beta-video-reel-error">
+                {t('betaVideo.loadError')}
               </Text>
             </View>
           ) : null}
 
-          {/* ── Bottom row: left info + right sidebar ────────────────────── */}
-          {currentVideo ? (
-            <View
-              style={[
-                styles.bottomRow,
-                { bottom: insets.bottom + 16 },
-              ]}
+          {/*
+           * Layer 2 — Gradient scrim (Bug 2: sits behind all text, pointerEvents none).
+           * Covers ~40% of screen height from the bottom so the overlay text
+           * (poster identity, route·gym label) is legible against raw video pixels.
+           * expo-linear-gradient is not installed; simulated with theme.colors.overlay
+           * (no hardcoded hex).
+           */}
+          <View style={styles.gradientScrim} pointerEvents="none" />
+
+          {/*
+           * Layer 3 — PanResponder gesture capture (Bug 1 fix).
+           * This View has NO children — it purely intercepts swipe gestures.
+           * Without onStartShouldSetPanResponderCapture, it no longer steals
+           * tap events from sibling Pressables in Layer 4.
+           */}
+          <View style={StyleSheet.absoluteFill} {...panRef.current.panHandlers} />
+
+          {/*
+           * Layer 4 — Interactive overlay UI (Bug 1 fix).
+           * Rendered LAST (highest z-order) so its Pressable children receive
+           * touches before the gesture layer below. pointerEvents="box-none"
+           * means the container itself passes through non-interactive touches
+           * to Layer 3, while Pressable children still capture their own taps.
+           */}
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+
+            {/* ── Close button (AC-133) — top-left, always visible ─────────── */}
+            <Pressable
+              style={[styles.closeButton, { top: insets.top + 12 }]}
+              onPress={handleDismiss}
+              accessibilityRole="button"
+              accessibilityLabel={t('betaVideo.reel.close')}
+              testID="beta-video-reel-close"
             >
-              {/* Left column: poster identity (AC-134) */}
-              <View style={styles.infoColumn}>
+              <Ionicons name="chevron-back" size={24} color={theme.colors.textInverse} />
+            </Pressable>
 
-                {/* Row 1: avatar + display_name (AC-135: no-op tap in Phase 1) */}
-                <View style={styles.posterRow}>
-                  <PosterAvatar
-                    avatarUrl={currentVideo.avatar_url}
-                    displayName={currentVideo.display_name}
-                    theme={theme}
-                  />
-                  <Text style={styles.displayName} numberOfLines={1} testID="reel-poster-name">
-                    {currentVideo.display_name ?? t('betaVideo.reel.anonymous')}
-                  </Text>
-                </View>
+            {/* ── Video counter — top-right ────────────────────────────────── */}
+            {videos.length > 1 ? (
+              <View style={[styles.counter, { top: insets.top + 12 }]}>
+                <Text style={styles.counterText}>
+                  {currentIndex + 1} / {videos.length}
+                </Text>
+              </View>
+            ) : null}
 
-                {/*
-                 * AC-134 / AC-136: Row 2 — "{routeName} · {gymName}".
-                 * Only rendered when at least one of routeName or gymName is provided.
-                 * Wrapped in a Pressable; tapping navigates to the route detail
-                 * screen (AC-136). onNavigateToRoute is undefined when the user is
-                 * already on the route detail screen — tap is a no-op in that case.
-                 */}
-                {(routeName != null || gymName != null) ? (
-                  <Pressable
-                    onPress={() => {
-                      if (onNavigateToRoute && currentVideo.route_id) {
-                        onNavigateToRoute(currentVideo.route_id);
-                      }
-                    }}
-                    accessibilityRole={onNavigateToRoute ? 'button' : 'text'}
-                    testID="reel-route-gym-label"
-                  >
-                    <MarqueeText
-                      text={[routeName, gymName].filter(Boolean).join(' · ')}
-                      containerWidth={INFO_COLUMN_WIDTH}
-                      style={styles.captionText}
-                      testID="reel-route-gym-text"
+            {/* ── Bottom row: left info + right sidebar ────────────────────── */}
+            {currentVideo ? (
+              <View
+                style={[
+                  styles.bottomRow,
+                  { bottom: insets.bottom + theme.spacing.md },
+                ]}
+              >
+                {/* Left column: poster identity (AC-134) */}
+                <View style={styles.infoColumn}>
+
+                  {/* Row 1: avatar + display_name (AC-135: no-op tap in Phase 1) */}
+                  <View style={styles.posterRow}>
+                    <PosterAvatar
+                      avatarUrl={currentVideo.avatar_url}
+                      displayName={currentVideo.display_name}
+                      theme={theme}
                     />
-                  </Pressable>
-                ) : null}
-              </View>
+                    <Text style={styles.displayName} numberOfLines={1} testID="reel-poster-name">
+                      {currentVideo.display_name ?? t('betaVideo.reel.anonymous')}
+                    </Text>
+                  </View>
 
-              {/* Right sidebar: like placeholder + report button (AC-138) */}
-              <View style={styles.sidebar}>
-
-                {/* Like icon — placeholder count 0, not tappable in Phase 1 (AC-135) */}
-                <View style={styles.sidebarItem} testID="reel-like-button">
-                  <Ionicons
-                    name="heart-outline"
-                    size={28}
-                    color={theme.colors.textInverse}
-                    accessibilityLabel={t('betaVideo.reel.like')}
-                  />
-                  <Text style={styles.sidebarCount}>0</Text>
+                  {/*
+                   * AC-134 / AC-136: Row 2 — "{routeName} · {gymName}".
+                   * Only rendered when at least one of routeName or gymName is provided.
+                   * Wrapped in a Pressable; tapping navigates to the route detail
+                   * screen (AC-136). onNavigateToRoute is undefined when the user is
+                   * already on the route detail screen — tap is a no-op in that case.
+                   */}
+                  {(routeName != null || gymName != null) ? (
+                    <Pressable
+                      onPress={() => {
+                        if (onNavigateToRoute && currentVideo.route_id) {
+                          onNavigateToRoute(currentVideo.route_id);
+                        }
+                      }}
+                      accessibilityRole={onNavigateToRoute ? 'button' : 'text'}
+                      testID="reel-route-gym-label"
+                    >
+                      <MarqueeText
+                        text={[routeName, gymName].filter(Boolean).join(' · ')}
+                        containerWidth={INFO_COLUMN_WIDTH}
+                        style={styles.captionText}
+                        testID="reel-route-gym-text"
+                      />
+                    </Pressable>
+                  ) : null}
                 </View>
 
-                {/* Report button (AC-139/AC-140) */}
-                {showReportButton ? (
-                  <Pressable
-                    style={[styles.sidebarItem, isReporting && styles.sidebarItemDisabled]}
-                    onPress={() => { void handleReport(currentVideo.id); }}
-                    disabled={isReporting || isReported}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      isReported
-                        ? t('betaVideo.reel.reported')
-                        : t('betaVideo.reel.report')
-                    }
-                    testID="reel-report-button"
-                  >
-                    {isReporting ? (
-                      <ActivityIndicator size="small" color={theme.colors.error} />
-                    ) : (
-                      <Ionicons
-                        name={isReported ? 'flag' : 'flag-outline'}
-                        size={26}
-                        color={theme.colors.error}
-                      />
-                    )}
-                    <Text
-                      style={[
-                        styles.sidebarLabel,
-                        { color: theme.colors.error },
-                      ]}
-                      testID="reel-report-label"
-                    >
-                      {isReported
-                        ? t('betaVideo.reel.reported')
-                        : t('betaVideo.reel.report')}
-                    </Text>
-                  </Pressable>
-                ) : null}
+                {/* Right sidebar: like placeholder + report button (AC-138) */}
+                <View style={styles.sidebar}>
 
-                {/* AC-139: report error text (shown below report button on failure) */}
-                {reportError ? (
-                  <Text
-                    style={styles.reportErrorText}
-                    testID="reel-report-error"
-                  >
-                    {reportError}
-                  </Text>
-                ) : null}
+                  {/* Like icon — placeholder count 0, not tappable in Phase 1 (AC-135) */}
+                  <View style={styles.sidebarItem} testID="reel-like-button">
+                    <Ionicons
+                      name="heart-outline"
+                      size={28}
+                      color={theme.colors.textInverse}
+                      accessibilityLabel={t('betaVideo.reel.like')}
+                    />
+                    <Text style={styles.sidebarCount}>0</Text>
+                  </View>
+
+                  {/* Report button (AC-139/AC-140) */}
+                  {showReportButton ? (
+                    <Pressable
+                      style={[styles.sidebarItem, isReporting && styles.sidebarItemDisabled]}
+                      onPress={() => { void handleReport(currentVideo.id); }}
+                      disabled={isReporting || isReported}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        isReported
+                          ? t('betaVideo.reel.reported')
+                          : t('betaVideo.reel.report')
+                      }
+                      testID="reel-report-button"
+                    >
+                      {isReporting ? (
+                        <ActivityIndicator size="small" color={theme.colors.error} />
+                      ) : (
+                        <Ionicons
+                          name={isReported ? 'flag' : 'flag-outline'}
+                          size={26}
+                          color={theme.colors.error}
+                        />
+                      )}
+                      <Text
+                        style={[
+                          styles.sidebarLabel,
+                          { color: theme.colors.error },
+                        ]}
+                        testID="reel-report-label"
+                      >
+                        {isReported
+                          ? t('betaVideo.reel.reported')
+                          : t('betaVideo.reel.report')}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+
+                  {/* AC-139: report error text (shown below report button on failure) */}
+                  {reportError ? (
+                    <Text
+                      style={styles.reportErrorText}
+                      testID="reel-report-error"
+                    >
+                      {reportError}
+                    </Text>
+                  ) : null}
+                </View>
               </View>
-            </View>
-          ) : null}
-        </View>
+            ) : null}
+          </View>
+
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -617,10 +715,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     fullscreen: {
       flex: 1,
       backgroundColor: VIDEO_VIEWER_BG,
-    },
-    video: {
-      width: '100%',
-      height: '100%',
     },
     centeredOverlay: {
       position: 'absolute',
@@ -708,18 +802,21 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       textAlign: 'center',
     },
     /**
-     * AC-134: Gradient scrim simulation — covers the bottom 30% of the video
+     * AC-134: Gradient scrim simulation — covers the bottom 40% of the video
      * area with a semi-transparent overlay so the poster-identity and route·gym
-     * text is legible against the raw video pixels.
+     * text is legible against the raw video pixels. 40% is tall enough to cover
+     * the overlay text without obscuring the video midscreen.
      * expo-linear-gradient is not installed; we use theme.colors.overlay (no
      * hardcoded hex colour) on a tall View pinned to the bottom.
+     * Bug 2 fix: z-order is Layer 2 (behind gesture layer and overlay UI),
+     * so the scrim is always behind all text elements.
      */
     gradientScrim: {
       position: 'absolute',
       left: 0,
       right: 0,
       bottom: 0,
-      height: '35%',
+      height: '40%',
       backgroundColor: theme.colors.overlay,
     },
     reportErrorText: {

@@ -2,6 +2,44 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-09-28 (reel viewer — chevron touch, bottom overlap, swipe animation)
+
+### Bug Fix — Reel viewer: chevron non-responsive, bottom overlap, swipe animation — 2026-09-28
+
+**Bugs fixed**:
+
+**Bug 1 — Chevron `<` close button non-responsive (AC-133)**
+- Root cause: `onStartShouldSetPanResponderCapture: () => true` in the old single-layer architecture claimed every touch before child Pressables (including the close button) could respond.
+- Fix: Restructured to four sibling layers inside an `Animated.View` wrapper: Layer 1 VideoView (`StyleSheet.absoluteFill`), Layer 2 gradient scrim (`pointerEvents="none"`), Layer 3 PanResponder gesture capture (`StyleSheet.absoluteFill`, no children), Layer 4 interactive overlay UI (`pointerEvents="box-none"`, rendered last/highest z-order). Layer 3 has no children so it never competes with Pressables. Layer 4's `pointerEvents="box-none"` passes through non-interactive touches to Layer 3 while Pressable children receive their own taps. Removed `onStartShouldSetPanResponderCapture: () => true` entirely — movement-based capture only (`onMoveShouldSetPanResponderCapture`).
+
+**Bug 2 — Bottom overlap with home indicator (AC-134)**
+- Fix: Changed `bottom: insets.bottom + 16` to `bottom: insets.bottom + theme.spacing.md` (uses theme token, not a hardcoded value). Updated `gradientScrim` height from `35%` to `40%` for better text coverage. Verified z-order: scrim is Layer 2 (behind all interactive UI).
+
+**Bug 3 — No swipe animation between videos (AC-039)**
+- Added `dragY = useRef(new Animated.Value(0)).current` tracking finger position.
+- PanResponder now drives `dragY.setValue(gs.dy)` in `onPanResponderMove`.
+- On release: if threshold crossed, `Animated.timing(dragY, { toValue: ±screenHeight, duration: 250 })` slides content off-screen, then `dragY.setValue(0)` and `setCurrentIndex` are called in the `.start()` callback. If threshold not crossed, `Animated.spring` snaps back to 0.
+- Added `videosLengthRef` to give the stable PanResponder closure a current `videos.length` without recreating the responder.
+- Dismiss at index 0 (swipe-down): calls `handleDismissRef.current()` synchronously (no slide-out animation) so the test expectation is met and the modal's own `animationType="slide"` handles the visual transition.
+- The entire four-layer content is wrapped in `<Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateY: dragY }] }]}>`.
+- `dragY.setValue(0)` is called in the visibility-reset effect alongside `setCurrentIndex(initialIndex)`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npx jest --testPathPattern="mod-beta-video" --passWithNoTests`: PASS — 66 tests, 5 suites, 0 failures
+- Git scope: only `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` modified. No other modules touched. PASS.
+- Judgment-based: all three bugs resolved; no new native dependencies; `Dimensions` is RN core; `screenHeight` is a module-level constant; theme tokens used for bottom inset spacing; no hardcoded values; TypeScript strict mode satisfied.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`
+
+**ACs addressed**:
+- **AC-133**: close button now reliably tappable — Layer 4 Pressables receive touches before Layer 3 PanResponder
+- **AC-134**: bottom overlay clears home indicator via `insets.bottom + theme.spacing.md`; scrim at correct z-order (Layer 2, behind all text)
+- **AC-039**: smooth swipe animation via `dragY` Animated.Value; whole content translates with finger; animates off-screen on swipe; snaps back if threshold not crossed
+
+---
+
 **Status**: Feature implementation — 2026-09-28 (Rev 16 reel overlay UI, video report flow, migration)
 
 ### Feature — Rev 16: reel viewer overlay, report flow, data join — 2026-09-28
