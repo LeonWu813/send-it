@@ -28,8 +28,6 @@ export type VGrade = (typeof GRADE_ORDER)[number];
 export interface HistoryAscent {
   ascent_id: string;
   route_id: string;
-  /** Route display name from routes.name. */
-  route_name: string;
   gym_id: string;
   gym_name: string;
   /** Grade string from routes.grade — never stored on ascents. */

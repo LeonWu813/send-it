@@ -43,7 +43,6 @@ describe('fetchProfileHistory', () => {
       {
         ascent_id: 'asc-001',
         route_id: 'route-001',
-        route_name: 'Blue Overhang',
         gym_id: 'gym-001',
         gym_name: 'Test Gym',
         grade: 'V3',
@@ -65,7 +64,6 @@ describe('fetchProfileHistory', () => {
 
     expect(result).toHaveLength(1);
     expect(result[0].ascent_id).toBe('asc-001');
-    expect(result[0].route_name).toBe('Blue Overhang');
     expect(result[0].grade).toBe('V3');
     expect(result[0].gym_name).toBe('Test Gym');
     expect(result[0].style).toBe('top');
@@ -333,7 +331,6 @@ describe('groupToRouteCards', () => {
     return {
       ascent_id: 'asc-001',
       route_id: 'route-001',
-      route_name: 'Test Route',
       gym_id: 'gym-001',
       gym_name: 'Test Gym',
       grade: 'V3',
@@ -386,8 +383,8 @@ describe('groupToRouteCards', () => {
 
   it('produces separate cards for different routes', () => {
     const ascents = [
-      makeAscent({ ascent_id: 'asc-001', route_id: 'route-001', route_name: 'Route A', grade: 'V3' }),
-      makeAscent({ ascent_id: 'asc-002', route_id: 'route-002', route_name: 'Route B', grade: 'V5' }),
+      makeAscent({ ascent_id: 'asc-001', route_id: 'route-001', grade: 'V3' }),
+      makeAscent({ ascent_id: 'asc-002', route_id: 'route-002', grade: 'V5' }),
     ];
 
     const result = groupToRouteCards(ascents);

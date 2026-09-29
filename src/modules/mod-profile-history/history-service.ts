@@ -64,7 +64,6 @@ export async function fetchProfileHistory(
   return (data as any[]).map((row): HistoryAscent => ({
     ascent_id:    row.ascent_id   as string,
     route_id:     row.route_id    as string,
-    route_name:   (row.route_name ?? '') as string,
     gym_id:       row.gym_id      as string,
     gym_name:     row.gym_name    as string,
     grade:        row.grade       as string,

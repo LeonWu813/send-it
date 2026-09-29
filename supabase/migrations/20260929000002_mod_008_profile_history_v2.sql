@@ -1,16 +1,17 @@
 -- ──────────────────────────────────────────────────────────────────────────────
--- MOD-008 v2: Profile History & Stats — accumulated days + route_name
+-- MOD-008 v2: Profile History & Stats — accumulated days
 -- ──────────────────────────────────────────────────────────────────────────────
 -- Replaces:
 --   • `get_profile_stats`   — replaces streak_days with accumulated_days
 --                             (total distinct calendar days with ≥1 flash or top)
---   • `get_profile_history` — adds route_name column to the return shape
+--   • `get_profile_history` — route identity expressed via grade, color_tag,
+--                             section_label (routes table has no name column)
 -- ──────────────────────────────────────────────────────────────────────────────
 
 -- ── get_profile_history RPC (v2) ──────────────────────────────────────────────
 --
--- Adds route_name to the return set so client-side route cards can display the
--- route name without a separate lookup.
+-- Route identity is expressed through grade, color_tag, and section_label.
+-- The routes table has no name column — route_name is not returned.
 --
 -- All filter parameters are preserved for backwards compatibility but the client
 -- no longer sends filter values (always passes NULL for all filter params).
@@ -30,7 +31,6 @@ CREATE OR REPLACE FUNCTION public.get_profile_history(
 RETURNS TABLE (
   ascent_id    UUID,
   route_id     UUID,
-  route_name   TEXT,
   gym_id       UUID,
   gym_name     TEXT,
   grade        TEXT,
@@ -50,7 +50,6 @@ AS $$
   SELECT
     a.id             AS ascent_id,
     a.route_id       AS route_id,
-    r.name           AS route_name,
     r.gym_id         AS gym_id,
     g.name           AS gym_name,
     r.grade::TEXT    AS grade,
