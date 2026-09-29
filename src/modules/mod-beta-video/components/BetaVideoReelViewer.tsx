@@ -480,7 +480,7 @@ export default function BetaVideoReelViewer({
             accessibilityLabel={t('betaVideo.reel.close')}
             testID="beta-video-reel-close"
           >
-            <Ionicons name="close" size={24} color={theme.colors.textInverse} />
+            <Ionicons name="chevron-back" size={24} color={theme.colors.textInverse} />
           </Pressable>
 
           {/* ── Video counter — top-right ────────────────────────────────── */}
