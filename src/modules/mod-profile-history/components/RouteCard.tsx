@@ -23,7 +23,7 @@ import type { RouteCard as RouteCardData } from '../history-service';
 
 interface RouteCardProps {
   card: RouteCardData;
-  onPress?: (routeId: string) => void;
+  onPress?: (routeId: string, gymId: string) => void;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ export default function RouteCard({ card, onPress }: RouteCardProps): React.JSX.
   return (
     <Pressable
       style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={() => onPress?.(card.route_id)}
+      onPress={() => onPress?.(card.route_id, card.gym_id)}
       accessibilityRole="button"
     >
       {/* Top row: route name + style tag */}

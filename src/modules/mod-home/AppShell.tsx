@@ -87,9 +87,11 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   const [selectedGymId, setSelectedGymId] = useState<string | undefined>(undefined);
   const [gymNavKey, setGymNavKey] = useState(0);
   /** Route deep-link state: when the user taps a route card in the profile
-   *  history surface, we switch to the Gyms tab and pass the routeId to
-   *  GymNavigator so it opens the route detail screen directly. */
+   *  history surface, we switch to the Gyms tab and pass the routeId + gymId
+   *  to GymNavigator so it opens the route detail screen within that gym's
+   *  route list. Back from the detail returns to the route list, not Profile. */
   const [routeDeepLinkId, setRouteDeepLinkId] = useState<string | undefined>(undefined);
+  const [gymDeepLinkId, setGymDeepLinkId] = useState<string | undefined>(undefined);
   const [routeNavKey, setRouteNavKey] = useState(0);
   const insets = useSafeAreaInsets();
 
@@ -112,10 +114,11 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     setTargetUserId(userId);
   }
 
-  const handleNavigateToRoute = useCallback((routeId: string): void => {
+  const handleNavigateToRoute = useCallback((routeId: string, gymId: string): void => {
     // Increment routeNavKey so GymNavigator's useEffect fires on every tap,
     // even if the same route is tapped twice after the user navigated back.
     setRouteDeepLinkId(routeId);
+    setGymDeepLinkId(gymId);
     setRouteNavKey((k) => k + 1);
     setActiveTab('gyms');
   }, []);
@@ -145,8 +148,8 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             initialGymId={selectedGymId}
             gymNavKey={gymNavKey}
             routeDeepLinkId={routeDeepLinkId}
+            gymDeepLinkId={gymDeepLinkId}
             routeNavKey={routeNavKey}
-            onBackToProfile={() => { setActiveTab('profile'); }}
           />
         </View>
 

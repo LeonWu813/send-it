@@ -44,9 +44,10 @@ interface SendHistoryProfileProps {
   listFooterComponent?: React.ReactElement;
   /**
    * Optional callback invoked when the user taps a route card.
-   * Phase 1 no-op: pass undefined from the host screen.
+   * Passes both the routeId and the gymId so the caller can navigate to the
+   * route detail screen within the correct gym's route list.
    */
-  onNavigateToRoute?: (routeId: string) => void;
+  onNavigateToRoute?: (routeId: string, gymId: string) => void;
 }
 
 /**

@@ -161,6 +161,7 @@ export interface RouteCard {
   grade: string;
   color_tag: string | null;
   section_label: string | null;
+  gym_id: string;
   gym_name: string;
   best_style: 'flash' | 'top';
   most_recent_date: string;
@@ -190,6 +191,7 @@ export function groupToRouteCards(ascents: HistoryAscent[]): RouteCard[] {
         grade:            a.grade,
         color_tag:        a.color_tag ?? null,
         section_label:    a.section_label ?? null,
+        gym_id:           a.gym_id,
         gym_name:         a.gym_name,
         best_style:       a.style as 'flash' | 'top',
         most_recent_date: a.logged_at,

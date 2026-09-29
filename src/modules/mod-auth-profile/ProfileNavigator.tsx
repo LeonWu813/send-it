@@ -35,9 +35,10 @@ interface ProfileNavigatorProps {
   isActive?: boolean;
   /**
    * Callback invoked when the user taps a route card in the profile history
-   * surface. Switches to the Gyms tab and opens the route detail screen.
+   * surface. Switches to the Gyms tab and opens the route detail screen within
+   * the correct gym's route list.
    */
-  onNavigateToRoute?: (routeId: string) => void;
+  onNavigateToRoute?: (routeId: string, gymId: string) => void;
 }
 
 export default function ProfileNavigator({

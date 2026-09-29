@@ -34,11 +34,10 @@ type GymView =
   | { name: 'routes'; gymId: string; gymName: string }
   /**
    * Direct route deep-link view: shows RouteNavigator initialized to a specific
-   * route's detail screen without knowing the gym context upfront. gymId/gymName
-   * are empty strings; RouteDetailScreen fetches the route's own data and uses
-   * gymName for display only (the back button goes to the Gyms list).
+   * route's detail screen. gymId is the real gym ID passed from AppShell so
+   * that back from the route detail goes to the route list for that gym.
    */
-  | { name: 'route-direct'; routeId: string; routeNavKey: number };
+  | { name: 'route-direct'; routeId: string; gymId: string; routeNavKey: number };
 
 interface GymNavigatorProps {
   session: Session;
@@ -57,13 +56,13 @@ interface GymNavigatorProps {
    * when the same route is tapped twice after navigating back.
    */
   routeDeepLinkId?: string;
-  routeNavKey?: number;
   /**
-   * Called when the user presses back from a route-direct deep-link view.
-   * When present, back from the route detail returns to the Profile tab instead
-   * of navigating to a gym-less route list. Provided by AppShell.
+   * The gym ID for the route identified by routeDeepLinkId. Passed from
+   * AppShell alongside the route ID so RouteNavigator can show the correct
+   * route list when the user presses back from the route detail screen.
    */
-  onBackToProfile?: () => void;
+  gymDeepLinkId?: string;
+  routeNavKey?: number;
 }
 
 export default function GymNavigator({
@@ -71,8 +70,8 @@ export default function GymNavigator({
   initialGymId,
   gymNavKey,
   routeDeepLinkId,
+  gymDeepLinkId,
   routeNavKey,
-  onBackToProfile,
 }: GymNavigatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
@@ -94,11 +93,16 @@ export default function GymNavigator({
   }, [gymNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Deep-link to a specific route detail from MOD-008 profile history.
-  // routeNavKey is the trigger; routeDeepLinkId is the payload.
+  // routeNavKey is the trigger; routeDeepLinkId and gymDeepLinkId are the payload.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (routeDeepLinkId) {
-      setView({ name: 'route-direct', routeId: routeDeepLinkId, routeNavKey: routeNavKey ?? 0 });
+      setView({
+        name: 'route-direct',
+        routeId: routeDeepLinkId,
+        gymId: gymDeepLinkId ?? '',
+        routeNavKey: routeNavKey ?? 0,
+      });
     }
   }, [routeNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -146,10 +150,10 @@ export default function GymNavigator({
       )}
       {view.name === 'route-direct' && (
         <RouteNavigator
-          gymId=""
+          gymId={view.gymId}
           gymName=""
           session={session}
-          onBackToGym={onBackToProfile ?? navigateToList}
+          onBackToGym={navigateToList}
           initialRouteId={view.routeId}
           routeNavKey={view.routeNavKey}
         />
