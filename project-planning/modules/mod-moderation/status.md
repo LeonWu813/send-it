@@ -10,6 +10,7 @@
 #### Migrations
 - `supabase/migrations/20260929000004_mod_009_moderation.sql` — Creates `report_category` enum, `reports` table (AC-080 user-profile reports), drops the MOD-006 stub `blocks` table and recreates with full schema (`blocker_user_id`, `blocked_user_id`, `created_at`), RLS policies, GRANTs.
 - `supabase/migrations/20260929000005_mod_009_block_feed_filter.sql` — `CREATE OR REPLACE` of `get_activity_feed` with updated column names (blocker_user_id / blocked_user_id) and symmetric block filters added to both `ascent_items` and `video_items` CTEs (AC-082, AC-084). Preserves the AC-141 is_reported filter from mod_006.
+- `supabase/migrations/20260929000006_mod_009_fix_follows_block.sql` — AC-083 bug fix: drops and recreates `follows_insert_own` RLS policy with a symmetric block check (rejects INSERT when any block exists between follower and followee in either direction); adds `remove_follows_on_block()` SECURITY DEFINER trigger function and `trg_remove_follows_on_block` AFTER INSERT trigger on `blocks` that deletes existing follows in both directions on block creation.
 
 #### Source code (`src/modules/mod-moderation/`)
 - `types.ts` — `ReportCategory`, `BlockStatus`, `Report`, `Block` types.
@@ -28,6 +29,12 @@
 ### Verification
 - `npx tsc --noEmit`: 0 errors
 - `npx jest --passWithNoTests`: 405 tests passed, 31 suites
+
+### Bug Fix (2026-09-29) — AC-083
+QA-found bug: `follows_insert_own` RLS policy had no block check; existing follows not removed on block.
+Fix A (migration `20260929000006_mod_009_fix_follows_block.sql`): dropped and recreated `follows_insert_own` with symmetric block check; added `trg_remove_follows_on_block` trigger to remove existing follows server-side on block INSERT.
+Fix B (`moderation-service.ts` `blockUser()`): added doc comment noting the DB trigger handles follow removal — no client-side delete needed.
+Post-fix verification: `npx tsc --noEmit` 0 errors; `npx jest --passWithNoTests` 405 tests passed, 31 suites.
 
 ## QA Results
 

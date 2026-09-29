@@ -69,6 +69,11 @@ export async function reportUser(
  * The block is symmetric at the feed level — both parties' content is hidden from
  * each other (AC-084), enforced by the get_activity_feed RPC.
  *
+ * Follow removal (AC-083): the DB trigger `trg_remove_follows_on_block` on the
+ * `blocks` table fires AFTER INSERT and deletes any existing follow rows in both
+ * directions (follower_id = blocker AND followee_id = blocked, and vice versa).
+ * No separate client-side delete is needed — the trigger handles it server-side.
+ *
  * @param blockedUserId  UUID of the user to block.
  * @throws {Error}       with a user-facing message on failure.
  */
