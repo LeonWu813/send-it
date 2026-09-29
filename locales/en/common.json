@@ -364,6 +364,32 @@
       "loadFailed": "Failed to load history. Please try again."
     }
   },
+  "moderation": {
+    "reportUser": "Report User",
+    "blockUser": "Block User",
+    "unblockUser": "Unblock User",
+    "report": {
+      "title": "Report User",
+      "category": "Category",
+      "categories": {
+        "inappropriate": "Inappropriate",
+        "spam": "Spam",
+        "harassment": "Harassment",
+        "other": "Other"
+      },
+      "note": "Additional note (optional)",
+      "submit": "Submit Report",
+      "cancel": "Cancel",
+      "confirmation": "Report submitted. Thank you.",
+      "error": "Failed to submit report. Please try again."
+    },
+    "block": {
+      "confirmBlock": "Block this user?",
+      "blocked": "User blocked.",
+      "unblocked": "User unblocked.",
+      "error": "Action failed. Please try again."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "retry": "Retry",

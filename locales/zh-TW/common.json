@@ -364,6 +364,32 @@
       "loadFailed": "載入紀錄失敗，請再試一次。"
     }
   },
+  "moderation": {
+    "reportUser": "檢舉用戶",
+    "blockUser": "封鎖用戶",
+    "unblockUser": "解除封鎖",
+    "report": {
+      "title": "檢舉用戶",
+      "category": "類別",
+      "categories": {
+        "inappropriate": "不當內容",
+        "spam": "垃圾訊息",
+        "harassment": "騷擾",
+        "other": "其他"
+      },
+      "note": "補充說明（選填）",
+      "submit": "提交檢舉",
+      "cancel": "取消",
+      "confirmation": "已提交檢舉，感謝您。",
+      "error": "提交失敗，請再試一次。"
+    },
+    "block": {
+      "confirmBlock": "封鎖此用戶？",
+      "blocked": "已封鎖此用戶。",
+      "unblocked": "已解除封鎖。",
+      "error": "操作失敗，請再試一次。"
+    }
+  },
   "common": {
     "loading": "載入中…",
     "retry": "重試",
