@@ -1312,3 +1312,54 @@ No new regressions in adjacent logic.
 All acceptance criteria pass. The AC-114 deep-link fix is verified: tapping a saved gym chip now navigates directly to that gym's detail screen (not just the gym list tab). The two new `GymNavigator` props are optional and backward-compatible — no mod-gym-directory tests required changes. No regressions introduced. TypeScript clean (0 errors). 314/314 tests pass.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
+
+---
+
+## Engineering Progress — Final Verification — 2026-09-29
+
+### Summary
+
+MOD-012 was fully implemented across prior sessions. This session performed a final verification of all deliverables — no source code changes were necessary.
+
+**Artifacts confirmed present and correct:**
+
+- `supabase/migrations/20260924000002_mod_012_home.sql` — `saved_gyms` DDL, composite PK `(user_id, gym_id)`, both FK constraints with `ON DELETE CASCADE`, RLS enabled, three RLS policies (select/insert/delete own), `GRANT SELECT, INSERT, DELETE` to `authenticated`, `user_id DEFAULT auth.uid()`.
+- `src/lib/banners.ts` — `Banner` interface + `BANNERS` static array (3 entries; structure, keys, image refs only; strings live in i18n catalogs).
+- `src/assets/banners/banner1.png`, `banner2.png`, `banner3.png` — placeholder banner images.
+- `src/modules/mod-home/AppShell.tsx` — persistent three-tab shell; keep-alive mount (`display: 'none'` on inactive tabs); `useState<TabKey>('home')` default; `selectedGymId` + `gymNavKey` for AC-114 gym deep-link; `targetUserId` overlay for AC-123 climber profile; imports `GymNavigator`, `ProfileNavigator`, `UserProfileNavigator` from module-root public entry points only.
+- `src/modules/mod-home/HomeNavigator.tsx` — Tab 1 navigator; threads all props to `HomeScreen`.
+- `src/modules/mod-home/screens/HomeScreen.tsx` — three sections in order (Banners, Saved Gyms, Following Climbers); `useSafeAreaInsets` + `makeStyles(theme, topInset)`; public service imports: `fetchSavedGymIds` (mod-gym-directory), `fetchFollowing` (mod-social-feed); `isActive`-triggered refetch for both data sources; `Pressable` gym and climber chips with correct callbacks.
+- `src/modules/mod-home/components/TabBar.tsx` — icon-only three-tab bar; `paddingBottom: bottomInset + theme.spacing.sm`.
+- `src/modules/mod-home/test-utils.tsx` — ThemeProvider + i18n wrapper for tests.
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — 12 tests (AC-112 through AC-124, isActive focus-refetch).
+- `src/modules/mod-home/__tests__/TabBar.test.tsx` — 5 tests.
+- `App.tsx` — composition root only: `SafeAreaProvider` → `ThemeProvider` → `AuthNavigator` → `AppShell`.
+- i18n: `home.banners.*`, `home.savedGyms.*`, `home.following.*` complete in both `locales/en/common.json` and `locales/zh-TW/common.json`.
+
+### Final Self-Check Results — 2026-09-29
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors (exit 0) |
+| `npx jest --testPathPattern="mod-home" --passWithNoTests` | PASS — 17 tests, 2 suites (exit 0) |
+| `npx jest --passWithNoTests` | PASS — 378 tests, 29 suites, all pass (exit 0) |
+| AC-110: Home tab default, three-tab bar icon-only | PASS |
+| AC-111: Three sections in order | PASS |
+| AC-112: Banners horizontal scroll; hidden when BANNERS empty | PASS |
+| AC-113: Saved Gyms strip + View All | PASS |
+| AC-114: Gym chip tap deep-links to gym detail screen | PASS |
+| AC-115: Empty state "Tap the bookmark on any gym to save it." | PASS |
+| AC-123: Following strip with Pressable chips + onSelectClimber | PASS |
+| AC-124: Empty state when following no one | PASS |
+| Keep-alive mount (`display: 'none'` on inactive tabs) | PASS |
+| Bottom safe area: TabBar `paddingBottom: bottomInset + spacing.sm` | PASS |
+| Top safe area: HomeScreen `makeStyles(theme, topInset)` | PASS |
+| Cross-module imports: public entry-points and service functions only | PASS |
+| Migration: DDL, FKs with CASCADE, RLS, 3 policies, GRANT | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| TypeScript strict mode, no unguarded `any` | PASS |
+| i18n complete in EN and zh-TW | PASS |
+| Full suite no regressions (378/378) | PASS |
+
+**Result: READY FOR QA**
