@@ -1,16 +1,9 @@
 /**
  * FollowersListScreen — list of users who follow the viewed profile.
  *
- * AC-146: Followers list screen showing circular avatar, display_name,
- *         total sends count, and highest grade per card. Tapping a card
- *         navigates to that user's profile. Blocked users are excluded.
- *
- * AC-148: Per-card sends count and highest grade are sourced from
- *         fetchProfileStats (MOD-008 / mod-profile-history), fetched
- *         lazily per visible card via useEffect inside the card component.
- *
- * Cross-module import: fetchProfileStats from mod-profile-history/history-service
- * is a public service — permitted per production.md Cross-Module Imports convention.
+ * AC-146: Followers list screen showing circular avatar and display_name
+ *         per card. Tapping a card navigates to that user's profile.
+ *         Blocked users are excluded.
  *
  * Blocked users are filtered client-side using fetchBlockedUserIds()
  * from mod-moderation (AC-082, AC-084). Both directions are covered:
@@ -34,8 +27,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { fetchProfileStats } from '../../mod-profile-history/history-service';
-import type { ProfileStats } from '../../mod-profile-history/types';
 import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import { useTheme } from '../../../lib/theme';
 import { fetchFollowersList } from '../social-feed-service';
@@ -52,51 +43,6 @@ export interface FollowersListScreenProps {
   onNavigateToUser: (userId: string) => void;
 }
 
-// ── Per-card stats hook ───────────────────────────────────────────────────────
-
-interface CardStats {
-  totalSends: number;
-  highestGrade: string | null;
-  loaded: boolean;
-}
-
-function useCardStats(cardUserId: string): CardStats {
-  const [stats, setStats] = useState<CardStats>({
-    totalSends: 0,
-    highestGrade: null,
-    loaded: false,
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load(): Promise<void> {
-      try {
-        const result: ProfileStats = await fetchProfileStats(cardUserId);
-        if (!cancelled) {
-          setStats({
-            totalSends: result.total_sends,
-            highestGrade: result.highest_grade,
-            loaded: true,
-          });
-        }
-      } catch {
-        // On error, leave placeholder values — no spinner per spec
-        if (!cancelled) {
-          setStats((prev) => ({ ...prev, loaded: true }));
-        }
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [cardUserId]);
-
-  return stats;
-}
-
 // ── User card component ───────────────────────────────────────────────────────
 
 interface UserCardProps {
@@ -106,8 +52,6 @@ interface UserCardProps {
 }
 
 function UserCard({ item, onPress, theme }: UserCardProps): React.JSX.Element {
-  const { t } = useTranslation('common');
-  const cardStats = useCardStats(item.userId);
   const styles = makeCardStyles(theme);
 
   return (
@@ -128,19 +72,10 @@ function UserCard({ item, onPress, theme }: UserCardProps): React.JSX.Element {
         <View style={[styles.avatar, styles.avatarPlaceholder]} />
       )}
 
-      {/* User info */}
-      <View style={styles.info}>
-        <Text style={styles.displayName} numberOfLines={1}>
-          {item.displayName}
-        </Text>
-        <Text style={styles.statLine} numberOfLines={1}>
-          {t('socialFeed.sends', { count: cardStats.totalSends })}
-          {'  '}
-          {cardStats.highestGrade !== null
-            ? t('socialFeed.highestGrade', { grade: cardStats.highestGrade })
-            : t('socialFeed.noGrade')}
-        </Text>
-      </View>
+      {/* Display name */}
+      <Text style={styles.displayName} numberOfLines={1}>
+        {item.displayName}
+      </Text>
     </Pressable>
   );
 }
@@ -169,18 +104,11 @@ function makeCardStyles(theme: ReturnType<typeof useTheme>['theme']) {
     avatarPlaceholder: {
       backgroundColor: theme.colors.border,
     },
-    info: {
-      flex: 1,
-    },
     displayName: {
+      flex: 1,
       fontSize: theme.fontSize.md,
       fontWeight: theme.fontWeight.bold,
       color: theme.colors.textPrimary,
-      marginBottom: 2,
-    },
-    statLine: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
     },
   });
 }

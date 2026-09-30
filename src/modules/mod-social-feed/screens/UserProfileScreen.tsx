@@ -8,6 +8,11 @@
  * the `users` table), but the activity list is omitted in Phase 1 (that is
  * MOD-008's surface). The follow/unfollow button is the primary action here.
  *
+ * Stats section: fetchProfileStats cross-module import from mod-profile-history
+ * (public service — permitted per production.md Cross-Module Imports convention).
+ * The get_profile_stats RPC enforces privacy server-side; followers_only non-followers
+ * receive zeroed stats — no special consumer-side handling needed.
+ *
  * Safe area: useSafeAreaInsets() + makeStyles(theme, topInset) pattern.
  *
  * Block/report interactions are NOT handled here — those belong to MOD-009.
@@ -27,6 +32,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { fetchProfileStats } from '../../mod-profile-history/history-service';
+import type { ProfileStats } from '../../mod-profile-history/types';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import {
@@ -36,6 +43,13 @@ import {
   unfollow,
 } from '../social-feed-service';
 import type { FollowerCounts } from '../types';
+
+// ── Constants ──────────────────────────────────────────────────────────────────
+
+/** Minimum bar width (px) so zero-count bars are still visible as a hairline. */
+const BAR_MIN_WIDTH = 2;
+/** Maximum bar track width — bar fills proportionally within this. */
+const BAR_TRACK_WIDTH = 160;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +86,7 @@ export default function UserProfileScreen({
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [counts, setCounts] = useState<FollowerCounts>({ follower_count: 0, following_count: 0 });
   const [isFollowing, setIsFollowing] = useState(false);
+  const [stats, setStats] = useState<ProfileStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,7 +98,7 @@ export default function UserProfileScreen({
   const loadProfile = useCallback(async (): Promise<void> => {
     setError(null);
     try {
-      const [profileResult, countsResult, followingResult] = await Promise.all([
+      const [profileResult, countsResult, followingResult, statsResult] = await Promise.all([
         supabase
           .from('users')
           .select('id, display_name, avatar_url, bio, privacy_setting')
@@ -91,6 +106,7 @@ export default function UserProfileScreen({
           .single(),
         fetchFollowerCounts(targetUserId),
         isOwnProfile ? Promise.resolve(false) : fetchIsFollowing(targetUserId),
+        fetchProfileStats(targetUserId).catch(() => null),
       ]);
 
       if (profileResult.error) {
@@ -100,6 +116,7 @@ export default function UserProfileScreen({
       setProfile(profileResult.data as TargetUserProfile);
       setCounts(countsResult);
       setIsFollowing(followingResult);
+      setStats(statsResult);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t('socialFeed.errors.profileLoadFailed');
@@ -160,6 +177,11 @@ export default function UserProfileScreen({
       </View>
     );
   }
+
+  // Compute bar chart max for proportional widths
+  const maxBarCount = stats !== null
+    ? Math.max(...stats.sends_by_grade.filter((g) => g.count > 0).map((g) => g.count), 1)
+    : 1;
 
   return (
     <ScrollView
@@ -253,6 +275,61 @@ export default function UserProfileScreen({
                 </Text>
               )}
             </Pressable>
+          )}
+
+          {/* Stats section — shown when stats loaded successfully */}
+          {stats !== null && (
+            <>
+              {/* Section divider */}
+              <View style={styles.statsDivider} />
+
+              {/* Summary row: Total Sends / Days Climbed / Best Grade */}
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.total_sends}</Text>
+                  <Text style={styles.statLabel}>{t('profileHistory.stats.totalSends')}</Text>
+                </View>
+                <View style={styles.statItemDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>{stats.accumulated_days}</Text>
+                  <Text style={styles.statLabel}>{t('profileHistory.stats.accumulatedDays')}</Text>
+                </View>
+                <View style={styles.statItemDivider} />
+                <View style={styles.statItem}>
+                  <Text style={styles.statValue}>
+                    {stats.highest_grade ?? t('profileHistory.stats.noGrade')}
+                  </Text>
+                  <Text style={styles.statLabel}>{t('profileHistory.stats.highestGrade')}</Text>
+                </View>
+              </View>
+
+              {/* Grade bar chart — only when there are sends */}
+              {stats.total_sends > 0 && (
+                <View
+                  style={styles.chartContainer}
+                  accessibilityLabel={t('profileHistory.stats.chartA11y')}
+                >
+                  <Text style={styles.chartTitle}>{t('profileHistory.stats.chartTitle')}</Text>
+                  {stats.sends_by_grade
+                    .filter(({ count }) => count > 0)
+                    .map(({ grade, count }) => {
+                      const barWidth = Math.max(
+                        BAR_MIN_WIDTH,
+                        Math.round((count / maxBarCount) * BAR_TRACK_WIDTH),
+                      );
+                      return (
+                        <View key={grade} style={styles.barRow}>
+                          <Text style={styles.barGradeLabel}>{grade}</Text>
+                          <View style={styles.barTrack}>
+                            <View style={[styles.bar, { width: barWidth }]} />
+                          </View>
+                          <Text style={styles.barCount}>{count}</Text>
+                        </View>
+                      );
+                    })}
+                </View>
+              )}
+            </>
           )}
         </>
       )}
@@ -380,6 +457,76 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     followButtonTextActive: {
       color: theme.colors.textPrimary,
+    },
+    // ── Stats section ────────────────────────────────────────────────────────
+    statsDivider: {
+      height: 1,
+      backgroundColor: theme.colors.border,
+      marginTop: theme.spacing.lg,
+      marginBottom: theme.spacing.lg,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      alignItems: 'center',
+      marginBottom: theme.spacing.lg,
+    },
+    statItem: {
+      alignItems: 'center',
+      flex: 1,
+    },
+    statValue: {
+      fontSize: theme.fontSize.xl,
+      fontWeight: theme.fontWeight.bold,
+      color: theme.colors.textPrimary,
+    },
+    statLabel: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
+      textAlign: 'center',
+    },
+    statItemDivider: {
+      width: 1,
+      height: 40,
+      backgroundColor: theme.colors.border,
+    },
+    chartContainer: {
+      marginBottom: theme.spacing.lg,
+    },
+    chartTitle: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.textSecondary,
+      marginBottom: theme.spacing.sm,
+    },
+    barRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      height: 24,
+    },
+    barGradeLabel: {
+      width: 32,
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+    },
+    barTrack: {
+      flex: 1,
+      height: 12,
+      backgroundColor: theme.colors.divider,
+      borderRadius: theme.borderRadius.sm,
+      overflow: 'hidden',
+    },
+    bar: {
+      height: '100%',
+      backgroundColor: theme.colors.primary,
+      borderRadius: theme.borderRadius.sm,
+    },
+    barCount: {
+      width: 28,
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      textAlign: 'right',
     },
   });
 }

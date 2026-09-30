@@ -8,7 +8,21 @@
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
 **AC-146/147/148 commit**: `77ad6f8` — `feat(mod-social-feed): AC-146/147/148 — followers/following list screens with per-card stats`
 **follow() bug-fix commit**: pending — `fix(mod-social-feed): include follower_id in follow() insert payload`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148 and follow() bug fix)
+**Human QA UI changes commit**: pending — `fix(mod-social-feed): simplify follower/following cards; add stats section to UserProfileScreen`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes)
+
+### Human QA UI Changes (2026-09-30)
+
+**Change 1 — Simplify FollowersListScreen and FollowingListScreen cards**: Removed the per-card stats display (sends count "X 攀登" and highest grade "最高 VX") from both list screens following human QA feedback. The `useCardStats` hook, `fetchProfileStats` import, and `ProfileStats` type import are fully removed from both files. Each card now renders circular avatar + display_name only. The `onNavigateToUser(userId)` tap behaviour, nav bar, empty state, and loading state are all preserved unchanged. No new i18n keys needed — removed keys (`sends`, `highestGrade`, `noGrade`) remain in the locale files as they are used elsewhere.
+
+**Change 2 — Add stats section to UserProfileScreen**: Added a stats section below the follow/unfollow button. Imports `fetchProfileStats` from `../../mod-profile-history/history-service` and `ProfileStats` type from `../../mod-profile-history/types` (cross-module public service import — permitted per production.md). `fetchProfileStats` is called in `loadProfile()` via `Promise.all` alongside existing calls, with `.catch(() => null)` so a stats fetch failure does not break the profile load. Added `stats: ProfileStats | null` state (initialized to null). Stats section renders only when `stats !== null`; shows nothing on load failure (no crash). Layout: 1px section divider using `theme.colors.border`, three-item summary row (Total Sends / Days Climbed / Best Grade) using existing `profileHistory.stats.*` i18n keys, then a proportional horizontal bar chart of `sends_by_grade` when `total_sends > 0`. No standalone stats component exported from `mod-profile-history/index.ts` was suitable for embedding (the exported `SendHistoryProfile` is a full-screen FlatList); stats are rendered inline with simple Views/Texts using `useTheme()` tokens exclusively. Test updated to mock `fetchProfileStats` from `mod-profile-history/history-service`.
+
+**Self-check (human QA UI changes)**:
+- PASS — `npx tsc --noEmit` clean, 0 errors
+- PASS — `npm test -- --watchAll=false` 413/413 tests pass, exit code 0
+- PASS — No hardcoded hex colors introduced; all styles use `theme.*` tokens
+- PASS — Cross-module import `fetchProfileStats` from `../../mod-profile-history/history-service` (permitted public service per production.md)
+- PASS — Stats section renders nothing when stats are null (load failure path is safe)
 
 ### Bug Fix — follow() missing follower_id (2026-09-30)
 

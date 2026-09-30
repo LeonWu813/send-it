@@ -4,7 +4,8 @@
  * AC-050: follow/unfollow any other user; counts reflect immediately.
  * AC-063: privacy_setting = followers_only badge is shown.
  *
- * social-feed-service and Supabase are mocked; no real network activity.
+ * social-feed-service, fetchProfileStats, and Supabase are mocked;
+ * no real network activity.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -22,11 +23,16 @@ jest.mock('../social-feed-service', () => ({
   unfollow: jest.fn(),
 }));
 
+jest.mock('../../mod-profile-history/history-service', () => ({
+  fetchProfileStats: jest.fn(),
+}));
+
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 import React from 'react';
 
 import { supabase } from '../../../lib/supabase';
+import { fetchProfileStats } from '../../mod-profile-history/history-service';
 import {
   fetchFollowerCounts,
   fetchIsFollowing,
@@ -41,6 +47,7 @@ const mockFetchFollowerCounts = fetchFollowerCounts as jest.MockedFunction<typeo
 const mockFetchIsFollowing = fetchIsFollowing as jest.MockedFunction<typeof fetchIsFollowing>;
 const mockFollow = follow as jest.MockedFunction<typeof follow>;
 const mockUnfollow = unfollow as jest.MockedFunction<typeof unfollow>;
+const mockFetchProfileStats = fetchProfileStats as jest.MockedFunction<typeof fetchProfileStats>;
 
 const CURRENT_USER_ID = 'user-001';
 const TARGET_USER_ID = 'user-002';
@@ -75,6 +82,12 @@ describe('UserProfileScreen', () => {
     mockFetchIsFollowing.mockResolvedValue(false);
     mockFollow.mockResolvedValue(undefined);
     mockUnfollow.mockResolvedValue(undefined);
+    mockFetchProfileStats.mockResolvedValue({
+      total_sends: 42,
+      accumulated_days: 15,
+      highest_grade: 'V5',
+      sends_by_grade: [],
+    });
   });
 
   function setupProfileMock(profile: typeof MOCK_PROFILE = MOCK_PROFILE): void {
