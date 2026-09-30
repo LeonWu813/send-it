@@ -285,3 +285,133 @@ Human QA checklist:
 Migration `20260928000002_mod_006_feed_exclude_reported.sql` applied to production Supabase instance. Feed report-exclusion filter active.
 
 **Context**: This migration ships the `CREATE OR REPLACE FUNCTION public.get_activity_feed(...)` update that adds `WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` to the `video_items` CTE — the AC-141 coordinated requirement. It is the MOD-006-owned half of the cross-module change described in the 2026-09-28 Tech Lead review (Q4), ordered after the MOD-005 migration `20260928000001_mod_005_video_reports.sql` which introduced the `is_reported` and `report_dismissed` columns on `beta_videos`. The feed-exclusion filter is now live; reported-but-not-dismissed beta videos will not appear in any user's activity feed.
+
+---
+
+## QA Run 3 — Regression — Rev 18 Scope (AC-146, AC-147, AC-148) — 2026-09-30
+
+**QA Agent**: qa-mod-social-feed
+**Workflow**: regression-test (Rev 18 additions — first QA of AC-146/147/148)
+**Scope**: AC-146 (FollowersListScreen), AC-147 (FollowingListScreen), AC-148 (per-card stats via fetchProfileStats)
+**Automated tests**: 412/412 pass (full suite); 51/51 pass (mod-social-feed suite); exit code 0
+**TypeScript**: `npx tsc --noEmit` — clean, 0 errors
+
+---
+
+### AC-146 — FollowersListScreen
+
+**PASS AC-146** — Followers list screen verified.
+
+- **Props**: `FollowersListScreenProps` exports `userId: string`, `onBack: () => void`, `onNavigateToUser: (userId: string) => void`. All three required props present and typed correctly.
+- **Scrollable list**: `FlatList` used with `data={users}` and `keyExtractor={(item) => item.userId}`. Confirmed at line 246.
+- **Card layout**: Each `UserCard` renders a circular avatar (`borderRadius: theme.borderRadius.full`, width/height 48), `displayName` text, and a `statLine` combining `t('socialFeed.sends', { count })` and `t('socialFeed.highestGrade', { grade })` or `t('socialFeed.noGrade')`. Confirmed by code inspection.
+- **Tap navigates**: `onPress={() => { onPress(item.userId); }}` in `UserCard` — calls `onNavigateToUser(cardUserId)`. No direct import of any profile screen component. Confirmed.
+- **Blocked users excluded**: Both `fetchFollowersList(userId)` and `fetchBlockedUserIds()` are called concurrently via `Promise.all`; the result is filtered with `rawList.filter((u) => !blockedIds.has(u.userId))` before `setUsers`. Confirmed at lines 207–212.
+- **Empty state**: `ListEmptyComponent` renders `t('socialFeed.noFollowers')` text in a centered view. Confirmed at lines 256–260.
+- **ActivityIndicator during initial load**: When `loading === true`, a `View` with `ActivityIndicator size="large"` is returned. Screen-level only (not per-card). Confirmed at lines 229–234.
+- **Nav bar**: Chevron-back icon (`Ionicons name="chevron-back"`), back label via `t('settings.back')` (resolves to "Back" / "返回"), and centered title via `t('socialFeed.followers')` (resolves to "Followers" / "追蹤者"). Confirmed at lines 270–281.
+- **No direct profile screen import**: grep confirms no import of `UserProfileScreen`, `UserProfileNavigator`, `FollowersListScreen`, or `FollowingListScreen` from within this file. Confirmed.
+- **Safe area insets**: `useSafeAreaInsets()` called, `insets.top` passed to `makeStyles(theme, insets.top)`, `paddingTop: topInset + theme.spacing.md` applied to the nav bar. Confirmed at lines 197–198, 298.
+- **No hardcoded hex colors**: grep for `0x` and `#[0-9a-fA-F]{3,6}` returned no matches in this file. All colors use `theme.colors.*`.
+- **useTheme()**: `const { theme } = useTheme()` pattern used. Confirmed at line 196.
+
+---
+
+### AC-147 — FollowingListScreen
+
+**PASS AC-147** — Following list screen verified.
+
+- **Props**: `FollowingListScreenProps` exports `userId: string`, `onBack: () => void`, `onNavigateToUser: (userId: string) => void`. Identical prop shape to AC-146.
+- **Scrollable list**: `FlatList` used — identical pattern to FollowersListScreen. Confirmed at line 247.
+- **Card layout**: `UserCard` component is structurally identical to FollowersListScreen — circular avatar, displayName, statLine with sends count and highest grade. Confirmed.
+- **Tap navigates**: Same `onPress` pattern — calls `onNavigateToUser(item.userId)`. No direct profile screen import. Confirmed.
+- **Blocked users excluded**: Same `Promise.all([fetchFollowingList(userId), fetchBlockedUserIds()])` pattern with filter. Confirmed at lines 208–213.
+- **Empty state**: `ListEmptyComponent` renders `t('socialFeed.noFollowing')` (different key from AC-146). Confirmed at lines 257–261.
+- **ActivityIndicator during initial load**: Screen-level only, identical pattern to AC-146. Confirmed at lines 230–234.
+- **Nav bar**: Chevron-back + `t('settings.back')` + centered title `t('socialFeed.following')` (resolves to "Following" / "追蹤中"). Confirmed at lines 271–281.
+- **Title distinction**: FollowersListScreen uses `t('socialFeed.followers')` ("追蹤者"); FollowingListScreen uses `t('socialFeed.following')` ("追蹤中"). Both correct per spec.
+- **No direct profile screen import**: Confirmed by grep — no cross-screen imports.
+- **Safe area insets**: Same `useSafeAreaInsets()` + `makeStyles(theme, insets.top)` pattern. Confirmed.
+- **No hardcoded hex colors**: Confirmed — all colors via `theme.colors.*`.
+
+---
+
+### AC-148 — Per-card stats via fetchProfileStats
+
+**PASS AC-148** — Per-card stats sourcing verified.
+
+- **Import path**: Both screens import `fetchProfileStats` from `'../../mod-profile-history/history-service'` (line 37 in FollowersListScreen, line 38 in FollowingListScreen). The relative path `../../mod-profile-history/history-service` from `src/modules/mod-social-feed/screens/` resolves to `src/modules/mod-profile-history/history-service.ts` — confirmed by `realpath` check. This is a direct import, not a re-export through `social-feed-service.ts`.
+- **NOT via re-export**: `grep fetchProfileStats social-feed-service.ts` returned zero results — the function is not re-exported or even mentioned in the service file. The screens import it directly from `mod-profile-history/history-service` as required.
+- **Per-card lazy fetch**: `fetchProfileStats(cardUserId)` is called inside the `useCardStats(cardUserId)` hook, which is called inside the `UserCard` component. Each card mounts its own hook and triggers its own independent RPC call. No single bulk call in the screen-level `loadFollowers`/`loadFollowing` effect. Confirmed by code structure.
+- **Placeholder during load**: `CardStats` initializes with `{ totalSends: 0, highestGrade: null, loaded: false }`. The card renders `0 Sends` and `t('socialFeed.noGrade')` ("Best: --" / "最高 --") immediately while the per-card fetch is in progress. No per-card ActivityIndicator. Confirmed at lines 64–68 and 136–142.
+- **Stats fields consumed**: `result.total_sends` mapped to `totalSends`; `result.highest_grade` mapped to `highestGrade`. The canonical `ProfileStats` type from `mod-profile-history/types.ts` is used — no client-side derivation. Confirmed at lines 75–81.
+- **Error handling**: On fetch error, placeholder values (0 sends, null grade) are retained — no per-card spinner, no crash. Confirmed at lines 83–87.
+- **Cancellation**: `useEffect` returns a cleanup function setting `cancelled = true` to prevent state updates after unmount. Correct pattern for lazy per-card fetches.
+
+---
+
+### Service Layer — AC-146 / AC-147
+
+**PASS** — `social-feed-service.ts` exports `fetchFollowersList(userId: string): Promise<UserListItem[]>` and `fetchFollowingList(userId: string): Promise<UserListItem[]>`. Both functions are confirmed present at lines 316 and 354 respectively. Both query the `follows` table with a joined `users` FK relation, return `UserListItem[]`, and delegate block filtering to the caller per the documented contract.
+
+**PASS** — `types.ts` exports `UserListItem` interface with `userId: string`, `displayName: string`, `avatarUrl: string | null`. Confirmed at lines 78–82. This is the correct shape for the list screens.
+
+**NOTE** — `fetchFollowersList` and `fetchFollowingList` are not covered by tests in `social-feed-service.test.ts`. The test file imports only the pre-existing functions and has no describe blocks for the two new functions. This is a test coverage gap. It is not a blocking issue (TypeScript is clean, the functions are correctly implemented and structurally verified here), but the engineer should add tests for the new service functions in a follow-up. Flagged as an observation, not a bug — no AC requires test coverage of these specific functions beyond what is present.
+
+---
+
+### i18n Verification
+
+**PASS** — Required keys present in both locales under `socialFeed` namespace:
+
+| Key | en/common.json | zh-TW/common.json |
+|---|---|---|
+| `socialFeed.sends` | "{{count}} Sends" | "{{count}} 攀登" |
+| `socialFeed.highestGrade` | "Best: {{grade}}" | "最高 {{grade}}" |
+| `socialFeed.noGrade` | "Best: --" | "最高 --" |
+| `socialFeed.noFollowers` | "No followers yet" | "還沒有追蹤者" |
+| `socialFeed.noFollowing` | "Not following anyone yet" | "還沒有追蹤任何人" |
+| `socialFeed.followers` | "Followers" | "追蹤者" |
+| `socialFeed.following` | "Following" | "追蹤中" |
+
+All confirmed present in both locale files.
+
+**PASS** — No duplicate key conflict. The `home.following` key in both locale files is a different namespace (`home.following.title`, `home.following.empty`) and does not conflict with `socialFeed.followers` or `socialFeed.following`. Both can coexist in the same JSON object because they are under different top-level keys.
+
+**PASS** — `settings.back` key used by both nav bars resolves to "Back" (en) and "返回" (zh-TW). Confirmed present at line 63 in both locale files.
+
+---
+
+### Guard Rail Verification
+
+**PASS** — Neither FollowersListScreen nor FollowingListScreen imports any profile screen directly. No import of `UserProfileScreen`, `UserProfileNavigator`, or any file from a `screens/` subdirectory of another module. Navigation is via `onNavigateToUser` callback prop exclusively.
+
+**PASS** — `fetchProfileStats` import path is `'../../mod-profile-history/history-service'` in both screens — matches the production.md convention and the spec requirement exactly. Not imported via a re-export in `social-feed-service.ts`.
+
+**PASS** — No hardcoded hex colors in either screen. All color references use `theme.colors.*` tokens via `useTheme()`.
+
+**PASS** — Safe area insets applied via `useSafeAreaInsets()` in both screens. `makeStyles(theme, insets.top)` pattern with `paddingTop: topInset + theme.spacing.md` in the nav bar. Correct per production.md Screen Layout convention.
+
+---
+
+### Regression Check
+
+**PASS** — 412/412 tests pass across all 31 test suites. No regressions from the AC-146/147/148 additions. The previously passing ACs (AC-050, AC-051, AC-052, AC-053, AC-063) remain unaffected — no changes to FeedScreen.tsx, UserProfileScreen.tsx, or the migration files.
+
+---
+
+### Summary (QA Run 3)
+
+**Result**: QA PASS — Rev 18 scope (AC-146, AC-147, AC-148) all clear.
+
+All three Rev 18 ACs are correctly implemented:
+
+- **AC-146**: FollowersListScreen renders a FlatList of followers with circular avatar, display_name, sends count, and highest grade per card; tap calls `onNavigateToUser`; blocked users excluded via `fetchBlockedUserIds()`; empty state and screen-level ActivityIndicator present; nav bar uses chevron-back + i18n back label + centered "追蹤者" title; safe area insets applied; no hardcoded hex colors.
+- **AC-147**: FollowingListScreen is structurally identical to AC-146 with the correct "追蹤中" title and `noFollowing` empty state; all same guard rails satisfied.
+- **AC-148**: `fetchProfileStats` imported directly from `../../mod-profile-history/history-service` in both screens (not via re-export); called per-card inside `useCardStats` hook; placeholder values (0/null) shown during load; no per-card spinner; no client-side derivation of stats.
+
+Service layer exports `fetchFollowersList` and `fetchFollowingList` returning `UserListItem[]`. Types file exports `UserListItem`. Both locale files have all required keys with no conflicts. TypeScript is clean. 412/412 tests pass.
+
+One non-blocking observation: `fetchFollowersList` and `fetchFollowingList` lack dedicated unit tests in the service test file. The functions are structurally verified here and TypeScript-clean, but test coverage is incomplete. This is a quality note for the engineer, not a blocking AC failure.
+
+**MOD-006 Rev 18 scope is QA PASS.**
