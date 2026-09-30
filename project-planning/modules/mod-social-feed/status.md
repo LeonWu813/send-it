@@ -2,12 +2,26 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, tsc clean, 412/412 tests pass.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, 413/413 tests pass.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
 **AC-146/147/148 commit**: `77ad6f8` — `feat(mod-social-feed): AC-146/147/148 — followers/following list screens with per-card stats`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148)
+**follow() bug-fix commit**: pending — `fix(mod-social-feed): include follower_id in follow() insert payload`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148 and follow() bug fix)
+
+### Bug Fix — follow() missing follower_id (2026-09-30)
+
+**Bug**: `follow()` in `social-feed-service.ts` inserted only `{ followee_id }` into the `follows` table. The `follows.follower_id` column is `NOT NULL` with no DEFAULT, so every follow attempt failed with PostgreSQL error 23502 (not_null_violation), surfacing to the user as "Failed to follow user. Please try again."
+
+**Fix**: Added the same `supabase.auth.getSession()` guard pattern used by `unfollow()` and `unlikeBetaVideo()`. The function now reads the current user's ID from the session, returns early with `throw new Error('Not authenticated.')` if no session is present, and inserts `{ follower_id: followerId, followee_id: followeeId }`.
+
+**Tests updated**: `social-feed-service.test.ts` `follow` describe block — added `mockGetSession` in `beforeEach`, corrected the insert payload assertion to include `follower_id: MOCK_USER_ID`, and added a new "throws when not authenticated" test (mirrors the equivalent `unfollow` test). Total test count increased from 412 to 413.
+
+**Self-check**:
+- PASS — `npx tsc --noEmit` clean, 0 errors
+- PASS — `npm test -- --watchAll=false` 413/413 tests pass, exit code 0
+- PASS — Pure client-side fix; no migration changes
 
 ### AC-146 / AC-147 / AC-148 Update (2026-09-30)
 

@@ -93,16 +93,29 @@ function makeRpcBuilder(result: { data: unknown; error: unknown }): any {
 // ── follow ────────────────────────────────────────────────────────────────────
 
 describe('follow', () => {
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockGetSession.mockResolvedValue(
+      MOCK_GET_SESSION_RESULT as unknown as Awaited<ReturnType<typeof supabase.auth.getSession>>,
+    );
+  });
 
-  it('inserts a follows row for the given followeeId', async () => {
+  it('inserts a follows row with both follower_id and followee_id', async () => {
     const qb = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
     await follow('user-002');
 
     expect(mockFrom).toHaveBeenCalledWith('follows');
-    expect(qb.insert).toHaveBeenCalledWith({ followee_id: 'user-002' });
+    expect(qb.insert).toHaveBeenCalledWith({ follower_id: MOCK_USER_ID, followee_id: 'user-002' });
+  });
+
+  it('throws when not authenticated', async () => {
+    mockGetSession.mockResolvedValueOnce(
+      MOCK_GET_SESSION_NO_AUTH as unknown as Awaited<ReturnType<typeof supabase.auth.getSession>>,
+    );
+
+    await expect(follow('user-002')).rejects.toThrow('Not authenticated.');
   });
 
   it('treats a unique_violation (23505) as a no-op (idempotent)', async () => {

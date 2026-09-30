@@ -50,9 +50,15 @@ import type {
  * @throws {Error}    with a user-facing message on failure.
  */
 export async function follow(followeeId: string): Promise<void> {
+  const { data: session } = await supabase.auth.getSession();
+  const followerId = session?.session?.user?.id;
+  if (!followerId) {
+    throw new Error('Not authenticated.');
+  }
+
   const { error } = await supabase
     .from('follows')
-    .insert({ followee_id: followeeId });
+    .insert({ follower_id: followerId, followee_id: followeeId });
 
   if (error) {
     // 23505 = unique_violation — already following, treat as success (idempotent)
