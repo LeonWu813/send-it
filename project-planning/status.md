@@ -3,15 +3,24 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: 4c0661b75bc87ac3e25917e0fe79abd9df4c00be
-timestamp: 2026-09-30T19:00:00Z
+commit: 48b4c2cdcdb264ec1a13d5049f100bfc5abd1740
+timestamp: 2026-09-30T23:34:54Z
 ```
 
 ## PM Updates
+
+- **2026-09-30 [TRIVIAL]** — Blocked Accounts screen in Settings (PRD Revision 21). Leon requested this change and instructed logging it directly as [TRIVIAL] with no Tech Lead review. PRD Status line `[TRIVIAL] — Revision 21`; `**Revision**` bumped 20 → 21; Date 2026-09-30. Change:
+  - **§8 MOD-010** — **AC-155 (new)**: the Settings screen (SettingsScreen) presents a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping it opens a BlockedAccountsScreen listing the current user's blocked users (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, `display_name`, and an "Unblock" button; tapping Unblock calls `unblockUser(userId)` (MOD-009, AC-152) and removes the entry from the list; an empty state is shown when no users are blocked. Navigation is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere) — no ProfileNavigator view-state change. The list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
+  - **§6 Module Breakdown** — MOD-010 purpose += ownership of the Settings "Blocked Accounts" row + Blocked Accounts screen (AC-155), consuming MOD-009's `fetchMyBlockedUsers` / `unblockUser` public services; **MOD-010 Dependencies: none → MOD-009** (new declared dependency for the block-status + unblock public services). MOD-009 purpose += the new `fetchMyBlockedUsers()` block-status public service, now also consumed by MOD-010's Blocked Accounts screen (AC-155).
+  - **§3 User Stories** — no new user story. US-016 (Block another user) AC list += AC-155 (now AC-082, AC-083, AC-151, AC-152, AC-155).
+  - **§9 Data Model** — **no change**: no new tables/columns, no migration. `fetchMyBlockedUsers()` queries the existing `blocks` table JOIN `users` (`blocker_user_id = auth.uid()`), returning `{ userId, displayName, avatarUrl }` per row; `unblockUser` reuses the existing MOD-009 action (AC-152).
+  - **New dependency edge**: MOD-010 → MOD-009 (MOD-010's SettingsScreen consumes MOD-009's block-status/action public services). This is a new declared edge (MOD-010 was previously `Dependencies: none`), consistent with the established cross-module public-service convention (deeply-mounted/consuming screens call the owning module's public service layer, never a direct table query). No cycle: MOD-009 does not depend on MOD-010.
+  - **Tagged [TRIVIAL]**: adds one new AC (AC-155) over MOD-009's existing block table + block/unblock action machinery, plus a small new read-only service (`fetchMyBlockedUsers()`) over the existing `blocks`/`users` tables. No new module, no new user story, no data-model/schema change, no migration; the phase plan is unchanged. The one structural touch is the new MOD-010 → MOD-009 dependency edge (block-status/unblock public services); Leon judged this trivial and directed no Tech Lead review.
+  - **Affected specs for Doc-Sync**: **MOD-010 (mod-localization-theme)** — AC-155 (SettingsScreen "Blocked Accounts" row + BlockedAccountsScreen, sub-view navigation, unblock action, empty state), new MOD-009 dependency; **MOD-009 (mod-moderation)** — new `fetchMyBlockedUsers()` public service (query `blocks JOIN users` where `blocker_user_id = auth.uid()`, return `{ userId, displayName, avatarUrl }`) added to its public-service surface. No `production.md` change required (reuses the existing block-status public-service convention). PM did not edit `production.md` or any module spec — this tag is the Doc-Sync trigger. **Run `claude --agent doc-sync`.** Doc-Sync NOT invoked here.
 
 - **2026-09-30 [SUBSTANTIVE]** — UserProfileScreen three-dots menu + report-and-block semantics + profile blocked state + beta-video block filtering (PRD Revision 20). Leon requested these changes and approved logging them directly. **No Tech Lead review required** (pure UI + client-side behavior + client-side filter; no new DB schema, no new table/column, no new migration). PRD Status line `[SUBSTANTIVE] — Revision 20`; `**Revision**` bumped 19 → 20; Date 2026-09-30. Changes:
   - **§8 MOD-006** — **AC-150 (new)**: `UserProfileScreen` (the other-user overlay via `handleSelectClimber`) shows a top-right three-dots icon (⋮) that opens a bottom action sheet over a translucent, interaction-blocking overlay, with exactly two options — "Report" (AC-151) and a block toggle labeled "Block"/"Unblock" (AC-152). This replaces any prior report/block control placement on the other-user profile surface; the ⋮ icon is shown even in the blocked state so the viewer can unblock. **AC-152 (new)**: the block toggle calls `blockUser` (block-only, no admin report) or `unblockUser` (MOD-009); block is symmetric per the existing `Block` DB trigger (follows removed both directions, neither can follow the other while blocked); profile reflects the new state immediately. **AC-153 (new)**: on load, `UserProfileScreen` checks block-in-either-direction via MOD-009's `isBlocked`/`fetchBlockedUserIds`; if blocked, it shows a "This profile isn't available" message, hides the follow/unfollow button and the AC-149 stats section, but still shows the ⋮ icon (so the viewer can unblock).

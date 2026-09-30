@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 20
+**Status**: [TRIVIAL] — Revision 21
 **Date**: 2026-09-30
-**Revision**: 20
+**Revision**: 21
 
 ---
 
@@ -209,7 +209,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** to block that user,
 **so that** their content no longer appears in my feed or on route pages I view, and they cannot follow or interact with me (App Store Guideline 1.2 requirement).
 
-**Acceptance Criteria**: AC-082, AC-083, AC-151, AC-152
+**Acceptance Criteria**: AC-082, AC-083, AC-151, AC-152, AC-155
 
 ---
 
@@ -402,7 +402,7 @@ The data flow for the two most important loops:
 
 ### MOD-009: Moderation (Report & Block)
 
-**Purpose**: Provide user-profile report submission (which in Phase 1 both files a report record and blocks the user, AC-151), block/unblock actions (`blockUser` / `unblockUser`, AC-152), a block-status public service (`isBlocked` / `fetchBlockedUserIds`) consumed by MOD-005 (AC-154) and MOD-006 (AC-153), and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio. Beta-video reporting is owned by MOD-005 (the one-tap report flow, AC-139/AC-140), not MOD-009.
+**Purpose**: Provide user-profile report submission (which in Phase 1 both files a report record and blocks the user, AC-151), block/unblock actions (`blockUser` / `unblockUser`, AC-152), a block-status public service (`isBlocked` / `fetchBlockedUserIds` / `fetchMyBlockedUsers`) consumed by MOD-005 (AC-154), MOD-006 (AC-153), and MOD-010's Blocked Accounts screen (AC-155, via `fetchMyBlockedUsers`), and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio. Beta-video reporting is owned by MOD-005 (the one-tap report flow, AC-139/AC-140), not MOD-009.
 
 **User Stories**: US-015, US-016
 
@@ -412,11 +412,11 @@ The data flow for the two most important loops:
 
 ### MOD-010: Localization & Theming
 
-**Purpose**: Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override.
+**Purpose**: Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override. Own the Settings screen "Blocked Accounts" row and the Blocked Accounts screen (AC-155), which lists the current user's blocked users and offers per-row unblock via MOD-009's public services (`fetchMyBlockedUsers` / `unblockUser`).
 
 **User Stories**: US-017, US-018
 
-**Dependencies**: none
+**Dependencies**: MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
 
 ---
 
@@ -713,6 +713,8 @@ The data flow for the two most important loops:
 **AC-091**: The system shall expose a language toggle in Settings between English and zh-TW that takes effect immediately without an app restart.
 
 **AC-092**: The system shall default to the OS Light/Dark appearance and expose a Settings override with three states (System, Light, Dark) that takes effect immediately without an app restart.
+
+**AC-155** (new): The Settings screen (SettingsScreen) shall present a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping the row shall open a Blocked Accounts screen (BlockedAccountsScreen) that lists the users the current user has blocked (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, the user's `display_name`, and an "Unblock" button. Tapping "Unblock" shall call `unblockUser(userId)` (MOD-009, AC-152) and remove that entry from the list. When the current user has blocked no one, the screen shall display an empty state. Navigation to and from the Blocked Accounts screen is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere), with no ProfileNavigator view-state change. The blocked-users list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
 
 ---
 
