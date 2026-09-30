@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 16
-**Date**: 2026-09-28
-**Revision**: 16
+**Status**: [TRIVIAL] — Revision 17
+**Date**: 2026-09-30
+**Revision**: 17
 
 ---
 
@@ -883,6 +883,7 @@ Block  (App Store Guideline 1.2 requirement)
 - **Security**: All Storage buckets have RLS policies aligned with the corresponding table policies (e.g., a user cannot fetch a private ascent's associated media). All Edge Functions validate the JWT and re-check authorization against Postgres. Edge Functions read the service-role key from the secret named `SERVICE_ROLE_KEY` (Supabase reserves the `SUPABASE_` prefix); the service-role key is never inlined into the client bundle.
 - **Native dependency installation**: All Expo native dependencies shall be installed via `npx expo install <package>`, never `npm install <package>`. Expo resolves the SDK-compatible version automatically; a plain `npm install` can silently install an SDK-incompatible version that passes the Jest suite (via mocks) but fails the native iOS/Android build. Hand-pinning a native module's version string in `package.json` is prohibited.
 - **Native build gate before QA handoff**: When a module adds or changes a native dependency (a package with iOS/Android native code), the module's engineer shall run the native build (`npx expo run:ios`, or the platform equivalent) and confirm it compiles before marking the module QA-ready. Passing unit tests alone are insufficient evidence that a native dependency compiles, because Jest mocks native modules.
+- **File upload to Supabase Storage**: all uploads of local device files (photos, videos, any binary asset) must use `expo-file-system`'s `File.bytes()` to obtain a `Uint8Array` and pass it directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`. The `fetch(uri) + response.blob()` pattern is prohibited: in React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes. Reference implementations: `mod-beta-video/beta-video-service.ts` (video) and `mod-route-catalog/route-service.ts` (photo).
 - **Soft-launch timeframe**: No date target set. Phase 1 ships when Phase 1 acceptance criteria pass and the App Store submission is approved.
 
 ---

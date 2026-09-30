@@ -3,15 +3,19 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
-module: n/a
-result: success
-commit: bf23a0c6e9aef0313096aa843bd26d7c8a5e3608
+agent: engineer-mod-route-catalog
+mode: implement
+module: mod-route-catalog
+result: blocked
+commit: f91b8ded9eea931d24c26efde9540f48d7ab3129
 timestamp: 2026-09-30T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-30 [TRIVIAL]** — File-upload convention for Supabase Storage (PRD Revision 17). Leon approved the exact drafted edit for immediate write. **PRD edits**: (1) Status line `[TRIVIAL] — Revision 17`; `**Revision**` bumped 16 → 17; Date → 2026-09-30. (2) **§10 NFR** — one new bullet inserted immediately after the "Native build gate before QA handoff" bullet and before "Soft-launch timeframe": **File upload to Supabase Storage** — all uploads of local device files (photos, videos, any binary asset) must use `expo-file-system`'s `File.bytes()` to obtain a `Uint8Array` and pass it directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`; the `fetch(uri) + response.blob()` pattern is prohibited because in React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes; reference implementations `mod-beta-video/beta-video-service.ts` (video) and `mod-route-catalog/route-service.ts` (photo).
+  - **Tagged [TRIVIAL]**: codifies an existing, already-implemented convention as a written NFR. No new/changed AC, no data-model or schema change, no new dependency, no new module; module boundaries, dependencies, and the phase plan are all unchanged. No Tech Lead review required.
+  - **Doc-Sync scope**: update `production.md` Shared Conventions **only** — carry in the file-upload convention (use `expo-file-system` `File.bytes()` → `Uint8Array` upload; `fetch(uri) + response.blob()` prohibited on Expo SDK 57+). **No module spec changes required** (the two reference modules already implement the pattern; this is a shared-convention codification, not a per-module behavior change). PM did not edit `production.md` or any module spec — this tag is the Doc-Sync trigger. **Run `claude --agent doc-sync`.** Doc-Sync NOT invoked here.
 
 - **2026-09-28 [TRIVIAL]** — AC-133 close/back control icon confirmed as `Ionicons chevron-back` (the `<` chevron) per the literal spec text. Implementation updated from `close` (X) to `chevron-back` by the engineer. No functional change — the dismiss behavior is identical; this is a spec interpretation, not a PRD change. `prd.md` NOT edited (no Revision bump); no Doc-Sync required. No module-boundary, dependency, or phase-plan impact; no new module.
 
