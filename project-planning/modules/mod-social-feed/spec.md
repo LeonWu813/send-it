@@ -3,21 +3,23 @@
 **Module ID**: MOD-006
 **Module Name**: Social Graph & Feed
 **Phase**: 1
-**Dependencies**: MOD-001, MOD-004, MOD-005
-**Last Synced from PRD Revision**: 16
-**Last Updated**: 2026-09-28
+**Dependencies**: MOD-001, MOD-004, MOD-005, MOD-008
+**Last Synced from PRD Revision**: 18
+**Last Updated**: 2026-09-30
 
 ---
 
 ## Purpose
 
-Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, and beta-video like reactions.
+Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, beta-video like reactions, and the Followers and Following list screens (AC-146, AC-147).
 
 ---
 
 ## Context
 
 Climbers connected to the local Taiwan scene want to follow friends and strong local climbers and see their sends and beta videos in a single chronological feed. The activity feed composes three intersecting filters: (1) only activity from users the current user follows (`Follow`), (2) excluding any users in a symmetric block relationship (`Block` — see MOD-009), and (3) respecting the `followers_only` privacy setting from MOD-001. This composition is too complex and too expensive to implement purely in RLS row-by-row filtering at scale. **The activity feed must be served by a `SECURITY INVOKER` Postgres RPC** that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy — this is a hard requirement, not a recommendation. RLS remains the security fence; the RPC performs the composition. Raw client-side table `SELECT` is not permitted for the feed query. In addition to the feed, this module owns the like reaction on beta videos (one like per user per video, idempotent) and the follow/unfollow actions.
+
+For US-022, this module also owns the Followers list screen (AC-146) and Following list screen (AC-147): scrollable lists of users who follow or are followed by the viewed profile, each entry showing a user card (circular avatar, `display_name`, total sends count, highest grade). Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064). Per-card sends count and highest grade are sourced from MOD-008's profile-stats public service (`fetchProfileStats(userId)` — the `get_profile_stats` RPC wrapper), fetched per-card on list render. Blocked users are excluded (AC-082, AC-084).
 
 **Non-goals for this module:**
 - Comments on sends or beta videos (out of scope for Phase 1).
@@ -32,6 +34,13 @@ Climbers connected to the local Taiwan scene want to follow friends and strong l
 
 - **US-007**: Follow other climbers and see their activity
 - **US-008**: Like a beta video
+- **US-022**: See who follows me and who I follow
+
+**US-007 Acceptance Criteria**: AC-050, AC-051
+
+**US-008 Acceptance Criteria**: AC-052, AC-053
+
+**US-022 Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148
 
 ---
 
@@ -47,11 +56,19 @@ Climbers connected to the local Taiwan scene want to follow friends and strong l
 
 > **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006.
 
+**AC-146** (new): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar, `display_name`, total sends count (ascents where `style` ∈ {flash, top}), and highest grade achieved. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
+
+**AC-147** (new): The system shall provide a Following list screen with the same card layout as the Followers list screen (AC-146), listing all users the profile owner follows. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to privacy (AC-063). Blocked users are excluded.
+
+**AC-148** (new): Per-card sends count and highest grade on the Followers and Following list screens (AC-146, AC-147) shall be sourced from MOD-008's profile-stats public service (`get_profile_stats` RPC), not from a direct `ascents` table query in MOD-006. Fetching is per-card on list render (acceptable for Phase 1 list sizes).
+
 ---
 
 ## Integration Points
 
 **Coordinated change with MOD-005 (Rev 16)**: The `get_activity_feed` RPC's `video_items` CTE must add a `WHERE` clause to exclude reported-and-not-dismissed beta videos from the feed (AC-141). This change ships in a MOD-006 migration ordered after the MOD-005 migration that adds the `is_reported` and `report_dismissed` columns.
+
+**MOD-008 profile-stats dependency (AC-148)**: Per-card sends count and highest grade on the Followers and Following list screens are sourced from MOD-008's `fetchProfileStats(userId)` public service wrapper (`get_profile_stats` RPC). MOD-006 imports `fetchProfileStats` directly from `mod-profile-history/history-service.ts` (cross-module import — see Key Implementation Notes).
 
 ---
 
@@ -101,6 +118,14 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 - Like count on the `BetaVideo` immediately reflected in UI
 - `Reaction` INSERT triggers the MOD-007 notification Edge Function via Postgres trigger
 
+**Inputs (Followers/Following list screens):**
+- `userId` (the profile being viewed), authenticated session
+
+**Outputs (Followers/Following list screens):**
+- Scrollable list of user cards; each card: circular avatar, `display_name`, total sends count, highest grade — sourced per-card from `fetchProfileStats(userId)` (MOD-008)
+- Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064)
+- Blocked users excluded (AC-082, AC-084)
+
 ---
 
 ## Key Implementation Notes
@@ -115,6 +140,18 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 - **Feed refresh (AC-051)**: New sends and beta videos from followed users appear in the feed within one refresh cycle (the user opens or pull-refreshes the feed). No real-time push to the feed is required in Phase 1.
 - **Inline video playback in feed (AC-034, owned by MOD-005)**: MOD-006 renders the feed; MOD-005 provides the inline playback component. The feed must support inline video playback for beta videos without leaving the app.
 
+### Followers and Following List Screens — Tech Lead Decisions (Rev 18)
+
+The following decisions were recorded by Tech Lead in the 2026-09-30 review for Rev 18 and are pinned here.
+
+#### Per-card stats fetching (AC-148) — Tech Lead Q2
+
+Per-card sends count and highest grade on the Followers and Following list screens (AC-146, AC-147) are sourced per-card via `get_profile_stats(p_user_id)` calls (option a). A bespoke batch RPC (option b) and client-side join over `ascents` (option c) are both rejected. Call `fetchProfileStats(userId)` lazily per visible card. The RPC is `SECURITY INVOKER STABLE` with a built-in privacy gate, so a `followers_only` non-follower correctly receives zeroed stats with no consumer-side privacy logic. Deriving `total_sends` or `highest_grade` client-side is prohibited — it risks disagreeing with the canonical `get_profile_stats` definition. A batch `get_profile_stats_batch(user_ids[])` is a Phase 2 optimization to revisit only if real list sizes exceed ~200; do not build it for Phase 1.
+
+#### Cross-module import from MOD-008 (AC-148) — Tech Lead Q3
+
+MOD-006 → MOD-008 dependency is safe. Express as a direct import: `import { fetchProfileStats } from '../mod-profile-history/history-service'`. This is a cross-module import of a **public service** (not an internal screen) and is permitted per the Cross-Module Imports convention in `production.md`. Document this cross-module import here and in the Integration Points section. MOD-006 must not import internal screen components from MOD-008; only `fetchProfileStats` (and other public service exports) from `history-service.ts` are permitted.
+
 ---
 
 ## Out of Scope for This Module
@@ -125,3 +162,4 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 - Push notifications for likes (owned by MOD-007).
 - Block/unblock user action UI (owned by MOD-009; this module consumes Block data for feed filtering).
 - New follower notifications (out of scope for Phase 1 push types).
+- Batch profile-stats RPC (Phase 2 optimization — do not build for Phase 1 list sizes).

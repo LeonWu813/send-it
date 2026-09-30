@@ -4,8 +4,8 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 16
-**Last Updated**: 2026-09-28
+**Last Synced from PRD Revision**: 18
+**Last Updated**: 2026-09-30
 
 ---
 
@@ -23,6 +23,8 @@ For US-005, the route detail page presents beta videos as a three-column thumbna
 
 For US-015, the one-tap beta-video report flow is owned by this module: tapping the report icon in the viewer sidebar immediately sets `beta_videos.is_reported = true` via a SECURITY DEFINER RPC and inserts one `video_reports` row. A reported-and-not-dismissed video (`is_reported = true AND report_dismissed = false`) is hidden from every user everywhere it is surfaced until an admin sets `report_dismissed = true` via Supabase Studio.
 
+For US-023, tapping Row 1 (the circular avatar or the `display_name` text) in the bottom-left overlay of the fullscreen viewer dismisses the viewer and navigates the user to that video poster's profile (the MOD-008 other-user profile-and-history surface, AC-064), subject to the poster's privacy setting (AC-063). Navigation is threaded from the viewer to the profile surface via a callback prop supplied by the hosting shell, not by MOD-005 importing the profile screen directly.
+
 **Non-goals for this module:**
 - Comments on beta videos (out of scope for Phase 1).
 - Android video pipeline (Phase 2).
@@ -37,12 +39,15 @@ For US-015, the one-tap beta-video report flow is owned by this module: tapping 
 - **US-004**: Upload a beta video for a route
 - **US-005**: Watch beta inline on a route
 - **US-015**: Report inappropriate content (beta-video report flow only — the one-tap AC-139/AC-140 flow; user-profile reports are owned by MOD-009)
+- **US-023**: Open a beta video poster's profile
 
 **US-004 Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130
 
 **US-005 Acceptance Criteria**: AC-033, AC-034, AC-038, AC-039, AC-133, AC-134, AC-135, AC-136, AC-137, AC-138
 
 **US-015 Acceptance Criteria (beta-video only)**: AC-139, AC-140, AC-141, AC-142, AC-143
+
+**US-023 Acceptance Criteria**: AC-135, AC-144
 
 ---
 
@@ -74,7 +79,7 @@ For US-015, the one-tap beta-video report flow is owned by this module: tapping 
 
 **AC-134** (new): The fullscreen beta-video viewer shall display a bottom-left overlay, rendered over a gradient scrim for legibility, containing two rows: Row 1 — a small circular avatar (from the poster's `avatar_url`; placeholder circle if absent) and the poster's `display_name`; Row 2 — the composed string `{route_name} · {gym_name}`.
 
-**AC-135** (new): In the bottom-left overlay, tapping Row 1 (avatar + `display_name`) shall be a no-op in Phase 1; the profile destination is deferred to a future module.
+**AC-135** (revised): In the bottom-left overlay of the fullscreen beta-video viewer, tapping Row 1 (the circular avatar or the `display_name` text) shall dismiss the viewer and navigate the user to that video poster's profile (the MOD-008 other-user profile-and-history surface, AC-064), subject to the poster's privacy setting (AC-063). Navigation is threaded from the viewer to the profile surface via a callback prop supplied by the hosting shell, not by MOD-005 importing the profile screen directly.
 
 **AC-136** (new): In the bottom-left overlay, tapping Row 2 (`{route_name} · {gym_name}`) shall navigate the user to the route detail screen for that video's route and dismiss the viewer.
 
@@ -92,7 +97,7 @@ For US-015, the one-tap beta-video report flow is owned by this module: tapping 
 
 **AC-143** (new): When an admin sets `beta_videos.report_dismissed = true` (via Supabase Studio), the video shall become visible again to all users on the next fetch, and the report affordance for that video shall be permanently hidden for all users (AC-139), preventing further reports.
 
-**AC-144** (new): The `fetchBetaVideosForRoute` result shall include the poster's `display_name` and `avatar_url` joined from the user record, so the viewer overlay (AC-134) can render poster identity without a second round-trip.
+**AC-144** (revised): The `fetchBetaVideosForRoute` result shall include the poster's `display_name` and `avatar_url` joined from the user record, so the viewer overlay (AC-134) can render poster identity without a second round-trip. The result shall also include the poster's `user_id` (UUID) on the same join, so the viewer has the poster's identifier for navigation per the revised AC-135. This `user_id` addition is a dependent edit required by the revised AC-135.
 
 ---
 
@@ -169,7 +174,7 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - On ingest validation failure: clear error message displayed to user; no file stored
 
 **Inputs (playback):**
-- `BetaVideo` rows from `fetchBetaVideosForRoute` — including `is_reported`, `report_dismissed`, `display_name`, `avatar_url` (joined from `public.users` via `users!beta_videos_user_id_fkey`)
+- `BetaVideo` rows from `fetchBetaVideosForRoute` — including `is_reported`, `report_dismissed`, `user_id`, `display_name`, `avatar_url` (joined from `public.users` via `users!beta_videos_user_id_fkey`)
 - Render context: route detail page (AC-033/AC-038/AC-039) or activity feed (AC-034)
 
 **Outputs (playback):**
@@ -308,6 +313,20 @@ Hide the report icon when `video.user_id === session.user.id` OR `video.report_d
 #### MOD-006 coordination
 
 The `get_activity_feed` RPC's `video_items` CTE must add the same exclusion filter (`WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)`) to exclude reported-and-not-dismissed videos from the feed (AC-141). This is a MOD-006-owned change that ships in a separate MOD-006 migration (`20260928000002_mod_006_feed_exclude_reported.sql`) ordered after `20260928000001_mod_005_video_reports.sql`. Both engineers and the ordering dependency must be routed.
+
+### Poster-Profile Navigation — Tech Lead Decisions (Rev 18)
+
+The following decisions were recorded by Tech Lead in the 2026-09-30 review for Rev 18 and are pinned here.
+
+#### AC-135 revised — `onNavigateToUser` callback prop on `BetaVideoReelViewer`
+
+The revised AC-135 converts the prior no-op Row-1 tap into a profile-navigation action. The correct shape is a new optional prop `onNavigateToUser?: (userId: string) => void` on `BetaVideoReelViewerProps`, parallel to the existing `onNavigateToRoute?: (routeId: string) => void` (Row 2 / AC-136). When Row 1 is tapped, the viewer calls `onNavigateToUser(currentVideo.user_id)` then `onDismiss()`. `currentVideo.user_id` is already available on every `BetaVideo` row returned by `fetchBetaVideosForRoute` (confirmed: `user_id` is already selected and already typed on the `BetaVideo` interface per Rev 16). MOD-005 must NOT import `UserProfileScreen`, `UserProfileNavigator`, or any profile-screen component from MOD-006 — that both violates the Cross-Module Imports rule and inverts the dependency direction (MOD-005 does not depend on MOD-006).
+
+The prop is threaded down the mount chain the reel viewer already sits on: `AppShell → GymNavigator → RouteNavigator → RouteDetailScreen → BetaVideoReelViewer`. `onNavigateToRoute` is already threaded down that chain, so `onNavigateToUser` follows the identical, already-proven path. At the top, `AppShell` (MOD-012) wires `onNavigateToUser` to the **same action `handleSelectClimber` already uses for AC-123** (`setTargetUserId(userId)`), which opens `UserProfileScreen` as a modal overlay. This reuses the one existing "open another user's profile from anywhere" code path — do NOT invent a new mechanism.
+
+#### AC-144 revised — `user_id` already selected
+
+Tech Lead confirmed (Rev 18 Q4): `fetchBetaVideosForRoute` already selects `user_id` explicitly and the `BetaVideo` TypeScript type already declares `user_id: string`. The `user_id` addition in AC-144 (revised) is a no-op at the data layer — `user_id` is already returned and already typed. The only real change Rev 18 requires for AC-144 is wiring: the reel viewer must use `currentVideo.user_id` in the new `onNavigateToUser` callback (see AC-135 above). No schema change, no migration, no service-query change is needed for AC-144 in Rev 18.
 
 ---
 

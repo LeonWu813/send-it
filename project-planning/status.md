@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 7fc4bd8f7a44faeff303eb537ee8273e2bf33d93
+commit: 38a65918af2873e256ab08a82b8ad4560d7d2f86
 timestamp: 2026-09-30T00:00:00Z
 ```
 
@@ -1108,6 +1108,29 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-09-30 — Delta Sync (Revision 18, [SUBSTANTIVE])
+
+**Trigger**: PM [SUBSTANTIVE] tag (2026-09-30) — Followers/Following list screens + beta-video poster-profile navigation (PRD Revision 18). Tech Lead review (2026-09-30) confirmed with four findings and two Proposed Shared Conventions.
+
+**Files modified:**
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 16 → 18; Last Updated 2026-09-28 → 2026-09-30. Purpose updated to include poster-profile navigation. US-023 added to Related User Stories section (ACs: AC-135, AC-144). AC-135 revised (Row-1 tap is now a callback-prop navigation to the MOD-008 other-user profile surface, not a no-op). AC-144 revised (appended: `user_id` included on the same join for use in the `onNavigateToUser` callback). New Key Implementation Notes subsection added: "Poster-Profile Navigation — Tech Lead Decisions (Rev 18)" covering the `onNavigateToUser?: (userId: string) => void` prop on `BetaVideoReelViewerProps`, threading chain, wiring to `handleSelectClimber` at AppShell, and the AC-144 data-layer no-op confirmation.
+
+- `project-planning/modules/mod-auth-profile/spec.md` — Last Synced from PRD Revision 7 → 18; Last Updated added (2026-09-30). Dependencies updated from `none` to `MOD-006`. Purpose updated to include follower/following count links (AC-145). US-022 added to Related User Stories section (ACs: AC-145, AC-146, AC-147, AC-148). AC-145 added to Acceptance Criteria Covered. Integration Point 3 added (MOD-006 follower/following counts). Requirements section updated with AC-145 requirement. Output contract updated to include follower/following count links.
+
+- `project-planning/modules/mod-social-feed/spec.md` — Last Synced from PRD Revision 16 → 18; Last Updated 2026-09-28 → 2026-09-30. Dependencies updated from `MOD-001, MOD-004, MOD-005` to `MOD-001, MOD-004, MOD-005, MOD-008`. Purpose updated to include Followers and Following list screens (AC-146, AC-147). US-022 added to Related User Stories section (ACs: AC-145, AC-146, AC-147, AC-148). AC-146, AC-147, AC-148 added to Acceptance Criteria Covered. Integration Point for MOD-008 dependency added. Input/Output Contract updated with Followers/Following list screen inputs/outputs. New Key Implementation Notes subsection added: "Followers and Following List Screens — Tech Lead Decisions (Rev 18)" covering per-card `fetchProfileStats` calls (Tech Lead Q2) and cross-module direct import from `mod-profile-history/history-service.ts` (Tech Lead Q3). Out-of-scope entry added for batch profile-stats RPC (Phase 2 only).
+
+- `project-planning/production.md` — Last synced from PRD rev 17 → rev 18. Two new Shared Conventions added: "User-Profile Navigation from Deeply-Mounted Screens" (onNavigateToUser callback prop pattern, shell-owned navigation, mirror of onNavigateToRoute) and "Per-User Stats on User Lists" (fetchProfileStats per-card from MOD-008, no batch RPC in Phase 1, client-side derivation prohibited).
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- All other module specs (MOD-002, MOD-003, MOD-004, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012) — not in scope for this delta.
+
+**Ambiguities / Conflicts**: None.
+
+**verify-sync.sh**: 4/6 — two pre-existing script bugs prevent Checks 4 and 6 from passing regardless of document content (Check 4 grep pattern does not match the "**US-NNN**:" format in spec Related User Stories sections; Check 6 grabs non-phase-name lines from prd.md). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ### 2026-09-30 — Trivial Sync (Revision 17, [TRIVIAL])
 

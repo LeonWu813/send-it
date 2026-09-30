@@ -2,7 +2,7 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 17 (2026-09-30)
+**Last synced from PRD**: rev 18 (2026-09-30)
 **Last Updated**: 2026-09-30
 
 ---
@@ -277,6 +277,14 @@ When one module (e.g. MOD-005) adds columns another module's RPC (e.g. MOD-006 `
 ### RN-Core Marquee for Text-Overflow Scroll
 
 Simple text-scroll/marquee animations use RN core `Animated` (`translateX` loop in an `overflow:'hidden'` container, gated on measured overflow — `onLayout` or `onTextLayout` to compare text width against container width), never a native marquee/animation package. Extends the existing "prefer RN built-ins for simple effects; no native rebuild for a small UI behavior" convention to text-overflow marquee.
+
+### User-Profile Navigation from Deeply-Mounted Screens
+
+Navigating to another user's profile is a shell-owned action reached via a callback prop; deeply-mounted screens never import the profile screen. Any screen that needs to open another user's profile must accept an `onNavigateToUser?: (userId: string) => void` callback prop and call it with the target user's `user_id`, then dismiss itself if it is a modal/overlay. The prop is threaded down the mount chain to `AppShell` (MOD-012), which owns the single "open another user's profile" action — in Phase 1 this opens MOD-006's `UserProfileScreen` (via `UserProfileNavigator`) as a modal-style overlay (the same mechanism as the AC-123 climber-chip tap: `setTargetUserId(userId)`). A deeply-mounted screen must NEVER import `UserProfileScreen`/`UserProfileNavigator` directly — that both violates the Cross-Module Imports rule and inverts the dependency direction. This mirrors the existing `onNavigateToRoute` callback pattern for route navigation. The "other user's profile" is an overlay, not the Profile tab (Tab 3 is the current user's own profile); do not deep-link another user's id into Tab 3 in Phase 1.
+
+### Per-User Stats on User Lists
+
+Per-user stats on any list of users are sourced per-card from MOD-008's `get_profile_stats` public service (`fetchProfileStats(userId)`), never from a client-side `ascents`/`routes` query and never from a bespoke batch RPC in Phase 1. Consuming modules (e.g. MOD-006's Followers/Following cards) import `fetchProfileStats` from `mod-profile-history/history-service.ts` and call it lazily per visible card. The RPC is `SECURITY INVOKER STABLE` with a built-in privacy gate, so a `followers_only` non-follower correctly receives zeroed stats with no consumer-side privacy logic. Deriving "total sends" or "highest grade" client-side is prohibited (it risks disagreeing with the canonical `get_profile_stats` definition — total_sends = count of `flash`+`top`, highest_grade = `MAX(grade)` under the same privacy gate). A batch `get_profile_stats_batch(user_ids[])` is a Phase 2 optimization to revisit only if real list sizes exceed ~200; do not build it for Phase 1.
 
 ### TypeScript Strict Mode
 

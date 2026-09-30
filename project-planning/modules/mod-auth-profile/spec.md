@@ -3,14 +3,15 @@
 **Module ID**: MOD-001
 **Module Name**: Auth & Profile
 **Phase**: 1
-**Dependencies**: none
-**Last Synced from PRD Revision**: 7
+**Dependencies**: MOD-006
+**Last Synced from PRD Revision**: 18
+**Last Updated**: 2026-09-30
 
 ---
 
 ## Purpose
 
-Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and expose a Logout control. There is no home gym concept — saved gyms live in MOD-012.
+Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); render follower/following count links on the profile (AC-145); and expose a Logout control. There is no home gym concept — saved gyms live in MOD-012.
 
 ---
 
@@ -19,6 +20,8 @@ Handle signup, sign-in (email, Apple, Google), session management, and user prof
 New climbers need a fast, trustworthy onboarding path that lets them complete signup and start logging. Send It supports Email, Apple Sign-In, and Google Sign-In; Apple Sign-In is required by the App Store because a third-party sign-in (Google) is offered. After auth, the user lands directly on the Home tab without requiring any gym selection step (AC-001 revised). Profile privacy (`public` | `followers_only`) controls whether non-followers can view a user's logs and beta video listings; this setting is required for US-012 and enforced in RLS across multiple downstream modules.
 
 The MOD-001 engineer must also execute the `home_gym_id` removal: add a forward migration to DROP COLUMN `home_gym_id` from `public.users` and remove all source references listed in the Impact Map (auth-service.ts, types.ts, AuthNavigator.tsx, HomeGymSelectionScreen.tsx, test files, i18n catalogs). This removal is required because the `SavedGym` join table (owned by MOD-012) replaces the single `home_gym_id` field.
+
+For US-022, the Profile screen shall display follower and following counts immediately below the user's bio as two tappable count links (followers left, following right), navigating to the Followers list screen (AC-146) and Following list screen (AC-147) respectively. Counts are sourced from MOD-006's social-graph public service. This applies to both the current user's own Profile screen and the MOD-008 other-user profile surface.
 
 **Non-goals for this module:**
 - Android support (Phase 2).
@@ -35,6 +38,15 @@ The MOD-001 engineer must also execute the `home_gym_id` removal: add a forward 
 - **US-001**: Sign up and start using the app
 - **US-011**: View my profile history and stats
 - **US-012**: Set profile privacy
+- **US-022**: See who follows me and who I follow
+
+**US-001 Acceptance Criteria**: AC-001
+
+**US-011 Acceptance Criteria**: AC-116, AC-117, AC-118, AC-119
+
+**US-012 Acceptance Criteria**: AC-063
+
+**US-022 Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148
 
 ---
 
@@ -52,6 +64,8 @@ The MOD-001 engineer must also execute the `home_gym_id` removal: add a forward 
 
 **AC-119** (new): The Profile screen shall expose a Logout control at the bottom that ends the session and returns the user to the signed-out state.
 
+**AC-145** (new): The Profile screen shall display, immediately below the user's bio, two tappable count links arranged left (followers count, label "追蹤者") and right (following count, label "追蹤中"). Tapping the followers link navigates to the Followers list screen (AC-146); tapping the following link navigates to the Following list screen (AC-147). The counts are sourced from MOD-006's social-graph public service. This applies to both the current user's own Profile screen and the MOD-008 other-user profile surface (AC-064).
+
 ---
 
 ## Integration Points
@@ -59,6 +73,8 @@ The MOD-001 engineer must also execute the `home_gym_id` removal: add a forward 
 1. MOD-001 must expose a `ProfileNavigator` entry-point component. `AppShell` (owned by MOD-012) mounts `ProfileNavigator` as Tab 3. The MOD-001 engineer must confirm the navigator is exposed as a public entry point before MOD-012 QA handoff.
 
 2. The Profile screen (AC-118) embeds MOD-008's send history surface. The MOD-001 engineer must integrate the MOD-008 surface component when MOD-008 ships.
+
+3. **MOD-006 follower/following counts (AC-145)**: The Profile screen sources follower and following counts from MOD-006's social-graph public service to render the tappable count links below the user's bio.
 
 ---
 
@@ -86,7 +102,7 @@ All tables guarded by Supabase Row-Level Security policies.
 - Authenticated Supabase session stored locally on the device
 - `User` row created/updated in Postgres
 - `privacy_setting` persisted on `User` (controls downstream RLS behaviour in MOD-004, MOD-005, MOD-006, MOD-008)
-- Profile screen rendering display name, avatar, bio, embedded send history (MOD-008), and Logout control
+- Profile screen rendering display name, avatar, bio, follower/following count links (AC-145), embedded send history (MOD-008), and Logout control
 
 ---
 
@@ -99,6 +115,7 @@ All tables guarded by Supabase Row-Level Security policies.
 - The Profile screen must expose an Edit Profile entry point for editing display name, avatar, bio, and privacy setting (AC-117).
 - The Profile screen must embed the current user's send history (MOD-008 surface) (AC-118).
 - The Profile screen must expose a Logout control at the bottom that ends the session and returns the user to the signed-out state (AC-119).
+- The Profile screen must display follower and following count links immediately below the bio, sourced from MOD-006's social-graph public service, navigating to AC-146 and AC-147 screens respectively (AC-145).
 - The MOD-001 engineer must add a migration to DROP COLUMN `home_gym_id` from `public.users` and remove all source references listed in the Impact Map (auth-service.ts, types.ts, AuthNavigator.tsx, HomeGymSelectionScreen.tsx, test files, i18n catalogs).
 
 ---
