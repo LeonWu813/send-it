@@ -2196,3 +2196,143 @@ All acceptance criteria confirmed passing on device by the user (2026-09-28):
 ### Verdict
 
 **Human QA — PASS. Module complete.**
+
+---
+
+## QA Run 10 — Regression — 2026-09-30
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (re-verification after Rev 18 implementation — AC-135 revised + AC-144)
+**Scope**: AC-135 (revised), AC-144 (Rev 18 scope only). Full regression spot-check on previously passing ACs.
+
+---
+
+### Automated Test Run
+
+- `npx tsc --noEmit`: PASS — 0 TypeScript errors (0 errors, clean output)
+- `npm test -- --watchAll=false`: PASS — 412 tests, 31 suites, 0 failures
+  - `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — PASS (all tests)
+  - `mod-beta-video/__tests__/BetaVideoSection.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoPlayer.test.tsx` — PASS
+  - `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — PASS
+  - `mod-beta-video/__tests__/beta-video-service.test.ts` — PASS
+  - All 31 suites across the full project pass — no regressions in adjacent modules.
+- Pre-existing `act()` console warnings (Icon state updates in BetaVideoUploader, BetaVideoPlayer, RouteListScreen, RouteSubmitScreen, RequestGymScreen) — unchanged from prior QA runs; not introduced by this change; all suites still pass.
+
+---
+
+### AC-135 (revised) — Row 1 is a Pressable calling onNavigateToUser + onDismiss
+
+**Spec requirement**: In the bottom-left overlay, tapping Row 1 (the circular avatar or the `display_name` text) shall dismiss the viewer and navigate the user to that video poster's profile. Navigation is threaded via a callback prop supplied by the hosting shell, not by MOD-005 importing the profile screen directly. If `onNavigateToUser` is absent, the tap is a no-op (no crash).
+
+**Row 1 element is a Pressable** — PASS
+`src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` lines 652–669: Row 1 is rendered as `<Pressable style={styles.posterRow} onPress={handleNavigateToUser} ... testID="reel-poster-row">`. Prior implementation (QA Run 9 passing baseline) used a plain `View` for Row 1. Rev 18 changed this to `Pressable`. Correct.
+
+**`handleNavigateToUser` calls `onNavigateToUser(currentVideo.user_id)` then `handleDismiss()`** — PASS
+Lines 521–525:
+```
+const handleNavigateToUser = useCallback((): void => {
+  if (!currentVideo || !onNavigateToUser) return;
+  onNavigateToUser(currentVideo.user_id);
+  handleDismiss();
+}, [currentVideo, onNavigateToUser, handleDismiss]);
+```
+- When `onNavigateToUser` is present: calls `onNavigateToUser(currentVideo.user_id)` (passes poster's `user_id`), then calls `handleDismiss()` (which calls `player.pause()` then `onDismiss()`). Both actions fire in order.
+- When `onNavigateToUser` is absent: returns early — no crash, tap is a no-op. Guard rail satisfied.
+
+**`onNavigateToUser` is an optional prop** — PASS
+`BetaVideoReelViewerProps` (line 130): `onNavigateToUser?: (userId: string) => void` — typed optional. Correct.
+
+**No profile screen imported in BetaVideoReelViewer** — PASS
+`grep` confirms no import of `UserProfileScreen`, `UserProfileNavigator`, or any profile-screen component from MOD-006 or MOD-008 in `BetaVideoReelViewer.tsx`. The only cross-module coupling is the callback prop. Guard rail satisfied.
+
+**AC-135 test coverage** — NOTE (no dedicated unit test, not a blocking failure)
+The test file `BetaVideoReelViewer.test.tsx` has no explicit test for the new `onNavigateToUser` callback behavior (e.g., pressing `reel-poster-row` when `onNavigateToUser` is provided should call the mock and call `onDismiss`). The implementation is correct and statically verified; the missing test is a coverage gap. Not routing to Engineer as a bug — the implementation is spec-compliant. Noting for completeness.
+
+**AC-135 (revised)** — PASS
+
+---
+
+### AC-144 (revised) — `user_id` in BetaVideo type and fetchBetaVideosForRoute select
+
+**Spec requirement**: `fetchBetaVideosForRoute` result shall include the poster's `user_id` (UUID) on the same join, so the viewer has the poster's identifier for navigation per AC-135. The `user_id` addition is a no-op at the data layer per Tech Lead Rev 18 Q4 confirmation — `user_id` was already selected and already typed.
+
+**`BetaVideo.user_id: string` present** — PASS
+`src/modules/mod-beta-video/types.ts` line 13: `user_id: string;` — present with correct type. No change needed from Rev 18 (already existed).
+
+**`fetchBetaVideosForRoute` selects `user_id` explicitly** — PASS
+`src/modules/mod-beta-video/beta-video-service.ts` lines 44–50: the select string includes `user_id` explicitly:
+`'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)'`
+`user_id` is returned as a top-level field on every row. No schema change, no migration, no service-query change was needed.
+
+**Viewer uses `currentVideo.user_id` in the callback** — PASS
+`BetaVideoReelViewer.tsx` line 523: `onNavigateToUser(currentVideo.user_id)` — correctly reads `user_id` from the current video and passes it to the callback. The field is present because `fetchBetaVideosForRoute` returns it on every row.
+
+**AC-144 (revised)** — PASS
+
+---
+
+### Threading Chain Verification — AppShell → GymNavigator → RouteNavigator → RouteDetailScreen → BetaVideoSection → BetaVideoReelViewer
+
+**AppShell wires `onNavigateToUser={handleSelectClimber}` on GymNavigator** — PASS
+`src/modules/mod-home/AppShell.tsx` line 153: `onNavigateToUser={handleSelectClimber}` passed to `GymNavigator`. `handleSelectClimber` (lines 112–115) calls `setTargetUserId(userId)`, which opens `UserProfileScreen` as a modal overlay (the existing AC-123 mechanism). No new mechanism invented. Correct.
+
+**GymNavigator declares and threads `onNavigateToUser` to both RouteNavigator render sites** — PASS
+- `GymNavigatorProps` (line 70): `onNavigateToUser?: (userId: string) => void` declared.
+- Destructured in the function signature (line 80).
+- Passed to `RouteNavigator` at line 155 (`routes` view) and line 166 (`route-direct` view).
+Both render sites thread the prop. Correct.
+
+**RouteNavigator declares and threads `onNavigateToUser` to RouteDetailScreen** — PASS
+- `RouteNavigatorProps` (line 54): `onNavigateToUser?: (userId: string) => void` declared.
+- Destructured in the function signature (line 64).
+- Passed to `RouteDetailScreen` at line 130.
+Correct.
+
+**RouteDetailScreen declares and threads `onNavigateToUser` to BetaVideoSection** — PASS
+- `RouteDetailScreenProps` (line 90): `onNavigateToUser?: (userId: string) => void` declared.
+- Destructured in the function signature (line 99).
+- Passed to `BetaVideoSection` at line 448.
+Correct.
+
+**BetaVideoSection declares and threads `onNavigateToUser` to BetaVideoReelViewer** — PASS
+- `BetaVideoSectionProps` (line 109): `onNavigateToUser?: (userId: string) => void` declared.
+- Destructured in the function signature (line 119).
+- Passed to `BetaVideoReelViewer` at line 361.
+Correct.
+
+**BetaVideoReelViewer receives `onNavigateToUser` and uses it in Row 1 Pressable** — PASS
+As verified above: optional prop declared, `handleNavigateToUser` uses it, Row 1 is `<Pressable onPress={handleNavigateToUser}>`.
+
+**Full threading chain** — PASS. No gap in any hop.
+
+---
+
+### Integration and Guard-Rail Checks
+
+**No profile screen imported in BetaVideoReelViewer** — PASS
+No import of `UserProfileScreen`, `UserProfileNavigator`, or any `mod-social-feed` or `mod-008` component in `BetaVideoReelViewer.tsx`. Cross-module import rule satisfied.
+
+**Optional prop → no-op when absent** — PASS
+`handleNavigateToUser` returns early when `!onNavigateToUser`. No crash. Guard rail satisfied.
+
+**AppShell reuses existing AC-123 `handleSelectClimber` action** — PASS
+`onNavigateToUser` is wired to `handleSelectClimber` (the same function used for AC-123 climber chip navigation on the Home screen). No new mechanism. Consistent with Tech Lead Rev 18 decision.
+
+**All previously passing ACs (AC-030 through AC-144) — spot-check** — PASS
+No source files other than the six listed in the Engineering Progress (Rev 18) were modified. The changes are additive (new optional prop, new callback, Row 1 changed from `View` to `Pressable`). No change to upload flow, validation gates, service queries, migration files, or other viewer behavior. All 412 tests pass with 0 failures.
+
+**TypeScript strict mode** — PASS
+`npx tsc --noEmit` exits 0 with no output. All new prop types correctly typed.
+
+---
+
+### Verdict
+
+**QA PASS (Rev 18 scope)** — AC-135 (revised) and AC-144 verified. Full threading chain confirmed. Guard rails satisfied.
+
+- **AC-135 (revised)**: Row 1 (`<Pressable testID="reel-poster-row">`) calls `onNavigateToUser(currentVideo.user_id)` then `handleDismiss()` when tapped. When `onNavigateToUser` is absent, tap is a no-op (no crash). No profile screen imported directly. Threading chain confirmed end-to-end from AppShell to BetaVideoReelViewer. PASS.
+- **AC-144 (revised)**: `BetaVideo.user_id: string` typed. `fetchBetaVideosForRoute` selects `user_id` explicitly. Viewer reads `currentVideo.user_id` in the callback. No schema change, no migration, no service-query change required. PASS.
+
+**Module status: QA PASS (Rev 18 scope).** All ACs from AC-030 through AC-144 pass.
+
