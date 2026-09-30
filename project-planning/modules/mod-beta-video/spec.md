@@ -3,15 +3,15 @@
 **Module ID**: MOD-005
 **Module Name**: Beta Video
 **Phase**: 1
-**Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 18
+**Dependencies**: MOD-001, MOD-003, MOD-009 (block-status public service `fetchBlockedUserIds`, AC-154)
+**Last Synced from PRD Revision**: 20
 **Last Updated**: 2026-09-30
 
 ---
 
 ## Purpose
 
-Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report).
+Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), and filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154).
 
 ---
 
@@ -24,6 +24,8 @@ For US-005, the route detail page presents beta videos as a three-column thumbna
 For US-015, the one-tap beta-video report flow is owned by this module: tapping the report icon in the viewer sidebar immediately sets `beta_videos.is_reported = true` via a SECURITY DEFINER RPC and inserts one `video_reports` row. A reported-and-not-dismissed video (`is_reported = true AND report_dismissed = false`) is hidden from every user everywhere it is surfaced until an admin sets `report_dismissed = true` via Supabase Studio.
 
 For US-023, tapping Row 1 (the circular avatar or the `display_name` text) in the bottom-left overlay of the fullscreen viewer dismisses the viewer and navigates the user to that video poster's profile (the MOD-008 other-user profile-and-history surface, AC-064), subject to the poster's privacy setting (AC-063). Navigation is threaded from the viewer to the profile surface via a callback prop supplied by the hosting shell, not by MOD-005 importing the profile screen directly.
+
+For US-023 (AC-154), the route detail screen's beta-video list filters out videos uploaded by blocked users (block in either direction) before rendering, using MOD-009's `fetchBlockedUserIds()` as a client-side filter over the fetched beta-video set. This filter is applied after `fetchBetaVideosForRoute` returns and before rendering, in addition to any existing reported-video exclusions (AC-142).
 
 **Non-goals for this module:**
 - Comments on beta videos (out of scope for Phase 1).
@@ -47,7 +49,7 @@ For US-023, tapping Row 1 (the circular avatar or the `display_name` text) in th
 
 **US-015 Acceptance Criteria (beta-video only)**: AC-139, AC-140, AC-141, AC-142, AC-143
 
-**US-023 Acceptance Criteria**: AC-135, AC-144
+**US-023 Acceptance Criteria**: AC-135, AC-144, AC-154
 
 ---
 
@@ -101,6 +103,10 @@ For US-023, tapping Row 1 (the circular avatar or the `display_name` text) in th
 
 ---
 
+**AC-154** (new): In the route detail screen's beta-video list, the system shall filter out beta videos uploaded by users the viewer has blocked or who have blocked the viewer (block in either direction) before rendering, using MOD-009's public service `fetchBlockedUserIds()` as a client-side filter over the fetched beta-video set. This filter applies in addition to the reported-video exclusion (AC-142).
+
+---
+
 ## Integration Points
 
 1. **File to modify**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
@@ -115,6 +121,9 @@ For US-023, tapping Row 1 (the circular avatar or the `display_name` text) in th
 
 3. **Coordinated change — MOD-006**: The `get_activity_feed` RPC's `video_items` CTE must also add the report exclusion filter (`WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)`) to exclude reported-and-not-dismissed beta videos from the activity feed (AC-141). This ships in a MOD-006 migration ordered after `20260928000001_mod_005_video_reports.sql`. See MOD-006 spec for ownership details.
    **AC**: AC-141
+
+4. **MOD-009 block-status dependency (AC-154)**: `fetchBlockedUserIds(userId)` is called once per route detail load from MOD-009's public service (`mod-moderation/moderation-service`). The result is used to filter the `fetchBetaVideosForRoute` array client-side — any video whose `user_id` is in the blocked set is excluded before rendering. This is a direct import of a public service function per the Cross-Module Imports convention.
+   **AC**: AC-154
 
 ---
 
@@ -175,10 +184,11 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 
 **Inputs (playback):**
 - `BetaVideo` rows from `fetchBetaVideosForRoute` — including `is_reported`, `report_dismissed`, `user_id`, `display_name`, `avatar_url` (joined from `public.users` via `users!beta_videos_user_id_fkey`)
+- Blocked user IDs from `fetchBlockedUserIds(currentUserId)` (MOD-009) — used as client-side filter (AC-154)
 - Render context: route detail page (AC-033/AC-038/AC-039) or activity feed (AC-034)
 
 **Outputs (playback):**
-- Route detail page: three-column thumbnail grid (AC-038); tapping a cell opens the fullscreen reel viewer (AC-039) with persistent back control (AC-133), poster-identity overlay (AC-134), and two-icon sidebar (AC-138)
+- Route detail page: three-column thumbnail grid (AC-038), with videos from blocked users filtered out before rendering (AC-154); tapping a cell opens the fullscreen reel viewer (AC-039) with persistent back control (AC-133), poster-identity overlay (AC-134), and two-icon sidebar (AC-138)
 - Activity feed: inline video playback within the app — no external link or browser required (AC-034)
 
 **Inputs (report):**
@@ -188,6 +198,12 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 **Outputs (report):**
 - `report_beta_video(p_beta_video_id uuid)` SECURITY DEFINER RPC sets `beta_videos.is_reported = true` and inserts one `video_reports` row (idempotent via `ON CONFLICT DO NOTHING`)
 - Reported video is hidden from all users on next fetch (AC-141)
+
+**Inputs (AC-154 block filter):**
+- `fetchBlockedUserIds(currentUserId)` called once per route detail load, imported from `mod-moderation/moderation-service` (MOD-009 public service)
+
+**Outputs (AC-154 block filter):**
+- Blocked user IDs used as a client-side filter over the `fetchBetaVideosForRoute` result array before rendering; videos whose `user_id` is in the blocked set are excluded from the rendered grid
 
 ---
 
@@ -204,6 +220,7 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - **60-second playability SLA (AC-032)**: The video must be playable inline within 60 seconds of upload completion on a normal 4G/LTE connection. Since there is no server transcoding, this depends on Storage CDN delivery latency — the compression + upload pipeline must keep total time within the SLA.
 - **Phase 1 Storage**: All video stored in Supabase Storage. Migration to Cloudflare Stream is triggered by monthly cost > US$25 OR total storage > 20 GB. At ~10 MB per compressed 60-sec clip, 20 GB ≈ 2,000 videos. A migration runbook should be drafted before Phase 1 GA (even though migration itself is expected in Phase 2).
 - **Attachment constraint**: Each `BetaVideo` row has exactly one `route_id`. A video cannot be attached to multiple routes.
+- **AC-154 block filter — `fetchBlockedUserIds()` called once per route detail load**: `fetchBlockedUserIds(currentUserId)` is called once when the route detail loads (not once per video). The returned set of blocked user IDs is used to filter the `fetchBetaVideosForRoute` result array client-side before rendering. Direct import from `mod-moderation/moderation-service` (MOD-009 public service). This filter is applied after `fetchBetaVideosForRoute` and after the reported-video exclusion (AC-142), before the video array is passed to the grid renderer.
 
 ### Grid and Fullscreen Reel Viewer (AC-038 / AC-039) — Tech Lead Decisions (Rev 13)
 
@@ -327,6 +344,14 @@ The prop is threaded down the mount chain the reel viewer already sits on: `AppS
 #### AC-144 revised — `user_id` already selected
 
 Tech Lead confirmed (Rev 18 Q4): `fetchBetaVideosForRoute` already selects `user_id` explicitly and the `BetaVideo` TypeScript type already declares `user_id: string`. The `user_id` addition in AC-144 (revised) is a no-op at the data layer — `user_id` is already returned and already typed. The only real change Rev 18 requires for AC-144 is wiring: the reel viewer must use `currentVideo.user_id` in the new `onNavigateToUser` callback (see AC-135 above). No schema change, no migration, no service-query change is needed for AC-144 in Rev 18.
+
+### Block Filter for Beta-Video List — Implementation Notes (Rev 20)
+
+#### AC-154 — `fetchBlockedUserIds()` from MOD-009
+
+`fetchBlockedUserIds(currentUserId)` is called **once per route detail load** and the resulting set of user IDs is used to filter the video array client-side before rendering. The filter excludes any video whose `user_id` is in the blocked set (block in either direction — the function returns IDs blocked by the viewer AND IDs that have blocked the viewer). This is a **direct import** from `mod-moderation/moderation-service` per the Cross-Module Imports convention — MOD-005 imports the public service function directly; it does not reach into MOD-009's internal screens or components.
+
+The filter is applied **after** `fetchBetaVideosForRoute` returns its result and **after** the reported-video exclusion (AC-142), before passing the array to the grid renderer. No new migration is required — `fetchBlockedUserIds` reads the existing `Block` table owned by MOD-009.
 
 ---
 

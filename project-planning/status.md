@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 8efe22cb25494ea7caf7fb75c068baa6c22c0768
-timestamp: 2026-09-30T18:00:00Z
+commit: 4c0661b75bc87ac3e25917e0fe79abd9df4c00be
+timestamp: 2026-09-30T19:00:00Z
 ```
 
 ## PM Updates
@@ -1128,6 +1128,28 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-09-30 — Delta Sync (Revision 20, [SUBSTANTIVE])
+
+**Trigger**: PM [SUBSTANTIVE] tag (2026-09-30) — UserProfileScreen three-dots menu + report-and-block semantics + profile blocked state + beta-video block filtering (PRD Revision 20). No Tech Lead review required (pure UI + client-side behavior + client-side filter; no new DB schema, no new table/column, no new migration).
+
+**Files modified:**
+
+- `project-planning/modules/mod-social-feed/spec.md` — Last Synced from PRD Revision 19 -> 20; Last Updated 2026-09-30. Dependencies field updated: added MOD-009. Purpose updated to include three-dots action sheet (AC-150) and blocked-state rendering (AC-153). US-020 ACs updated to include AC-150, AC-153. New ACs added to Acceptance Criteria Covered: AC-150 (three-dots icon + bottom action sheet with Report and Block/Unblock), AC-152 (block toggle calls blockUser/unblockUser from MOD-009; symmetric; block-only, no report), AC-153 (loadProfile checks isBlocked/fetchBlockedUserIds from MOD-009; if blocked in either direction, shows unavailable message, hides follow button and stats section, keeps icon visible). Integration Points updated with MOD-009 block-status and action dependency. Input/Output Contract updated with three-dots sheet + blocked state inputs/outputs. Key Implementation Notes updated: three-dots sheet is a Modal with translucent background overlay; isBlocked check runs as part of initial loadProfile Promise.all; blocked state hides everything except the back button and three-dots icon; MOD-009 public-service calls for block actions.
+
+- `project-planning/modules/mod-moderation/spec.md` — Last Synced from PRD Revision 16 -> 20; Last Updated 2026-09-28 -> 2026-09-30. Purpose updated: profile report = report-and-block (AC-151), blockUser/unblockUser (AC-152), block-status public service (isBlocked/fetchBlockedUserIds) consumed by MOD-005 and MOD-006. Context section updated with Rev 20 clarification (reportUser and blockUser called sequentially in UI handler, not a single combined RPC; no new migration). US-016 ACs updated to AC-082, AC-083, AC-151, AC-152. AC-080 revised in Acceptance Criteria Covered: profile Report action now invoked from three-dots sheet (AC-150) and both files a report record and blocks the user (AC-151); category defaults to general "inappropriate" value; no note collected; category/note columns retained for admin/back-compat. AC-151 added: calling reportUser then blockUser sequentially; confirmation shown; profile shows blocked state (AC-153). Integration Points updated: block-status public service consumed by MOD-006 (AC-153) and MOD-005 (AC-154). Input/Output Contract updated: report-and-block (AC-151) replaces prior report-only; block-status public service inputs/outputs added. Key Implementation Notes updated: reportUser and blockUser called sequentially (not a single combined RPC); block-status public service (isBlocked/fetchBlockedUserIds) documented as exported public service functions.
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 18 -> 20; Last Updated 2026-09-30. Dependencies field updated: added MOD-009. Purpose updated to include AC-154 block filtering. US-023 ACs updated to include AC-154. AC-154 added to Acceptance Criteria Covered: route-detail beta-video list filters out videos from blocked users (either direction) client-side using fetchBlockedUserIds() from MOD-009; applied after fetchBetaVideosForRoute, before rendering; in addition to existing reported-video exclusions (AC-142). Integration Point 4 added: MOD-009 block-status dependency (fetchBlockedUserIds). Input/Output contract updated: Inputs (playback) includes blocked user IDs from fetchBlockedUserIds; Outputs (playback) notes blocked-user filtering before rendering; AC-154 block filter inputs/outputs added. Key Implementation Notes updated: fetchBlockedUserIds() called once per route detail load; direct import from mod-moderation/moderation-service; result used to filter video array. New Key Implementation Notes subsection added: "Block Filter for Beta-Video List — Implementation Notes (Rev 20)" with AC-154 details.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- All other module specs (MOD-001, MOD-002, MOD-003, MOD-004, MOD-007, MOD-008, MOD-010, MOD-011, MOD-012) — not in scope for this delta.
+- `project-planning/production.md` — PM confirmed no production.md change required (reuses existing block-status public-service convention).
+
+**Ambiguities / Conflicts**: None.
+
+**verify-sync.sh**: 4/6 — same pre-existing script bugs as Rev 18 (Check 4 grep pattern does not match the "**US-NNN**:" format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ### 2026-09-30 — Delta Sync (Revision 18, [SUBSTANTIVE])
 
