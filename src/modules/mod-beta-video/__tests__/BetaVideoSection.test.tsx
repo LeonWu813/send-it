@@ -21,6 +21,10 @@ jest.mock('../beta-video-service', () => ({
   reportBetaVideo: jest.fn(),
 }));
 
+jest.mock('../../mod-moderation/moderation-service', () => ({
+  fetchBlockedUserIds: jest.fn(),
+}));
+
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn(),
@@ -35,12 +39,14 @@ import {
   fetchBetaVideosForRoute,
   getVideoSignedUrl,
 } from '../beta-video-service';
+import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import BetaVideoSection from '../components/BetaVideoSection';
 import { renderOptions } from '../test-utils';
 import type { BetaVideo } from '../types';
 
 const mockFetchBetaVideos = fetchBetaVideosForRoute as jest.MockedFunction<typeof fetchBetaVideosForRoute>;
 const mockGetVideoSignedUrl = getVideoSignedUrl as jest.MockedFunction<typeof getVideoSignedUrl>;
+const mockFetchBlockedUserIds = fetchBlockedUserIds as jest.MockedFunction<typeof fetchBlockedUserIds>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -81,6 +87,8 @@ describe('BetaVideoSection', () => {
     jest.clearAllMocks();
     // The reel viewer lazy-loads signed URLs — mock it so viewer tests don't fail
     mockGetVideoSignedUrl.mockResolvedValue('https://signed.example.com/video.mp4?token=abc');
+    // AC-154: default to no blocked users
+    mockFetchBlockedUserIds.mockResolvedValue(new Set<string>());
   });
 
   it('shows loading indicator while fetching videos', () => {
@@ -259,5 +267,86 @@ describe('BetaVideoSection', () => {
 
     // There should be exactly 1 grid cell before upload
     expect(screen.queryByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`)).toBeNull();
+  });
+
+  // AC-154: block filter tests
+
+  it('AC-154: filters out videos from blocked users before rendering', async () => {
+    const BLOCKED_VIDEO: BetaVideo = {
+      id: 'vid-blocked',
+      route_id: 'route-001',
+      user_id: 'user-blocked',
+      video_url: 'user-blocked/route-001/blocked.mp4',
+      thumbnail_url: 'user-blocked/route-001/blocked_thumb.jpg',
+      duration_seconds: 20,
+      caption: null,
+      created_at: '2026-09-29T10:00:00Z',
+      is_reported: false,
+      report_dismissed: false,
+      display_name: 'Blocked Climber',
+      avatar_url: null,
+    };
+
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO, BLOCKED_VIDEO]);
+    mockFetchBlockedUserIds.mockResolvedValue(new Set(['user-blocked']));
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      // MOCK_VIDEO (user-001) should be visible
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeTruthy();
+    });
+
+    // Blocked user's video should not be in the grid
+    expect(screen.queryByTestId(`beta-video-grid-cell-${BLOCKED_VIDEO.id}`)).toBeNull();
+  });
+
+  it('AC-154: shows all videos when blocked list is empty', async () => {
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO, MOCK_VIDEO_2]);
+    mockFetchBlockedUserIds.mockResolvedValue(new Set<string>());
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeTruthy();
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`)).toBeTruthy();
+    });
+  });
+
+  it('AC-154: shows all videos when fetchBlockedUserIds fails (graceful degradation)', async () => {
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO, MOCK_VIDEO_2]);
+    mockFetchBlockedUserIds.mockRejectedValue(new Error('block list unavailable'));
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      // Both videos should still appear — block filter defaults to empty set on failure
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeTruthy();
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`)).toBeTruthy();
+    });
+  });
+
+  it('AC-154: fetches blocked user IDs in parallel with beta videos', async () => {
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
+    mockFetchBlockedUserIds.mockResolvedValue(new Set<string>());
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(mockFetchBetaVideos).toHaveBeenCalledWith('route-001');
+      expect(mockFetchBlockedUserIds).toHaveBeenCalled();
+    });
   });
 });

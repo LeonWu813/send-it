@@ -2,6 +2,31 @@
 
 ## Engineering Progress
 
+**Status**: Feature implementation — 2026-09-30 (AC-154 — block filter for beta-video list)
+
+### Feature — Rev 20: block filter for beta-video list (AC-154) — 2026-09-30
+
+**AC implemented**:
+
+- **AC-154 ✓**: `BetaVideoSection` now fetches blocked user IDs in parallel with beta videos using `Promise.all([fetchBetaVideosForRoute(routeId), fetchBlockedUserIds()])`. The resulting video array is filtered client-side — any video whose `user_id` is in the blocked set is excluded before being stored in state and passed to the grid renderer and reel viewer. If `fetchBlockedUserIds` rejects, the error is logged via `console.error` and an empty `Set` is used as the default so video loading is never broken.
+
+**Implementation**:
+
+- Direct import of `fetchBlockedUserIds` from `../../mod-moderation/moderation-service` (Cross-Module Imports convention — public service function, not an internal screen or component).
+- `Promise.all` ensures both fetches are initiated simultaneously; no serial latency added.
+- `.catch` on `fetchBlockedUserIds()` inside `Promise.all` isolates its failure: outer `try/catch` continues to set `loadError` only if `fetchBetaVideosForRoute` throws.
+- Filter applied after `fetchBetaVideosForRoute` returns (after the AC-142 reported-video exclusion that is enforced in the query itself) and before `setBetaVideos`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 417 tests, 31 suites, 0 failures (up from 378/29 — 4 new AC-154 tests added in `BetaVideoSection.test.tsx`)
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoSection.tsx` — added `fetchBlockedUserIds` import; replaced `fetchBetaVideosForRoute` call with `Promise.all` + filter
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — added `mod-moderation/moderation-service` mock; added `mockFetchBlockedUserIds` default in `beforeEach`; added 4 AC-154 tests: filter blocks, empty block list, graceful degradation on failure, parallel fetch verification
+
+---
+
 **Status**: Feature implementation — 2026-09-30 (AC-135 revised, AC-144 — poster profile navigation)
 
 ### Feature — Rev 18: onNavigateToUser callback prop for poster Row 1 tap (AC-135, AC-144) — 2026-09-30

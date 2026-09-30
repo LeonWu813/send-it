@@ -52,6 +52,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from '../../../lib/theme';
+import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import { fetchBetaVideosForRoute, uploadBetaVideo } from '../beta-video-service';
 import type { BetaVideo, UploadProgress } from '../types';
 import BetaVideoReelViewer from './BetaVideoReelViewer';
@@ -138,8 +139,20 @@ export default function BetaVideoSection({
     setIsLoading(true);
     setLoadError(null);
     try {
-      const rows = await fetchBetaVideosForRoute(routeId);
-      setBetaVideos(rows);
+      // AC-154: fetch beta videos and blocked user IDs in parallel to avoid
+      // adding latency. If fetchBlockedUserIds fails, log and default to an
+      // empty set so video loading is not broken.
+      const [rows, blockedIds] = await Promise.all([
+        fetchBetaVideosForRoute(routeId),
+        fetchBlockedUserIds().catch((err: unknown) => {
+          console.error('[BetaVideoSection] fetchBlockedUserIds failed:', err);
+          return new Set<string>();
+        }),
+      ]);
+      // AC-154: filter out videos uploaded by blocked users (either direction)
+      // before passing the array to the grid renderer.
+      const filtered = rows.filter((v) => !blockedIds.has(v.user_id));
+      setBetaVideos(filtered);
     } catch {
       setLoadError(t('betaVideo.errors.loadFailed'));
     } finally {
