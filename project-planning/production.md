@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 16 (2026-09-28)
-**Last Updated**: 2026-09-28
+**Last synced from PRD**: rev 17 (2026-09-30)
+**Last Updated**: 2026-09-30
 
 ---
 
@@ -125,6 +125,10 @@ Only vars prefixed `EXPO_PUBLIC_` are safe to inline into the client bundle. Any
 ### Video Pipeline Conventions
 
 Accepted upload containers are **MP4 (`.mp4`) and QuickTime (`.mov`)**. Rejection on ingest is codec-based: uploads whose video codec is not H.264 or HEVC, or whose audio codec is not AAC, must be rejected with a clear error surfaced to the user (AC-035). Both `.mp4` and `.mov` files are stored as-is — no server-side transcoding. The recommended client-side compression library is `ffmpeg-kit-react-native` (H.264 output guaranteed); the final library choice is confirmed in the MOD-005 spec. Thumbnails are generated client-side before upload and uploaded alongside the video artifact.
+
+### File Upload to Supabase Storage
+
+All uploads of local device files (photos, videos, any binary asset) must use `expo-file-system`'s `File.bytes()` to obtain a `Uint8Array` and pass it directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`. The `fetch(uri) + response.blob()` pattern is prohibited: in React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes. Reference implementations: `mod-beta-video/beta-video-service.ts` (video) and `mod-route-catalog/route-service.ts` (photo).
 
 ### match_key Implementation
 

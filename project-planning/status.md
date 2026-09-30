@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-auth-profile
-mode: bugfix
-module: mod-auth-profile
+agent: doc-sync
+mode: trivial
+module: n/a
 result: success
-commit: ffa9b3d
+commit: d0fd4669a28fad73d06f706c15ef42272b438bab
 timestamp: 2026-09-30T00:00:00Z
 ```
 
@@ -1067,6 +1067,20 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-09-30 — Trivial Sync (Revision 17, [TRIVIAL])
+
+**Trigger**: PM [TRIVIAL] tag (2026-09-30) — File-upload convention for Supabase Storage (PRD Revision 17).
+
+**Files modified:**
+- `project-planning/production.md` — Added new `### File Upload to Supabase Storage` convention under Shared Conventions (inserted between `### Video Pipeline Conventions` and `### match_key Implementation`). Updated header: `Last synced from PRD` rev 16 → rev 17; `Last Updated` 2026-09-28 → 2026-09-30.
+
+**Files not touched:**
+- All module specs — PM scoped this trivial sync to `production.md` Shared Conventions only; no per-module behavior change.
+
+**Ambiguities / Conflicts**: None.
+
+**verify-sync.sh**: Skipped — trivial passthrough per SKILL.md routing rules.
 
 ### 2026-09-21 — Delta Sync (Revision 3, [SUBSTANTIVE])
 
