@@ -805,3 +805,207 @@ None. All previously-passing items continue to pass. No new failures introduced 
 **Stub note**: Both `FollowersListScreen.tsx` and `FollowingListScreen.tsx` were concurrently delivered by engineer-mod-social-feed (MOD-006). They are now fully implemented rather than stubs. The `onNavigateToUser` prop on both screens is required; ProfileNavigator provides a no-op fallback `((_id: string) => undefined)` when `onNavigateToUser` is absent from `ProfileNavigatorProps`.
 
 **Result: READY FOR QA**
+
+---
+
+## QA Run 5 — Rev 18 Regression — AC-145 — 2026-09-30
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification — Rev 18 AC-145 scope)
+**Scope**: AC-145 (new — follower/following count links on ProfileScreen), ProfileNavigator threading, AppShell wiring, layout check, guard rails, TypeScript, tests
+
+### Automated Test Suite
+
+Command: `npm test -- --watchAll=false`
+Result: 412 tests, 31 suites — all PASS
+Exit code: 0
+
+### TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+### AC-145 Verification
+
+**Criterion: Two tappable count links immediately below bio**
+
+PASS. In `ProfileScreen.tsx` (lines 185–212), immediately after the bio `<Text>` block and before the Edit Profile `<Pressable>`, a `<View style={styles.followCountsRow}>` renders two child `<Pressable>` elements. The first child is the followers link; the second is the following link. Layout is confirmed by the JSX order: `header` section (avatar + display_name + bio) → `followCountsRow` → `editProfileButton`. The `followCountsRow` style uses `flexDirection: 'row'` with `justifyContent: 'flex-start'` and `gap: theme.spacing.lg`, placing the followers count to the left of the following count in the row — satisfying "left (followers), right (following)" arrangement.
+
+**Criterion: Both use Pressable**
+
+PASS. Both count links are `<Pressable>` elements (lines 187–211). Both have `onPress` handlers (followers: `onNavigateToFollowers`, following: `onNavigateToFollowing`) and `accessibilityRole="button"`.
+
+**Criterion: Followers link navigates to FollowersListScreen, following link navigates to FollowingListScreen**
+
+PASS. `ProfileScreen` calls `onNavigateToFollowers()` / `onNavigateToFollowing()` via the `onPress` prop. `ProfileNavigator.tsx` wires these callbacks: `onNavigateToFollowers={() => setView('followers')}` and `onNavigateToFollowing={() => setView('following')}`. The `view === 'followers'` branch renders `FollowersListScreen`; `view === 'following'` renders `FollowingListScreen`. Both branch transitions confirmed at lines 97–115 of `ProfileNavigator.tsx`.
+
+**Criterion: Counts sourced from MOD-006 social-graph service (`fetchFollowerCounts` or equivalent)**
+
+PASS. `ProfileScreen.tsx` line 40 imports `fetchFollowerCounts` from `../../mod-social-feed/social-feed-service`. The `useEffect` on `profile?.id` (lines 101–114) calls `fetchFollowerCounts(userId)` and destructures `{ follower_count, following_count }` from the result. `fetchFollowerCounts` in `social-feed-service.ts` (lines 131–145) calls `supabase.rpc('get_follower_counts', { p_user_id: userId })` — the MOD-006 social-graph RPC. This is the correct public service function.
+
+**Criterion: Show 0 on load or error (no crash if fetch fails)**
+
+PASS. `followerCount` and `followingCount` are initialized as `useState(0)`. The `.catch()` handler in the `useEffect` (lines 109–113) explicitly calls `setFollowerCount(0)` and `setFollowingCount(0)` — no re-throw, no error banner, no crash path. The spec requirement "Show 0 on load or error" is satisfied.
+
+**Criterion: Labels "追蹤者" (followers left) and "追蹤中" (following right)**
+
+PASS. The followers `<Pressable>` renders `{t('socialFeed.followers')}` for the label. The following `<Pressable>` renders `{t('socialFeed.following')}`. In `locales/zh-TW/common.json` (lines 308–309): `"followers": "追蹤者"` and `"following": "追蹤中"`. Both keys confirmed present in both EN and zh-TW catalogs. The i18n.test.ts key-completeness test passes as part of the 412-test suite.
+
+**Criterion: Labels use `theme.colors.primary` (no hardcoded hex)**
+
+PASS. The `followCountLabel` style (line 377–379 of `ProfileScreen.tsx`) uses `color: theme.colors.primary`. No `#RRGGBB` or `rgba(...)` literal appears on the follow count elements. `followCountNumber` uses `theme.colors.textPrimary`. All colors are token-based.
+
+---
+
+### ProfileNavigator Threading Verification
+
+**Criterion: `ProfileView` union type includes `'followers'` and `'following'`**
+
+PASS. Line 37 of `ProfileNavigator.tsx`: `type ProfileView = 'profile' | 'editProfile' | 'settings' | 'notifications' | 'followers' | 'following';`. Both values are present.
+
+**Criterion: `'followers'` branch renders `FollowersListScreen` with `userId`, `onBack`, `onNavigateToUser`**
+
+PASS. Lines 97–105 of `ProfileNavigator.tsx`:
+```
+if (view === 'followers') {
+  return (
+    <FollowersListScreen
+      userId={session.user.id}
+      onBack={() => setView('profile')}
+      onNavigateToUser={onNavigateToUser ?? ((_id: string) => undefined)}
+    />
+  );
+}
+```
+All three required props present: `userId`, `onBack`, `onNavigateToUser`.
+
+**Criterion: `'following'` branch renders `FollowingListScreen` with `userId`, `onBack`, `onNavigateToUser`**
+
+PASS. Lines 107–115 of `ProfileNavigator.tsx`:
+```
+if (view === 'following') {
+  return (
+    <FollowingListScreen
+      userId={session.user.id}
+      onBack={() => setView('profile')}
+      onNavigateToUser={onNavigateToUser ?? ((_id: string) => undefined)}
+    />
+  );
+}
+```
+All three required props present.
+
+**Criterion: `onNavigateToUser` is declared on `ProfileNavigatorProps` and threaded from AppShell (`handleSelectClimber`)**
+
+PASS. `ProfileNavigatorProps` interface (lines 39–57 of `ProfileNavigator.tsx`) includes `onNavigateToUser?: (userId: string) => void`. In `AppShell.tsx` line 163: `<ProfileNavigator session={session} isActive={activeTab === 'profile'} onNavigateToRoute={handleNavigateToRoute} onNavigateToUser={handleSelectClimber} />`. The `handleSelectClimber` function (lines 112–115) calls `setTargetUserId(userId)` — the overlay mechanism.
+
+**Criterion: AppShell passes `onNavigateToUser={handleSelectClimber}` to ProfileNavigator**
+
+PASS. Confirmed above — `AppShell.tsx` line 163 passes `onNavigateToUser={handleSelectClimber}` to `<ProfileNavigator>`.
+
+---
+
+### Guard Rails Verification
+
+**Guard rail: ProfileNavigator must NOT import `OtherUserProfileScreen` or any profile screen directly**
+
+PASS. `ProfileNavigator.tsx` does not contain any import of `OtherUserProfileScreen`. The imports at lines 29–35 are: `FollowersListScreen` (from `mod-social-feed/screens/`), `FollowingListScreen` (from `mod-social-feed/screens/`), `NotificationsNavigator` (from `mod-notifications/`), `SettingsScreen` (from `mod-localization-theme/screens/`), `useSession` (internal hook), `EditProfileScreen` (internal screen), `ProfileScreen` (internal screen). Navigation to another user's profile is delegated via the `onNavigateToUser` callback — no direct import of the profile overlay screen.
+
+**Guard rail: `useSafeAreaInsets()` — no duplicate inset application**
+
+PASS. `ProfileScreen.tsx` calls `useSafeAreaInsets()` and applies `insets.top` in `headerContainer: { paddingTop: topInset + theme.spacing.md }`. `ProfileNavigator.tsx` contains no `useSafeAreaInsets()` call — confirmed by grep returning zero matches. There is no double inset risk: when the navigator renders `FollowersListScreen` or `FollowingListScreen`, those screens fully replace `ProfileScreen` in the component tree; each applies its own `useSafeAreaInsets()` independently. There is no nesting scenario where two inset-applying components are parent/child.
+
+**Guard rail: FollowersListScreen and FollowingListScreen use `useSafeAreaInsets()`**
+
+PASS. Both screens import and call `useSafeAreaInsets()` (confirmed: `FollowersListScreen.tsx` lines 35, 197; `FollowingListScreen.tsx` lines 36, 198). Both use the `makeStyles(theme, topInset)` pattern where `topInset` is applied to `navBar: { paddingTop: topInset + theme.spacing.md }`.
+
+---
+
+### Layout Check
+
+**Count links appear below bio, above stats/history section**
+
+PASS. In `profileHeader` (the JSX block passed as `listHeaderComponent` to `SendHistoryProfile`), the render order within `<View style={styles.headerContainer}>` is: notifications button → settings button → `<View style={styles.header}>` (avatar + display_name + bio) → `<View style={styles.followCountsRow}>` (count links) → Edit Profile `<Pressable>`. The count links appear after bio and before the Edit Profile button. The `SendHistoryProfile`/`ProfileHistoryScreen` FlatList (which contains the stats panel) comes after the entire `profileHeader` block via `listHeaderComponent` — the count links are therefore above the stats/history section.
+
+**Left: "X 追蹤者", Right: "X 追蹤中"**
+
+PASS. First `<Pressable>` in `followCountsRow`: shows `{followerCount}` (number) then `{t('socialFeed.followers')}` ("追蹤者" in zh-TW). Second `<Pressable>`: shows `{followingCount}` then `{t('socialFeed.following')}` ("追蹤中" in zh-TW). `flexDirection: 'row'` places the first item on the left and the second on the right.
+
+**Both use `theme.colors.primary`**
+
+PASS. `followCountLabel` style: `color: theme.colors.primary`. `followCountNumber` style: `color: theme.colors.textPrimary` (the count number uses the primary text color, which is appropriate; the label uses `theme.colors.primary` per spec). No hardcoded hex colors anywhere in the follow count block.
+
+---
+
+### Regression — All Previously Passing ACs
+
+**AC-001 (revised)** — PASS. `AuthNavigator.tsx` unchanged from QA Run 4; session → children directly, no gym selection gate.
+
+**AC-063** — PASS. `EditProfileScreen.tsx` and `upsertProfile()` unchanged. `privacy_setting` column unaffected.
+
+**AC-116** — PASS. Avatar, display name, bio still rendered from `useSession().profile` in `profileHeader`. Restructuring to `listHeaderComponent` preserved all three fields.
+
+**AC-117** — PASS. Edit Profile `<Pressable>` still present in `profileHeader`, wired to `onNavigateEditProfile`.
+
+**AC-118** — PASS. `SendHistoryProfile` component still rendered via `listHeaderComponent`/`listFooterComponent` pattern. No inline string literals.
+
+**AC-119** — PASS. Logout `<Pressable>` in `profileFooter` still wired to `handleLogout()` → `signOut()`.
+
+**Supabase singleton** — PASS. No new `createClient()` calls.
+
+**No service_role key** — PASS. No new env var reads.
+
+**No hardcoded hex colors** — PASS. All AC-145 new styles use theme tokens.
+
+**All user-facing strings through i18n** — PASS. `t('socialFeed.followers')` and `t('socialFeed.following')` used for labels. No inline string literals in any new JSX.
+
+**EN and zh-TW catalogs complete** — PASS. Reused existing keys; no new keys needed. i18n.test.ts passes as part of 412-test suite.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0.
+
+**ProfileNavigator exposed as public entry point** — PASS. Still `export default function ProfileNavigator`.
+
+**Safe area insets on ProfileScreen** — PASS. `headerContainer` still uses `paddingTop: topInset + theme.spacing.md`.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| AC-145: two tappable count links below bio | PASS |
+| AC-145: followers left, following right (flexDirection: row) | PASS |
+| AC-145: labels "追蹤者" / "追蹤中" via i18n (socialFeed.followers/following) | PASS |
+| AC-145: labels use theme.colors.primary (no hardcoded hex) | PASS |
+| AC-145: counts from fetchFollowerCounts (MOD-006 social-graph RPC) | PASS |
+| AC-145: show 0 on load; show 0 on error, no crash | PASS |
+| ProfileView union includes 'followers' and 'following' | PASS |
+| 'followers' branch → FollowersListScreen with userId, onBack, onNavigateToUser | PASS |
+| 'following' branch → FollowingListScreen with userId, onBack, onNavigateToUser | PASS |
+| onNavigateToUser declared on ProfileNavigatorProps | PASS |
+| AppShell passes onNavigateToUser={handleSelectClimber} to ProfileNavigator | PASS |
+| Count links below bio, above stats/history section | PASS |
+| ProfileNavigator does NOT import OtherUserProfileScreen | PASS |
+| useSafeAreaInsets — no duplicate inset (ProfileNavigator has none) | PASS |
+| FollowersListScreen uses useSafeAreaInsets independently | PASS |
+| FollowingListScreen uses useSafeAreaInsets independently | PASS |
+| No hardcoded hex in new AC-145 styles | PASS |
+| No inline string literals in new AC-145 JSX | PASS |
+| AC-001 (revised) regression | PASS |
+| AC-063 regression | PASS |
+| AC-116 regression | PASS |
+| AC-117 regression | PASS |
+| AC-118 regression | PASS |
+| AC-119 regression | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS |
+| Automated test suite (412 tests, 31 suites) | PASS |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**MOD-001 Rev 18 scope (AC-145) — QA PASS.**
