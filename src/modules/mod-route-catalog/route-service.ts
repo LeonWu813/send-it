@@ -13,6 +13,8 @@
  * - All errors are wrapped with user-facing messages before propagation.
  */
 
+import { File as ExpoFile } from 'expo-file-system';
+
 import { supabase } from '../../lib/supabase';
 import type {
   Route,
@@ -92,16 +94,17 @@ export async function uploadRoutePhoto(
   const randomSuffix = Math.random().toString(36).slice(2, 8);
   const storagePath = `${userId}/${timestamp}-${randomSuffix}.${ext}`;
 
-  // Fetch the local file as a Blob for upload
-  const response = await fetch(localUri);
-  if (!response.ok) {
-    throw new Error('Failed to read the selected photo. Please try again.');
-  }
-  const blob = await response.blob();
+  // Read the local file as raw bytes using expo-file-system's File class.
+  // The fetch()+blob() pattern is unreliable in React Native / Expo SDK 57
+  // (triggers the "Response.blob() is using React Native's Blob" warning and
+  // causes upload failures). File.bytes() returns a Uint8Array directly —
+  // no base64 detour, no fetch() corruption risk.
+  const expoFile = new ExpoFile(localUri);
+  const uint8Array = await expoFile.bytes();
 
   const { error: uploadError } = await supabase.storage
     .from('route-photos')
-    .upload(storagePath, blob, {
+    .upload(storagePath, uint8Array, {
       contentType: mimeType,
       upsert: false,
     });
