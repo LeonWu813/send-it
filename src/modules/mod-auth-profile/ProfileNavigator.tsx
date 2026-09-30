@@ -74,6 +74,7 @@ export default function ProfileNavigator({
       <NotificationsNavigator
         session={session}
         isActive={isActive}
+        onBack={() => setView('profile')}
         onNavigateToRoute={onNavigateToRoute}
       />
     );

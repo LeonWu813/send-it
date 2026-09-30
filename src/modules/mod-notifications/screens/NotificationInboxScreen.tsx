@@ -17,6 +17,7 @@
  * i18n: all user-facing strings use useTranslation('common') hook.
  */
 
+import { Ionicons } from '@expo/vector-icons';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +47,11 @@ interface NotificationInboxScreenProps {
   session: Session;
   isActive?: boolean;
   /**
+   * Callback invoked when the user taps the back button in the inbox header.
+   * Returns the caller (e.g. ProfileNavigator) to its previous view.
+   */
+  onBack?: () => void;
+  /**
    * Callback invoked when the user taps a beta-video-like notification entry.
    * Resolves the notification's target_id to the route and gym, then delegates
    * to AppShell.handleNavigateToRoute to open the route detail screen (AC-058).
@@ -58,6 +64,7 @@ interface NotificationInboxScreenProps {
 export default function NotificationInboxScreen({
   session: _session,
   isActive = true,
+  onBack,
   onNavigateToRoute,
 }: NotificationInboxScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
@@ -128,9 +135,29 @@ export default function NotificationInboxScreen({
   }
 
   return (
+    <View style={styles.root}>
+      {/* Navigation bar with back button */}
+      {onBack !== undefined && (
+        <View style={styles.navBar}>
+          <Pressable
+            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back') ?? 'Back'}
+          >
+            <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
+            <Text style={styles.backButtonText}>{t('common.back') ?? 'Back'}</Text>
+          </Pressable>
+          <Text style={styles.navTitle}>{t('notifications.title')}</Text>
+          <View style={styles.navSpacer} />
+        </View>
+      )}
+
     <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.contentContainer}
+      style={styles.scrollView}
+      contentContainerStyle={
+        onBack !== undefined ? styles.contentContainerWithNav : styles.contentContainer
+      }
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
@@ -140,8 +167,10 @@ export default function NotificationInboxScreen({
         />
       }
     >
-      {/* Screen title */}
-      <Text style={styles.screenTitle}>{t('notifications.title')}</Text>
+      {/* Screen title — only shown when there is no nav bar (standalone mount) */}
+      {onBack === undefined && (
+        <Text style={styles.screenTitle}>{t('notifications.title')}</Text>
+      )}
 
       {/* Error banner */}
       {error !== null && (
@@ -174,6 +203,7 @@ export default function NotificationInboxScreen({
         />
       ))}
     </ScrollView>
+    </View>
   );
 }
 
@@ -276,8 +306,52 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    navBar: {
+      paddingTop: topInset + theme.spacing.md,
+      paddingBottom: theme.spacing.md,
+      paddingHorizontal: theme.spacing.md,
+      flexDirection: 'row',
+      alignItems: 'center',
+      borderBottomWidth: 1,
+      borderBottomColor: theme.colors.border,
+      backgroundColor: theme.colors.background,
+    },
+    backButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 2,
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.xs,
+      borderRadius: theme.borderRadius.md,
+      minWidth: 60,
+    },
+    backButtonPressed: {
+      backgroundColor: theme.colors.surface,
+    },
+    backButtonText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.primary,
+      fontWeight: theme.fontWeight.medium,
+    },
+    navTitle: {
+      flex: 1,
+      textAlign: 'center',
+      fontSize: theme.fontSize.lg,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+    },
+    navSpacer: {
+      minWidth: 60,
+    },
+    scrollView: {
+      flex: 1,
+    },
     contentContainer: {
       paddingTop: topInset + theme.spacing.md,
+      paddingBottom: theme.spacing.xxl,
+    },
+    contentContainerWithNav: {
+      paddingTop: theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
     },
     centered: {

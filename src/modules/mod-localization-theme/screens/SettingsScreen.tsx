@@ -117,9 +117,10 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
           style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
           onPress={onBack}
           accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
+          accessibilityLabel={t('settings.back') ?? 'Back'}
         >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+          <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
+          <Text style={styles.backButtonText}>{t('settings.back') ?? 'Back'}</Text>
         </Pressable>
         <Text style={styles.navTitle}>{t('settings.title')}</Text>
         {/* Spacer to balance the back button */}
@@ -213,14 +214,21 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       backgroundColor: theme.colors.background,
     },
     backButton: {
-      width: 40,
-      height: 40,
+      flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: theme.borderRadius.full,
+      gap: 2,
+      paddingVertical: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.xs,
+      borderRadius: theme.borderRadius.md,
+      minWidth: 60,
     },
     backButtonPressed: {
       backgroundColor: theme.colors.surface,
+    },
+    backButtonText: {
+      fontSize: theme.fontSize.md,
+      color: theme.colors.primary,
+      fontWeight: theme.fontWeight.medium,
     },
     navTitle: {
       flex: 1,

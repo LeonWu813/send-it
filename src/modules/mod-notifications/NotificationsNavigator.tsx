@@ -28,6 +28,11 @@ interface NotificationsNavigatorProps {
   initialView?: NotificationsView;
   isActive?: boolean;
   /**
+   * Callback invoked when the user taps the back button in the inbox header.
+   * Returns the caller (e.g. ProfileNavigator) to its previous view.
+   */
+  onBack?: () => void;
+  /**
    * Callback invoked when the user taps a notification row to navigate to the
    * liked beta video's route detail screen (AC-058). Threaded from AppShell
    * via handleNavigateToRoute — switches to the Gyms tab and opens the route.
@@ -41,6 +46,7 @@ export default function NotificationsNavigator({
   session,
   initialView = 'inbox',
   isActive = true,
+  onBack,
   onNavigateToRoute,
 }: NotificationsNavigatorProps): React.JSX.Element {
   const [view, setView] = useState<NotificationsView>(initialView);
@@ -61,6 +67,7 @@ export default function NotificationsNavigator({
         <NotificationInboxScreen
           session={session}
           isActive={isActive}
+          onBack={onBack}
           onNavigateToRoute={onNavigateToRoute}
         />
       );

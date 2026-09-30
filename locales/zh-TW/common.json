@@ -60,6 +60,7 @@
   },
   "settings": {
     "title": "設定",
+    "back": "返回",
     "language": {
       "title": "語言",
       "en": "English",

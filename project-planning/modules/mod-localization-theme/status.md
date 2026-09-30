@@ -2,6 +2,40 @@
 
 ## Engineering Progress
 
+### Bugfix — 2026-09-30
+
+**Bug 1 — Settings back button not visible**
+- [pass] `backButton` style updated to `flexDirection: 'row', alignItems: 'center', gap: 2` with padding + borderRadius
+- [pass] `backButtonText` style added: `fontSize: theme.fontSize.md, color: theme.colors.primary, fontWeight: theme.fontWeight.medium`
+- [pass] Icon size reduced 24 → 20 to match iOS standard back button
+- [pass] `Ionicons chevron-back` (size 20) + `Text` with `t('settings.back')` rendered side-by-side in back button
+- [pass] `accessibilityLabel` updated to `t('settings.back') ?? 'Back'`
+- [pass] `settings.back` key added to `locales/en/common.json` ("Back") and `locales/zh-TW/common.json` ("返回")
+- [pass] `npm run check:i18n` — i18n completeness OK (new key present in both locales)
+
+**Bug 2 — Notifications view missing onBack to return to Profile**
+- [pass] `onBack?: () => void` added to `NotificationsNavigatorProps` in `NotificationsNavigator.tsx`
+- [pass] `onBack` threaded from `NotificationsNavigator` to `NotificationInboxScreen`
+- [pass] `onBack?: () => void` added to `NotificationInboxScreenProps`
+- [pass] `Ionicons` import added to `NotificationInboxScreen.tsx`
+- [pass] Nav bar with `chevron-back` + `t('common.back')` text button rendered at top of `NotificationInboxScreen` when `onBack` is defined
+- [pass] Nav bar styles added: `navBar`, `backButton`, `backButtonPressed`, `backButtonText`, `navTitle`, `navSpacer`, `scrollView`, `contentContainerWithNav`
+- [pass] ScrollView `contentContainerStyle` uses `contentContainerWithNav` (no topInset double-apply) when `onBack` is defined, `contentContainer` (includes topInset) when standalone
+- [pass] `ProfileNavigator.tsx` passes `onBack={() => setView('profile')}` to `NotificationsNavigator`
+
+**Self-check**
+- [pass] `npm run check:i18n` — i18n completeness OK
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] `npx jest --passWithNoTests` — 412 tests passed (31 suites), 0 failures
+
+**Files modified**
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+- `src/modules/mod-notifications/NotificationsNavigator.tsx`
+- `src/modules/mod-notifications/screens/NotificationInboxScreen.tsx`
+- `src/modules/mod-auth-profile/ProfileNavigator.tsx`
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+
 ### Implementation — 2026-09-29
 
 **Automated checks**
