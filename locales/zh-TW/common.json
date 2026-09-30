@@ -374,6 +374,12 @@
     "reportUser": "檢舉用戶",
     "blockUser": "封鎖用戶",
     "unblockUser": "解除封鎖",
+    "sheetReport": "檢舉",
+    "sheetBlock": "封鎖",
+    "sheetUnblock": "解除封鎖",
+    "sheetCancel": "取消",
+    "profileUnavailable": "此帳號無法檢視",
+    "reportConfirmation": "已檢舉並封鎖此用戶",
     "report": {
       "title": "檢舉用戶",
       "category": "類別",

@@ -2,14 +2,34 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, 413/413 tests pass.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, 422/422 tests pass.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
 **AC-146/147/148 commit**: `77ad6f8` — `feat(mod-social-feed): AC-146/147/148 — followers/following list screens with per-card stats`
 **follow() bug-fix commit**: pending — `fix(mod-social-feed): include follower_id in follow() insert payload`
 **Human QA UI changes commit**: pending — `fix(mod-social-feed): simplify follower/following cards; add stats section to UserProfileScreen`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes)
+**AC-150/151/152/153 commit**: pending — `feat(mod-social-feed): AC-150/151(UI)/152/153 — three-dots sheet, block/report, blocked state`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153)
+
+### AC-150 / AC-151 (UI) / AC-152 / AC-153 Implementation (2026-09-30)
+
+**AC-150 DONE**: Added `Ionicons "ellipsis-vertical"` (size 22) button to `UserProfileScreen` header. Only rendered when `!isOwnProfile`. On press opens a `Modal` (transparent, animationType="slide") bottom action sheet with translucent overlay (`rgba(0,0,0,0.5)`), drag handle pill, option rows, and Cancel row. Sheet panel uses `theme.colors.surface` background, `borderTopLeftRadius`/`borderTopRightRadius`, and `paddingBottom: insets.bottom + theme.spacing.lg`.
+
+**AC-151 (UI) DONE**: "Report" option row with `theme.colors.error` text. On press: calls `reportUser(targetUserId, 'inappropriate')` then `blockUser(targetUserId)` sequentially (both awaited). Shows `ActivityIndicator` on the row while in progress. On success: closes sheet, sets `isProfileBlocked = true` and `isBlockedByMe = true`. On failure: shows inline error text in sheet (sheet stays open).
+
+**AC-152 DONE**: "Block"/"Unblock" toggle option row with `theme.colors.textPrimary` text. Block calls `blockUser(targetUserId)`; unblock calls `unblockUser(targetUserId)`. On block success: closes sheet, `isProfileBlocked = true`, `isBlockedByMe = true`. On unblock success: closes sheet, `isProfileBlocked = false`, `isBlockedByMe = false`, reloads profile via `loadProfile()`.
+
+**AC-153 DONE**: `fetchBlockedUserIds()` added to `loadProfile()` `Promise.all` (no-op result for own profile via `Promise.resolve(new Set())`). Two new state variables: `isProfileBlocked` (targetUserId appears in blocked set, either direction) and `isBlockedByMe` (verified via separate `supabase.from('blocks').select(...).eq('blocker_user_id', session.user.id).eq('blocked_user_id', targetUserId).maybeSingle()` call when `isProfileBlocked` is true). When `isProfileBlocked`: renders back button + optional dots icon + centered `t('moderation.profileUnavailable')` instead of normal profile content. Dots icon shown in blocked state only when `isBlockedByMe` (so viewer can unblock). i18n keys added: `moderation.sheetReport`, `moderation.sheetBlock`, `moderation.sheetUnblock`, `moderation.sheetCancel`, `moderation.profileUnavailable`, `moderation.reportConfirmation` — placed under `moderation` namespace in both `locales/en/common.json` and `locales/zh-TW/common.json` with non-conflicting key names (existing `moderation.report` and `moderation.block` are nested objects; new sheet-label keys use `sheet*` prefix).
+
+**Self-check (AC-150/151/152/153)**:
+- PASS — `npx tsc --noEmit` clean, 0 errors
+- PASS — `npm test -- --watchAll=false` 422/422 tests pass (9 new tests), exit code 0
+- PASS — No hardcoded hex colors; all styles use `theme.*` tokens; overlay uses `'rgba(0,0,0,0.5)'` (string literal, not a hex color)
+- PASS — `useSafeAreaInsets()` already in file; `insets.bottom` used for sheet `paddingBottom`
+- PASS — `ModerationActions` not imported; sheet is built inline in `ActionSheet` function component
+- PASS — Three-dots icon and sheet not rendered for `isOwnProfile`
+- PASS — Cross-module imports: `blockUser`, `unblockUser`, `reportUser`, `fetchBlockedUserIds` from `../../mod-moderation/moderation-service` (public service layer, permitted per production.md)
 
 ### Human QA UI Changes (2026-09-30)
 
@@ -121,6 +141,10 @@ MOD-009 will `CREATE TABLE IF NOT EXISTS public.blocks (...)` with its full sche
 - AC-146 ✓: FollowersListScreen — scrollable list of followers with per-card stats, blocked users excluded
 - AC-147 ✓: FollowingListScreen — scrollable list of followees with same card layout, blocked users excluded
 - AC-148 ✓: Per-card stats via fetchProfileStats cross-module import from mod-profile-history
+- AC-150 ✓: Three-dots icon (ellipsis-vertical, size 22) in UserProfileScreen header, only for !isOwnProfile; opens bottom action sheet (Modal, transparent, animationType="slide")
+- AC-151 (UI) ✓: "Report" option in sheet calls reportUser(targetUserId, 'inappropriate') then blockUser(targetUserId) sequentially; loading indicator on option; on success closes sheet and sets isProfileBlocked/isBlockedByMe; on failure shows inline error
+- AC-152 ✓: Block/Unblock toggle in sheet; block calls blockUser, unblock calls unblockUser; profile reflects new state immediately after each action
+- AC-153 ✓: fetchBlockedUserIds() added to loadProfile() Promise.all; isProfileBlocked and isBlockedByMe state variables derived; blocked state renders "This profile isn't available", hides follow button and stats; dots icon shown only when isBlockedByMe so viewer can unblock
 
 ### Notes
 - Block filter in RPC uses NOT EXISTS subqueries against `public.blocks`. A minimal stub `blocks` table (blocker_id, blocked_id) is created in this migration before the function body so PostgreSQL can validate the LANGUAGE sql reference at CREATE FUNCTION time. MOD-009 adds the full schema with IF NOT EXISTS — safe to layer on top.

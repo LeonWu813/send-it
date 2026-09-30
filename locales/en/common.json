@@ -374,6 +374,12 @@
     "reportUser": "Report User",
     "blockUser": "Block User",
     "unblockUser": "Unblock User",
+    "sheetReport": "Report",
+    "sheetBlock": "Block",
+    "sheetUnblock": "Unblock",
+    "sheetCancel": "Cancel",
+    "profileUnavailable": "This profile isn't available",
+    "reportConfirmation": "User reported and blocked",
     "report": {
       "title": "Report User",
       "category": "Category",
