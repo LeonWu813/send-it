@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 19
+**Status**: [SUBSTANTIVE] — Revision 20
 **Date**: 2026-09-30
-**Revision**: 19
+**Revision**: 20
 
 ---
 
@@ -209,7 +209,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** to block that user,
 **so that** their content no longer appears in my feed or on route pages I view, and they cannot follow or interact with me (App Store Guideline 1.2 requirement).
 
-**Acceptance Criteria**: AC-082, AC-083
+**Acceptance Criteria**: AC-082, AC-083, AC-151, AC-152
 
 ---
 
@@ -249,7 +249,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** a Home screen that shows announcement banners, my saved gyms, and the climbers I follow,
 **so that** I have a single landing surface that surfaces the gyms and people most relevant to me.
 
-**Acceptance Criteria**: AC-110, AC-111, AC-112, AC-113, AC-114, AC-115, AC-123, AC-124
+**Acceptance Criteria**: AC-110, AC-111, AC-112, AC-113, AC-114, AC-115, AC-123, AC-124, AC-150, AC-153
 
 ---
 
@@ -279,7 +279,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** to tap a beta video poster's name or avatar to view their profile,
 **so that** I can discover climbers whose content I enjoy.
 
-**Acceptance Criteria**: AC-135, AC-144
+**Acceptance Criteria**: AC-135, AC-144, AC-154
 
 ---
 
@@ -362,21 +362,21 @@ The data flow for the two most important loops:
 
 ### MOD-005: Beta Video
 
-**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report).
+**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), and filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154).
 
 **User Stories**: US-004, US-005, US-015, US-023
 
-**Dependencies**: MOD-001, MOD-003
+**Dependencies**: MOD-001, MOD-003, MOD-009 (block-status public service `fetchBlockedUserIds`, AC-154)
 
 ---
 
 ### MOD-006: Social Graph & Feed
 
-**Purpose**: Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, beta-video like reactions, and the Followers and Following list screens (AC-146, AC-147).
+**Purpose**: Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, beta-video like reactions, the Followers and Following list screens (AC-146, AC-147), and the other-user `UserProfileScreen` overlay — including its three-dots action sheet (Report / Block / Unblock, AC-150) and its blocked-state "This profile isn't available" rendering (AC-153). The report and block actions themselves are performed via MOD-009's public services.
 
 **User Stories**: US-007, US-008, US-022
 
-**Dependencies**: MOD-001, MOD-004, MOD-005, MOD-008
+**Dependencies**: MOD-001, MOD-004, MOD-005, MOD-008, MOD-009 (block/unblock actions and block-status service for the UserProfileScreen three-dots sheet + blocked state, AC-150/AC-152/AC-153)
 
 ---
 
@@ -402,7 +402,7 @@ The data flow for the two most important loops:
 
 ### MOD-009: Moderation (Report & Block)
 
-**Purpose**: Provide user-profile report submission (with category + optional note), block/unblock actions, and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio. Beta-video reporting is owned by MOD-005 (the one-tap report flow, AC-139/AC-140), not MOD-009.
+**Purpose**: Provide user-profile report submission (which in Phase 1 both files a report record and blocks the user, AC-151), block/unblock actions (`blockUser` / `unblockUser`, AC-152), a block-status public service (`isBlocked` / `fetchBlockedUserIds`) consumed by MOD-005 (AC-154) and MOD-006 (AC-153), and filtering blocked users out of feeds, route pages, and follow flows. Admin review happens in Supabase Studio. Beta-video reporting is owned by MOD-005 (the one-tap report flow, AC-139/AC-140), not MOD-009.
 
 **User Stories**: US-015, US-016
 
@@ -628,6 +628,8 @@ The data flow for the two most important loops:
 
 ---
 
+**AC-154** (new): In the route detail screen's beta-video list, the system shall filter out beta videos uploaded by users the viewer has blocked or who have blocked the viewer (block in either direction) before rendering, using MOD-009's public service `fetchBlockedUserIds()` as a client-side filter over the fetched beta-video set. This filter applies in addition to the reported-video exclusion (AC-142).
+
 ### MOD-006 (Social Graph & Feed) Acceptance Criteria
 
 **AC-050**: The system shall allow a user to follow and unfollow any other user (subject to Block; see AC-083) and reflect the change immediately in the follower's profile counts.
@@ -646,6 +648,12 @@ The data flow for the two most important loops:
 
 
 **AC-149** (new): The other-user profile screen (`UserProfileScreen`, the profile overlay reached via `handleSelectClimber`) shall display, immediately after the follow/unfollow button, a stats section sourced from MOD-008's profile-stats public service (`fetchProfileStats(targetUserId)` from `mod-profile-history/history-service`). The section shall show the target user's total sends, accumulated days, highest grade, and a grade bar chart. This section shall not render any route cards. This is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state per AC-064 rather than the stats section.
+**AC-150** (new): The other-user profile screen (`UserProfileScreen`, the profile overlay reached via `handleSelectClimber`) shall display a three-dots icon (⋮) fixed in the top-right corner. Tapping it shall open a bottom action sheet rendered over a translucent background overlay that blocks interaction with the underlying screen until the sheet is dismissed. The sheet shall contain exactly two options: "Report" (AC-151) and a block toggle labeled "Block" when the viewer has not blocked this user or "Unblock" when the viewer has already blocked this user (AC-152). This three-dots sheet replaces any prior placement of the report and block controls on the other-user profile surface. The three-dots icon is shown even when the profile is in the blocked state (AC-153), so the viewer can unblock.
+
+**AC-152** (new): Selecting the block toggle in the three-dots sheet (AC-150) shall, when labeled "Block", call `blockUser` (MOD-009) to block the target user only, with no admin report; when labeled "Unblock", it shall call `unblockUser` (MOD-009) to remove the block. Block behavior is symmetric per the existing `Block` database trigger: on block, any follow relationship is removed in both directions, and neither party can follow the other while the block is in effect; on unblock, the block is lifted (follows are not automatically restored). After the action completes, the profile shall immediately reflect the new state (blocked → AC-153 unavailable state; unblocked → normal profile content) and the sheet toggle label shall update accordingly.
+
+**AC-153** (new): When `UserProfileScreen` (AC-150) loads, it shall check whether either party has blocked the other using MOD-009's public service (`isBlocked` / `fetchBlockedUserIds`). If a block exists in either direction, the screen shall display a "This profile isn't available" message in place of the profile content: the follow/unfollow button and the stats section (AC-149) shall be hidden. The three-dots icon (AC-150) shall still be shown so the viewer can unblock the user (AC-152).
+
 > **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006.
 
 ---
@@ -682,7 +690,7 @@ The data flow for the two most important loops:
 
 ### MOD-009 (Moderation — Report & Block) Acceptance Criteria
 
-**AC-080** (revised): The system shall allow a user to report a **user profile** with a category (e.g., inappropriate, spam, harassment, other) and an optional note, and persist the report to the `Report` table for admin review in Supabase Studio. (Beta-video reporting is not handled here — it is handled by the AC-140 one-tap flow in MOD-005, which writes to `beta_videos.is_reported` + the `VideoReport` table with no category or note.)
+**AC-080** (revised): The system shall persist a **user-profile** report to the `Report` table for admin review in Supabase Studio. In Phase 1 the profile Report action is invoked from the `UserProfileScreen` three-dots sheet (AC-150) and both files this report record and blocks the reported user in a single action (AC-151); the category defaults to a general "inappropriate" value and no note is collected in that flow (the `category` and `note` columns remain in the `Report` schema for admin/back-compat use). (Beta-video reporting is not handled here — it is handled by the AC-140 one-tap flow in MOD-005, which writes to `beta_videos.is_reported` + the `VideoReport` table with no category or note.)
 
 **AC-081**: The system shall show the reporter a confirmation state after a successful report submission and shall not require admin action to complete the report flow.
 
@@ -695,6 +703,8 @@ The data flow for the two most important loops:
 **AC-085**: The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window. This digest covers the `Report` table only (user-profile and beta-video content reports filed via AC-080); it does not include the `VideoReport` table (beta-video reports filed via AC-140), which the admin reviews manually in Supabase Studio.
 
 ---
+
+**AC-151** (new): Selecting "Report" in the three-dots sheet (AC-150) shall, in a single user action, both notify the admin and block the reported user: the system shall call `reportUser` (persisting a report record to the `Report` table for admin review per AC-080) and `blockUser` (AC-082) sequentially for the target user. This report-and-block behavior replaces the prior report-only profile action. The user shall see a confirmation, and the profile shall immediately show the blocked state (AC-153).
 
 ### MOD-010 (Localization & Theming) Acceptance Criteria
 
