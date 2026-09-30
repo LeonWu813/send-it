@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 17
+**Status**: [SUBSTANTIVE] — Revision 18
 **Date**: 2026-09-30
-**Revision**: 17
+**Revision**: 18
 
 ---
 
@@ -263,6 +263,26 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 
 ---
 
+### US-022: See my followers and who I follow
+
+**As a** user,
+**I want** to see who follows me and who I follow,
+**so that** I can discover and connect with climbers in my community.
+
+**Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148
+
+---
+
+### US-023: Open a beta video poster's profile
+
+**As a** user,
+**I want** to tap a beta video poster's name or avatar to view their profile,
+**so that** I can discover climbers whose content I enjoy.
+
+**Acceptance Criteria**: AC-135, AC-144
+
+---
+
 ## 4. Tech Stack
 
 | Component        | Name + Version                                      | Notes                                                                                                                                       |
@@ -302,9 +322,9 @@ The data flow for the two most important loops:
 
 ### MOD-001: Auth & Profile
 
-**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and expose a Logout control. There is no home gym concept — saved gyms live in MOD-012.
+**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and expose a Logout control. There is no home gym concept — saved gyms live in MOD-012.
 
-**User Stories**: US-001, US-011, US-012
+**User Stories**: US-001, US-011, US-012, US-022
 
 **Dependencies**: none
 
@@ -344,7 +364,7 @@ The data flow for the two most important loops:
 
 **Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report).
 
-**User Stories**: US-004, US-005, US-015
+**User Stories**: US-004, US-005, US-015, US-023
 
 **Dependencies**: MOD-001, MOD-003
 
@@ -352,11 +372,11 @@ The data flow for the two most important loops:
 
 ### MOD-006: Social Graph & Feed
 
-**Purpose**: Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, and beta-video like reactions.
+**Purpose**: Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, beta-video like reactions, and the Followers and Following list screens (AC-146, AC-147).
 
-**User Stories**: US-007, US-008
+**User Stories**: US-007, US-008, US-022
 
-**Dependencies**: MOD-001, MOD-004, MOD-005
+**Dependencies**: MOD-001, MOD-004, MOD-005, MOD-008
 
 ---
 
@@ -467,6 +487,8 @@ The data flow for the two most important loops:
 **AC-118** (new): The Profile screen shall embed the current user's send history (the MOD-008 profile-history-and-stats surface).
 
 **AC-119** (new): The Profile screen shall expose a Logout control at the bottom that ends the session and returns the user to the signed-out state.
+
+**AC-145** (new): The Profile screen shall display, immediately below the user's bio, two tappable count links arranged left (followers count, label "追蹤者") and right (following count, label "追蹤中"). Tapping the followers link navigates to the Followers list screen (AC-146); tapping the following link navigates to the Following list screen (AC-147). The counts are sourced from MOD-006's social-graph public service. This applies to both the current user's own Profile screen and the MOD-008 other-user profile surface (AC-064).
 
 ---
 
@@ -584,7 +606,7 @@ The data flow for the two most important loops:
 
 **AC-134** (new): The fullscreen beta-video viewer shall display a bottom-left overlay, rendered over a gradient scrim for legibility, containing two rows: Row 1 — a small circular avatar (from the poster's `avatar_url`; placeholder circle if absent) and the poster's `display_name`; Row 2 — the composed string `{route_name} · {gym_name}`.
 
-**AC-135** (new): In the bottom-left overlay, tapping Row 1 (avatar + `display_name`) shall be a no-op in Phase 1; the profile destination is deferred to a future module.
+**AC-135** (revised): In the bottom-left overlay of the fullscreen beta-video viewer, tapping Row 1 (the circular avatar or the `display_name` text) shall dismiss the viewer and navigate the user to that video poster's profile (the MOD-008 other-user profile-and-history surface, AC-064), subject to the poster's privacy setting (AC-063). Navigation is threaded from the viewer to the profile surface via a callback prop supplied by the hosting shell, not by MOD-005 importing the profile screen directly.
 
 **AC-136** (new): In the bottom-left overlay, tapping Row 2 (`{route_name} · {gym_name}`) shall navigate the user to the route detail screen for that video's route and dismiss the viewer.
 
@@ -602,7 +624,7 @@ The data flow for the two most important loops:
 
 **AC-143** (new): When an admin sets `beta_videos.report_dismissed = true` (via Supabase Studio), the video shall become visible again to all users on the next fetch, and the report affordance for that video shall be permanently hidden for all users (AC-139), preventing further reports.
 
-**AC-144** (new): The `fetchBetaVideosForRoute` result shall include the poster's `display_name` and `avatar_url` joined from the user record, so the viewer overlay (AC-134) can render poster identity without a second round-trip.
+**AC-144** (revised): The `fetchBetaVideosForRoute` result shall include the poster's `display_name` and `avatar_url` joined from the user record, so the viewer overlay (AC-134) can render poster identity without a second round-trip. The result shall also include the poster's `user_id` (UUID) on the same join, so the viewer has the poster's identifier for navigation per the revised AC-135. This `user_id` addition is a dependent edit required by the revised AC-135.
 
 ---
 
@@ -615,6 +637,12 @@ The data flow for the two most important loops:
 **AC-052**: The system shall allow a user to like exactly one time per beta video (idempotent) and immediately reflect the like count change on the video.
 
 **AC-053**: The system shall not render a comment UI anywhere in the app in Phase 1 and shall not expose a like affordance on plain send logs.
+
+**AC-146** (new): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar, `display_name`, total sends count (ascents where `style` ∈ {flash, top}), and highest grade achieved. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
+
+**AC-147** (new): The system shall provide a Following list screen with the same card layout as the Followers list screen (AC-146), listing all users the profile owner follows. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to privacy (AC-063). Blocked users are excluded.
+
+**AC-148** (new): Per-card sends count and highest grade on the Followers and Following list screens (AC-146, AC-147) shall be sourced from MOD-008's profile-stats public service (`get_profile_stats` RPC), not from a direct `ascents` table query in MOD-006. Fetching is per-card on list render (acceptable for Phase 1 list sizes).
 
 > **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006.
 
