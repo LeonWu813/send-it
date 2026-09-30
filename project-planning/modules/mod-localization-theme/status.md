@@ -2,6 +2,27 @@
 
 ## Engineering Progress
 
+### AC-155 — 2026-09-30
+
+**Blocked Accounts screen and sub-navigation from Settings**
+
+- [pass] `fetchMyBlockedUsers()` added to `src/modules/mod-moderation/moderation-service.ts` — queries `blocks` joined with `users!blocks_blocked_user_id_fkey`, ordered by `created_at DESC`, returns `BlockedUser[]`
+- [pass] `BlockedUser` interface exported from `moderation-service.ts`
+- [pass] `src/modules/mod-localization-theme/screens/BlockedAccountsScreen.tsx` created — nav bar with `chevron-back` + back label + centered title, loading/error/empty states, 48×48 circular avatar rows with display_name and outlined Unblock button, optimistic removal + re-fetch on error
+- [pass] `SettingsScreen.tsx` updated — `SettingsView` type added, `view` state declared at top of component (all hooks remain before early return), early return renders `<BlockedAccountsScreen>` when `view === 'blockedAccounts'`, "Blocked Accounts" row with `chevron-forward` added after Appearance section
+- [pass] `locales/en/common.json` — `settings.blockedAccounts` ("Blocked Accounts"), `moderation.unblock` ("Unblock"), `moderation.noBlockedAccounts` ("No blocked accounts") added
+- [pass] `locales/zh-TW/common.json` — matching keys added: "已封鎖的帳號", "解除封鎖", "沒有已封鎖的帳號"
+- [pass] `npm run check:i18n` — i18n completeness OK (both catalogs symmetric)
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] `npm test -- --watchAll=false` — 422 tests passed (31 suites), 0 failures
+
+**Files modified / created**
+- `src/modules/mod-moderation/moderation-service.ts` (`fetchMyBlockedUsers`, `BlockedUser` interface)
+- `src/modules/mod-localization-theme/screens/BlockedAccountsScreen.tsx` (new)
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+
 ### Bugfix — 2026-09-30
 
 **Bug 1 — Settings back button not visible**

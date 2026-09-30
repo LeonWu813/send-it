@@ -9,6 +9,8 @@
  *                                                the current user has blocked or is
  *                                                blocked by (both directions, AC-084)
  *   isBlocked(userId)                          — returns boolean
+ *   fetchMyBlockedUsers()                      — returns BlockedUser[] of users the
+ *                                                current user has blocked (AC-155)
  *
  * Rules:
  * - Uses the shared Supabase singleton from src/lib/supabase.ts.
@@ -173,4 +175,54 @@ export async function fetchBlockedUserIds(): Promise<Set<string>> {
 export async function isBlocked(userId: string): Promise<boolean> {
   const blockedIds = await fetchBlockedUserIds();
   return blockedIds.has(userId);
+}
+
+// ── Blocked users list ────────────────────────────────────────────────────────
+
+/**
+ * A user that the current user has blocked (AC-155).
+ */
+export interface BlockedUser {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/**
+ * Fetch the list of users that the current user has explicitly blocked (AC-155).
+ *
+ * Queries the `blocks` table joined with `users` where
+ * `blocker_user_id = auth.uid()`, ordered by `created_at DESC`.
+ *
+ * @returns  Array of BlockedUser sorted newest-block-first. Returns [] when
+ *           the user has no blocks.
+ * @throws {Error} with a user-facing message on failure.
+ */
+export async function fetchMyBlockedUsers(): Promise<BlockedUser[]> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentUserId = sessionData?.session?.user?.id;
+  if (!currentUserId) return [];
+
+  const { data, error } = await supabase
+    .from('blocks')
+    .select('blocked_user_id, users!blocks_blocked_user_id_fkey(id, display_name, avatar_url)')
+    .eq('blocker_user_id', currentUserId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error('Failed to load blocked accounts. Please try again.');
+  }
+
+  return (data ?? []).map((row) => {
+    const u = row.users as unknown as {
+      id: string;
+      display_name: string;
+      avatar_url: string | null;
+    } | null;
+    return {
+      userId: u?.id ?? (row.blocked_user_id as string),
+      displayName: u?.display_name ?? '',
+      avatarUrl: u?.avatar_url ?? null,
+    };
+  });
 }

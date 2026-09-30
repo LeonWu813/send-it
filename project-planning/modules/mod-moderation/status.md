@@ -2,6 +2,17 @@
 
 ## Engineering Progress
 
+### AC-155 — 2026-09-30
+
+**fetchMyBlockedUsers() added to moderation-service.ts**
+
+- [pass] `BlockedUser` interface exported: `{ userId: string; displayName: string; avatarUrl: string | null }`
+- [pass] `fetchMyBlockedUsers()` queries `blocks` joined with `users!blocks_blocked_user_id_fkey(id, display_name, avatar_url)` where `blocker_user_id = currentUserId`, ordered `created_at DESC`
+- [pass] Returns `[]` if unauthenticated or no rows; throws user-facing error on Supabase failure
+- [pass] Follows existing service patterns (same `supabase.auth.getSession()` pattern as all other functions)
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] `npm test -- --watchAll=false` — 422 tests passed (31 suites), 0 failures
+
 **Status**: Complete
 **Date**: 2026-09-29
 

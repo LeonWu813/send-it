@@ -61,6 +61,7 @@
   "settings": {
     "title": "設定",
     "back": "返回",
+    "blockedAccounts": "已封鎖的帳號",
     "language": {
       "title": "語言",
       "en": "English",
@@ -374,6 +375,8 @@
     "reportUser": "檢舉用戶",
     "blockUser": "封鎖用戶",
     "unblockUser": "解除封鎖",
+    "unblock": "解除封鎖",
+    "noBlockedAccounts": "沒有已封鎖的帳號",
     "sheetReport": "檢舉",
     "sheetBlock": "封鎖",
     "sheetUnblock": "解除封鎖",

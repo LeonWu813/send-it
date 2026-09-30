@@ -61,6 +61,7 @@
   "settings": {
     "title": "Settings",
     "back": "Back",
+    "blockedAccounts": "Blocked Accounts",
     "language": {
       "title": "Language",
       "en": "English",
@@ -374,6 +375,8 @@
     "reportUser": "Report User",
     "blockUser": "Block User",
     "unblockUser": "Unblock User",
+    "unblock": "Unblock",
+    "noBlockedAccounts": "No blocked accounts",
     "sheetReport": "Report",
     "sheetBlock": "Block",
     "sheetUnblock": "Unblock",

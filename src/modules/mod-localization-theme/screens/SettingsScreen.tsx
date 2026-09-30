@@ -45,12 +45,16 @@ import {
   saveLanguage,
   saveThemeOverride,
 } from '../settings-storage';
+import BlockedAccountsScreen from './BlockedAccountsScreen';
 
 export interface SettingsScreenProps {
   onBack: () => void;
 }
 
+type SettingsView = 'settings' | 'blockedAccounts';
+
 export default function SettingsScreen({ onBack }: SettingsScreenProps): React.JSX.Element {
+  const [view, setView] = useState<SettingsView>('settings');
   const { t } = useTranslation('common');
   const { theme, override, setOverride } = useTheme();
   const insets = useSafeAreaInsets();
@@ -108,6 +112,11 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
     { value: 'light', label: t('settings.appearance.light') },
     { value: 'dark', label: t('settings.appearance.dark') },
   ];
+
+  // Sub-screen: Blocked Accounts (AC-155)
+  if (view === 'blockedAccounts') {
+    return <BlockedAccountsScreen onBack={() => { setView('settings'); }} />;
+  }
 
   return (
     <View style={styles.root}>
@@ -189,6 +198,24 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
                 </Pressable>
               );
             })}
+          </View>
+        </View>
+
+        {/* Blocked Accounts navigation row (AC-155) */}
+        <View style={styles.section}>
+          <View style={styles.optionGroup}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.optionRow,
+                pressed && styles.optionRowPressed,
+              ]}
+              onPress={() => { setView('blockedAccounts'); }}
+              accessibilityRole="button"
+              accessibilityLabel={t('settings.blockedAccounts')}
+            >
+              <Text style={styles.optionLabel}>{t('settings.blockedAccounts')}</Text>
+              <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+            </Pressable>
           </View>
         </View>
       </ScrollView>
