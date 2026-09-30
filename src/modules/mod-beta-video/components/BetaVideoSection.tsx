@@ -101,6 +101,12 @@ interface BetaVideoSectionProps {
    * route detail screen (tap becomes a no-op).
    */
   onNavigateToRoute?: (routeId: string) => void;
+  /**
+   * AC-135 (revised): Called when the user taps Row 1 (avatar or display_name)
+   * in the reel viewer. Receives the user_id of the poster.
+   * Passed through to BetaVideoReelViewer unchanged.
+   */
+  onNavigateToUser?: (userId: string) => void;
 }
 
 export default function BetaVideoSection({
@@ -110,6 +116,7 @@ export default function BetaVideoSection({
   routeName,
   gymName,
   onNavigateToRoute,
+  onNavigateToUser,
 }: BetaVideoSectionProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -351,6 +358,7 @@ export default function BetaVideoSection({
         routeName={routeName}
         gymName={gymName}
         onNavigateToRoute={onNavigateToRoute}
+        onNavigateToUser={onNavigateToUser}
       />
     </View>
   );

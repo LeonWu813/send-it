@@ -82,6 +82,12 @@ interface RouteDetailScreenProps {
   onBack: () => void;
   /** AC-128: navigates to the Send History Detail screen for this route. */
   onViewSendHistory: (routeId: string) => void;
+  /**
+   * AC-135 (revised): Called when the user taps Row 1 of the reel viewer.
+   * Receives the user_id of the video poster. Threaded through to BetaVideoSection
+   * and then to BetaVideoReelViewer.
+   */
+  onNavigateToUser?: (userId: string) => void;
 }
 
 export default function RouteDetailScreen({
@@ -90,6 +96,7 @@ export default function RouteDetailScreen({
   session,
   onBack,
   onViewSendHistory,
+  onNavigateToUser,
 }: RouteDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -438,6 +445,7 @@ export default function RouteDetailScreen({
         onRegisterUploadLauncher={handleRegisterUploadLauncher}
         routeName={routeName}
         gymName={gymName}
+        onNavigateToUser={onNavigateToUser}
       />
 
       {/* ── AC-126: Added date footer ─────────────────────────────────────── */}

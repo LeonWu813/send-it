@@ -7,7 +7,7 @@
  *
  * AC-133: Persistent top-left close button — never unmounts or loses tap target.
  * AC-134: Bottom-left poster-identity overlay (avatar + display_name + route/gym info).
- * AC-135: Tapping poster row is a no-op in Phase 1.
+ * AC-135 (revised): Tapping Row 1 (avatar or display_name) calls onNavigateToUser then onDismiss.
  * AC-137: Marquee animation for overflowing text (pure-JS Animated translateX).
  * AC-138: Right sidebar — like icon (placeholder) + report icon.
  * AC-139: Report icon hidden for own videos and admin-dismissed videos.
@@ -121,6 +121,13 @@ export interface BetaVideoReelViewerProps {
    * when the user is already on the route detail screen — tap is a no-op.
    */
   onNavigateToRoute?: (routeId: string) => void;
+  /**
+   * AC-135 (revised): Called when the user taps Row 1 (avatar or display_name).
+   * Receives the user_id of the current video's poster.
+   * The viewer calls this then onDismiss(). Optional — if omitted, tap is a no-op.
+   * MOD-005 must NOT import any profile screen directly; the callback is the only coupling.
+   */
+  onNavigateToUser?: (userId: string) => void;
 }
 
 // ── MarqueeText — pure-JS translateX marquee for overflowing text (AC-137) ────
@@ -257,6 +264,7 @@ export default function BetaVideoReelViewer({
   routeName,
   gymName,
   onNavigateToRoute,
+  onNavigateToUser,
 }: BetaVideoReelViewerProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
@@ -505,6 +513,17 @@ export default function BetaVideoReelViewer({
 
   const currentVideo = videos[currentIndex];
 
+  /**
+   * AC-135 (revised): tapping Row 1 (avatar or display_name) navigates to the
+   * poster's profile and dismisses the viewer. The callback is optional — if
+   * onNavigateToUser is not provided, the tap is a no-op.
+   */
+  const handleNavigateToUser = useCallback((): void => {
+    if (!currentVideo || !onNavigateToUser) return;
+    onNavigateToUser(currentVideo.user_id);
+    handleDismiss();
+  }, [currentVideo, onNavigateToUser, handleDismiss]);
+
   // ── Report icon visibility (AC-139) ──────────────────────────────────────
   // Hide when: own video OR admin has dismissed the report for this video.
   const isOwnVideo = currentVideo ? currentVideo.user_id === session.user.id : true;
@@ -624,8 +643,21 @@ export default function BetaVideoReelViewer({
                 {/* Left column: poster identity (AC-134) */}
                 <View style={styles.infoColumn}>
 
-                  {/* Row 1: avatar + display_name (AC-135: no-op tap in Phase 1) */}
-                  <View style={styles.posterRow}>
+                  {/*
+                   * Row 1: avatar + display_name (AC-135 revised).
+                   * Tapping navigates to the poster's profile via onNavigateToUser,
+                   * then dismisses the viewer. If onNavigateToUser is not provided,
+                   * the Pressable is still rendered but the handler is a no-op.
+                   */}
+                  <Pressable
+                    style={styles.posterRow}
+                    onPress={handleNavigateToUser}
+                    accessibilityRole={onNavigateToUser ? 'button' : 'text'}
+                    accessibilityLabel={
+                      currentVideo.display_name ?? t('betaVideo.reel.anonymous')
+                    }
+                    testID="reel-poster-row"
+                  >
                     <PosterAvatar
                       avatarUrl={currentVideo.avatar_url}
                       displayName={currentVideo.display_name}
@@ -634,7 +666,7 @@ export default function BetaVideoReelViewer({
                     <Text style={styles.displayName} numberOfLines={1} testID="reel-poster-name">
                       {currentVideo.display_name ?? t('betaVideo.reel.anonymous')}
                     </Text>
-                  </View>
+                  </Pressable>
 
                   {/*
                    * AC-134 / AC-136: Row 2 — "{routeName} · {gymName}".

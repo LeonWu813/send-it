@@ -63,6 +63,11 @@ interface GymNavigatorProps {
    */
   gymDeepLinkId?: string;
   routeNavKey?: number;
+  /**
+   * AC-135 (revised): Called when the user taps Row 1 of the reel viewer.
+   * Receives the user_id of the video poster. Threaded through to RouteNavigator.
+   */
+  onNavigateToUser?: (userId: string) => void;
 }
 
 export default function GymNavigator({
@@ -72,6 +77,7 @@ export default function GymNavigator({
   routeDeepLinkId,
   gymDeepLinkId,
   routeNavKey,
+  onNavigateToUser,
 }: GymNavigatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
@@ -146,6 +152,7 @@ export default function GymNavigator({
           gymName={view.gymName}
           session={session}
           onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}
+          onNavigateToUser={onNavigateToUser}
         />
       )}
       {view.name === 'route-direct' && (
@@ -156,6 +163,7 @@ export default function GymNavigator({
           onBackToGym={navigateToList}
           initialRouteId={view.routeId}
           routeNavKey={view.routeNavKey}
+          onNavigateToUser={onNavigateToUser}
         />
       )}
     </View>

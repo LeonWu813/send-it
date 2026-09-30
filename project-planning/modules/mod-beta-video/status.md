@@ -2,6 +2,41 @@
 
 ## Engineering Progress
 
+**Status**: Feature implementation — 2026-09-30 (AC-135 revised, AC-144 — poster profile navigation)
+
+### Feature — Rev 18: onNavigateToUser callback prop for poster Row 1 tap (AC-135, AC-144) — 2026-09-30
+
+**ACs implemented**:
+
+- **AC-135 (revised)**: Row 1 of the reel viewer (avatar + display_name `Pressable`) now calls `onNavigateToUser(currentVideo.user_id)` then `handleDismiss()` when tapped. If `onNavigateToUser` is not provided the tap is a no-op (no crash). `BetaVideoReelViewer` does NOT import any profile screen — the callback is the only coupling.
+- **AC-144 (revised)**: Confirmed `user_id` is already selected in `fetchBetaVideosForRoute` and already typed on `BetaVideo`. No schema change, no migration, no service-query change needed. The only real work was wiring `currentVideo.user_id` to the new callback as described in AC-135.
+
+**Implementation**:
+
+New optional prop `onNavigateToUser?: (userId: string) => void` added to `BetaVideoReelViewerProps`, parallel to the existing `onNavigateToRoute` prop. The `handleNavigateToUser` callback is declared after `currentVideo` (so it has access to `currentVideo.user_id`) and calls `onNavigateToUser(currentVideo.user_id)` then `handleDismiss()`.
+
+The callback is threaded down the full mount chain:
+- `AppShell` wires `onNavigateToUser={handleSelectClimber}` — reusing the existing AC-123 action (`setTargetUserId(userId)`) that opens `UserProfileScreen` as a modal overlay. No new mechanism invented.
+- `AppShell` → `GymNavigator` (both `routes` and `route-direct` `RouteNavigator` render sites)
+- `GymNavigator` → `RouteNavigator`
+- `RouteNavigator` → `RouteDetailScreen`
+- `RouteDetailScreen` → `BetaVideoSection`
+- `BetaVideoSection` → `BetaVideoReelViewer`
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- Git scope: `BetaVideoReelViewer.tsx`, `BetaVideoSection.tsx`, `RouteDetailScreen.tsx`, `RouteNavigator.tsx`, `GymNavigator.tsx`, `AppShell.tsx` modified. No new files. No migrations.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — added `onNavigateToUser` prop, `handleNavigateToUser` callback, Row 1 `Pressable` wrapper
+- `src/modules/mod-beta-video/components/BetaVideoSection.tsx` — added `onNavigateToUser` prop, threaded to `BetaVideoReelViewer`
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — added `onNavigateToUser` prop, threaded to `BetaVideoSection`
+- `src/modules/mod-route-catalog/RouteNavigator.tsx` — added `onNavigateToUser` prop, threaded to `RouteDetailScreen`
+- `src/modules/mod-gym-directory/GymNavigator.tsx` — added `onNavigateToUser` prop, threaded to both `RouteNavigator` renders
+- `src/modules/mod-home/AppShell.tsx` — wired `onNavigateToUser={handleSelectClimber}` on `GymNavigator`
+
+---
+
 **Status**: Bug fix — 2026-09-28 (reel viewer — chevron touch, bottom overlap, swipe animation)
 
 ### Bug Fix — Reel viewer: chevron non-responsive, bottom overlap, swipe animation — 2026-09-28

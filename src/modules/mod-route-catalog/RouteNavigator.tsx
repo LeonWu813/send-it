@@ -47,6 +47,11 @@ interface RouteNavigatorProps {
   initialRouteId?: string;
   /** Increment to re-trigger the deep-link navigation even for the same route. */
   routeNavKey?: number;
+  /**
+   * AC-135 (revised): Called when the user taps Row 1 of the reel viewer.
+   * Receives the user_id of the video poster. Threaded through to RouteDetailScreen.
+   */
+  onNavigateToUser?: (userId: string) => void;
 }
 
 export default function RouteNavigator({
@@ -56,6 +61,7 @@ export default function RouteNavigator({
   onBackToGym,
   initialRouteId,
   routeNavKey,
+  onNavigateToUser,
 }: RouteNavigatorProps): React.JSX.Element {
   const { theme } = useTheme();
   const styles = makeStyles(theme);
@@ -121,6 +127,7 @@ export default function RouteNavigator({
           session={session}
           onBack={navigateToList}
           onViewSendHistory={navigateToSendHistory}
+          onNavigateToUser={onNavigateToUser}
         />
       )}
       {view.name === 'submit' && (

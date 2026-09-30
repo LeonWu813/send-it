@@ -150,6 +150,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             routeDeepLinkId={routeDeepLinkId}
             gymDeepLinkId={gymDeepLinkId}
             routeNavKey={routeNavKey}
+            onNavigateToUser={handleSelectClimber}
           />
         </View>
 
@@ -159,6 +160,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             session={session}
             isActive={activeTab === 'profile'}
             onNavigateToRoute={handleNavigateToRoute}
+            onNavigateToUser={handleSelectClimber}
           />
         </View>
       </View>
