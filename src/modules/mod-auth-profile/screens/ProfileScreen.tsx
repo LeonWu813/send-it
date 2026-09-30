@@ -43,6 +43,8 @@ interface ProfileScreenProps {
   onNavigateEditProfile: () => void;
   /** Callback to navigate to the Settings screen (AC-091, AC-092). */
   onNavigateSettings?: () => void;
+  /** Callback to navigate to the Notifications inbox (AC-058). */
+  onNavigateNotifications?: () => void;
   /** True when the Profile tab is the active tab. Used to trigger refetch on
    *  tab focus (AC-062) — the keep-alive pattern means the component never
    *  remounts on tab switch, so we increment refetchKey when isActive flips
@@ -60,6 +62,7 @@ export default function ProfileScreen({
   session: _session,
   onNavigateEditProfile,
   onNavigateSettings,
+  onNavigateNotifications,
   isActive = false,
   onNavigateToRoute,
 }: ProfileScreenProps): React.JSX.Element {
@@ -100,6 +103,21 @@ export default function ProfileScreen({
   // the FlatList rather than requiring a wrapping ScrollView.
   const profileHeader = (
     <View style={styles.headerContainer}>
+      {/* Notifications bell icon (top-left, AC-058) */}
+      {onNavigateNotifications ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.notificationsButton,
+            pressed && styles.notificationsButtonPressed,
+          ]}
+          onPress={onNavigateNotifications}
+          accessibilityRole="button"
+          accessibilityLabel={t('notifications.title')}
+        >
+          <Ionicons name="notifications-outline" size={24} color={theme.colors.textSecondary} />
+        </Pressable>
+      ) : null}
+
       {/* Settings gear icon (top-right) */}
       {onNavigateSettings ? (
         <Pressable
@@ -216,6 +234,20 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: topInset + theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.md,
+    },
+    notificationsButton: {
+      position: 'absolute',
+      top: topInset + theme.spacing.md,
+      left: theme.spacing.md,
+      width: 40,
+      height: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: theme.borderRadius.full,
+      zIndex: 1,
+    },
+    notificationsButtonPressed: {
+      backgroundColor: theme.colors.surface,
     },
     settingsButton: {
       position: 'absolute',

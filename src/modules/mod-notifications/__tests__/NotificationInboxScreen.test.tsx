@@ -13,20 +13,28 @@ jest.mock('../../../lib/supabase', () => ({
 
 jest.mock('../notification-service', () => ({
   fetchNotifications: jest.fn(),
+  fetchRouteForBetaVideo: jest.fn(),
   markNotificationsRead: jest.fn(),
 }));
 
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 import React from 'react';
 
-import { fetchNotifications, markNotificationsRead } from '../notification-service';
+import {
+  fetchNotifications,
+  fetchRouteForBetaVideo,
+  markNotificationsRead,
+} from '../notification-service';
 import NotificationInboxScreen from '../screens/NotificationInboxScreen';
 import { renderOptions } from '../test-utils';
 import type { Notification } from '../types';
 
 const mockFetchNotifications = fetchNotifications as jest.MockedFunction<
   typeof fetchNotifications
+>;
+const mockFetchRouteForBetaVideo = fetchRouteForBetaVideo as jest.MockedFunction<
+  typeof fetchRouteForBetaVideo
 >;
 const mockMarkNotificationsRead = markNotificationsRead as jest.MockedFunction<
   typeof markNotificationsRead
@@ -170,5 +178,60 @@ describe('NotificationInboxScreen', () => {
     );
 
     expect(mockFetchNotifications).not.toHaveBeenCalled();
+  });
+
+  it('calls onNavigateToRoute with routeId and gymId when tapping a beta_video_like notification', async () => {
+    mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
+    mockFetchRouteForBetaVideo.mockResolvedValueOnce({
+      routeId: 'route-001',
+      gymId: 'gym-001',
+    });
+    const mockOnNavigateToRoute = jest.fn();
+
+    render(
+      <NotificationInboxScreen
+        session={MOCK_SESSION}
+        onNavigateToRoute={mockOnNavigateToRoute}
+      />,
+      renderOptions(),
+    );
+
+    // Wait for the row to appear
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+
+    // Tap the notification row (first Pressable with accessibilityRole="button")
+    fireEvent.press(screen.getAllByRole('button')[0]);
+
+    await waitFor(() => {
+      expect(mockFetchRouteForBetaVideo).toHaveBeenCalledWith('video-001');
+      expect(mockOnNavigateToRoute).toHaveBeenCalledWith('route-001', 'gym-001');
+    });
+  });
+
+  it('does not call onNavigateToRoute when fetchRouteForBetaVideo returns null', async () => {
+    mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
+    mockFetchRouteForBetaVideo.mockResolvedValueOnce(null);
+    const mockOnNavigateToRoute = jest.fn();
+
+    render(
+      <NotificationInboxScreen
+        session={MOCK_SESSION}
+        onNavigateToRoute={mockOnNavigateToRoute}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+
+    fireEvent.press(screen.getAllByRole('button')[0]);
+
+    await waitFor(() => {
+      expect(mockFetchRouteForBetaVideo).toHaveBeenCalledWith('video-001');
+    });
+    expect(mockOnNavigateToRoute).not.toHaveBeenCalled();
   });
 });

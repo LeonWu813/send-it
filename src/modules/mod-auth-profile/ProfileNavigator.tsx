@@ -22,12 +22,13 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useState } from 'react';
 
+import NotificationsNavigator from '../mod-notifications/NotificationsNavigator';
 import SettingsScreen from '../mod-localization-theme/screens/SettingsScreen';
 import { useSession } from './hooks/useSession';
 import EditProfileScreen from './screens/EditProfileScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
-type ProfileView = 'profile' | 'editProfile' | 'settings';
+type ProfileView = 'profile' | 'editProfile' | 'settings' | 'notifications';
 
 interface ProfileNavigatorProps {
   /** The active Supabase session, threaded from AppShell. */
@@ -68,12 +69,23 @@ export default function ProfileNavigator({
     return <SettingsScreen onBack={() => setView('profile')} />;
   }
 
+  if (view === 'notifications') {
+    return (
+      <NotificationsNavigator
+        session={session}
+        isActive={isActive}
+        onNavigateToRoute={onNavigateToRoute}
+      />
+    );
+  }
+
   return (
     <ProfileScreen
       session={session}
       isActive={isActive}
       onNavigateEditProfile={() => setView('editProfile')}
       onNavigateSettings={() => setView('settings')}
+      onNavigateNotifications={() => setView('notifications')}
       onNavigateToRoute={onNavigateToRoute}
     />
   );

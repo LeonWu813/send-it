@@ -12,6 +12,8 @@
  *       — load the user's beta_video_like preference (AC-057)
  *   updateNotificationPreference(betaVideoLike)
  *       — update the beta_video_like toggle (AC-057)
+ *   fetchRouteForBetaVideo(betaVideoId)
+ *       — resolve a beta video's route and gym context for inbox tap-through (AC-058)
  *
  * Rules:
  * - Uses the shared Supabase singleton from src/lib/supabase.ts.
@@ -145,6 +147,39 @@ export async function markNotificationsRead(): Promise<void> {
   if (error) {
     throw new Error('Failed to mark notifications as read. Please try again.');
   }
+}
+
+// ── Route Resolution for Tap-Through (AC-058) ─────────────────────────────────
+
+/**
+ * Fetch the route_id and gym_id for a given beta video id.
+ * Used by the notification inbox tap handler (AC-058).
+ *
+ * Resolves Notification.target_id (BetaVideo.id) → route_id + gym_id so the
+ * caller can invoke AppShell.handleNavigateToRoute to open the route detail
+ * screen in the Gyms tab.
+ *
+ * @param betaVideoId  UUID of the BetaVideo that was liked (Notification.target_id).
+ * @returns            { routeId, gymId } if the video exists and has a route; null otherwise.
+ */
+export async function fetchRouteForBetaVideo(
+  betaVideoId: string,
+): Promise<{ routeId: string; gymId: string } | null> {
+  const { data, error } = await supabase
+    .from('beta_videos')
+    .select('route_id, routes(gym_id)')
+    .eq('id', betaVideoId)
+    .single();
+
+  if (error || !data) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const row = data as any;
+  const routeId = row.route_id as string | null;
+  const gymId = row.routes?.gym_id as string | null;
+
+  if (!routeId || !gymId) return null;
+  return { routeId, gymId };
 }
 
 // ── Notification Preferences (AC-057) ────────────────────────────────────────

@@ -35,6 +35,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
 import {
   fetchNotifications,
+  fetchRouteForBetaVideo,
   markNotificationsRead,
 } from '../notification-service';
 import type { Notification } from '../types';
@@ -44,6 +45,12 @@ import type { Notification } from '../types';
 interface NotificationInboxScreenProps {
   session: Session;
   isActive?: boolean;
+  /**
+   * Callback invoked when the user taps a beta-video-like notification entry.
+   * Resolves the notification's target_id to the route and gym, then delegates
+   * to AppShell.handleNavigateToRoute to open the route detail screen (AC-058).
+   */
+  onNavigateToRoute?: (routeId: string, gymId: string) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -51,6 +58,7 @@ interface NotificationInboxScreenProps {
 export default function NotificationInboxScreen({
   session: _session,
   isActive = true,
+  onNavigateToRoute,
 }: NotificationInboxScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -88,6 +96,26 @@ export default function NotificationInboxScreen({
     setRefreshing(true);
     await loadNotifications().finally(() => setRefreshing(false));
   }, [loadNotifications]);
+
+  // ── Tap-through handler (AC-058) ────────────────────────────────────────────
+
+  /**
+   * Handle tap on a notification row.
+   * For beta_video_like notifications: resolve target_id (BetaVideo.id) to
+   * route_id + gym_id via fetchRouteForBetaVideo, then invoke onNavigateToRoute
+   * so AppShell switches to the Gyms tab and opens the route detail screen.
+   */
+  const handleNotificationPress = useCallback(
+    async (notification: Notification): Promise<void> => {
+      if (notification.type === 'beta_video_like' && notification.target_id) {
+        const result = await fetchRouteForBetaVideo(notification.target_id);
+        if (result) {
+          onNavigateToRoute?.(result.routeId, result.gymId);
+        }
+      }
+    },
+    [onNavigateToRoute],
+  );
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -136,7 +164,14 @@ export default function NotificationInboxScreen({
 
       {/* Notification list */}
       {notifications.map((item) => (
-        <NotificationRow key={item.id} item={item} styles={styles} theme={theme} t={t} />
+        <NotificationRow
+          key={item.id}
+          item={item}
+          styles={styles}
+          theme={theme}
+          t={t}
+          onPress={handleNotificationPress}
+        />
       ))}
     </ScrollView>
   );
@@ -147,18 +182,16 @@ export default function NotificationInboxScreen({
 /**
  * Renders one notification inbox entry.
  *
- * AC-058 tap-through note:
- *   Tapping an entry should navigate to the liked beta video on its route detail
- *   screen (resolving Notification.target_id → route_id → MOD-003 RouteDetailScreen).
- *   This navigation contract is flagged as a Phase 1 blocker — it requires cross-module
- *   navigation to MOD-003/MOD-005 (see status.md Engineering Progress). The row is
- *   rendered but tap is a no-op in Phase 1.
+ * AC-058: tapping a beta_video_like entry resolves target_id (BetaVideo.id)
+ * to route_id + gym_id via fetchRouteForBetaVideo, then calls onPress so
+ * AppShell can switch to the Gyms tab and open the route detail screen.
  */
 interface NotificationRowProps {
   item: Notification;
   styles: ReturnType<typeof makeStyles>;
   theme: ReturnType<typeof useTheme>['theme'];
   t: (key: string) => string;
+  onPress: (notification: Notification) => Promise<void>;
 }
 
 function NotificationRow({
@@ -166,13 +199,15 @@ function NotificationRow({
   styles,
   theme,
   t,
+  onPress,
 }: NotificationRowProps): React.JSX.Element {
   const actorName = item.actor_display_name ?? t('notifications.unknownActor');
 
   return (
-    <View
+    <Pressable
       style={[styles.notificationRow, !item.is_read && styles.notificationRowUnread]}
-      accessibilityRole="text"
+      onPress={() => void onPress(item)}
+      accessibilityRole="button"
       accessibilityLabel={t('notifications.betaVideoLikeA11y')}
     >
       {/* Unread indicator dot */}
@@ -216,7 +251,7 @@ function NotificationRow({
           {t('notifications.badgeBetaVideoLike')}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 

@@ -21,6 +21,7 @@ import { supabase } from '../../../lib/supabase';
 import {
   fetchNotificationPreference,
   fetchNotifications,
+  fetchRouteForBetaVideo,
   markNotificationsRead,
   registerDeviceToken,
   updateNotificationPreference,
@@ -269,6 +270,71 @@ describe('fetchNotificationPreference', () => {
     await expect(fetchNotificationPreference()).rejects.toThrow(
       'Failed to load notification preferences. Please try again.',
     );
+  });
+});
+
+// ── fetchRouteForBetaVideo ────────────────────────────────────────────────────
+
+describe('fetchRouteForBetaVideo', () => {
+  beforeEach(() => jest.resetAllMocks());
+
+  it('returns routeId and gymId when the video exists with a route', async () => {
+    const mockData = {
+      route_id: 'route-001',
+      routes: { gym_id: 'gym-001' },
+    };
+    const qb = makeQueryBuilder({ data: mockData, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchRouteForBetaVideo('video-001');
+
+    expect(result).toEqual({ routeId: 'route-001', gymId: 'gym-001' });
+    expect(mockFrom).toHaveBeenCalledWith('beta_videos');
+    expect(qb.eq).toHaveBeenCalledWith('id', 'video-001');
+  });
+
+  it('returns null when the query returns an error', async () => {
+    const qb = makeQueryBuilder({ data: null, error: { code: 'PGRST116' } });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchRouteForBetaVideo('video-missing');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when data is null', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchRouteForBetaVideo('video-001');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when route_id is null (video has no route)', async () => {
+    const mockData = {
+      route_id: null,
+      routes: null,
+    };
+    const qb = makeQueryBuilder({ data: mockData, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchRouteForBetaVideo('video-orphan');
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when gym_id is null (route has no gym)', async () => {
+    const mockData = {
+      route_id: 'route-001',
+      routes: { gym_id: null },
+    };
+    const qb = makeQueryBuilder({ data: mockData, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchRouteForBetaVideo('video-orphan');
+
+    expect(result).toBeNull();
   });
 });
 

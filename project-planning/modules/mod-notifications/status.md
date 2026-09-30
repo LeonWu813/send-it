@@ -2,6 +2,38 @@
 
 ## Engineering Progress
 
+**AC-058 bugfix: complete — 2026-09-29**
+
+### AC-058 Fix Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npx jest --passWithNoTests` | PASS | 412 tests pass (7 new tests added for AC-058) |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| AC-058 requirement implemented | PASS | Tapping a beta_video_like inbox row resolves target_id → routeId + gymId via `fetchRouteForBetaVideo`, then calls `onNavigateToRoute` which switches to the Gyms tab and opens the route detail screen via `AppShell.handleNavigateToRoute` |
+| No hardcoded values | PASS | No hardcoded IDs or URLs |
+| Coding conventions followed | PASS | `useCallback` for tap handler, optional chaining for `onNavigateToRoute?.()`, `// eslint-disable-next-line` comment on necessary `any` cast |
+| No new dependencies | PASS | No new packages; uses existing Supabase singleton |
+| Cross-module import rules | PASS | `NotificationsNavigator` imported in `ProfileNavigator` as a public entry-point component (allowed by production.md Cross-Module Imports convention) |
+| Tests cover tap-through behavior | PASS | Two new tests in `NotificationInboxScreen.test.tsx`: tap resolves route and calls handler; tap with null resolve does not call handler. Five new tests in `notification-service.test.ts` cover `fetchRouteForBetaVideo` happy path and all null/error edge cases |
+
+### Files Modified for AC-058
+
+- `src/modules/mod-notifications/notification-service.ts` — added `fetchRouteForBetaVideo`
+- `src/modules/mod-notifications/screens/NotificationInboxScreen.tsx` — added `onNavigateToRoute` prop + `handleNotificationPress` tap handler; `NotificationRow` changed from `View` to `Pressable`
+- `src/modules/mod-notifications/NotificationsNavigator.tsx` — added `onNavigateToRoute` prop and threaded to `NotificationInboxScreen`
+- `src/modules/mod-auth-profile/ProfileNavigator.tsx` — added `'notifications'` view state; mounts `NotificationsNavigator` with `onNavigateToRoute` prop; passes `onNavigateNotifications` to `ProfileScreen`
+- `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` — added `onNavigateNotifications` prop; renders notification bell icon (top-left) that opens inbox
+- `src/modules/mod-notifications/__tests__/notification-service.test.ts` — 5 new tests for `fetchRouteForBetaVideo`
+- `src/modules/mod-notifications/__tests__/NotificationInboxScreen.test.tsx` — 2 new tests for tap-through behavior
+
 **Implementation: complete — 2026-09-24**
 
 ### Self-Check Results
