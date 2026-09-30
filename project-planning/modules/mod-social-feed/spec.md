@@ -4,7 +4,7 @@
 **Module Name**: Social Graph & Feed
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-004, MOD-005, MOD-008
-**Last Synced from PRD Revision**: 18
+**Last Synced from PRD Revision**: 19
 **Last Updated**: 2026-09-30
 
 ---
@@ -19,7 +19,7 @@ Handle follow/unfollow, the chronological activity feed of sends and beta videos
 
 Climbers connected to the local Taiwan scene want to follow friends and strong local climbers and see their sends and beta videos in a single chronological feed. The activity feed composes three intersecting filters: (1) only activity from users the current user follows (`Follow`), (2) excluding any users in a symmetric block relationship (`Block` — see MOD-009), and (3) respecting the `followers_only` privacy setting from MOD-001. This composition is too complex and too expensive to implement purely in RLS row-by-row filtering at scale. **The activity feed must be served by a `SECURITY INVOKER` Postgres RPC** that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy — this is a hard requirement, not a recommendation. RLS remains the security fence; the RPC performs the composition. Raw client-side table `SELECT` is not permitted for the feed query. In addition to the feed, this module owns the like reaction on beta videos (one like per user per video, idempotent) and the follow/unfollow actions.
 
-For US-022, this module also owns the Followers list screen (AC-146) and Following list screen (AC-147): scrollable lists of users who follow or are followed by the viewed profile, each entry showing a user card (circular avatar, `display_name`, total sends count, highest grade). Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064). Per-card sends count and highest grade are sourced from MOD-008's profile-stats public service (`fetchProfileStats(userId)` — the `get_profile_stats` RPC wrapper), fetched per-card on list render. Blocked users are excluded (AC-082, AC-084).
+For US-022, this module also owns the Followers list screen (AC-146) and Following list screen (AC-147): scrollable lists of users who follow or are followed by the viewed profile, each entry showing a user card with the user's circular avatar and `display_name` only. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064). Blocked users are excluded (AC-082, AC-084). Per-card sends count and highest grade are not displayed on the list cards; aggregate profile stats are surfaced on the other-user profile screen instead (AC-149).
 
 **Non-goals for this module:**
 - Comments on sends or beta videos (out of scope for Phase 1).
@@ -40,7 +40,7 @@ For US-022, this module also owns the Followers list screen (AC-146) and Followi
 
 **US-008 Acceptance Criteria**: AC-052, AC-053
 
-**US-022 Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148
+**US-022 Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148, AC-149
 
 ---
 
@@ -56,11 +56,13 @@ For US-022, this module also owns the Followers list screen (AC-146) and Followi
 
 > **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006.
 
-**AC-146** (new): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar, `display_name`, total sends count (ascents where `style` ∈ {flash, top}), and highest grade achieved. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
+**AC-146** (revised): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar and `display_name` only — no per-card sends count or highest grade is displayed. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
 
-**AC-147** (new): The system shall provide a Following list screen with the same card layout as the Followers list screen (AC-146), listing all users the profile owner follows. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to privacy (AC-063). Blocked users are excluded.
+**AC-147** (revised): The system shall provide a Following list screen with the same card layout as the Followers list screen (AC-146) — circular avatar and `display_name` only, no per-card sends count or highest grade — listing all users the profile owner follows. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to privacy (AC-063). Blocked users are excluded.
 
-**AC-148** (new): Per-card sends count and highest grade on the Followers and Following list screens (AC-146, AC-147) shall be sourced from MOD-008's profile-stats public service (`get_profile_stats` RPC), not from a direct `ascents` table query in MOD-006. Fetching is per-card on list render (acceptable for Phase 1 list sizes).
+**AC-148** (revised): The Followers and Following list cards (AC-146, AC-147) shall display the user's avatar and `display_name` only. Per-card sends count and highest grade are removed from the cards, and no per-card profile-stats fetch (`fetchProfileStats` / the `get_profile_stats` RPC) is made on list render. Aggregate profile stats are surfaced on the other-user profile screen instead (AC-149), not on the list cards.
+
+**AC-149** (new): The other-user profile screen (`UserProfileScreen`, the profile overlay reached via `handleSelectClimber`) shall display, immediately after the follow/unfollow button, a stats section sourced from MOD-008's profile-stats public service (`fetchProfileStats(targetUserId)` from `mod-profile-history/history-service`). The section shall show the target user's total sends, accumulated days, highest grade, and a grade bar chart. This section shall not render any route cards. This is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state per AC-064 rather than the stats section.
 
 ---
 
@@ -68,7 +70,7 @@ For US-022, this module also owns the Followers list screen (AC-146) and Followi
 
 **Coordinated change with MOD-005 (Rev 16)**: The `get_activity_feed` RPC's `video_items` CTE must add a `WHERE` clause to exclude reported-and-not-dismissed beta videos from the feed (AC-141). This change ships in a MOD-006 migration ordered after the MOD-005 migration that adds the `is_reported` and `report_dismissed` columns.
 
-**MOD-008 profile-stats dependency (AC-148)**: Per-card sends count and highest grade on the Followers and Following list screens are sourced from MOD-008's `fetchProfileStats(userId)` public service wrapper (`get_profile_stats` RPC). MOD-006 imports `fetchProfileStats` directly from `mod-profile-history/history-service.ts` (cross-module import — see Key Implementation Notes).
+**MOD-008 profile-stats dependency (AC-149)**: The other-user profile screen (`UserProfileScreen`) sources its stats section from MOD-008's `fetchProfileStats(targetUserId)` public service wrapper (`get_profile_stats` RPC). MOD-006 imports `fetchProfileStats` directly from `mod-profile-history/history-service.ts` (cross-module import — see Key Implementation Notes). No per-card stats fetch occurs on the Followers or Following list render.
 
 ---
 
@@ -122,9 +124,17 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 - `userId` (the profile being viewed), authenticated session
 
 **Outputs (Followers/Following list screens):**
-- Scrollable list of user cards; each card: circular avatar, `display_name`, total sends count, highest grade — sourced per-card from `fetchProfileStats(userId)` (MOD-008)
+- Scrollable list of user cards; each card: circular avatar and `display_name` only — no sends count or highest grade on cards
 - Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064)
 - Blocked users excluded (AC-082, AC-084)
+
+**Inputs (other-user profile screen — AC-149 stats section):**
+- `targetUserId`, authenticated session
+
+**Outputs (other-user profile screen — AC-149 stats section):**
+- Stats section immediately after the follow/unfollow button, sourced from `fetchProfileStats(targetUserId)` (MOD-008): total sends, accumulated days, highest grade, grade bar chart
+- No route cards rendered in the stats section
+- Subject to privacy (AC-063): `followers_only` profile for a non-follower shows the hidden/403 state per AC-064 rather than the stats section
 
 ---
 
@@ -146,11 +156,15 @@ The following decisions were recorded by Tech Lead in the 2026-09-30 review for 
 
 #### Per-card stats fetching (AC-148) — Tech Lead Q2
 
-Per-card sends count and highest grade on the Followers and Following list screens (AC-146, AC-147) are sourced per-card via `get_profile_stats(p_user_id)` calls (option a). A bespoke batch RPC (option b) and client-side join over `ascents` (option c) are both rejected. Call `fetchProfileStats(userId)` lazily per visible card. The RPC is `SECURITY INVOKER STABLE` with a built-in privacy gate, so a `followers_only` non-follower correctly receives zeroed stats with no consumer-side privacy logic. Deriving `total_sends` or `highest_grade` client-side is prohibited — it risks disagreeing with the canonical `get_profile_stats` definition. A batch `get_profile_stats_batch(user_ids[])` is a Phase 2 optimization to revisit only if real list sizes exceed ~200; do not build it for Phase 1.
+Per-card sends count and highest grade are no longer shown on the Followers and Following list cards (AC-146, AC-147) as of Rev 19. The prior per-card `get_profile_stats(p_user_id)` call pattern (option a, approved in Rev 18) no longer applies to list render — **no per-card `fetchProfileStats` call is made on list render**. Aggregate profile stats are instead surfaced on the other-user profile screen (AC-149). The Tech Lead Q2 reasoning (rejecting batch RPC option b and client-side join option c) remains relevant for the AC-149 stats section: `fetchProfileStats(targetUserId)` is called once on the other-user profile screen, not per-card on the list.
 
-#### Cross-module import from MOD-008 (AC-148) — Tech Lead Q3
+#### AC-149 — Stats section on other-user profile screen
 
-MOD-006 → MOD-008 dependency is safe. Express as a direct import: `import { fetchProfileStats } from '../mod-profile-history/history-service'`. This is a cross-module import of a **public service** (not an internal screen) and is permitted per the Cross-Module Imports convention in `production.md`. Document this cross-module import here and in the Integration Points section. MOD-006 must not import internal screen components from MOD-008; only `fetchProfileStats` (and other public service exports) from `history-service.ts` are permitted.
+The other-user profile screen (`UserProfileScreen`, reached via `handleSelectClimber`) displays a stats section immediately after the follow/unfollow button, sourced from `fetchProfileStats(targetUserId)` from `mod-profile-history/history-service.ts`. The section shows total sends, accumulated days, highest grade, and a grade bar chart. No route cards are rendered. This is subject to AC-063/AC-064 privacy gating. MOD-006 imports `fetchProfileStats` directly from `mod-profile-history/history-service.ts`; this is a cross-module import of a public service (not an internal screen) and is permitted per the Cross-Module Imports convention in `production.md`.
+
+#### Cross-module import from MOD-008 (AC-149) — Tech Lead Q3
+
+MOD-006 → MOD-008 dependency is safe. Express as a direct import: `import { fetchProfileStats } from '../mod-profile-history/history-service'`. This is a cross-module import of a **public service** (not an internal screen component) and is permitted per the Cross-Module Imports convention in `production.md`. Document this cross-module import here and in the Integration Points section. MOD-006 must not import internal screen components from MOD-008; only `fetchProfileStats` (and other public service exports) from `history-service.ts` are permitted.
 
 ---
 
@@ -163,3 +177,4 @@ MOD-006 → MOD-008 dependency is safe. Express as a direct import: `import { fe
 - Block/unblock user action UI (owned by MOD-009; this module consumes Block data for feed filtering).
 - New follower notifications (out of scope for Phase 1 push types).
 - Batch profile-stats RPC (Phase 2 optimization — do not build for Phase 1 list sizes).
+- Per-card sends count or highest grade on Followers/Following list cards (removed in Rev 19; stats surfaced on the other-user profile screen via AC-149 instead).
