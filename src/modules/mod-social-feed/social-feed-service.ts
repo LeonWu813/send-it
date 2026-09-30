@@ -12,6 +12,8 @@
  *   fetchLikeInfo(targetId)    — like count + own-like state (AC-052)
  *   fetchFollowing(userId)     — list of users the given user follows
  *                                (public service function for MOD-012 Following strip)
+ *   fetchFollowersList(userId) — list of users who follow userId (AC-146)
+ *   fetchFollowingList(userId) — list of users that userId follows (AC-147)
  *
  * Rules:
  * - Uses the shared Supabase singleton from src/lib/supabase.ts.
@@ -28,6 +30,7 @@ import type {
   FollowerCounts,
   FollowingUser,
   LikeInfo,
+  UserListItem,
 } from './types';
 
 // ── Follow / Unfollow ─────────────────────────────────────────────────────────
@@ -291,6 +294,82 @@ export async function fetchFollowing(userId: string): Promise<FollowingUser[]> {
     if (!rawUser) continue;
     const user = rawUser as { id: string; display_name: string; avatar_url: string | null };
     results.push({ id: user.id, display_name: user.display_name, avatar_url: user.avatar_url });
+  }
+  return results;
+}
+
+// ── Followers and Following List (AC-146, AC-147) ─────────────────────────────
+
+/**
+ * Fetch the list of users who follow `userId`.
+ *
+ * Used by FollowersListScreen (AC-146). Returns minimal user info sufficient
+ * for rendering user cards (avatar, display_name).
+ *
+ * Blocked users are NOT filtered here — caller is responsible for client-side
+ * filtering via `fetchBlockedUserIds()` from mod-moderation (AC-082, AC-084).
+ *
+ * @param userId  UUID of the profile being viewed.
+ * @returns       Array of UserListItem rows ordered by follow creation date DESC.
+ * @throws {Error} with a user-facing message on failure.
+ */
+export async function fetchFollowersList(userId: string): Promise<UserListItem[]> {
+  const { data, error } = await supabase
+    .from('follows')
+    .select('follower_id, users!follows_follower_id_fkey(id, display_name, avatar_url)')
+    .eq('followee_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error('Failed to load followers list. Please try again.');
+  }
+
+  if (!data) return [];
+
+  const results: UserListItem[] = [];
+  for (const row of data) {
+    const rawUser = (row as unknown as { users: unknown }).users;
+    if (!rawUser) continue;
+    const user = rawUser as { id: string; display_name: string; avatar_url: string | null };
+    results.push({ userId: user.id, displayName: user.display_name, avatarUrl: user.avatar_url });
+  }
+  return results;
+}
+
+/**
+ * Fetch the list of users that `userId` follows (for the Following list screen).
+ *
+ * Used by FollowingListScreen (AC-147). Distinct from `fetchFollowing` in that
+ * it returns `UserListItem` (userId/displayName/avatarUrl) instead of
+ * `FollowingUser` (id/display_name/avatar_url), keeping a consistent shape with
+ * `fetchFollowersList` for the list screen pair.
+ *
+ * Blocked users are NOT filtered here — caller is responsible for client-side
+ * filtering via `fetchBlockedUserIds()` from mod-moderation (AC-082, AC-084).
+ *
+ * @param userId  UUID of the user whose following list to fetch.
+ * @returns       Array of UserListItem rows ordered by follow creation date DESC.
+ * @throws {Error} with a user-facing message on failure.
+ */
+export async function fetchFollowingList(userId: string): Promise<UserListItem[]> {
+  const { data, error } = await supabase
+    .from('follows')
+    .select('followee_id, users!follows_followee_id_fkey(id, display_name, avatar_url)')
+    .eq('follower_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error('Failed to load following list. Please try again.');
+  }
+
+  if (!data) return [];
+
+  const results: UserListItem[] = [];
+  for (const row of data) {
+    const rawUser = (row as unknown as { users: unknown }).users;
+    if (!rawUser) continue;
+    const user = rawUser as { id: string; display_name: string; avatar_url: string | null };
+    results.push({ userId: user.id, displayName: user.display_name, avatarUrl: user.avatar_url });
   }
   return results;
 }

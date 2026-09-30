@@ -70,3 +70,13 @@ export interface FollowingUser {
   display_name: string;
   avatar_url: string | null;
 }
+
+/**
+ * Minimal user entry for the Followers and Following list screens (AC-146, AC-147).
+ * Returned by `fetchFollowersList` and `fetchFollowingList`.
+ */
+export interface UserListItem {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}

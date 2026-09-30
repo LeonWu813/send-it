@@ -308,6 +308,11 @@
     "followers": "Followers",
     "following": "Following",
     "privateProfile": "Followers Only",
+    "sends": "{{count}} Sends",
+    "highestGrade": "Best: {{grade}}",
+    "noGrade": "Best: --",
+    "noFollowers": "No followers yet",
+    "noFollowing": "Not following anyone yet",
     "errors": {
       "loadFailed": "Failed to load activity feed. Please try again.",
       "profileLoadFailed": "Failed to load profile. Please try again.",

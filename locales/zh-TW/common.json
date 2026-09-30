@@ -308,6 +308,11 @@
     "followers": "追蹤者",
     "following": "追蹤中",
     "privateProfile": "僅限追蹤者",
+    "sends": "{{count}} 攀登",
+    "highestGrade": "最高 {{grade}}",
+    "noGrade": "最高 --",
+    "noFollowers": "還沒有追蹤者",
+    "noFollowing": "還沒有追蹤任何人",
     "errors": {
       "loadFailed": "載入動態消息失敗，請再試一次。",
       "profileLoadFailed": "載入個人資料失敗，請再試一次。",
