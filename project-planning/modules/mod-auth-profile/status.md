@@ -750,3 +750,58 @@ None. All previously-passing items continue to pass. No new failures introduced 
 | Targeted change only — no other refactoring | PASS |
 
 **Result: READY FOR QA**
+
+---
+
+## Engineering Progress — AC-145 — 2026-09-30
+
+### Changes Implemented
+
+**AC-145: Follower/following count links on own-profile surface (ProfileScreen)**
+
+**1. Stub screens created for MOD-006 concurrent work**
+- `src/modules/mod-social-feed/screens/FollowersListScreen.tsx` — initially created as a stub (empty `<View />`) to satisfy the TypeScript import in `ProfileNavigator.tsx` while MOD-006 implemented AC-146. The MOD-006 engineer landed a full implementation concurrently; the file is now fully implemented.
+- `src/modules/mod-social-feed/screens/FollowingListScreen.tsx` — same: stub created, MOD-006 engineer replaced with full implementation concurrently.
+
+**2. ProfileNavigator.tsx updated**
+- Added `'followers' | 'following'` to `ProfileView` type union.
+- Added `onNavigateToUser?: (userId: string) => void` to `ProfileNavigatorProps` — threaded from AppShell (MOD-012) per the User-Profile Navigation shared convention.
+- Added `view === 'followers'` branch → renders `FollowersListScreen` with `userId=session.user.id`, `onBack=()=>setView('profile')`, and `onNavigateToUser` (with a no-op fallback if prop is absent).
+- Added `view === 'following'` branch → renders `FollowingListScreen` with the same prop shape.
+- Threads `onNavigateToFollowers` / `onNavigateToFollowing` callbacks down to `ProfileScreen`.
+
+**3. ProfileScreen.tsx updated**
+- Added `onNavigateToFollowers?: () => void` and `onNavigateToFollowing?: () => void` to `ProfileScreenProps`.
+- Added `followerCount` / `followingCount` state (default 0 — placeholder during load).
+- Added `useEffect` on `profile?.id` that calls `fetchFollowerCounts(userId)` from `social-feed-service.ts` (the existing MOD-006 public service); sets counts on success, leaves at 0 on error (non-critical per AC-145).
+- Added `followCountsRow` block immediately below the bio `<Text>` and above the Edit Profile button: two `<Pressable>` elements, each showing the count and the label (`socialFeed.followers` / `socialFeed.following` — reusing existing i18n keys rather than adding duplicates).
+- Adjusted `header` `marginBottom` from `theme.spacing.lg` to `theme.spacing.md` to keep spacing proportional with the new count row.
+- Import: `fetchFollowerCounts` from `../../mod-social-feed/social-feed-service`.
+
+**4. AppShell.tsx updated (src/modules/mod-home/AppShell.tsx)**
+- Added `onNavigateToUser={handleSelectClimber}` to the `<ProfileNavigator>` mount — threads the existing `handleSelectClimber` action (AC-123 overlay mechanism) so that Followers/Following list card taps open the correct user profile overlay.
+
+**5. i18n — no new keys added**
+- Reused existing `socialFeed.followers` ("追蹤者" / "Followers") and `socialFeed.following` ("追蹤中" / "Following") keys. No new catalog entries needed; i18n completeness check remains passing.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 412 tests, 31 suites, all pass |
+| AC-145 ✓ — follower/following count links below bio on ProfileScreen | PASS |
+| Counts loaded from `fetchFollowerCounts` (MOD-006 public service, no new service call) | PASS |
+| 0 shown on error, no error banner (non-critical display) | PASS |
+| Tapping followers link → `setView('followers')` → FollowersListScreen | PASS |
+| Tapping following link → `setView('following')` → FollowingListScreen | PASS |
+| `onNavigateToUser` threaded AppShell → ProfileNavigator → Followers/FollowingListScreen | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced — reused existing socialFeed i18n keys | PASS |
+| No new dependencies outside tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| OtherUserProfileScreen not modified (out of scope for AC-145) | PASS |
+
+**Stub note**: Both `FollowersListScreen.tsx` and `FollowingListScreen.tsx` were concurrently delivered by engineer-mod-social-feed (MOD-006). They are now fully implemented rather than stubs. The `onNavigateToUser` prop on both screens is required; ProfileNavigator provides a no-op fallback `((_id: string) => undefined)` when `onNavigateToUser` is absent from `ProfileNavigatorProps`.
+
+**Result: READY FOR QA**

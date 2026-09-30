@@ -10,6 +10,8 @@
  * AC-118: send history section via MOD-008 SendHistoryProfile.
  * AC-119: Logout button ends the session and returns to signed-out state
  *          (handled by the AuthNavigator via onAuthStateChange).
+ * AC-145: follower/following count links immediately below bio, tapping
+ *          navigates to FollowersListScreen / FollowingListScreen.
  *
  * Scroll architecture: SendHistoryProfile owns the FlatList as the sole
  * scroll container. The profile header (avatar, name, bio, Edit Profile
@@ -35,6 +37,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
 import { SendHistoryProfile } from '../../mod-profile-history';
+import { fetchFollowerCounts } from '../../mod-social-feed/social-feed-service';
 import { signOut } from '../auth-service';
 import { useSession } from '../hooks/useSession';
 
@@ -56,6 +59,10 @@ interface ProfileScreenProps {
    * the correct gym's route list.
    */
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  /** Callback to navigate to the FollowersListScreen (AC-145). */
+  onNavigateToFollowers?: () => void;
+  /** Callback to navigate to the FollowingListScreen (AC-145). */
+  onNavigateToFollowing?: () => void;
 }
 
 export default function ProfileScreen({
@@ -65,6 +72,8 @@ export default function ProfileScreen({
   onNavigateNotifications,
   isActive = false,
   onNavigateToRoute,
+  onNavigateToFollowers,
+  onNavigateToFollowing,
 }: ProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -75,6 +84,11 @@ export default function ProfileScreen({
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // AC-145: follower/following counts — loaded on mount; 0 placeholder during load.
+  // On fetch failure, counts remain at 0 (non-critical display, no error banner).
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+
   // AC-062: Increment refetchKey each time the Profile tab becomes active so
   // SendHistoryProfile re-fetches stats even though the component never
   // unmounts (keep-alive display:none pattern in AppShell).
@@ -82,6 +96,22 @@ export default function ProfileScreen({
   useEffect(() => {
     if (isActive) setRefetchKey((prev) => prev + 1);
   }, [isActive]);
+
+  // AC-145: Fetch follower/following counts whenever the profile id is available.
+  useEffect(() => {
+    if (!profile?.id) return;
+    const userId = profile.id;
+    fetchFollowerCounts(userId)
+      .then(({ follower_count, following_count }) => {
+        setFollowerCount(follower_count);
+        setFollowingCount(following_count);
+      })
+      .catch(() => {
+        // Non-critical: show 0 on error per AC-145 spec.
+        setFollowerCount(0);
+        setFollowingCount(0);
+      });
+  }, [profile?.id]);
 
   async function handleLogout(): Promise<void> {
     setIsSigningOut(true);
@@ -98,7 +128,7 @@ export default function ProfileScreen({
     }
   }
 
-  // ── Profile header (AC-116 + AC-117) ────────────────────────────────────────
+  // ── Profile header (AC-116 + AC-117 + AC-145) ───────────────────────────────
   // Passed as listHeaderComponent to SendHistoryProfile so it scrolls with
   // the FlatList rather than requiring a wrapping ScrollView.
   const profileHeader = (
@@ -150,6 +180,35 @@ export default function ProfileScreen({
         {profile?.bio ? (
           <Text style={styles.bio}>{profile.bio}</Text>
         ) : null}
+      </View>
+
+      {/* AC-145: Follower / following count links — immediately below bio */}
+      <View style={styles.followCountsRow}>
+        <Pressable
+          style={({ pressed }) => [
+            styles.followCountItem,
+            pressed && styles.followCountItemPressed,
+          ]}
+          onPress={onNavigateToFollowers}
+          accessibilityRole="button"
+          accessibilityLabel={`${followerCount} ${t('socialFeed.followers')}`}
+        >
+          <Text style={styles.followCountNumber}>{followerCount}</Text>
+          <Text style={styles.followCountLabel}>{t('socialFeed.followers')}</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.followCountItem,
+            pressed && styles.followCountItemPressed,
+          ]}
+          onPress={onNavigateToFollowing}
+          accessibilityRole="button"
+          accessibilityLabel={`${followingCount} ${t('socialFeed.following')}`}
+        >
+          <Text style={styles.followCountNumber}>{followingCount}</Text>
+          <Text style={styles.followCountLabel}>{t('socialFeed.following')}</Text>
+        </Pressable>
       </View>
 
       {/* Edit Profile entry (AC-117) */}
@@ -265,7 +324,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     header: {
       alignItems: 'center',
-      marginBottom: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
       gap: theme.spacing.sm,
     },
     avatar: {
@@ -292,6 +351,31 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontSize: theme.fontSize.md,
       color: theme.colors.textSecondary,
       textAlign: 'center',
+    },
+    // AC-145: follower / following count row
+    followCountsRow: {
+      flexDirection: 'row',
+      justifyContent: 'flex-start',
+      gap: theme.spacing.lg,
+      marginBottom: theme.spacing.md,
+    },
+    followCountItem: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: theme.spacing.xs,
+      paddingVertical: theme.spacing.xs,
+    },
+    followCountItemPressed: {
+      opacity: 0.6,
+    },
+    followCountNumber: {
+      fontSize: theme.fontSize.md,
+      fontWeight: theme.fontWeight.bold,
+      color: theme.colors.textPrimary,
+    },
+    followCountLabel: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.primary,
     },
     editProfileButton: {
       height: 44,

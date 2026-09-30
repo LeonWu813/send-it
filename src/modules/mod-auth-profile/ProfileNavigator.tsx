@@ -7,6 +7,10 @@
  * State machine:
  *   'profile'     → ProfileScreen (default)
  *   'editProfile' → EditProfileScreen
+ *   'settings'    → SettingsScreen
+ *   'notifications' → NotificationsNavigator
+ *   'followers'   → FollowersListScreen (AC-145)
+ *   'following'   → FollowingListScreen (AC-145)
  *
  * Props:
  *   session — the active Supabase session, threaded from AppShell.
@@ -22,13 +26,15 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useState } from 'react';
 
+import FollowersListScreen from '../mod-social-feed/screens/FollowersListScreen';
+import FollowingListScreen from '../mod-social-feed/screens/FollowingListScreen';
 import NotificationsNavigator from '../mod-notifications/NotificationsNavigator';
 import SettingsScreen from '../mod-localization-theme/screens/SettingsScreen';
 import { useSession } from './hooks/useSession';
 import EditProfileScreen from './screens/EditProfileScreen';
 import ProfileScreen from './screens/ProfileScreen';
 
-type ProfileView = 'profile' | 'editProfile' | 'settings' | 'notifications';
+type ProfileView = 'profile' | 'editProfile' | 'settings' | 'notifications' | 'followers' | 'following';
 
 interface ProfileNavigatorProps {
   /** The active Supabase session, threaded from AppShell. */
@@ -41,12 +47,20 @@ interface ProfileNavigatorProps {
    * the correct gym's route list.
    */
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  /**
+   * Callback invoked when the user taps a climber card in the Followers or
+   * Following list screens. Opens the target user's profile overlay (AC-123).
+   * Threaded from AppShell which owns the single "open another user's profile"
+   * action per the User-Profile Navigation convention.
+   */
+  onNavigateToUser?: (userId: string) => void;
 }
 
 export default function ProfileNavigator({
   session,
   isActive = false,
   onNavigateToRoute,
+  onNavigateToUser,
 }: ProfileNavigatorProps): React.JSX.Element {
   const [view, setView] = useState<ProfileView>('profile');
   const { profile } = useSession();
@@ -80,6 +94,26 @@ export default function ProfileNavigator({
     );
   }
 
+  if (view === 'followers') {
+    return (
+      <FollowersListScreen
+        userId={session.user.id}
+        onBack={() => setView('profile')}
+        onNavigateToUser={onNavigateToUser ?? ((_id: string) => undefined)}
+      />
+    );
+  }
+
+  if (view === 'following') {
+    return (
+      <FollowingListScreen
+        userId={session.user.id}
+        onBack={() => setView('profile')}
+        onNavigateToUser={onNavigateToUser ?? ((_id: string) => undefined)}
+      />
+    );
+  }
+
   return (
     <ProfileScreen
       session={session}
@@ -88,6 +122,8 @@ export default function ProfileNavigator({
       onNavigateSettings={() => setView('settings')}
       onNavigateNotifications={() => setView('notifications')}
       onNavigateToRoute={onNavigateToRoute}
+      onNavigateToFollowers={() => setView('followers')}
+      onNavigateToFollowing={() => setView('following')}
     />
   );
 }
