@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-notifications
-mode: bugfix
-module: mod-notifications
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: 62ef95885ae23138245b5d161a8ff159fd3a38d5
-timestamp: 2026-09-29T00:00:00Z
+commit: bf23a0c6e9aef0313096aa843bd26d7c8a5e3608
+timestamp: 2026-09-30T00:00:00Z
 ```
 
 ## PM Updates
@@ -133,6 +133,27 @@ timestamp: 2026-09-29T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-09-30 — change (file-upload convention: ExpoFile.bytes() over fetch+blob)
+
+**Context**: Two independent modules shipped Supabase Storage file uploads using `fetch(localUri)` + `response.blob()`, and both failed in real-world use. MOD-005 (beta-video) hit it first with video uploads; MOD-003 (route-catalog) then repeated the same mistake with route-photo uploads (fixed 2026-09-30). The correct pattern — `expo-file-system`'s `File.bytes()` returning a `Uint8Array` directly — is now established in both modules, but it was never written down as a project-wide convention, so MOD-003 had no reference to prevent re-introducing the broken pattern. This entry records it as a Proposed Shared Convention so PM can tag it and Doc-Sync can carry it into `production.md`. Advisory only — no source, spec, or PRD files changed here.
+
+Grounded in the shipped code: `src/modules/mod-beta-video/beta-video-service.ts` (video upload — imports `File as ExpoFile` from `expo-file-system`, `new ExpoFile(localVideoUri).bytes()` → `.upload(fileName, uint8Array, ...)`, with a header comment noting `File.bytes()` avoids the base64 detour / `fetch()` corruption risk) and `src/modules/mod-route-catalog/route-service.ts` (photo upload — same `ExpoFile(localUri).bytes()` → `.upload(storagePath, uint8Array, ...)` pattern, with an inline comment that the `fetch()+blob()` pattern is unreliable in RN/Expo SDK 57 and causes upload failures). Both reference implementations match the convention verbatim.
+
+**Concerns** (must address before proceeding):
+- None. The pattern fix is already correct and shipped in both modules. The only gap is documentation: without a written convention, a third upload path (e.g. a future profile-avatar upload, a gym-photo admin flow, or any new binary asset) could reintroduce `fetch()+blob()` and fail the same way. Recording the convention closes that recurrence risk — this is the same class of "the fix wasn't written down, so the mistake repeated" gap as the Rev 11 native-dependency conventions.
+
+**Recommendations**:
+- Pin one canonical upload pattern in `production.md` Shared Conventions (below) so every current and future Supabase Storage upload of a local device file copies it. Point new engineers at the two reference implementations.
+- When a new module needs to upload a local file, it must import `File as ExpoFile` from `expo-file-system` and pass the `Uint8Array` from `.bytes()` to `supabase.storage.from(bucket).upload(...)` with an explicit `contentType`. A code-review/QA check should reject any `Response.blob()` in an upload path.
+
+**Approved**:
+- The `ExpoFile.bytes()` upload approach as shipped in MOD-005 and MOD-003. It is the correct RN/Expo pattern: `File.bytes()` returns a `Uint8Array` with no base64 round-trip, unlike `Response.blob()`, which in RN/Expo SDK 57+ routes binary data through the native blob store via base64 and fails silently at real-world file sizes.
+
+**Proposed Shared Conventions** (for Doc-Sync to carry into production.md):
+- **File uploads to Supabase Storage must use `expo-file-system`'s `File.bytes()` — never `fetch + blob()`.** All Supabase Storage uploads of local device files (photos, videos, or any binary asset) must read the file with `new ExpoFile(localUri).bytes()` (importing `File as ExpoFile` from `expo-file-system`) and pass the resulting `Uint8Array` directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`. The `fetch(localUri)` + `response.blob()` pattern must never be used: in React Native / Expo SDK 57+, `Response.blob()` copies data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes (photos, videos). `ExpoFile.bytes()` returns a `Uint8Array` directly with no base64 round-trip. Reference implementations: `src/modules/mod-beta-video/beta-video-service.ts` (video upload) and `src/modules/mod-route-catalog/route-service.ts` (photo upload, fixed 2026-09-30).
+
+---
 
 ### Review — 2026-09-29 — change (setup.md secret-name correction, line 140)
 
@@ -1242,6 +1263,10 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 
 Pattern: An expo-av@15 (SDK 52) package was installed under Expo SDK 57, importing a legacy header (EXEventEmitter.h) removed from expo-modules-core@57. Unit tests passed the whole time because expo-av was mocked via Jest moduleNameMapper, so the SDK/native mismatch only surfaced at xcodebuild. Root cause was hand-pinning a native module version in package.json instead of using `npx expo install`.
 Why: Two recurring failure modes worth codifying — (1) native Expo modules must be installed with `npx expo install` to stay SDK-aligned, never hand-pinned in package.json; (2) a Jest module mock for a native package makes the unit suite green while the native build is broken, so any add/change/remove of a native dependency requires running the actual iOS build before the module is called QA-ready. Passing unit tests are not evidence a native dependency compiles.
+Agent: tech-lead
+
+Pattern: Two separate modules (MOD-005 beta-video, MOD-003 route-catalog) independently shipped Supabase Storage uploads via `fetch(localUri)` + `response.blob()` and both failed in production use. In React Native / Expo SDK 57+, `Response.blob()` copies binary through the native blob store via base64 encoding, causing silent upload failures at real-world file sizes. Both were fixed by switching to `expo-file-system`'s `new ExpoFile(localUri).bytes()` → `Uint8Array` → `.upload(path, uint8Array, { contentType })`. MOD-003 repeated MOD-005's exact mistake because the correct pattern was never written down as a project convention.
+Why: A correct-but-undocumented fix that gets repeated in a second module is the signature of a missing skill/convention. Codifying "Supabase Storage uploads use ExpoFile.bytes(), never fetch+blob()" (with the two reference implementations) prevents a third upload path from reintroducing the broken pattern, and gives QA a concrete anti-pattern to grep for (`Response.blob()` in any upload path). Same class of gap as the native-dependency conventions — the framework should surface established fixes as conventions so later modules inherit them.
 Agent: tech-lead
 
 ## PM Alignment Note — Route Submission Flow (2026-09-22)
