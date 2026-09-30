@@ -225,3 +225,84 @@ No features implemented beyond spec requirements. The `NotificationsNavigator` p
 | AC-058 | SCOPE BLOCKER — pre-flagged by Tech Lead; not an implementation bug; requires cross-module navigation contract with MOD-003/MOD-005 before implementation |
 
 All 310 tests pass. TypeScript clean. Security checks pass. Idempotency constraint verified. Preference gate verified.
+
+---
+
+**QA Run 2 — Regression — 2026-09-29 — workflow: regression-test**
+
+Re-verifying AC-058 fix. Original scope blocker resolved by Engineer via `fetchRouteForBetaVideo` service function, `handleNotificationPress` tap handler in `NotificationInboxScreen`, `onNavigateToRoute` prop threading through `NotificationsNavigator` and `ProfileNavigator`, `'notifications'` view state in `ProfileNavigator`, and notification bell icon on `ProfileScreen`.
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npx tsc --noEmit` | PASS | 0 errors. Exit code 0. |
+| `npm test -- --watchAll=false` | PASS | 412 tests passed, 0 failed across 31 test suites. All 40 mod-notifications tests green (7 new AC-058 tests included). |
+
+### AC-058 Regression Verification
+
+**REGRESSION PASS AC-058.**
+
+The original scope blocker (tap handler was a no-op) is resolved. Verified:
+
+1. **`fetchRouteForBetaVideo(betaVideoId)` service function** — reads `beta_videos` joined to `routes(gym_id)` using `.select('route_id, routes(gym_id)')`, `.eq('id', betaVideoId)`, `.single()`. Returns `{ routeId, gymId }` when both fields are non-null; returns `null` on error, missing data, null `route_id`, or null `gym_id`. The `if (error || !data) return null` guard at line 174 covers the Supabase error and missing-row cases. The explicit `if (!routeId || !gymId) return null` guard at line 181 covers the orphaned-video edge cases. Null safety is complete — all five null/error paths are covered and tested.
+
+2. **`handleNotificationPress` tap handler** — defined with `useCallback` in `NotificationInboxScreen`. The logic is: `if (notification.type === 'beta_video_like' && notification.target_id)` → `fetchRouteForBetaVideo(notification.target_id)` → `if (result) onNavigateToRoute?.(result.routeId, result.gymId)`. The `onNavigateToRoute?.()` optional call means when `onNavigateToRoute` is not provided (e.g. in tests or isolated rendering), the handler is a safe no-op — no crash. When `fetchRouteForBetaVideo` returns null, `onNavigateToRoute` is not called — the notification tap silently fails rather than navigating to a broken state. This matches the observed test behavior (second new test: `does not call onNavigateToRoute when fetchRouteForBetaVideo returns null` — PASS).
+
+3. **`onNavigateToRoute` prop threading** — verified end-to-end:
+   - `AppShell` defines `handleNavigateToRoute` (sets `routeDeepLinkId`, `gymDeepLinkId`, `routeNavKey`, switches `activeTab` to `'gyms'`) and passes it as `onNavigateToRoute` to `ProfileNavigator`.
+   - `ProfileNavigator` receives `onNavigateToRoute` and passes it to `NotificationsNavigator` when mounting the `'notifications'` view state.
+   - `NotificationsNavigator` receives `onNavigateToRoute` and passes it to `NotificationInboxScreen`.
+   - `NotificationInboxScreen` receives `onNavigateToRoute` and uses it in `handleNotificationPress`.
+   The full prop chain is unbroken.
+
+4. **`ProfileNavigator` `'notifications'` view state** — `ProfileNavigator` has `ProfileView = 'profile' | 'editProfile' | 'settings' | 'notifications'`. The `'notifications'` branch mounts `NotificationsNavigator` with `session`, `isActive`, and `onNavigateToRoute`. Verified at lines 72–79 of `ProfileNavigator.tsx`.
+
+5. **Notification bell icon on `ProfileScreen`** — `ProfileScreen` accepts `onNavigateNotifications?: () => void`. When provided (which `ProfileNavigator` does via `onNavigateNotifications={() => setView('notifications')}`), it renders a `Pressable` with `Ionicons name="notifications-outline"` in the top-left of the profile header, with `accessibilityRole="button"` and `accessibilityLabel={t('notifications.title')}`. The bell is conditionally rendered only when the prop is provided — correctly absent in isolated ProfileScreen tests where the prop is omitted.
+
+6. **Safe area — `NotificationInboxScreen`** — `useSafeAreaInsets()` called; `makeStyles(theme, insets.top)` follows the convention; `contentContainerStyle.paddingTop: topInset + theme.spacing.md` applied. No regression.
+
+7. **i18n — `NotificationInboxScreen` new strings** — `t('notifications.betaVideoLikeA11y')` used for the `Pressable` accessibility label; all i18n keys remain routed through `useTranslation('common')`. No inline strings introduced.
+
+8. **Cross-module import rule** — `ProfileNavigator` imports `NotificationsNavigator` from `'../mod-notifications/NotificationsNavigator'` (the public entry-point component), not from any internal `screens/` path. Verified by grep: zero matches for `mod-notifications/screens/` imports anywhere in `src/`. PASS.
+
+### Previously Passing ACs — Re-verification
+
+| AC | Result | Notes |
+|----|--------|-------|
+| AC-054 | PASS | No changes to device token service or registration path. All 3 existing tests still pass. |
+| AC-055 | PASS | No changes to Edge Function, trigger, or inbox fetch. All existing inbox tests pass. |
+| AC-056 | PASS | No changes to push fan-out path. |
+| AC-057 | PASS | No changes to `NotificationPreferenceScreen` or preference RPC. All 8 preference tests still pass. |
+
+### Regression Checks for Adjacent Code
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `NotificationInboxScreen` non-tap behavior unchanged | PASS | Load, mark-read, pull-to-refresh, empty state, error banner, unread dot, actor fallback all exercised by 7 pre-existing tests — all pass. |
+| `NotificationsNavigator` default inbox view | PASS | `initialView = 'inbox'` default and `switch(view)` still route correctly; `preferences` view unchanged. |
+| `ProfileNavigator` existing view states | PASS | `'profile'`, `'editProfile'`, `'settings'` branches intact; AC-058 change adds a fourth branch only. Verified by reading `ProfileNavigator.tsx` lines 54–91. |
+| `ProfileScreen` bell not shown without prop | PASS | `onNavigateNotifications` is optional; when omitted (as in pre-existing tests), the bell is not rendered — `{onNavigateNotifications ? (...) : null}` guard at line 107. No pre-existing tests broken. |
+| TypeScript strict mode | PASS | `any` cast in `fetchRouteForBetaVideo` is accompanied by `// eslint-disable-next-line @typescript-eslint/no-explicit-any` comment per production.md TypeScript Strict Mode convention. 0 tsc errors. |
+
+### New Regression Check — Null Safety for AC-058
+
+The key null-safety question: what happens if `fetchRouteForBetaVideo` returns null (e.g. the beta video was deleted, or has no associated route)?
+
+- `handleNotificationPress` checks `if (result)` before calling `onNavigateToRoute?.(...)`. When `result` is null, `onNavigateToRoute` is never called. The tap silently does nothing — the user stays on the inbox. This is the correct behavior: the spec requires navigating to the route when the tap is processed; it does not specify an error state when the video/route cannot be resolved, and a silent no-op is the least-harmful fallback.
+- Test coverage: the second new test (`does not call onNavigateToRoute when fetchRouteForBetaVideo returns null`) explicitly verifies this path — PASS.
+- `fetchRouteForBetaVideo` itself returns null for: Supabase error, missing row (PGRST116), null data, null `route_id`, and null `gym_id`. All five cases are tested — PASS.
+
+### Overall Result
+
+**QA PASS — regression test.**
+
+| AC | QA Verdict |
+|----|-----------|
+| AC-054 | PASS (no regression) |
+| AC-055 | PASS (no regression) |
+| AC-056 | PASS (no regression; measurement deferred per spec) |
+| AC-057 | PASS (no regression) |
+| AC-058 | REGRESSION PASS — original scope blocker resolved; tap-through implemented with full null safety |
+
+All 412 tests pass. TypeScript 0 errors. No new regressions introduced by the AC-058 fix. The notification bell is accessible from ProfileScreen (top-left, rendered when `onNavigateNotifications` is provided). Prop chain from AppShell through ProfileNavigator → NotificationsNavigator → NotificationInboxScreen is complete and verified.
