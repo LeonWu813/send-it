@@ -9,6 +9,7 @@
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as AuthSession from 'expo-auth-session';
 import * as Crypto from 'expo-crypto';
+import { File as ExpoFile } from 'expo-file-system';
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
@@ -252,20 +253,22 @@ export async function uploadAvatar(
   const fileExtension = imageUri.split('.').pop() ?? 'jpg';
   const fileName = `${userId}.${fileExtension}`;
   const storagePath = `avatars/${fileName}`;
+  const contentType = fileExtension === 'png' ? 'image/png' : 'image/jpeg';
 
-  // Fetch the image as a blob
-  const response = await fetch(imageUri);
-  if (!response.ok) {
-    throw new Error('Failed to upload photo. Please try again.');
-  }
-  const blob = await response.blob();
+  // Read the local file as raw bytes using expo-file-system's File class.
+  // The fetch-then-blob approach is unreliable in React Native / Expo SDK 57+:
+  // the native blob store encodes data via base64, causing silent upload
+  // failures for real-world file sizes. File.bytes() returns a Uint8Array
+  // directly — no base64 detour, no fetch corruption risk.
+  const expoFile = new ExpoFile(imageUri);
+  const uint8Array = await expoFile.bytes();
 
   const { error: uploadError } = await supabase.storage
     .from('avatars')
-    .upload(storagePath, blob, {
+    .upload(storagePath, uint8Array, {
       cacheControl: '3600',
       upsert: true,
-      contentType: blob.type || 'image/jpeg',
+      contentType,
     });
 
   if (uploadError) {
