@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 18
+**Status**: [TRIVIAL] — Revision 19
 **Date**: 2026-09-30
-**Revision**: 18
+**Revision**: 19
 
 ---
 
@@ -269,7 +269,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** to see who follows me and who I follow,
 **so that** I can discover and connect with climbers in my community.
 
-**Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148
+**Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148, AC-149
 
 ---
 
@@ -638,12 +638,14 @@ The data flow for the two most important loops:
 
 **AC-053**: The system shall not render a comment UI anywhere in the app in Phase 1 and shall not expose a like affordance on plain send logs.
 
-**AC-146** (new): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar, `display_name`, total sends count (ascents where `style` ∈ {flash, top}), and highest grade achieved. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
+**AC-146** (revised): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar and `display_name` only — no per-card sends count or highest grade is displayed. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
 
-**AC-147** (new): The system shall provide a Following list screen with the same card layout as the Followers list screen (AC-146), listing all users the profile owner follows. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to privacy (AC-063). Blocked users are excluded.
+**AC-147** (revised): The system shall provide a Following list screen with the same card layout as the Followers list screen (AC-146) — circular avatar and `display_name` only, no per-card sends count or highest grade — listing all users the profile owner follows. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to privacy (AC-063). Blocked users are excluded.
 
-**AC-148** (new): Per-card sends count and highest grade on the Followers and Following list screens (AC-146, AC-147) shall be sourced from MOD-008's profile-stats public service (`get_profile_stats` RPC), not from a direct `ascents` table query in MOD-006. Fetching is per-card on list render (acceptable for Phase 1 list sizes).
+**AC-148** (revised): The Followers and Following list cards (AC-146, AC-147) shall display the user's avatar and `display_name` only. Per-card sends count and highest grade are removed from the cards, and no per-card profile-stats fetch (`fetchProfileStats` / the `get_profile_stats` RPC) is made on list render. Aggregate profile stats are surfaced on the other-user profile screen instead (AC-149), not on the list cards.
 
+
+**AC-149** (new): The other-user profile screen (`UserProfileScreen`, the profile overlay reached via `handleSelectClimber`) shall display, immediately after the follow/unfollow button, a stats section sourced from MOD-008's profile-stats public service (`fetchProfileStats(targetUserId)` from `mod-profile-history/history-service`). The section shall show the target user's total sends, accumulated days, highest grade, and a grade bar chart. This section shall not render any route cards. This is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state per AC-064 rather than the stats section.
 > **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006.
 
 ---

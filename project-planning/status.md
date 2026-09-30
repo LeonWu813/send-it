@@ -3,15 +3,24 @@
 ## Last Action
 
 ```
-agent: qa-mod-auth-profile
-mode: regression
-module: mod-auth-profile
+agent: pm
+mode: change
+module: n/a
 result: success
-commit: 101fbc6
-timestamp: 2026-09-30T14:00:00Z
+commit: f6bb2ea
+timestamp: 2026-09-30T15:30:00Z
 ```
 
 ## PM Updates
+
+- **2026-09-30 [TRIVIAL]** — Followers/Following list card simplification + other-user profile stats section (PRD Revision 19). Human QA feedback: the per-card stats cluttered the Followers/Following list cards. Leon (via coordinator) approved the exact drafted edits for immediate write. PRD Status line `[TRIVIAL] — Revision 19`; `**Revision**` bumped 18 → 19; Date 2026-09-30. Changes:
+  - **§8 MOD-006** — **AC-146 (revised)** and **AC-147 (revised)**: the Followers and Following list user cards now show the user's circular avatar and `display_name` only; the per-card total-sends count (`style` ∈ {flash, top}) and highest grade are removed from the card. Navigation (tap → MOD-008 other-user profile surface AC-064), privacy (AC-063), and block-exclusion (AC-082, AC-084) clauses are unchanged.
+  - **§8 MOD-006** — **AC-148 (revised)**: repurposed to state the removal — the list cards display avatar + `display_name` only, and no per-card profile-stats fetch (`fetchProfileStats` / the `get_profile_stats` RPC) is made on list render. Aggregate stats are surfaced on the other-user profile screen instead (AC-149). This eliminates the prior AC-148 per-card `get_profile_stats` fetch pattern.
+  - **§8 MOD-006** — **AC-149 (new)**: the other-user profile screen (`UserProfileScreen`, reached via `handleSelectClimber`) shall display, immediately after the follow/unfollow button, a stats section sourced from `fetchProfileStats(targetUserId)` (MOD-008's `mod-profile-history/history-service`): total sends, accumulated days, highest grade, and a grade bar chart; no route cards. Subject to the target's privacy setting (AC-063 / AC-064 hidden-or-403 for a `followers_only` profile requested by a non-follower).
+  - **§3 User Stories** — **US-022** AC list += AC-149 (now AC-145, AC-146, AC-147, AC-148, AC-149). No new user story — this is a refinement of existing US-020 (Home surfaces followed climbers → their profiles) and US-022 (see followers/following); the concrete new AC (AC-149) governs the other-user profile surface that is the destination of the US-022 followers/following flow.
+  - **§9 Data Model** — **no change**: no new tables/columns; AC-149 reuses MOD-008's existing `fetchProfileStats` / `get_profile_stats` public service (already owned by MOD-008), and AC-148 removes a fetch (net-negative on data access).
+  - **Tagged [TRIVIAL]**: presentation-only refinement — removes two display fields + a per-card fetch from existing list cards (AC-146/AC-147/AC-148) and relocates aggregate stats onto the existing other-user profile screen (new AC-149 over the already-existing `fetchProfileStats` service). No new module, no new table/column, no new cross-module dependency (MOD-006 → MOD-008 already exists from Revision 18), no data-model change; module boundaries and the phase plan are unchanged. No Tech Lead review required.
+  - **Affected specs for Doc-Sync**: **MOD-006 (mod-social-feed)** only — carry the revised AC-146/AC-147 card layout (avatar + `display_name` only), the revised AC-148 (no per-card stats fetch), and the new AC-149 (UserProfileScreen stats section via `fetchProfileStats(targetUserId)`) into the spec's Acceptance Criteria Covered and Key Implementation Notes; drop the prior per-card `get_profile_stats` fetch note. No `production.md` change and no other module spec change. PM did not edit `production.md` or any module spec — this tag is the Doc-Sync trigger. **Run `claude --agent doc-sync`.** Doc-Sync NOT invoked here.
 
 - **2026-09-30 [SUBSTANTIVE]** — Followers/Following list screens + beta-video poster-profile navigation (PRD Revision 18). Leon answered the three open questions and approved the exact drafted edits for immediate write. **Tech Lead review required BEFORE Doc-Sync.** PRD Status line `[SUBSTANTIVE] — Revision 18`; `**Revision**` bumped 17 → 18; Date 2026-09-30. Changes:
   - **§8 MOD-005** — **AC-135 (revised)**: tapping Row 1 (avatar or `display_name`) in the fullscreen beta-video viewer overlay now dismisses the viewer and navigates to the poster's profile (the MOD-008 other-user profile-and-history surface, AC-064), subject to the poster's privacy setting (AC-063); navigation is threaded via a callback prop supplied by the hosting shell, not by MOD-005 importing the profile screen directly (replaces the prior Phase-1 no-op). **AC-144 (revised/append)**: `fetchBetaVideosForRoute` result now also includes the poster's `user_id` (UUID) on the existing poster join (alongside `display_name` + `avatar_url`), so the viewer has the poster's identifier for navigation — a dependent edit required by the revised AC-135.
