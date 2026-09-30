@@ -95,10 +95,10 @@ export async function uploadRoutePhoto(
   const storagePath = `${userId}/${timestamp}-${randomSuffix}.${ext}`;
 
   // Read the local file as raw bytes using expo-file-system's File class.
-  // The fetch()+blob() pattern is unreliable in React Native / Expo SDK 57
-  // (triggers the "Response.blob() is using React Native's Blob" warning and
-  // causes upload failures). File.bytes() returns a Uint8Array directly —
-  // no base64 detour, no fetch() corruption risk.
+  // The fetch-then-blob approach is unreliable in React Native / Expo SDK 57
+  // (triggers a "using React Native's Blob" warning and causes upload failures).
+  // File.bytes() returns a Uint8Array directly — no base64 detour, no fetch
+  // corruption risk. See production.md Shared Conventions for the full rule.
   const expoFile = new ExpoFile(localUri);
   const uint8Array = await expoFile.bytes();
 

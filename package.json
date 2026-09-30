@@ -43,7 +43,8 @@
     "web": "expo start --web",
     "test": "jest",
     "lint": "tsc --noEmit",
-    "check:i18n": "node scripts/check-i18n-completeness.js"
+    "check:i18n": "node scripts/check-i18n-completeness.js",
+    "check:uploads": "node scripts/check-uploads.js"
   },
   "jest": {
     "preset": "jest-expo",

@@ -1954,3 +1954,26 @@ Also removed (no longer needed):
 ### Notes
 
 No bugs found. All acceptance criteria confirmed correct on device. Module complete.
+
+---
+
+## Engineering Progress — check:uploads CI script (2026-09-30)
+
+**Task**: Add `scripts/check-uploads.js` CI script and `check:uploads` npm script to enforce the `ExpoFile.bytes()` upload convention; prevent `fetch()+response.blob()` from being reintroduced in any future service file.
+
+### Files created/modified
+
+- `scripts/check-uploads.js` — new Node.js script (exact spec provided); greps `src/` for `response.blob()` or `.blob()` patterns; exits 0 when clean, exits 1 with details when pattern found
+- `package.json` — added `"check:uploads": "node scripts/check-uploads.js"` to `scripts`
+- `src/modules/mod-route-catalog/route-service.ts` — rewrote the `uploadRoutePhoto` comment (lines 97-101) to avoid the literal `.blob()` text that the script's grep pattern would have matched in a comment (the actual upload code already uses `ExpoFile.bytes()` — no functional change)
+
+### Self-check
+
+- PASS: `npx tsc --noEmit` — 0 errors
+- PASS: `npm test -- --watchAll=false --forceExit` — 412 tests, 31 suites, 0 failures
+- PASS: `route-service.ts` comment rewritten — no `.blob()` text remains in MOD-003 source files
+- BLOCKER (out-of-scope): `npm run check:uploads` exits 1 because `src/modules/mod-auth-profile/auth-service.ts:261` contains `const blob = await response.blob()` — an actual fetch+blob() call in MOD-001 (not a comment). This file is outside MOD-003's scope. The script is correct; the violation is real and must be fixed by `engineer-mod-auth-profile`. Route to: coordinator → `engineer-mod-auth-profile`.
+
+### Blocker
+
+`npm run check:uploads` cannot pass until `src/modules/mod-auth-profile/auth-service.ts` line 261 is updated to use `ExpoFile.bytes()` instead of `response.blob()`. That file is owned by MOD-001 (mod-auth-profile). This engineer has no write scope over MOD-001 source files.
