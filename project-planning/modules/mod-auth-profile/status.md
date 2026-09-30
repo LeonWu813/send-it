@@ -724,3 +724,29 @@ None. All previously-passing items continue to pass. No new failures introduced 
 | Git scope — `SendHistoryProfile.tsx` and `ProfileHistoryScreen.tsx` changes are cross-module but explicitly within scope of this bugfix per coordinator invocation (pre-existing uncommitted changes to `.env.example`, `setup.md`, migrations, `tsconfig.json` are carry-overs from before this session) | ACCEPTABLE |
 
 **Result: READY FOR QA**
+
+---
+
+## Engineering Progress — Bugfix — 2026-09-30 (avatar upload fetch+blob violation)
+
+**Issue**: `uploadAvatar()` in `auth-service.ts` used `fetch(localUri)` + `response.blob()` to upload the user avatar to Supabase Storage. In React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes. Caught by `npm run check:uploads`.
+
+**Fix applied — one file changed**: `src/modules/mod-auth-profile/auth-service.ts`
+- Added `import { File as ExpoFile } from 'expo-file-system';` at top of file.
+- Removed `fetch(localUri)` call, `response.ok` check, and `response.blob()` call.
+- Replaced with `new ExpoFile(imageUri)` + `expoFile.bytes()` returning a `Uint8Array`.
+- Passed `uint8Array` directly to `supabase.storage.from('avatars').upload(...)`.
+- Content type derived from file extension instead of `blob.type` (since there is no blob).
+- Pattern matches the reference implementation in `mod-route-catalog/route-service.ts`.
+
+**Self-check results**:
+
+| Check | Result |
+|-------|--------|
+| `npm run check:uploads` | PASS — exits 0, no fetch+blob violations |
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --passWithNoTests` | PASS — 412 tests, 31 suites, all pass |
+| No new dependencies introduced | PASS — `expo-file-system` already in tech stack and mocked |
+| Targeted change only — no other refactoring | PASS |
+
+**Result: READY FOR QA**
