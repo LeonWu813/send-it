@@ -3,13 +3,15 @@
 **Module ID**: MOD-010
 **Module Name**: Localization & Theming
 **Phase**: 1
-**Dependencies**: none
+**Dependencies**: MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
+**Last Synced from PRD Revision**: 21
+**Last Updated**: 2026-09-30
 
 ---
 
 ## Purpose
 
-Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override.
+Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override. Own the Settings screen "Blocked Accounts" row and the Blocked Accounts screen (AC-155), which lists the current user's blocked users and offers per-row unblock via MOD-009's public services (`fetchMyBlockedUsers` / `unblockUser`).
 
 ---
 
@@ -26,6 +28,7 @@ Send It targets the Taiwan indoor bouldering community, so Traditional Chinese (
 
 ## Related User Stories
 
+- **US-016**: Block another user
 - **US-017**: Use the app in Traditional Chinese or English
 - **US-018**: Use the app in Dark Mode
 
@@ -39,11 +42,13 @@ Send It targets the Taiwan indoor bouldering community, so Traditional Chinese (
 
 **AC-092**: The system shall default to the OS Light/Dark appearance and expose a Settings override with three states (System, Light, Dark) that takes effect immediately without an app restart.
 
+**AC-155** (new): The Settings screen (SettingsScreen) shall present a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping the row shall open a Blocked Accounts screen (BlockedAccountsScreen) that lists the users the current user has blocked (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, the user's `display_name`, and an "Unblock" button. Tapping "Unblock" shall call `unblockUser(userId)` (MOD-009, AC-152) and remove that entry from the list. When the current user has blocked no one, the screen shall display an empty state. Navigation to and from the Blocked Accounts screen is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere), with no ProfileNavigator view-state change. The blocked-users list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
+
 ---
 
 ## Integration Points
 
-none
+**MOD-009 public services consumed by AC-155**: `fetchMyBlockedUsers()` (queries `blocks JOIN users` where `blocker_user_id = auth.uid()`, returns `Array<{ userId, displayName, avatarUrl }>`) and `unblockUser(userId)` (AC-152) are direct imports from `mod-moderation/moderation-service`. These are read-only and write-only respectively; no write permissions beyond what AC-152 already grants are needed.
 
 ---
 
@@ -82,6 +87,15 @@ No dedicated Supabase tables for this module. Language preference and theme pref
 - Active theme updated immediately — no app restart
 - All theme tokens update across the app
 
+**Inputs (Blocked Accounts screen — AC-155):**
+- Authenticated user session (`auth.uid()`)
+- `fetchMyBlockedUsers()` from MOD-009 (`mod-moderation/moderation-service`)
+
+**Outputs (Blocked Accounts screen — AC-155):**
+- List of blocked users rendered (circular avatar, `display_name`, Unblock button per row)
+- Empty state when the current user has blocked no one
+- On Unblock tap: calls `unblockUser(userId)` (MOD-009, AC-152) and removes the entry from the list
+
 ---
 
 ## Key Implementation Notes
@@ -94,6 +108,7 @@ No dedicated Supabase tables for this module. Language preference and theme pref
 - **Three-state override (AC-092)**: The Settings override has three states: System (follows OS), Light (forced), Dark (forced). The override takes effect immediately without an app restart.
 - **Dark mode + zh-TW combinatorial testing**: QA must verify every screen in 4 combinations (light/dark × en/zh-TW). This should be incorporated into every module's test plan rather than treated as a one-off audit.
 - **No hardcoded hex colors**: Any hardcoded `#RRGGBB` or `rgb()` color in component code is a defect. All colors must come from the theme token system.
+- **Blocked Accounts screen sub-view state (AC-155)**: SettingsScreen manages a sub-view state (`'settings' | 'blockedAccounts'`); BlockedAccountsScreen is a new file in `mod-localization-theme/screens/`. No ProfileNavigator view-state change is needed. `fetchMyBlockedUsers` and `unblockUser` are direct imports from `mod-moderation/moderation-service`.
 
 ---
 

@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: 1cf7a7372e9aca637af12db6f5ce844abeb42c72
-timestamp: 2026-09-30T23:34:54Z
+commit: f529d435f679521dfb45e3ae84818892ca191122
+timestamp: 2026-09-30T23:50:00Z
 ```
 
 ## PM Updates
@@ -1137,6 +1137,26 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-09-30 — Trivial Sync (Revision 21, [TRIVIAL])
+
+**Trigger**: PM [TRIVIAL] tag (2026-09-30) — Blocked Accounts screen in Settings (PRD Revision 21). No Tech Lead review required (no new module, no new user story, no data-model/schema change, no migration; one new AC over existing block table + block/unblock machinery plus a small new read-only service).
+
+**Files modified:**
+
+- `project-planning/modules/mod-localization-theme/spec.md` — Last Synced from PRD Revision (none previously set) → 21; Last Updated 2026-09-30. Dependencies field updated: `none` → `MOD-009 (block-status + unblock public services fetchMyBlockedUsers / unblockUser for the Blocked Accounts screen, AC-155)`. Purpose updated to include ownership of the Settings screen "Blocked Accounts" row and BlockedAccountsScreen (AC-155), consuming MOD-009 public services. US-016 added to Related User Stories. AC-155 added to Acceptance Criteria Covered (full PRD text). Integration Points section updated from `none` to MOD-009 public services (`fetchMyBlockedUsers()`, `unblockUser(userId)`) consumed by AC-155. Input/Output Contract updated with Blocked Accounts screen inputs/outputs. Key Implementation Notes updated: new "Blocked Accounts screen sub-view state (AC-155)" bullet (SettingsScreen sub-view state `'settings' | 'blockedAccounts'`; BlockedAccountsScreen as new file in `mod-localization-theme/screens/`; direct imports from `mod-moderation/moderation-service`).
+
+- `project-planning/modules/mod-moderation/spec.md` — Last Synced from PRD Revision 20 → 21; Last Updated 2026-09-30. Purpose updated: public service surface expanded from `isBlocked / fetchBlockedUserIds` to `isBlocked / fetchBlockedUserIds / fetchMyBlockedUsers`, with MOD-010 (AC-155) added as a consumer. Context updated: `fetchMyBlockedUsers` added to the block-status public service consumers list (MOD-010 BlockedAccountsScreen, AC-155). US-016 AC list updated: added AC-155 (now AC-082, AC-083, AC-151, AC-152, AC-155). Integration Points section updated: new "Block-list public service consumed by MOD-010 (AC-155)" entry documenting `fetchMyBlockedUsers()` query (`blocks JOIN users` where `blocker_user_id = auth.uid()`, returns `Array<{ userId, displayName, avatarUrl }>`); `unblockUser(userId)` (AC-152) also consumed by MOD-010. Input/Output Contract updated: new inputs/outputs for `fetchMyBlockedUsers()` (AC-155). Key Implementation Notes updated: new `fetchMyBlockedUsers()` bullet documenting the query, return shape, consumer (MOD-010 BlockedAccountsScreen AC-155), and no-migration note.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/production.md` — PM confirmed no production.md change required (reuses existing block-status public-service convention).
+- All other module specs (MOD-001 through MOD-009, MOD-011, MOD-012) — not in scope for this trivial sync.
+
+**Ambiguities / Conflicts**: None.
+
+**verify-sync.sh**: Skipped — trivial passthrough per SKILL.md routing rules.
 
 ### 2026-09-30 — Delta Sync (Revision 20, [SUBSTANTIVE])
 
