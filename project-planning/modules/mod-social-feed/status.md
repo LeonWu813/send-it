@@ -2,11 +2,27 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, tsc clean, 277/277 tests pass.
+**Status**: Complete — migration bug fixed, tsc clean, 412/412 tests pass.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
-**Date**: 2026-09-24
+**AC-146/147/148 commit**: `77ad6f8` — `feat(mod-social-feed): AC-146/147/148 — followers/following list screens with per-card stats`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148)
+
+### AC-146 / AC-147 / AC-148 Update (2026-09-30)
+
+**AC-146 DONE**: `FollowersListScreen` — scrollable list of followers with circular avatar, display_name, total sends, and highest grade per card. Blocked users excluded client-side via `fetchBlockedUserIds()`. Empty state, loading indicator, and error state all present. Back button with chevron-back + i18n label. Safe area insets applied.
+
+**AC-147 DONE**: `FollowingListScreen` — identical card layout to FollowersListScreen, lists users the profile owner follows. Same block exclusion, empty state, loading, error, and nav bar pattern.
+
+**AC-148 DONE**: Per-card stats sourced from `fetchProfileStats(userId)` cross-module import from `mod-profile-history/history-service`. Stats fetched lazily per visible card inside the `useCardStats` hook (per Tech Lead Q2 decision). No client-side derivation of total_sends or highest_grade — canonical RPC used exclusively.
+
+**Self-check (AC-146/147/148)**:
+- PASS — `npx tsc --noEmit` clean, no errors
+- PASS — `npm test -- --passWithNoTests` 412/412 tests pass, exit code 0
+- PASS — Locale keys (`sends`, `highestGrade`, `noGrade`, `noFollowers`, `noFollowing`) added to both `locales/en/common.json` and `locales/zh-TW/common.json` — no conflict with existing `followers` and `following` keys
+- PASS — Cross-module import `fetchProfileStats` from `../../mod-profile-history/history-service` (permitted public service per production.md)
+- PASS — `fetchBlockedUserIds()` from `mod-moderation/moderation-service` applied in both screens (AC-082, AC-084)
 
 ### Public Entry-Point Addition (2026-09-24)
 
@@ -74,6 +90,9 @@ MOD-009 will `CREATE TABLE IF NOT EXISTS public.blocks (...)` with its full sche
 - AC-052: idempotent beta video like/unlike, immediate like count update
 - AC-053: no comment UI anywhere; no like affordance on ascent items
 - AC-063: followers_only privacy badge on UserProfileScreen; feed RPC enforces privacy filter
+- AC-146 ✓: FollowersListScreen — scrollable list of followers with per-card stats, blocked users excluded
+- AC-147 ✓: FollowingListScreen — scrollable list of followees with same card layout, blocked users excluded
+- AC-148 ✓: Per-card stats via fetchProfileStats cross-module import from mod-profile-history
 
 ### Notes
 - Block filter in RPC uses NOT EXISTS subqueries against `public.blocks`. A minimal stub `blocks` table (blocker_id, blocked_id) is created in this migration before the function body so PostgreSQL can validate the LANGUAGE sql reference at CREATE FUNCTION time. MOD-009 adds the full schema with IF NOT EXISTS — safe to layer on top.
