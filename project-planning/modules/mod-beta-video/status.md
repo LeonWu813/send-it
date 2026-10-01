@@ -2,6 +2,57 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-10-01 (AC-166 upsert hang — missing UPDATE RLS policy on beta_videos)
+
+### Bug Fix — Missing UPDATE RLS policy on beta_videos (AC-166 upsert hang) — 2026-10-01
+
+**Problem**: The AC-166 upsert (`upsert(onConflict: 'user_id,route_id')`) uses `ON CONFLICT DO UPDATE` under the hood. The original migration `20260924000005_mod_005_beta_video.sql` explicitly excluded UPDATE from the RLS policies and GRANT (comment: "UPDATE: not permitted in Phase 1"). Without an UPDATE policy and UPDATE privilege, Supabase silently blocks the update leg, and the operation never resolves — the upload hangs indefinitely.
+
+**Fix**: Created `supabase/migrations/20261001000001_mod_005_beta_video_update_policy.sql` which:
+1. Adds `CREATE POLICY "beta_videos_update_own"` for `FOR UPDATE TO authenticated` with `USING (auth.uid() = user_id)` and `WITH CHECK (auth.uid() = user_id)`.
+2. Re-issues `GRANT SELECT, INSERT, UPDATE, DELETE ON public.beta_videos TO authenticated` to include the UPDATE privilege.
+
+No TypeScript changes required.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- Git scope: only `supabase/migrations/20261001000001_mod_005_beta_video_update_policy.sql` created (new file, untracked). All other dirty files are pre-existing; none introduced by this change. PASS.
+- Judgment-based: pure SQL migration; no AC logic changed; UPDATE policy scope is `auth.uid() = user_id` (own rows only, consistent with INSERT and DELETE policies); GRANT statement is additive (re-grants existing SELECT/INSERT/DELETE plus the new UPDATE); no hardcoded values; no new dependencies. PASS.
+
+**Files created**:
+- `supabase/migrations/20261001000001_mod_005_beta_video_update_policy.sql` — UPDATE RLS policy + updated GRANT for `beta_videos`
+
+**ACs addressed**:
+- **AC-166**: upsert/replace flow now resolves correctly — the UPDATE leg of `ON CONFLICT DO UPDATE` is unblocked by the new RLS policy
+
+---
+
+**Status**: Bug fix — 2026-09-30 (BetaVideoGrid — horizontalPadding prop to prevent third-cell clip in padded containers)
+
+### Bug Fix — BetaVideoGrid horizontalPadding prop — 2026-09-30
+
+**Problem**: `BetaVideoGrid` had `GRID_HORIZONTAL_PADDING = 0` (fixed in the prior Bug 3), so it calculated `CELL_SIZE` as a module-level constant sized for the full screen width. Any caller that wraps `<BetaVideoGrid>` inside a container with `paddingHorizontal` (e.g. `BetaVideoSection`'s `paddingHorizontal: GRID_PADDING` container) would have available width narrower than `SCREEN_WIDTH`, causing the third cell to clip.
+
+**Fix**:
+
+1. Removed the module-level `GRID_HORIZONTAL_PADDING` constant and the module-level `CELL_SIZE` constant from `BetaVideoGrid.tsx`.
+2. Added optional prop `horizontalPadding?: number` (default `0`) to `BetaVideoGridProps`. Documents that profile-screen callers (MOD-001, MOD-006) render the grid edge-to-edge and omit the prop; a padded-container caller passes the per-side padding value.
+3. Inside the component, `cellSize` is now computed from props: `(SCREEN_WIDTH - horizontalPadding * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS`.
+4. `makeStyles` now receives `cellSize` as a second parameter and uses it for `cell.width`, `cell.height`, and `gradientOverlay.height` (was `CELL_SIZE / 2`).
+
+Note: `BetaVideoSection.tsx` currently renders its own `FlatList`-based grid (not `<BetaVideoGrid>`), so no change is required there — its local `CELL_SIZE` already accounts for `GRID_PADDING * 2`. The `horizontalPadding` prop is available for any future caller that hosts `BetaVideoGrid` inside a padded container.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 431 tests, 31 suites, 0 failures (count unchanged)
+- Git scope: only `src/modules/mod-beta-video/components/BetaVideoGrid.tsx` modified. No other modules touched. PASS.
+- Judgment-based: `cellSize` computed inside component from prop (no module-level constant); default `0` preserves existing behavior for all current callers (MOD-001, MOD-006 profile screens); no new dependencies; no hardcoded values; TypeScript strict mode satisfied. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoGrid.tsx` — removed module-level `GRID_HORIZONTAL_PADDING` and `CELL_SIZE` constants; added `horizontalPadding?: number` prop; moved `cellSize` computation inside component; `makeStyles` now takes `cellSize` parameter
+
+---
+
 **Status**: Bug fix — 2026-09-30 (Human QA — four bugs: upload upsert, own-video reel, grid padding, fetchBetaVideosByUser poster join)
 
 ### Bug Fix — Human QA — four bugs fixed — 2026-09-30
