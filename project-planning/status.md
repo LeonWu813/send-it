@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: cc76600
+commit: 16ea5d1
 timestamp: 2026-10-01T00:00:00Z
 ```
 
@@ -1538,5 +1538,35 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 - none
 
 **verify-sync.sh:** 4/6 — same two pre-existing script bugs as Rev 18 and Rev 20 (Check 4 grep pattern does not match the `**US-NNN**:` format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
+
+### Sync Report — Delta Sync — 2026-10-01
+
+**Sync type:** delta
+**PRD Revision:** 23
+**PM Update reference:** 2026-10-01 [SUBSTANTIVE] — Beta-video compression reconciliation + post-compression size guard (PRD Revision 23)
+
+**Files modified:**
+- `project-planning/production.md` — Last synced rev 18 → rev 23; Last Updated 2026-09-30 → 2026-10-01. Video Pipeline Conventions section: replaced `ffmpeg-kit-react-native` (H.264 output guaranteed) with `react-native-compressor` (iOS AVFoundation wrapper, Expo bare compatible; H.264/AAC output, ≤1080p, library-default mobile bitrate).
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 22 → 23; Last Updated 2026-09-30 → 2026-10-01. AC-031 revised (compression uses `react-native-compressor`; ordering: after AC-030 duration check, before storage upload; H.264/AAC, ≤1080p, library-default bitrate; AC-036 overlay now shows distinct "Compressing…" phase before "Uploading…"). AC-036 revised (progress overlay now covers "Compressing…" phase followed by "Uploading…" 0–100%). AC-169 added to Acceptance Criteria Covered (post-compression size check via `expo-file-system` `getInfoAsync()`; if >50 MB, upload blocked, user sees zh-TW/EN error; prevents HTTP 413). US-004 AC list updated: added AC-169. Data Model note updated: added AC-169 upload-size note. Input/Output Contract updated: upload outputs now document post-compression size check (AC-169); compression library named. Key Implementation Notes updated: "Recommended compression library" bullet replaced by "Compression library (react-native-compressor, AC-031)" bullet (native install, build gate required); new "Post-compression size guard (AC-169)" bullet; "Progress overlay phases (AC-036)" bullet added. Any reference to `ffmpeg-kit-react-native` in Key Implementation Notes removed.
+- `.claude/agents/engineer-mod-beta-video.md` — Description updated for Rev 23 scope (AC-031 revised, AC-169 new).
+- `.claude/agents/qa-mod-beta-video.md` — Description updated for Rev 23 scope (AC-031 revised, AC-169 new).
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files created:**
+- none
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**AMBIGUITY markers resolved:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as Rev 18, Rev 20, and Rev 22 (Check 4 grep pattern does not match the `**US-NNN**:` format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ## Skill Recommendations

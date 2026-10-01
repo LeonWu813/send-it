@@ -4,8 +4,8 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003, MOD-009 (block-status public service `fetchBlockedUserIds`, AC-154)
-**Last Synced from PRD Revision**: 22
-**Last Updated**: 2026-09-30
+**Last Synced from PRD Revision**: 23
+**Last Updated**: 2026-10-01
 
 ---
 
@@ -47,7 +47,7 @@ This module owns the shared `BetaVideoGrid` component (`mod-beta-video/component
 - **US-015**: Report inappropriate content (beta-video report flow only — the one-tap AC-139/AC-140 flow; user-profile reports are owned by MOD-009)
 - **US-023**: Open a beta video poster's profile
 
-**US-004 Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166
+**US-004 Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166, AC-169
 
 **US-005 Acceptance Criteria**: AC-033, AC-034, AC-038, AC-039, AC-133, AC-134, AC-135, AC-136, AC-137, AC-138
 
@@ -61,7 +61,7 @@ This module owns the shared `BetaVideoGrid` component (`mod-beta-video/component
 
 **AC-030**: The system shall reject beta video uploads longer than 60 seconds before upload begins.
 
-**AC-031**: The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must use H.264 or HEVC video + AAC audio in an MP4 (`.mp4`) or QuickTime (`.mov`) container (see AC-035 for the accepted container/codec set). **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
+**AC-031** (revised): The system shall run client-side video compression before upload using `react-native-compressor` (iOS AVFoundation), and shall generate a thumbnail on the client, uploading both artifacts to storage. Compression runs **after** the AC-030 duration check and **before** the storage upload. The compression output must use H.264 video + AAC audio, be constrained to ≤1080p, and use the library's default mobile bitrate tuning, producing an MP4 (`.mp4`) or QuickTime (`.mov`) container (see AC-035 for the accepted container/codec set). The AC-036 upload progress overlay must cover a distinct "Compressing…" phase that precedes the "Uploading…" phase, so the user sees progress during both compression and upload. **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
@@ -71,7 +71,7 @@ This module owns the shared `BetaVideoGrid` component (`mod-beta-video/component
 
 **AC-035** (revised): The system shall accept beta video uploads in either an MP4 (`.mp4`) or QuickTime (`.mov`) container — `.mov` is included so users can upload iPhone-camera footage without converting it first — and shall reject, on ingest, any upload whose video codec is not H.264 or HEVC or whose audio codec is not AAC, surfacing a clear error to the user rather than storing an unplayable file. Both containers are stored as-is (no server-side transcoding); the ≤60-second duration cap (AC-030) and size constraints apply regardless of container.
 
-**AC-036**: While a beta video is uploading, a progress overlay is displayed showing upload progress (0–100%). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
+**AC-036**: While a beta video upload is in progress, a progress overlay is displayed covering a distinct "Compressing…" phase followed by an "Uploading…" phase (0–100% for the upload portion). The overlay blocks further interaction until the upload completes or fails, preventing double-submission.
 
 **AC-037** (new — code gap, future module): The system shall present an "Add beta video" entry point on the route detail screen that launches the beta video capture/selection flow with the route context (route ID) pre-attached, so the resulting upload is bound to that route (AC-032). The entry point must be visible without leaving the route detail screen.
 
@@ -123,6 +123,8 @@ This module owns the shared `BetaVideoGrid` component (`mod-beta-video/component
 
 **AC-166** (new): In `UploadBetaVideoScreen`, before the final confirm/upload action, the system shall call a new service check `checkExistingBetaVideo(routeId): Promise<boolean>` to determine whether the current user already has a beta video for this route. If an existing video is found, the screen shall display the reminder text "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。" (EN: "You already have a beta video for this route. Confirming will replace your existing video."). The upload shall use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint.
 
+**AC-169** (new): After client-side compression completes (AC-031) and before the storage upload is attempted, the system shall check the compressed file's size using `expo-file-system` `getInfoAsync()`. If the compressed file still exceeds the Supabase Storage bucket limit (the 50 MB free-tier ceiling), the system shall not attempt the upload and shall show the user-facing error "影片壓縮後仍超過上限，請修剪影片後再試。" (EN: "Video is still too large after compression. Please trim it and try again."). This post-compression size guard prevents an HTTP 413 from ever reaching the user as a cryptic error.
+
 ---
 
 ## Integration Points
@@ -165,6 +167,10 @@ BetaVideo
    --   for this route, the upload replaces it (delete-old + insert, or ON CONFLICT
    --   DO UPDATE). Per-upload visibility toggle removed (AC-161) -- visibility is the
    --   account-level users.beta_video_privacy setting (AC-156/AC-157).
+   -- Upload size (AC-169, no schema change): after compression with react-native-compressor
+   --   (H.264/AAC, <=1080p), the client checks the compressed file size via
+   --   expo-file-system getInfoAsync(); if still >50 MB (free-tier bucket ceiling),
+   --   upload is blocked and user sees the zh-TW/EN "still too large" error.
    -- is_reported: set true via a SECURITY DEFINER RPC when any user files a
    --   one-tap report (AC-140). The reporter does not own the row, so the flip
    --   must go through a SECURITY DEFINER RPC, not a direct UPDATE.
@@ -209,8 +215,9 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - Authenticated user session (MOD-001)
 
 **Outputs (upload):**
-- Client-side: video compressed to H.264/HEVC + AAC in `.mp4` or `.mov`; thumbnail generated; both validated for codec conformance before upload
+- Client-side: video compressed using `react-native-compressor` (H.264/AAC, ≤1080p, library-default mobile bitrate) after the AC-030 duration check; thumbnail generated; both validated for codec conformance before upload
 - `checkExistingBetaVideo(routeId)` called before confirm — if existing video found, replace reminder shown (AC-166)
+- Post-compression size check via `expo-file-system` `getInfoAsync()`: if compressed file exceeds 50 MB, upload is blocked and user sees "影片壓縮後仍超過上限，請修剪影片後再試。" (AC-169)
 - Video artifact and thumbnail uploaded to Supabase Storage
 - `BetaVideo` row inserted (or upserted) in Postgres with `video_url`, `thumbnail_url`, `duration_seconds`, `caption`, `route_id`, `user_id`, `is_reported = false`, `report_dismissed = false`, consistent with the `UNIQUE (user_id, route_id)` constraint (AC-165)
 - On ingest validation failure: clear error message displayed to user; no file stored
@@ -258,10 +265,12 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 
 - **60-second cap**: Check video duration client-side before compression begins. Reject (with clear error) any video longer than 60 seconds (AC-030). Do not begin compression or upload for over-limit videos.
 - **Codec standardization (H.264/HEVC + AAC in MP4 or MOV)**: All client-side compression output must use H.264 or HEVC video + AAC audio in an MP4 (`.mp4`) or QuickTime (`.mov`) container (AC-031, AC-035). This is required because Supabase Storage serves the file as-uploaded with no server-side transcoding; playability on iOS AVPlayer depends entirely on the container/codec.
-- **Recommended compression library**: `ffmpeg-kit-react-native` is the recommended library because it guarantees H.264 output. Alternative (`expo-image-picker` with `videoQuality: 'medium'`) is device-dependent and may produce HEVC or other codecs on some iPhones, risking unplayable files. The final library choice must be confirmed during MOD-005 engineering and documented in this spec before coding begins.
+- **Compression library (`react-native-compressor`, AC-031)**: Client-side compression uses `react-native-compressor` (iOS AVFoundation wrapper, Expo bare compatible). Output targets H.264/AAC, ≤1080p, library-default mobile bitrate. Compression runs **after** the AC-030 duration check and **before** the storage upload. Install via `npx expo install react-native-compressor` (per the Native Dependency Installation convention); hand-pinning the version is prohibited. Because `react-native-compressor` is a native module, unit tests will mock it — the engineer must run `npx expo run:ios` and confirm the native build compiles before QA handoff (Native Build Gate Before QA Handoff convention).
+- **Post-compression size guard (AC-169)**: After compression and before the upload attempt, call `expo-file-system` `getInfoAsync()` on the compressed file. If the reported size exceeds 50 MB (the Supabase Storage free-tier bucket ceiling), do not attempt the upload — show the user-facing error "影片壓縮後仍超過上限，請修剪影片後再試。" (EN: "Video is still too large after compression. Please trim it and try again."). This guard prevents an HTTP 413 from reaching the user as a cryptic error. No schema change or migration is required.
+- **Progress overlay phases (AC-036)**: The upload progress overlay must cover two sequential phases: "Compressing…" (during `react-native-compressor` execution) and then "Uploading…" (0–100% during the Supabase Storage upload). Both phases must block further interaction.
 - **Ingest validation (AC-035)**: Before inserting the `BetaVideo` row, validate that the muxed output uses H.264 or HEVC video + AAC audio. Rejection is codec-based, not container-based — both `.mp4` and `.mov` are accepted containers; an upload is rejected only when the video codec is not H.264/HEVC or the audio codec is not AAC. If validation fails, surface a clear error and do not store the file.
 - **Thumbnail (Phase 1 simplification)**: In Phase 1, the thumbnail may use the video URI as a placeholder; `BetaVideo.thumbnail_url` must still be a valid, retrievable URL. Client-side frame extraction (e.g. a frame at 1 second using `expo-video-thumbnails`) is deferred to Phase 2. Uploaded to Supabase Storage alongside the video. URL stored in `BetaVideo.thumbnail_url`.
-- **Phase 1 simplification — client-side frame extraction deferred**: True frame extraction (extracting a still frame from the video at a given timestamp) is a Phase 2 feature. Phase 1 may populate `thumbnail_url` with the video URI as a placeholder, provided it is a valid, retrievable URL (AC-031 Phase 1 clause). Adding a native frame-extraction dependency (e.g. `expo-video-thumbnails`, `ffmpeg-kit-react-native`) is a scope/dependency decision deferred to Phase 2.
+- **Phase 1 simplification — client-side frame extraction deferred**: True frame extraction (extracting a still frame from the video at a given timestamp) is a Phase 2 feature. Phase 1 may populate `thumbnail_url` with the video URI as a placeholder, provided it is a valid, retrievable URL (AC-031 Phase 1 clause). Adding a native frame-extraction dependency (e.g. `expo-video-thumbnails`) is a scope/dependency decision deferred to Phase 2.
 - **Storage upload pattern**: Upload video and thumbnail to Supabase Storage using the Supabase client singleton from `src/lib/supabase.ts`. Never call `createClient()` at call sites. Never import the `service_role` key in client code. The service-role key lives in `supabase secrets` as `SERVICE_ROLE_KEY` and is only read inside Edge Functions.
 - **Inline playback**: Beta videos must play inline in both the route detail page (MOD-003 context) and the activity feed (MOD-006 context). No external links. No external browser.
 - **60-second playability SLA (AC-032)**: The video must be playable inline within 60 seconds of upload completion on a normal 4G/LTE connection. Since there is no server transcoding, this depends on Storage CDN delivery latency — the compression + upload pipeline must keep total time within the SLA.
@@ -290,7 +299,7 @@ The following six decisions were recorded by Tech Lead in the 2026-09-28 review 
 
 5. **Swipe gesture — RN built-in `PanResponder`; do NOT add `react-native-gesture-handler`.** `react-native-gesture-handler` is not installed and adding it requires a native dependency install + rebuild + a root `GestureHandlerRootView` wrap. Use RN core `PanResponder` (vertical-only): `onMoveShouldSetPanResponder` returns true when `|dy| > |dx|` and `|dy|` exceeds a threshold; on release, `dy < -SWIPE_THRESHOLD` → advance to next (if exists); `dy > +SWIPE_THRESHOLD` → go to previous (if exists) or dismiss. Also provide an explicit back/close control (`<` chevron, AC-133) pinned top-left within `insets.top` — the back control always dismisses from any position in the set (AC-039). The back control must not unmount, disappear, or lose its tap target during or after a swipe transition (AC-133). `<Modal onRequestClose>` should also route to dismiss. If `nativeControls` is on in the viewer, keep the `PanResponder` on a region outside the control bar's hit area to avoid gesture conflicts; or disable `nativeControls` in the viewer and rely on auto-play + swipe + back button. Document the chosen approach.
 
-6. **Thumbnails — Phase 1 placeholder; do NOT mount `VideoView` per grid cell; do NOT add a frame-extraction library.** `thumbnail_url` is a video storage path, not an image (confirmed by PM Rev 10 ruling / AC-031 Phase 1 simplification). Each AC-038 grid cell renders the mandatory camera-icon overlay (top-left, AC-038) over a neutral themed placeholder fill (e.g. `styles.thumbnailPlaceholder`, `theme.colors.textDisabled`), attempting `<Image>` but expecting it to fall back. Do NOT mount a `VideoView` per grid cell — N live decoders on one screen risks the ≤3s cold-start / smooth-scroll NFR and battery. Do NOT add a frame-extraction library (`expo-video-thumbnails`, `ffmpeg-kit-react-native`) for this change — that reopens the settled Phase 2 scope decision (AC-031 Phase 1 clause). The camera-icon overlay is the "this is a video" affordance; the placeholder-thumbnail limitation is cosmetically absorbed by the AC-038 design.
+6. **Thumbnails — Phase 1 placeholder; do NOT mount `VideoView` per grid cell; do NOT add a frame-extraction library.** `thumbnail_url` is a video storage path, not an image (confirmed by PM Rev 10 ruling / AC-031 Phase 1 simplification). Each AC-038 grid cell renders the mandatory camera-icon overlay (top-left, AC-038) over a neutral themed placeholder fill (e.g. `styles.thumbnailPlaceholder`, `theme.colors.textDisabled`), attempting `<Image>` but expecting it to fall back. Do NOT mount a `VideoView` per grid cell — N live decoders on one screen risks the ≤3s cold-start / smooth-scroll NFR and battery. Do NOT add a frame-extraction library (`expo-video-thumbnails`) for this change — that reopens the settled Phase 2 scope decision (AC-031 Phase 1 clause). The camera-icon overlay is the "this is a video" affordance; the placeholder-thumbnail limitation is cosmetically absorbed by the AC-038 design.
 
 ### Reel Viewer Overlay, Report Flow, and Data Join — Tech Lead Decisions (Rev 16)
 

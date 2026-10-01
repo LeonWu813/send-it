@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 18 (2026-09-30)
-**Last Updated**: 2026-09-30
+**Last synced from PRD**: rev 23 (2026-10-01)
+**Last Updated**: 2026-10-01
 
 ---
 
@@ -124,7 +124,7 @@ Only vars prefixed `EXPO_PUBLIC_` are safe to inline into the client bundle. Any
 
 ### Video Pipeline Conventions
 
-Accepted upload containers are **MP4 (`.mp4`) and QuickTime (`.mov`)**. Rejection on ingest is codec-based: uploads whose video codec is not H.264 or HEVC, or whose audio codec is not AAC, must be rejected with a clear error surfaced to the user (AC-035). Both `.mp4` and `.mov` files are stored as-is — no server-side transcoding. The recommended client-side compression library is `ffmpeg-kit-react-native` (H.264 output guaranteed); the final library choice is confirmed in the MOD-005 spec. Thumbnails are generated client-side before upload and uploaded alongside the video artifact.
+Accepted upload containers are **MP4 (`.mp4`) and QuickTime (`.mov`)**. Rejection on ingest is codec-based: uploads whose video codec is not H.264 or HEVC, or whose audio codec is not AAC, must be rejected with a clear error surfaced to the user (AC-035). Both `.mp4` and `.mov` files are stored as-is — no server-side transcoding. The recommended client-side compression library is `react-native-compressor` (iOS AVFoundation wrapper, Expo bare compatible; H.264/AAC output, ≤1080p, library-default mobile bitrate); the final library choice is confirmed in the MOD-005 spec. Thumbnails are generated client-side before upload and uploaded alongside the video artifact.
 
 ### File Upload to Supabase Storage
 

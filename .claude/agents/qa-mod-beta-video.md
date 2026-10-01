@@ -1,6 +1,6 @@
 ---
 name: qa-mod-beta-video
-description: QA agent for mod-beta-video (Beta Video, MOD-005). Verifies the module against project-planning/modules/mod-beta-video/spec.md. Invoke after Engineer completes or fixes the module. Rev 22: verify BetaVideoGrid (AC-160), fetchBetaVideosByUser (AC-162), reelContext prop (AC-164), AC-158 privacy filter, AC-161 toggle removal, AC-165 unique constraint migration, AC-166 upsert/replace.
+description: QA agent for mod-beta-video (Beta Video, MOD-005). Verifies the module against project-planning/modules/mod-beta-video/spec.md. Invoke after Engineer completes or fixes the module. Rev 23: verify AC-031 revised (react-native-compressor, ordering, AC-036 Compressing phase), AC-169 new (post-compression size guard — expo-file-system getInfoAsync, 50 MB ceiling, zh-TW/EN error string, upload not attempted when exceeded).
 tools:
   - Read
   - Write

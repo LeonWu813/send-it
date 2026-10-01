@@ -1,6 +1,6 @@
 ---
 name: engineer-mod-beta-video
-description: Engineer agent for mod-beta-video (Beta Video, MOD-005). Implements the module per project-planning/modules/mod-beta-video/spec.md. Use after Doc-Sync has created the spec. Reports blockers to human; hands off to qa-mod-beta-video on completion. Rev 22: owns BetaVideoGrid component (AC-160), fetchBetaVideosByUser service (AC-162), reelContext prop on BetaVideoReelViewer (AC-164), AC-158 beta_video_privacy filter, AC-161 toggle removal, AC-165 unique constraint migration, AC-166 upsert/replace flow.
+description: Engineer agent for mod-beta-video (Beta Video, MOD-005). Implements the module per project-planning/modules/mod-beta-video/spec.md. Use after Doc-Sync has created the spec. Reports blockers to human; hands off to qa-mod-beta-video on completion. Rev 23: AC-031 revised (react-native-compressor, ordering, AC-036 Compressing phase), AC-169 new (post-compression size guard via expo-file-system getInfoAsync, 50 MB ceiling, zh-TW/EN error string).
 tools:
   - Read
   - Write
