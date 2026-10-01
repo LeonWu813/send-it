@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 22
-**Date**: 2026-09-30
-**Revision**: 22
+**Status**: [SUBSTANTIVE] — Revision 23
+**Date**: 2026-10-01
+**Revision**: 23
 
 ---
 
@@ -97,7 +97,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to record or select a short video (≤60 sec), attach it to a specific route, and publish it,
 **so that** others attempting the route can learn from my beta.
 
-**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166
+**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166, AC-169
 
 ---
 
@@ -592,7 +592,7 @@ The data flow for the two most important loops:
 
 **AC-030**: The system shall reject beta video uploads longer than 60 seconds before upload begins.
 
-**AC-031** (revised): The system shall run client-side video compression before upload and generate a thumbnail on the client, uploading both artifacts to storage. The compression output must use H.264 or HEVC video + AAC audio in an MP4 (`.mp4`) or QuickTime (`.mov`) container (see AC-035 for the accepted container/codec set). **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
+**AC-031** (revised): The system shall run client-side video compression before upload using `react-native-compressor` (iOS AVFoundation), and shall generate a thumbnail on the client, uploading both artifacts to storage. Compression runs **after** the AC-030 duration check and **before** the storage upload. The compression output must use H.264 video + AAC audio, be constrained to ≤1080p, and use the library's default mobile bitrate tuning, producing an MP4 (`.mp4`) or QuickTime (`.mov`) container (see AC-035 for the accepted container/codec set). The AC-036 upload progress overlay must cover a distinct “Compressing…” phase that precedes the “Uploading…” phase, so the user sees progress during both compression and upload. **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1.
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
@@ -649,6 +649,8 @@ The data flow for the two most important loops:
 **AC-165** (new, DB migration): The system shall add a `UNIQUE (user_id, route_id)` constraint on the `beta_videos` table, enforcing one beta video per user per route at the database level. The migration file shall be `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql`.
 
 **AC-166** (new): In `UploadBetaVideoScreen`, before the final confirm/upload action, the system shall call a new service check `checkExistingBetaVideo(routeId): Promise<boolean>` to determine whether the current user already has a beta video for this route. If an existing video is found, the screen shall display the reminder text "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。" (EN: "You already have a beta video for this route. Confirming will replace your existing video."). The upload shall use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint.
+
+**AC-169** (new): After client-side compression completes (AC-031) and before the storage upload is attempted, the system shall check the compressed file's size using `expo-file-system` `getInfoAsync()`. If the compressed file still exceeds the Supabase Storage bucket limit (the 50 MB free-tier ceiling), the system shall not attempt the upload and shall show the user-facing error “影片壓縮後仍超過上限，請修剪影片後再試。” (EN: “Video is still too large after compression. Please trim it and try again.”). This post-compression size guard prevents an HTTP 413 from ever reaching the user as a cryptic error.
 
 ### MOD-006 (Social Graph & Feed) Acceptance Criteria
 
@@ -871,6 +873,12 @@ BetaVideo
    --   for the route, confirming replaces it (delete-old + insert, or ON CONFLICT
    --   DO UPDATE). Per-upload visibility toggle removed (AC-161) -- visibility is the
    --   account-level users.beta_video_privacy setting (AC-156/AC-157).
+   -- Upload size (AC-169, no schema change): client compresses with
+   --   react-native-compressor (H.264/AAC, <=1080p) before upload; after
+   --   compression the client checks file size via expo-file-system
+   --   getInfoAsync() and blocks the upload with a user-facing error if the
+   --   compressed file still exceeds the Supabase Storage bucket limit
+   --   (50 MB free-tier ceiling), so HTTP 413 never reaches the user.
 
 VideoReport  (beta-video one-tap reports — App Store Guideline 1.2)
  - id (uuid PK),
@@ -949,7 +957,7 @@ Block  (App Store Guideline 1.2 requirement)
 ## 10. Non-Functional Requirements
 
 - **Platform**: iOS 16+ (Phase 1). Android is Phase 2.
-- **Video**: 60-second maximum. Client-side compression before upload. Client-generated thumbnail (Phase 1: may use the video URI as a placeholder; true still-frame extraction is deferred to Phase 2 per AC-031). Accepted containers are MP4 (`.mp4`) and QuickTime (`.mov`) with H.264/HEVC video + AAC audio; both are stored as-is with no server-side transcoding (per AC-035), so iPhone-camera `.mov` footage uploads without conversion. Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
+- **Video**: 60-second maximum. Client-side compression before upload using `react-native-compressor` (iOS AVFoundation), targeting H.264/AAC, ≤1080p, library-default mobile bitrate; compression runs after the 60-second duration check and before the storage upload (AC-031). After compression, a size guard checks the compressed file via `expo-file-system` `getInfoAsync()` and, if it still exceeds the Supabase Storage bucket limit (50 MB free-tier ceiling), blocks the upload and shows a user-facing “video still too large” error rather than letting an HTTP 413 surface as a cryptic failure (AC-169). Client-generated thumbnail (Phase 1: may use the video URI as a placeholder; true still-frame extraction is deferred to Phase 2 per AC-031). Accepted containers are MP4 (`.mp4`) and QuickTime (`.mov`) with H.264/HEVC video + AAC audio; both are stored as-is with no server-side transcoding (per AC-035), so iPhone-camera `.mov` footage uploads without conversion. Storage in Supabase Storage during Phase 1; migrate to Cloudflare Stream when monthly video cost exceeds US$25 or total video storage exceeds 20 GB, whichever comes first. Operator responsibility: monitor monthly usage in Supabase dashboard.
 - **Backend**: Supabase (Postgres + Auth + Storage + Edge Functions), with RLS policies on every user-writable table. No custom backend server in Phase 1.
 - **Saved gyms**: The `saved_gyms` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-gyms list.
 - **Saved routes**: The `saved_routes` join table requires RLS such that an authenticated user may read and write only their own rows (`user_id = auth.uid()`). No user can read or modify another user's saved-routes list. Saved routes are surfaced only in the browse flow (bookmark toggle on the route detail screen; read-only saved indicator on the gym route list) — Phase 1 provides no dedicated saved-routes list surface.
