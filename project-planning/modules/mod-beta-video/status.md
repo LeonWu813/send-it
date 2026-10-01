@@ -2,6 +2,73 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-09-30 (AC-165 migration — deduplicate before adding UNIQUE constraint)
+
+### Bug Fix — AC-165 migration: deduplicate before UNIQUE constraint — 2026-09-30
+
+**Problem**: `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql` failed in production with error 23505 (unique_violation) because duplicate `(user_id, route_id)` rows already exist in `beta_videos`. The original migration added the `UNIQUE` constraint directly without first removing duplicates.
+
+**Fix**: Rewrote the migration file to add a deduplication `DELETE` step before the `ADD CONSTRAINT` step. The `DELETE` keeps the most recent row per `(user_id, route_id)` pair (highest `created_at`), using `DISTINCT ON (user_id, route_id) … ORDER BY user_id, route_id, created_at DESC`. After deduplication, the `UNIQUE` constraint is safe to add. No TypeScript changes required.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 429 tests, 31 suites, 0 failures
+- Git scope: only `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql` modified by this fix (other dirty files are pre-existing). PASS.
+- Judgment-based: pure SQL migration fix; no AC logic changed; no new dependencies; deduplication semantics (keep most recent) are consistent with the AC-166 upsert/replace design (most recent upload wins). PASS.
+
+**Files modified**:
+- `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql` — added Step 1 deduplication DELETE before Step 2 ADD CONSTRAINT
+
+**ACs addressed**:
+- **AC-165**: UNIQUE (user_id, route_id) constraint on `beta_videos` — migration now safe on a non-empty table
+
+---
+
+**Status**: Feature implementation — 2026-09-30 (Rev 22 — BetaVideoGrid, fetchBetaVideosByUser, AC-158 followers-only filter, AC-161 no per-video toggle, AC-165 DB migration, AC-166 replace flow, reelContext prop)
+
+### Feature — Rev 22: BetaVideoGrid, fetchBetaVideosByUser, AC-158, AC-161, AC-165, AC-166, reelContext — 2026-09-30
+
+**ACs implemented**:
+
+- **AC-158 ✓**: BetaVideoSection now applies a followers-only privacy filter after the AC-154 blocked-user filter. After `fetchBetaVideosForRoute` returns (which now includes `beta_video_privacy` in the poster join), posters with `beta_video_privacy = 'followers_only'` are identified; a single batch `follows` query checks all affected poster IDs at once; videos from non-followed followers-only posters are excluded. The viewer always sees their own videos regardless. The follows check is a direct `supabase.from('follows').select('followee_id').eq(...).in(...)` — one query per route load, not one per poster.
+
+- **AC-160 ✓**: New `BetaVideoGrid` component at `src/modules/mod-beta-video/components/BetaVideoGrid.tsx`. 3-column grid (row-based layout with gap). Each cell: gray `theme.colors.surface` background + `rgba(0,0,0,0.35)` absolute View on bottom half + centered `Ionicons name="play"` (white, size 28). Tapping fires `onPressVideo(index)`. If `videos.length === 0` and `emptyState` is provided, renders `emptyState` (returns `null` otherwise). Exported from the module barrel.
+
+- **AC-161 ✓**: No per-video visibility toggle existed in `BetaVideoUploader` or anywhere in the upload flow. Confirmed: no state, no UI, no payload field for per-upload privacy. Consistent with the spec — AC-161 is a removal of a never-added feature in this implementation. Added a code comment confirming the intentional absence.
+
+- **AC-162 ✓**: `fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]>` added to `beta-video-service.ts`. Selects `id, route_id, user_id, video_url, thumbnail_url, created_at`, filters with canonical `.or('is_reported.eq.false,report_dismissed.eq.true')` exclusion predicate, orders `created_at DESC`. Auth session guard: calls `supabase.auth.getSession()` and throws if no session. Exported from module barrel.
+
+- **AC-165 ✓**: Migration `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql` created. Adds `UNIQUE (user_id, route_id)` constraint (`beta_videos_user_id_route_id_key`) on `public.beta_videos`.
+
+- **AC-166 ✓**: `checkExistingBetaVideo(routeId: string): Promise<boolean>` added to `beta-video-service.ts`. Uses `supabase.from('beta_videos').select('id').eq('user_id', currentUserId).eq('route_id', routeId).maybeSingle()` — returns `true` if row exists. `BetaVideoUploader` calls this in `useEffect` on mount; stores result in `hasExistingVideo` state. When `true`, renders `t('betaVideo.replaceWarning')` text (below the add button, above errors). The upload handler deletes the existing row before calling `uploadBetaVideo` when `hasExistingVideo` is true (delete-old + insert pattern consistent with the AC-165 UNIQUE constraint). i18n keys `betaVideo.replaceWarning` added to both locale files.
+
+- **reelContext prop ✓** (AC-164 dependency): `reelContext?: 'route' | 'profile'` prop added to `BetaVideoReelViewerProps` (default `'route'`). When `'route'`: poster Row 1 Pressable calls `handleNavigateToUser` as before. When `'profile'`: `disabled={true}` and `onPress={undefined}` — poster row visible but not tappable, no navigation fires. MOD-001 and MOD-006 pass `reelContext="profile"` when they host the viewer on profile screens.
+
+- **Module barrel `index.ts` ✓**: New `src/modules/mod-beta-video/index.ts` created. Exports: `BetaVideoSection`, `BetaVideoGrid`, `BetaVideoReelViewer`, `fetchBetaVideosForRoute`, `uploadBetaVideo`, `getVideoSignedUrl`, `getThumbnailSignedUrl`, `reportBetaVideo`, `fetchBetaVideosByUser`, `checkExistingBetaVideo`, and types `BetaVideo`, `BetaVideoUploadInput`, `UploadProgress`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 429 tests, 31 suites, 0 failures (up from 417/31 — 12 new tests added: 7 service tests for AC-162/AC-166, 5 existing suites updated)
+
+**Files created**:
+- `src/modules/mod-beta-video/components/BetaVideoGrid.tsx` — new shared component (AC-160)
+- `src/modules/mod-beta-video/index.ts` — module barrel (AC-160, AC-162, AC-164, AC-166)
+- `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql` — UNIQUE constraint (AC-165)
+
+**Files modified**:
+- `src/modules/mod-beta-video/types.ts` — added `beta_video_privacy` field to `BetaVideo` interface (AC-158)
+- `src/modules/mod-beta-video/beta-video-service.ts` — updated `fetchBetaVideosForRoute` select to include `beta_video_privacy` (AC-158); added `fetchBetaVideosByUser` (AC-162); added `checkExistingBetaVideo` (AC-166)
+- `src/modules/mod-beta-video/components/BetaVideoSection.tsx` — added `supabase` import; added AC-158 followers-only filter with batch follows query after AC-154 block filter
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — added `reelContext` prop (default `'route'`); poster Row 1 Pressable is disabled when `reelContext === 'profile'` (AC-164)
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — added `supabase` import; added `checkExistingBetaVideo` import and call on mount; added `hasExistingVideo` state; added replace warning text and `replaceWarningText` style; added delete-old-row step in `handleSelectVideo` when `hasExistingVideo` is true (AC-161, AC-166)
+- `locales/en/common.json` — added `betaVideo.replaceWarning` key (AC-166)
+- `locales/zh-TW/common.json` — added `betaVideo.replaceWarning` key (AC-166)
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — added `auth.getSession` to supabase mock; added `fetchBetaVideosByUser` and `checkExistingBetaVideo` imports and test blocks (AC-162, AC-166)
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — updated supabase mock to include chainable `follows` query mock; added `checkExistingBetaVideo` to service mock (AC-158, AC-166)
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — added `checkExistingBetaVideo` to service mock and `mockCheckExistingBetaVideo` typed reference; added `beforeEach` default (AC-166)
+
+---
+
 **Status**: Feature implementation — 2026-09-30 (AC-154 — block filter for beta-video list)
 
 ### Feature — Rev 20: block filter for beta-video list (AC-154) — 2026-09-30
