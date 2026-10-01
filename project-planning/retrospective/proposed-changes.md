@@ -1,8 +1,8 @@
 # Retrospective: Proposed Changes
 
-**Date:** 2026-09-21 (updated 2026-09-22)
-**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion; MOD-003 cross-module integration gap
-**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership; human QA preparation for MOD-003 revealed `RouteNavigator` was never wired into `GymDetailScreen` (MOD-002)
+**Date:** 2026-09-21 (updated 2026-09-22, 2026-10-01)
+**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion; MOD-003 cross-module integration gap; MOD-005 human QA session — AC-169 mock-fidelity gap
+**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership; human QA preparation for MOD-003 revealed `RouteNavigator` was never wired into `GymDetailScreen` (MOD-002); human QA on MOD-005 revealed AC-169 size guard silently never fired due to a mock that hid option-gated API behavior
 
 ---
 
@@ -44,7 +44,20 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 4. Document production.md Ownership and Mid-Project Escalation Path
+### 4. Mock-Fidelity Gap — Option-Gated API Return Fields (Engineer + QA + Cross-Project)
+
+**Target files:**
+- `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section (Change 1: mock-fidelity rule)
+- `~/.claude/skills/qa-checklist/references/common-failure-patterns.md` — append as pattern 10 (Change 2: API contract audit step)
+- Optional follow-on: `~/.claude/agents/templates/engineer.md` and `~/.claude/agents/templates/qa.md` if templates exist (Change 3: cross-project encoding)
+
+**Rationale:** Human QA on MOD-005 (AC-169 post-compression size guard, 2026-10-01) revealed a class of silent test failure: a Jest mock for `getInfoAsync` returned `{ exists: true, size: 1000 }` unconditionally, regardless of call arguments. This allowed engineer tests to verify the if-size-then-throw branch logic while hiding whether `size` is ever populated at runtime without a `{ size: true }` option. `tsc --noEmit` and all unit tests passed; the failure surfaced only during human QA when the real API was called without the option. The guard silently never fired and the user received a cryptic HTTP 413 instead of the friendly i18n error. The same pattern recurs whenever an API has option-gated return fields and the mock returns all fields unconditionally. Both proposed changes are general (not React Native- or expo-specific) and apply to any project using this framework with Jest-mocked external libraries.
+
+**Draft:** `project-planning/retrospective/drafts/mock-fidelity-gap.proposal.md`
+
+---
+
+### 5. Document production.md Ownership and Mid-Project Escalation Path
 
 **Target file:** New project-level skill — suggested `~/.claude/skills/agent-workflow/SKILL.md` (create via create-agent-skills skill)
 
@@ -60,4 +73,4 @@ For each approved proposal, tell Claude Code:
 
 > "Use the create-agent-skills skill to create a project-level skill based on `project-planning/retrospective/drafts/<proposal-file>.md`"
 
-For proposals targeting existing skill files (proposals 2 and 3 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
+For proposals targeting existing skill files (proposals 2, 3, and 4 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
