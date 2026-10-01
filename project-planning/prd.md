@@ -97,7 +97,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to record or select a short video (≤60 sec), attach it to a specific route, and publish it,
 **so that** others attempting the route can learn from my beta.
 
-**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130
+**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166
 
 ---
 
@@ -127,7 +127,9 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to follow other users and see their sends and beta videos in a chronological feed,
 **so that** I can keep up with what my friends and local strong climbers are doing.
 
-**Acceptance Criteria**: AC-050, AC-051
+**Note (Phase 1)**: the chronological activity feed UI is deferred to Phase 2 (AC-159). Phase 1 ships follow/unfollow and surfaces followed climbers on the Home screen (US-020) and their beta videos on profile grids (US-023, AC-163), but not a dedicated feed screen.
+
+**Acceptance Criteria**: AC-050, AC-051, AC-159
 
 ---
 
@@ -167,7 +169,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to see my full send history (filterable by gym, grade, date range) and basic stats (sends by grade, total sends, current streak, highest grade), with each logged send showing an achievement icon for its style,
 **so that** I can see how I'm improving.
 
-**Acceptance Criteria**: AC-060, AC-061, AC-062, AC-064, AC-065
+**Acceptance Criteria**: AC-060, AC-061, AC-062, AC-064, AC-065, AC-160, AC-162, AC-164
 
 ---
 
@@ -279,7 +281,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** to tap a beta video poster's name or avatar to view their profile,
 **so that** I can discover climbers whose content I enjoy.
 
-**Acceptance Criteria**: AC-135, AC-144, AC-154
+**Acceptance Criteria**: AC-135, AC-144, AC-154, AC-163
 
 ---
 
@@ -322,11 +324,11 @@ The data flow for the two most important loops:
 
 ### MOD-001: Auth & Profile
 
-**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and expose a Logout control. Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). There is no home gym concept — saved gyms live in MOD-012.
+**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). There is no home gym concept — saved gyms live in MOD-012.
 
 **User Stories**: US-001, US-011, US-012, US-022
 
-**Dependencies**: none
+**Dependencies**: MOD-005 (`BetaVideoGrid` component, `fetchBetaVideosByUser` service, and `BetaVideoReelViewer` `profile` context for the own-videos grid on ProfileScreen, AC-164)
 
 ---
 
@@ -362,7 +364,7 @@ The data flow for the two most important loops:
 
 ### MOD-005: Beta Video
 
-**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154), and filtering out beta videos whose poster has set `beta_video_privacy = followers_only` when the viewer is neither the poster nor a follower (AC-158).
+**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154), and filtering out beta videos whose poster has set `beta_video_privacy = followers_only` when the viewer is neither the poster nor a follower (AC-158). Own the shared `BetaVideoGrid` component (3-column thumbnail grid, AC-160) consumed by MOD-006 (AC-163) and MOD-001 (AC-164); the `fetchBetaVideosByUser` service (AC-162) consumed by the same; the `reelContext: 'route' | 'profile'` prop on `BetaVideoReelViewer` (AC-164); the account-level upload flow (per-upload visibility toggle removed, AC-161; one-video-per-route enforced by a DB unique constraint AC-165 with an upsert/replace flow and a replace reminder, AC-166).
 
 **User Stories**: US-004, US-005, US-015, US-023
 
@@ -372,7 +374,7 @@ The data flow for the two most important loops:
 
 ### MOD-006: Social Graph & Feed
 
-**Purpose**: Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, beta-video like reactions, the Followers and Following list screens (AC-146, AC-147), and the other-user `UserProfileScreen` overlay — including its three-dots action sheet (Report / Block / Unblock, AC-150) and its blocked-state "This profile isn't available" rendering (AC-153). The report and block actions themselves are performed via MOD-009's public services.
+**Purpose**: Handle follow/unfollow, beta-video like reactions, the Followers and Following list screens (AC-146, AC-147), and the other-user `UserProfileScreen` overlay — including its three-dots action sheet (Report / Block / Unblock, AC-150), its blocked-state "This profile isn't available" rendering (AC-153), and a 3-column beta-video grid of that user's beta videos below the stats section (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-163). The report and block actions themselves are performed via MOD-009's public services. The chronological activity feed UI is formally deferred to Phase 2 (AC-159): `FeedScreen.tsx` and the `get_activity_feed` RPC remain in the codebase as dead code, never imported or rendered in any navigator or shell.
 
 **User Stories**: US-007, US-008, US-022
 
@@ -491,6 +493,10 @@ The data flow for the two most important loops:
 **AC-145** (new): The Profile screen shall display, immediately below the user's bio, two tappable count links arranged left (followers count, label "追蹤者") and right (following count, label "追蹤中"). Tapping the followers link navigates to the Followers list screen (AC-146); tapping the following link navigates to the Following list screen (AC-147). The counts are sourced from MOD-006's social-graph public service. This applies to both the current user's own Profile screen and the MOD-008 other-user profile surface (AC-064).
 
 **AC-156** (new): The system shall persist a per-user beta-video privacy setting in a new `users.beta_video_privacy` column (enum `public` (default) | `followers_only`), separate and independent from the existing `privacy_setting` column (AC-063). MOD-001 shall expose a public service function that updates the current user's `beta_video_privacy` value; MOD-001 owns this profile write. When `beta_video_privacy = followers_only`, the user's beta videos shall be visible only to the user themselves and to their followers; when `public` (default), the user's beta videos are visible to all users. This setting governs beta-video visibility only and does not affect `privacy_setting` (which governs logs and the profile surface per AC-063). Adding the column requires a migration.
+
+**AC-164** (new, MOD-001 + MOD-005): The `ProfileScreen` shall display a 3-column `BetaVideoGrid` (AC-160) as a separate section below the full send history, showing the current user's own beta videos fetched via `fetchBetaVideosByUser(currentUserId)` (AC-162). Tapping a cell shall open `BetaVideoReelViewer` cycling through the current user's own videos, starting at the tapped index. In this context the viewer is passed `reelContext = 'profile'`: the poster-identity row is visible but NOT tappable (no navigation on tap). MOD-005 shall add a `reelContext: 'route' | 'profile'` prop to `BetaVideoReelViewer` — `'route'` keeps the existing behavior (poster row tappable, navigates to the poster's profile per AC-135); `'profile'` renders the poster row visible but not tappable. MOD-001 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer` for this section.
+
+**AC-167** (new): The Logout control shall be removed from the `ProfileScreen` `listFooterComponent`. Logout moves to the SettingsScreen (AC-168). This supersedes AC-119's placement of the Logout control on the Profile screen; the session-ending behavior (ends the session and returns the user to the signed-out state) is unchanged — only its location moves.
 
 ---
 
@@ -634,6 +640,16 @@ The data flow for the two most important loops:
 
 **AC-158** (new): The system shall exclude from every beta-video listing (the route-detail grid per AC-038/AC-142, the fullscreen viewer set per AC-039, and the activity feed per AC-051) any beta video whose poster has set `beta_video_privacy = followers_only` (AC-156) when the requesting viewer is neither the poster nor a follower of the poster. A viewer who is the poster, or who follows the poster, continues to see that poster's beta videos. This beta-video privacy filter applies in addition to the reported-video exclusion (AC-142) and the blocked-user filter (AC-154). The `beta_video_privacy` value is read from the poster's user record (joined on the existing `fetchBetaVideosForRoute` poster join, AC-144); the follower relationship is determined via the `Follow` table (the viewer is a follower when a `Follow` row exists with `follower_id = viewer` and `followee_id = poster`).
 
+**AC-160** (new): The system shall provide a shared `BetaVideoGrid` component at `mod-beta-video/components/BetaVideoGrid.tsx` that renders a 3-column grid of beta-video thumbnails. Each cell shall show a Phase 1 placeholder: a gray background with a centered play-icon overlay on a dark gradient. The component's props shall be `videos: BetaVideo[]`, `onPressVideo: (index: number) => void`, and an optional `emptyState?: React.ReactNode`. Tapping a cell shall fire `onPressVideo(index)` with that cell's index. This component is owned by MOD-005 and consumed by MOD-006 (AC-163) and MOD-001 (AC-164).
+
+**AC-161** (new): The system shall remove the per-video visibility toggle from `UploadBetaVideoScreen`. Beta-video visibility is an account-level setting (`beta_video_privacy`, AC-156/AC-157) and shall not be settable per upload.
+
+**AC-162** (new): The system shall add a service function `fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]>` to `mod-beta-video/beta-video-service.ts` that returns all beta videos uploaded by the given user across all routes, ordered by `created_at DESC`. This service is owned by MOD-005 and consumed by MOD-006 (AC-163) and MOD-001 (AC-164). The result remains subject to the existing visibility rules where surfaced (reported-video exclusion AC-142, blocked-user filter AC-154, and beta-video privacy AC-158 as applicable to the viewing context).
+
+**AC-165** (new, DB migration): The system shall add a `UNIQUE (user_id, route_id)` constraint on the `beta_videos` table, enforcing one beta video per user per route at the database level. The migration file shall be `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql`.
+
+**AC-166** (new): In `UploadBetaVideoScreen`, before the final confirm/upload action, the system shall call a new service check `checkExistingBetaVideo(routeId): Promise<boolean>` to determine whether the current user already has a beta video for this route. If an existing video is found, the screen shall display the reminder text "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。" (EN: "You already have a beta video for this route. Confirming will replace your existing video."). The upload shall use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint.
+
 ### MOD-006 (Social Graph & Feed) Acceptance Criteria
 
 **AC-050**: The system shall allow a user to follow and unfollow any other user (subject to Block; see AC-083) and reflect the change immediately in the follower's profile counts.
@@ -658,7 +674,11 @@ The data flow for the two most important loops:
 
 **AC-153** (new): When `UserProfileScreen` (AC-150) loads, it shall check whether either party has blocked the other using MOD-009's public service (`isBlocked` / `fetchBlockedUserIds`). If a block exists in either direction, the screen shall display a "This profile isn't available" message in place of the profile content: the follow/unfollow button and the stats section (AC-149) shall be hidden. The three-dots icon (AC-150) shall still be shown so the viewer can unblock the user (AC-152).
 
-> **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006.
+**AC-159** (new): The social activity feed UI is formally deferred to Phase 2. `FeedScreen.tsx` in `mod-social-feed/screens/` and the `get_activity_feed` RPC shall remain in the codebase as dead code but shall never be imported or rendered in any navigator or shell, with zero runtime impact and no new wiring to `HomeScreen`.
+
+**AC-163** (new, MOD-006 + MOD-005): The `UserProfileScreen` (the other-user profile overlay reached via `handleSelectClimber`) shall display a 3-column `BetaVideoGrid` (AC-160) below the stats section (AC-149), showing all beta videos by that user fetched via `fetchBetaVideosByUser` (AC-162). Tapping a cell shall open `BetaVideoReelViewer` cycling through that user's videos, starting at the tapped index. In this context the viewer is passed `reelContext = 'profile'` (AC-164): the poster-identity row is visible but NOT tappable (no navigation on tap). This grid is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state (AC-064) rather than the grid. MOD-006 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer`.
+
+> **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006. **Phase 1 status (AC-159)**: the feed UI (`FeedScreen.tsx`) and this `get_activity_feed` RPC are deferred to Phase 2 — they remain in the codebase as dead code and are never imported or rendered in Phase 1.
 
 ---
 
@@ -721,6 +741,8 @@ The data flow for the two most important loops:
 **AC-155** (new): The Settings screen (SettingsScreen) shall present a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping the row shall open a Blocked Accounts screen (BlockedAccountsScreen) that lists the users the current user has blocked (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, the user's `display_name`, and an "Unblock" button. Tapping "Unblock" shall call `unblockUser(userId)` (MOD-009, AC-152) and remove that entry from the list. When the current user has blocked no one, the screen shall display an empty state. Navigation to and from the Blocked Accounts screen is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere), with no ProfileNavigator view-state change. The blocked-users list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
 
 **AC-157** (new): The Settings screen (SettingsScreen) shall present a "Beta Video Privacy" toggle row with two states — `public` (default) and `followers_only` — reflecting the current user's `beta_video_privacy` value (AC-156). Changing the toggle shall call MOD-001's public service function to update the current user's `beta_video_privacy` column (MOD-001 owns the write) and reflect the new state immediately. This row is independent from the existing profile privacy setting (AC-063), which is edited via the MOD-001 Edit Profile entry point (AC-117), not here.
+
+**AC-168** (new): The SettingsScreen shall present a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and the "Blocked Accounts" row, AC-155). The button shall use the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167).
 
 ---
 
@@ -843,6 +865,12 @@ BetaVideo
    --   report_dismissed = false is hidden from every user everywhere it is
    --   surfaced (route detail grid, fullscreen viewer, activity feed).
    --   Requires a migration to add the two new columns.
+   -- Unique: (user_id, route_id) -- one beta video per user per route, enforced at
+   --   the DB level (AC-165). Migration: 20260930000001_mod_005_beta_video_unique_per_route.sql.
+   --   The upload flow is upsert/replace (AC-166): if a user already has a video
+   --   for the route, confirming replaces it (delete-old + insert, or ON CONFLICT
+   --   DO UPDATE). Per-upload visibility toggle removed (AC-161) -- visibility is the
+   --   account-level users.beta_video_privacy setting (AC-156/AC-157).
 
 VideoReport  (beta-video one-tap reports — App Store Guideline 1.2)
  - id (uuid PK),
