@@ -2,27 +2,24 @@
  * BetaVideoUploader — video selection and upload flow for a single route.
  *
  * AC-030: rejects videos longer than 60 seconds before upload begins.
- * AC-031: client-side compression note — expo-image-picker is used for video
- *         selection with videoMaxDuration:60 as a guard. In Phase 1, the
- *         library choice (expo-image-picker) may produce device-dependent codecs
- *         on some iPhones. The recommended production upgrade is to
- *         ffmpeg-kit-react-native for guaranteed H.264/AAC/MP4 output (spec
- *         note: final library confirmed as expo-image-picker for Phase 1 POC;
- *         upgrade path documented in spec).
+ * AC-031: client-side compression using react-native-compressor (iOS AVFoundation).
+ *         Compression runs after the AC-030 duration check and before the upload.
+ *         Output targets H.264/AAC, ≤1080p, library-default mobile bitrate.
  * AC-035: validates that the selected video file is an MP4 or MOV container
  *         before upload (PRD Revision 12 — .mov accepted for iPhone-camera
  *         footage). If validation fails, surfaces a clear error and does not
  *         upload.
- * AC-036: progress overlay is displayed during upload (0–100%), blocking
- *         further interaction until the upload completes or fails.
+ * AC-036: progress overlay covers a "Compressing…" phase followed by an
+ *         "Uploading…" phase, blocking further interaction until complete.
  * AC-037: receives route_id so the upload is bound to the correct route.
- *
- * Phase 1 simplification: expo-image-picker handles video selection only;
- * no in-app capture flow. Compression relies on the device's media pipeline
- * (acceptable for Phase 1 iOS-only scope).
+ * AC-169: after compression, checks file size via expo-file-system getInfoAsync().
+ *         If still > 50 MB (free-tier bucket ceiling), blocks upload and shows
+ *         a user-facing error.
  */
 
+import { getInfoAsync } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
+import { Video as CompressorVideo } from 'react-native-compressor';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -178,18 +175,56 @@ export default function BetaVideoUploader({
     // Duration in seconds for storage
     const durationSeconds = (asset.duration ?? 0) / 1000;
 
-    // For Phase 1, use the selected video URI directly as the thumbnail source.
-    // A proper client-side thumbnail would require ffmpeg-kit-react-native
-    // (Phase 2). Phase 1 uses the video's first-frame as captured by the picker.
-    // expo-image-picker does not expose a thumbnail URI separately for video;
-    // we use a placeholder thumbnail path pointing to the same file.
-    // In a real implementation with ffmpeg-kit, a frame at 1s would be extracted.
-    const localThumbnailUri = asset.uri; // Phase 1 simplification
-
     setIsUploading(true);
-    setProgress({ percent: 0, phase: 'thumbnail' });
 
     try {
+      // AC-031: compress before upload using react-native-compressor.
+      // Compression runs after the AC-030 duration check (above) and before
+      // the storage upload. Output: H.264/AAC, ≤1080p, library-default bitrate.
+
+      // Pre-compression guard: warn early if source is extremely large (>300 MB).
+      // Compression will still be attempted — the post-compression AC-169 guard is the hard gate.
+      // expo-file-system legacy API: size is always present on existing files (no option required).
+      const sourceInfo = await getInfoAsync(asset.uri);
+      if (sourceInfo.exists && sourceInfo.size !== undefined && sourceInfo.size > 300 * 1024 * 1024) {
+        throw new Error(t('betaVideo.errors.videoTooLargeAfterCompression'));
+      }
+
+      setProgress({ percent: 5, phase: 'compressing' });
+      const compressedUri = await CompressorVideo.compress(
+        asset.uri,
+        {
+          compressionMethod: 'auto',
+          // 'auto' targets H.264, ≤1080p, library-default mobile bitrate
+        },
+        (compressionProgress) => {
+          // Map compressor's 0→1 progress to 5%→50% on the overlay
+          setProgress({
+            percent: Math.round(compressionProgress * 45) + 5,
+            phase: 'compressing',
+          });
+        },
+      );
+
+      // AC-169: post-compression size guard.
+      // If the compressed file still exceeds the Supabase Storage free-tier
+      // bucket ceiling (50 MB), block the upload and show a user-facing error
+      // instead of receiving a cryptic HTTP 413 from the server.
+      const BUCKET_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB
+      const fileInfo = await getInfoAsync(compressedUri);
+      if (
+        fileInfo.exists &&
+        fileInfo.size !== undefined &&
+        fileInfo.size > BUCKET_LIMIT_BYTES
+      ) {
+        throw new Error(t('betaVideo.errors.videoTooLargeAfterCompression'));
+      }
+
+      // For Phase 1, use the compressed video URI as the thumbnail source.
+      // True client-side frame extraction is deferred to Phase 2 (AC-031
+      // Phase 1 simplification clause).
+      const localThumbnailUri = compressedUri;
+
       // AC-166 / AC-165: the uploadBetaVideo service uses upsert (ON CONFLICT on
       // user_id,route_id), so no manual delete step is needed here. The upsert
       // handles both the new-video and the replace case at the DB level.
@@ -198,12 +233,15 @@ export default function BetaVideoUploader({
       const video = await uploadBetaVideo(
         {
           route_id: routeId,
-          localVideoUri: asset.uri,
+          localVideoUri: compressedUri,   // compressed, not asset.uri
           localThumbnailUri,
           duration_seconds: Math.max(durationSeconds, 0.1), // guard against 0
         },
         userId,
-        (prog) => setProgress(prog),
+        (prog) => {
+          // Remap upload progress to 50%–100% range (compression occupied 5%–50%)
+          setProgress({ percent: Math.round(prog.percent / 2) + 50, phase: prog.phase });
+        },
       );
       // After a successful replace, the "has existing video" state is still true
       // (there is now a new video for this route). No reset needed.
@@ -255,7 +293,11 @@ export default function BetaVideoUploader({
         <View style={styles.progressOverlay}>
           <View style={styles.progressCard}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.progressTitle}>{t('betaVideo.uploading')}</Text>
+            <Text style={styles.progressTitle}>
+              {progress?.phase === 'compressing'
+                ? t('betaVideo.compressing')
+                : t('betaVideo.uploading')}
+            </Text>
             {progress ? (
               <Text style={styles.progressPercent}>
                 {t('betaVideo.uploadProgress', { percent: progress.percent })}

@@ -2,6 +2,64 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-10-01 (AC-169 pre-compression source size guard added; getInfoAsync option discovery)
+
+### Bug Fix — AC-169 pre-compression guard + getInfoAsync investigation — 2026-10-01
+
+**Bugs addressed**:
+
+- **Pre-compression guard (new)**: Added a `getInfoAsync(asset.uri)` call immediately before `CompressorVideo.compress()`. If the source file already exceeds 300 MB, the upload is short-circuited early with the existing `betaVideo.errors.videoTooLargeAfterCompression` error, sparing the user from waiting through a long compression run only to fail the post-compression AC-169 check. The post-compression `getInfoAsync(compressedUri)` check remains the hard gate for the 50 MB bucket ceiling.
+
+- **`{ size: true }` option — not applicable**: The invocation requested adding `{ size: true }` to both `getInfoAsync` calls. Investigation of the installed `expo-file-system` `InfoOptions` type (`node_modules/expo-file-system/build/legacy/FileSystem.types.d.ts`) found that the legacy API's `InfoOptions` only accepts `{ md5?: boolean }` — there is no `size` option. The `FileInfo` type (when `exists: true`) already unconditionally includes `size: number` — it is not optional and does not require a flag to populate. Adding `{ size: true }` caused two TS2353 errors ("Object literal may only specify known properties"). The option was therefore not added; the calls remain `getInfoAsync(asset.uri)` and `getInfoAsync(compressedUri)` without options, which is correct per the API contract. The existing `fileInfo.size !== undefined` guard is still valid because TypeScript narrows `size` to `number` on the `exists: true` branch.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 434 tests, 31 suites, 0 failures (count unchanged — no new test surface; existing mock returns `{ exists: true, size: 1000 }` which already covers both call sites)
+- Git scope: only `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` modified. No other modules touched. PASS.
+- Judgment-based: pre-compression guard reuses the same error key as the post-compression guard (spec-consistent — the user message is the same for both "too large" outcomes); no new i18n keys needed; no new dependencies; `{ size: true }` omission is correct per API types and documented above; no gold-plating. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — added pre-compression `getInfoAsync(asset.uri)` source size guard (>300 MB early exit) before `CompressorVideo.compress()`
+
+**ACs addressed**:
+- **AC-169**: pre-compression guard catches extremely large source files before compression begins; post-compression guard (existing) remains the hard 50 MB gate
+
+---
+
+**Status**: Feature implementation — 2026-10-01 (Rev 23 — AC-031 react-native-compressor, AC-169 post-compression size guard)
+
+### Feature — Rev 23: react-native-compressor integration, AC-169 size guard — 2026-10-01
+
+**ACs implemented**:
+
+- **AC-031 (revised) ✓**: Client-side video compression now uses `react-native-compressor` (iOS AVFoundation). Compression runs after the AC-030 duration check and before the storage upload, using `compressionMethod: 'auto'` (H.264/AAC, ≤1080p, library-default mobile bitrate). The AC-036 progress overlay covers a distinct "Compressing…" phase (5%→50%) followed by the existing "Uploading…" phase (50%→100%). The compressed URI is passed to `uploadBetaVideo` instead of `asset.uri`. The thumbnail source also switches to `compressedUri` (Phase 1 simplification). The i18n key `betaVideo.compressing` added to both locale files.
+
+- **AC-169 ✓**: After compression completes, `getInfoAsync(compressedUri)` (expo-file-system legacy API, named import) checks the compressed file's size. If the file exceeds 50 MB (the Supabase Storage free-tier bucket ceiling), the upload is blocked and the user sees `"betaVideo.errors.videoTooLargeAfterCompression"` ("Video is still too large after compression. Please trim it and try again." / "影片壓縮後仍超過上限，請修剪影片後再試。"). The HTTP 413 can no longer reach the user as a cryptic error. No schema change or migration required.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 434 tests, 31 suites, 0 failures (up from 431 — 3 new tests added: AC-031 compress-then-upload path, AC-169 over-50MB blocked, AC-169 at-exactly-50MB allowed)
+- Git scope: `src/modules/mod-beta-video/components/BetaVideoUploader.tsx`, `src/modules/mod-beta-video/types.ts`, `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx`, `locales/en/common.json`, `locales/zh-TW/common.json`, `__mocks__/react-native-compressor.js` (new), `package.json` (moduleNameMapper), `app.json` (plugin auto-added by expo install). No other modules touched. PASS.
+- Judgment-based: compression is the correct AC-031 production path (react-native-compressor, iOS AVFoundation); `getInfoAsync` without options satisfies the legacy API type; `{ size: true }` option omitted (size is always present on existing files in the legacy API); progress remapping to 5%→50% / 50%→100% is correct per spec; no hardcoded values (BUCKET_LIMIT_BYTES is a named constant); i18n keys in both locales; no gold-plating. PASS.
+
+**Files created**:
+- `__mocks__/react-native-compressor.js` — Jest mock for react-native-compressor (Video.compress no-op, returns original URI, calls progress at 100%)
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — added `react-native-compressor` compression step (AC-031), `getInfoAsync` size guard (AC-169), dynamic progress title ("Compressing…" / "Uploading…"), compressed URI passed to `uploadBetaVideo`; progress remap 50%–100%
+- `src/modules/mod-beta-video/types.ts` — added `'compressing'` to `UploadProgress.phase` union
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — added `react-native-compressor` and `expo-file-system` mock references; added 3 new tests (AC-031 compress path, AC-169 over-limit, AC-169 at-limit)
+- `locales/en/common.json` — added `betaVideo.compressing` and `betaVideo.errors.videoTooLargeAfterCompression`
+- `locales/zh-TW/common.json` — added `betaVideo.compressing` and `betaVideo.errors.videoTooLargeAfterCompression`
+- `package.json` — added `react-native-compressor` to Jest `moduleNameMapper`
+- `app.json` — `react-native-compressor` config plugin added automatically by `npx expo install`
+
+**ACs addressed**:
+- **AC-031 (revised)**: react-native-compressor compression before upload; distinct "Compressing…" overlay phase (AC-036)
+- **AC-169**: post-compression file size guard; error shown if > 50 MB; upload blocked
+
+---
+
 **Status**: Bug fix — 2026-10-01 (AC-166 upsert hang — missing UPDATE RLS policy on beta_videos)
 
 ### Bug Fix — Missing UPDATE RLS policy on beta_videos (AC-166 upsert hang) — 2026-10-01
