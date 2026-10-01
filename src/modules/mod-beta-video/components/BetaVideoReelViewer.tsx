@@ -66,6 +66,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import type { BetaVideo } from '../types';
@@ -128,6 +129,16 @@ export interface BetaVideoReelViewerProps {
    * MOD-005 must NOT import any profile screen directly; the callback is the only coupling.
    */
   onNavigateToUser?: (userId: string) => void;
+  /**
+   * AC-164: Controls whether the poster Row 1 is tappable.
+   *   'route' (default) — existing behavior: poster row taps navigate to poster's
+   *     profile via onNavigateToUser (AC-135).
+   *   'profile' — poster row is visible (avatar + display_name rendered) but the
+   *     outer Pressable is disabled and onNavigateToUser is never called. Used
+   *     when BetaVideoReelViewer is hosted on a profile screen (MOD-001, MOD-006)
+   *     where navigating to the same profile would be redundant.
+   */
+  reelContext?: 'route' | 'profile';
 }
 
 // ── MarqueeText — pure-JS translateX marquee for overflowing text (AC-137) ────
@@ -265,6 +276,7 @@ export default function BetaVideoReelViewer({
   gymName,
   onNavigateToRoute,
   onNavigateToUser,
+  reelContext = 'route',
 }: BetaVideoReelViewerProps): React.JSX.Element {
   const { theme } = useTheme();
   const { t } = useTranslation('common');
@@ -291,6 +303,18 @@ export default function BetaVideoReelViewer({
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState(false);
+
+  // ── Current authenticated user ID (Bug 2 — own-video check) ─────────────
+  // Fetched once on mount via supabase.auth.getSession(). Used to determine
+  // whether the current video belongs to the viewer so the poster row can be
+  // made non-tappable and the report button hidden for own videos (AC-139).
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => {
+      setCurrentUserId(data.session?.user.id ?? null);
+    });
+  }, []);
 
   // ── Report state ─────────────────────────────────────────────────────────
   // Set of video IDs that have been successfully reported in this session.
@@ -524,9 +548,19 @@ export default function BetaVideoReelViewer({
     handleDismiss();
   }, [currentVideo, onNavigateToUser, handleDismiss]);
 
+  // ── Own-video check (Bug 2 / AC-139) ─────────────────────────────────────
+  // isOwnVideo is true when the current video was uploaded by the authenticated
+  // viewer. Derived from the session-fetched currentUserId (not from the session
+  // prop) so it reflects the actual viewer even when the component is hosted on
+  // a profile screen where the session prop may belong to a different user.
+  // Falls back to false (show report / allow tap) when currentUserId is not yet
+  // loaded — the session fetch is near-instant so this is a momentary state.
+  const isOwnVideo = currentUserId !== null && currentVideo
+    ? currentVideo.user_id === currentUserId
+    : false;
+
   // ── Report icon visibility (AC-139) ──────────────────────────────────────
   // Hide when: own video OR admin has dismissed the report for this video.
-  const isOwnVideo = currentVideo ? currentVideo.user_id === session.user.id : true;
   const isDismissed = currentVideo ? currentVideo.report_dismissed : false;
   const showReportButton = !isOwnVideo && !isDismissed;
   const isReported = currentVideo ? reportedIds.has(currentVideo.id) : false;
@@ -644,15 +678,27 @@ export default function BetaVideoReelViewer({
                 <View style={styles.infoColumn}>
 
                   {/*
-                   * Row 1: avatar + display_name (AC-135 revised).
-                   * Tapping navigates to the poster's profile via onNavigateToUser,
-                   * then dismisses the viewer. If onNavigateToUser is not provided,
-                   * the Pressable is still rendered but the handler is a no-op.
+                   * Row 1: avatar + display_name (AC-135 revised, AC-164, Bug 2).
+                   * When reelContext === 'route' AND !isOwnVideo: tapping navigates
+                   *   to the poster's profile via onNavigateToUser, then dismisses.
+                   * When reelContext === 'profile': poster row visible, not tappable.
+                   * When isOwnVideo: poster row visible, not tappable regardless of
+                   *   reelContext (navigating to your own profile from your own video
+                   *   is redundant and the report button is already hidden).
                    */}
                   <Pressable
                     style={styles.posterRow}
-                    onPress={handleNavigateToUser}
-                    accessibilityRole={onNavigateToUser ? 'button' : 'text'}
+                    onPress={
+                      reelContext === 'route' && !isOwnVideo
+                        ? handleNavigateToUser
+                        : undefined
+                    }
+                    disabled={reelContext === 'profile' || isOwnVideo}
+                    accessibilityRole={
+                      reelContext === 'route' && !isOwnVideo && onNavigateToUser
+                        ? 'button'
+                        : 'text'
+                    }
                     accessibilityLabel={
                       currentVideo.display_name ?? t('betaVideo.reel.anonymous')
                     }

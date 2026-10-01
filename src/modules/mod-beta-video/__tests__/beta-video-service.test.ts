@@ -20,6 +20,14 @@ jest.mock('../../../lib/supabase', () => ({
       from: jest.fn(),
     },
     rpc: jest.fn(),
+    auth: {
+      // AC-162 / AC-166: fetchBetaVideosByUser and checkExistingBetaVideo require
+      // an authenticated session. Default mock returns a valid session.
+      getSession: jest.fn().mockResolvedValue({
+        data: { session: { user: { id: 'user-001' } } },
+        error: null,
+      }),
+    },
   },
 }));
 
@@ -31,6 +39,8 @@ import {
   getVideoSignedUrl,
   getThumbnailSignedUrl,
   reportBetaVideo,
+  fetchBetaVideosByUser,
+  checkExistingBetaVideo,
 } from '../beta-video-service';
 import type { BetaVideo } from '../types';
 
@@ -228,15 +238,19 @@ describe('uploadBetaVideo', () => {
 
   function makeFromMock(insertResult: { data: BetaVideo | null; error: Error | null }) {
     return {
-      insert: jest.fn().mockReturnThis(),
+      // AC-166 / AC-165: uploadBetaVideo uses upsert (ON CONFLICT on user_id,route_id)
+      // instead of insert, so we mock upsert (which chains the same way as insert).
+      upsert: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue(insertResult),
     };
   }
 
-  it('AC-032: uploads video then inserts row with route_id (Phase 1 — no separate thumbnail upload)', async () => {
+  it('AC-032: uploads video then upserts row with route_id (Phase 1 — no separate thumbnail upload)', async () => {
     // Phase 1: only the video is uploaded; thumbnail_url is set to the video path.
     // Upload uses expo-file-system File.bytes() → Uint8Array → supabase.storage.upload(Uint8Array).
+    // AC-166 / AC-165: upsert (ON CONFLICT on user_id,route_id) handles both new-video
+    // and replace cases without a separate delete step.
     const storageBucket = makeStorageMock();
     (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
 
@@ -352,6 +366,140 @@ describe('reportBetaVideo', () => {
 
     await expect(reportBetaVideo('vid-001')).rejects.toThrow(
       'Failed to report video',
+    );
+  });
+});
+
+describe('fetchBetaVideosByUser', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Restore default authenticated session mock.
+    (mockSupabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { session: { user: { id: 'user-001' } } },
+      error: null,
+    });
+  });
+
+  it('AC-162: returns videos for the given user ordered newest-first with poster identity', async () => {
+    // Bug 4 fix: fetchBetaVideosByUser now joins the users table to provide
+    // display_name and avatar_url so the reel viewer poster row is not anonymous.
+    const rawRow = {
+      id: 'vid-001',
+      route_id: 'route-001',
+      user_id: 'user-001',
+      video_url: 'user-001/vid.mp4',
+      thumbnail_url: 'user-001/vid.mp4',
+      duration_seconds: 30,
+      caption: null,
+      created_at: '2026-09-30T10:00:00Z',
+      is_reported: false,
+      report_dismissed: false,
+      users: { display_name: 'Test Climber', avatar_url: 'https://example.com/avatar.jpg' },
+    };
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [rawRow], error: null }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    const result = await fetchBetaVideosByUser('user-001');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('vid-001');
+    expect(result[0].user_id).toBe('user-001');
+    // Bug 4: display_name and avatar_url must be flattened from the users join.
+    expect(result[0].display_name).toBe('Test Climber');
+    expect(result[0].avatar_url).toBe('https://example.com/avatar.jpg');
+    expect(selectChain.eq).toHaveBeenCalledWith('user_id', 'user-001');
+    expect(selectChain.or).toHaveBeenCalledWith('is_reported.eq.false,report_dismissed.eq.true');
+    expect(selectChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+  });
+
+  it('AC-162: returns empty array when user has no videos', async () => {
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [], error: null }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    const result = await fetchBetaVideosByUser('user-999');
+    expect(result).toHaveLength(0);
+  });
+
+  it('AC-162: throws when not authenticated', async () => {
+    (mockSupabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    await expect(fetchBetaVideosByUser('user-001')).rejects.toThrow(
+      'Authentication required',
+    );
+  });
+
+  it('AC-162: throws a user-facing error on Supabase error', async () => {
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: null, error: new Error('DB error') }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    await expect(fetchBetaVideosByUser('user-001')).rejects.toThrow(
+      'Failed to load beta videos',
+    );
+  });
+});
+
+describe('checkExistingBetaVideo', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Restore default authenticated session mock.
+    (mockSupabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { session: { user: { id: 'user-001' } } },
+      error: null,
+    });
+  });
+
+  it('AC-166: returns true when a row exists for (user_id, route_id)', async () => {
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: { id: 'vid-001' }, error: null }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    const result = await checkExistingBetaVideo('route-001');
+    expect(result).toBe(true);
+    expect(selectChain.eq).toHaveBeenCalledWith('user_id', 'user-001');
+    expect(selectChain.eq).toHaveBeenCalledWith('route_id', 'route-001');
+  });
+
+  it('AC-166: returns false when no row exists', async () => {
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    const result = await checkExistingBetaVideo('route-001');
+    expect(result).toBe(false);
+  });
+
+  it('AC-166: throws when not authenticated', async () => {
+    (mockSupabase.auth.getSession as jest.Mock).mockResolvedValue({
+      data: { session: null },
+      error: null,
+    });
+
+    await expect(checkExistingBetaVideo('route-001')).rejects.toThrow(
+      'Authentication required',
     );
   });
 });

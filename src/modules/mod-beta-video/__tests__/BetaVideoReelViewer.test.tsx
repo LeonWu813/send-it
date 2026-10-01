@@ -28,7 +28,19 @@
  */
 
 jest.mock('../../../lib/supabase', () => ({
-  supabase: { from: jest.fn(), storage: { from: jest.fn() }, rpc: jest.fn() },
+  supabase: {
+    from: jest.fn(),
+    storage: { from: jest.fn() },
+    rpc: jest.fn(),
+    // Bug 2: BetaVideoReelViewer now fetches currentUserId via getSession to
+    // determine own-video status for poster-row and report-button visibility.
+    auth: {
+      getSession: jest.fn().mockResolvedValue({
+        data: { session: { user: { id: 'viewer-user-001' } } },
+        error: null,
+      }),
+    },
+  },
 }));
 
 jest.mock('../beta-video-service', () => ({
@@ -503,6 +515,65 @@ describe('BetaVideoReelViewer', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('reel-poster-avatar')).toBeTruthy();
+    });
+  });
+
+  // ── Bug 2: own-video — poster row non-tappable, report button hidden ────────
+
+  it('Bug 2: poster row has onPress=undefined and report button hidden for the viewer\'s own video', async () => {
+    // The supabase mock returns viewer-user-001 from getSession.
+    // When the current video's user_id matches, isOwnVideo = true.
+    // isOwnVideo causes: onPress={undefined} on the poster row and report button
+    // is not rendered (null). We verify this by checking that the report button
+    // is absent and that pressing the poster row does NOT call onNavigateToUser.
+    const ownVideo = makeVideo('vid-own-viewer', 1, { user_id: 'viewer-user-001' });
+    const onNavigateToUser = jest.fn();
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[ownVideo]}
+        initialIndex={0}
+        reelContext="route"
+        onNavigateToUser={onNavigateToUser}
+      />,
+      renderOptions(),
+    );
+
+    // Wait for the poster row to be rendered and the getSession async to complete.
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-poster-row')).toBeTruthy();
+    });
+
+    // Report button must not be rendered for own videos (isOwnVideo = true → showReportButton = false).
+    // Wait for currentUserId to be set (async getSession), then check.
+    await waitFor(() => {
+      expect(screen.queryByTestId('reel-report-button')).toBeNull();
+    }, { timeout: 2000 });
+
+    // Pressing the poster row must not call onNavigateToUser (onPress is undefined for own video).
+    fireEvent.press(screen.getByTestId('reel-poster-row'));
+    expect(onNavigateToUser).not.toHaveBeenCalled();
+  });
+
+  it('Bug 2: poster row is tappable and report button visible for another user\'s video (reelContext=route)', async () => {
+    const otherVideo = makeVideo('vid-other-viewer', 1, { user_id: 'other-user-999' });
+    const onNavigateToUser = jest.fn();
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[otherVideo]}
+        initialIndex={0}
+        reelContext="route"
+        onNavigateToUser={onNavigateToUser}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      // Report button must be visible for another user's video
+      expect(screen.getByTestId('reel-report-button')).toBeTruthy();
     });
   });
 });

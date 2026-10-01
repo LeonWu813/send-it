@@ -43,7 +43,9 @@ export async function fetchBetaVideosForRoute(routeId: string): Promise<BetaVide
   const { data, error } = await supabase
     .from('beta_videos')
     .select(
-      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)',
+      // AC-158: include beta_video_privacy from the poster's user record so the
+      // followers-only filter in BetaVideoSection can be applied client-side.
+      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url, beta_video_privacy)',
     )
     .eq('route_id', routeId)
     .or('is_reported.eq.false,report_dismissed.eq.true')
@@ -55,11 +57,13 @@ export async function fetchBetaVideosForRoute(routeId: string): Promise<BetaVide
 
   // Flatten the embedded `users` object to top-level fields so the viewer
   // (AC-134) reads `video.display_name` / `video.avatar_url` directly.
+  // Also expose `beta_video_privacy` for the AC-158 filter in BetaVideoSection.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
     ...row,
     display_name: row.users?.display_name ?? null,
     avatar_url: row.users?.avatar_url ?? null,
+    beta_video_privacy: row.users?.beta_video_privacy ?? 'public',
   })) as BetaVideo[];
 }
 
@@ -131,22 +135,31 @@ export async function uploadBetaVideo(
     // ── Phase 2: Insert BetaVideo row ─────────────────────────────────────────
     onProgress?.({ percent: 90, phase: 'saving' });
 
+    // AC-166 / AC-165: use upsert so a second upload for the same (user_id, route_id)
+    // pair replaces the existing row instead of hitting the UNIQUE constraint.
+    // The old video file in storage becomes an orphan when replaced — storage cleanup
+    // on replace is deferred to Phase 2 (TODO: add a cleanup job that removes orphaned
+    // storage objects whose paths are no longer referenced in beta_videos).
     const { data, error: insertError } = await supabase
       .from('beta_videos')
-      .insert({
-        route_id: input.route_id,
-        user_id: userId,
-        video_url: videoPath,
-        // Phase 1: thumbnail_url stores the video storage path as a placeholder.
-        // Phase 2 will replace this with a real JPEG frame URL (ffmpeg-kit-react-native).
-        thumbnail_url: videoPath,
-        duration_seconds: input.duration_seconds,
-        caption: input.caption ?? null,
-      })
+      .upsert(
+        {
+          route_id: input.route_id,
+          user_id: userId,
+          video_url: videoPath,
+          // Phase 1: thumbnail_url stores the video storage path as a placeholder.
+          // Phase 2 will replace this with a real JPEG frame URL (ffmpeg-kit-react-native).
+          thumbnail_url: videoPath,
+          duration_seconds: input.duration_seconds,
+          caption: input.caption ?? null,
+        },
+        { onConflict: 'user_id,route_id' },
+      )
       .select('id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed')
       .single();
 
     if (insertError) {
+      console.error('[uploadBetaVideo] insert error:', insertError);
       // Clean up the video artifact
       await supabase.storage.from(BETA_VIDEO_BUCKET).remove([videoPath]);
       throw new Error('Failed to save beta video. Please try again.');
@@ -199,6 +212,85 @@ export async function getThumbnailSignedUrl(storagePath: string): Promise<string
   }
 
   return data.signedUrl;
+}
+
+/**
+ * Fetch all beta videos uploaded by a given user, ordered newest-first.
+ *
+ * AC-162: service function consumed by MOD-006 (AC-163) and MOD-001 (AC-164).
+ * Filters out rows where `is_reported = true AND report_dismissed = false`
+ * using the canonical AC-142/AC-143 exclusion predicate.
+ * Requires an authenticated session; throws if none.
+ *
+ * @param userId  UUID of the user whose videos to fetch.
+ * @returns       Array of BetaVideo rows ordered by created_at DESC.
+ * @throws {Error} if not authenticated or on Supabase error.
+ */
+export async function fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]> {
+  // Auth guard — all service functions require a valid session.
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error('Authentication required.');
+  }
+
+  const { data, error } = await supabase
+    .from('beta_videos')
+    .select(
+      // AC-162: include poster identity so BetaVideoReelViewer (AC-134) can render
+      // the poster row (avatar + display_name) when opened from a profile screen.
+      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)',
+    )
+    .eq('user_id', userId)
+    // AC-142 / AC-143: canonical exclusion predicate — same as fetchBetaVideosForRoute.
+    .or('is_reported.eq.false,report_dismissed.eq.true')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    throw new Error('Failed to load beta videos. Please try again.');
+  }
+
+  // Flatten the embedded `users` object to top-level fields so the viewer
+  // (AC-134) reads `video.display_name` / `video.avatar_url` directly.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    display_name: (row.users as any)?.display_name ?? null,
+    avatar_url: (row.users as any)?.avatar_url ?? null,
+  })) as BetaVideo[];
+}
+
+/**
+ * Check whether the currently authenticated user already has a beta video
+ * for the given route.
+ *
+ * AC-166: called on component mount in UploadBetaVideoScreen (or BetaVideoUploader)
+ * before the confirm/upload action to show the replace reminder.
+ *
+ * @param routeId  UUID of the route to check.
+ * @returns        `true` if a row exists, `false` otherwise.
+ * @throws {Error} if not authenticated or on Supabase error.
+ */
+export async function checkExistingBetaVideo(routeId: string): Promise<boolean> {
+  // Auth guard.
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  if (sessionError || !session) {
+    throw new Error('Authentication required.');
+  }
+
+  const currentUserId = session.user.id;
+
+  const { data, error } = await supabase
+    .from('beta_videos')
+    .select('id')
+    .eq('user_id', currentUserId)
+    .eq('route_id', routeId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error('Failed to check existing beta video.');
+  }
+
+  return data !== null;
 }
 
 /**

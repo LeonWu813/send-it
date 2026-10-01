@@ -10,8 +10,30 @@
  * beta-video-service is mocked; no real network activity.
  */
 
+// AC-158: BetaVideoSection now queries supabase.from('follows') directly for the
+// followers-only privacy filter. The mock must return a chainable object so the
+// follows query does not throw on .select().eq().in().
+const followsChain = {
+  select: jest.fn().mockReturnThis(),
+  eq: jest.fn().mockReturnThis(),
+  // Default: viewer follows nobody — returns empty array (no followers_only videos shown).
+  in: jest.fn().mockResolvedValue({ data: [], error: null }),
+};
+const mockSupabaseFrom = jest.fn().mockReturnValue(followsChain);
+
 jest.mock('../../../lib/supabase', () => ({
-  supabase: { from: jest.fn(), storage: { from: jest.fn() } },
+  supabase: {
+    from: mockSupabaseFrom,
+    storage: { from: jest.fn() },
+    // BetaVideoReelViewer (rendered inside BetaVideoSection) calls getSession to
+    // derive currentUserId for own-video checks (Bug 2 fix). Provide a minimal mock.
+    auth: {
+      getSession: jest.fn().mockResolvedValue({
+        data: { session: { user: { id: 'user-001' } } },
+        error: null,
+      }),
+    },
+  },
 }));
 
 jest.mock('../beta-video-service', () => ({
@@ -19,6 +41,8 @@ jest.mock('../beta-video-service', () => ({
   getVideoSignedUrl: jest.fn(),
   getThumbnailSignedUrl: jest.fn(),
   reportBetaVideo: jest.fn(),
+  // AC-166: BetaVideoUploader (rendered inside BetaVideoSection) calls this on mount.
+  checkExistingBetaVideo: jest.fn().mockResolvedValue(false),
 }));
 
 jest.mock('../../mod-moderation/moderation-service', () => ({

@@ -2,6 +2,48 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-09-30 (Human QA — four bugs: upload upsert, own-video reel, grid padding, fetchBetaVideosByUser poster join)
+
+### Bug Fix — Human QA — four bugs fixed — 2026-09-30
+
+**Bugs fixed**:
+
+**Bug 1 — Upload fails with "Failed to save beta video" (UNIQUE constraint violation)**
+- Root cause: `BetaVideoUploader.tsx` used a delete-then-insert pattern guarded by `hasExistingVideo`. If `checkExistingBetaVideo` failed silently (`.catch(() => {})`), `hasExistingVideo` stayed `false`, the delete was skipped, and the INSERT hit the UNIQUE (user_id, route_id) constraint (error 23505).
+- Fix A: Added `console.error('[uploadBetaVideo] insert error:', insertError)` before the throw in `beta-video-service.ts` to make future failures visible in the console.
+- Fix B: Changed the INSERT in `uploadBetaVideo` to `upsert` with `{ onConflict: 'user_id,route_id' }`, eliminating the fragile delete-before-insert pattern entirely. The upsert handles both new-video and replace cases at the DB level.
+- Removed the `hasExistingVideo`-conditional delete block from `BetaVideoUploader.tsx`. Removed the now-unused `supabase` import from `BetaVideoUploader.tsx`. `hasExistingVideo` state and the replace-reminder UI are retained — the user still sees the warning before confirming.
+- Added a TODO comment noting that storage cleanup for orphaned files on replace is deferred to Phase 2.
+
+**Bug 2 — Self-video in reel: poster row tappable + report visible for own videos**
+- Root cause: The `isOwnVideo` check in `BetaVideoReelViewer.tsx` used `session.user.id`, but the `session` prop may reflect the profile-screen owner rather than the actual viewer when the component is hosted on a profile screen. More importantly, the `reelContext = 'route'` poster-row tappability was not gated on own-video status.
+- Fix: Added `currentUserId: string | null` state fetched once on mount via `supabase.auth.getSession()`. Derived `isOwnVideo = currentUserId !== null && currentVideo.user_id === currentUserId`. When `isOwnVideo = true`: poster row `onPress={undefined}` and `disabled={true}` regardless of `reelContext`; report button not rendered (`showReportButton = !isOwnVideo && !isDismissed`).
+
+**Bug 3 — BetaVideoGrid cells overflow on profile screens**
+- Root cause: `BetaVideoGrid` had `GRID_HORIZONTAL_PADDING = 16`, causing cells to be sized for the full screen width minus 16px on each side. When placed inside a profile-screen section that already applies `paddingHorizontal`, the padding compounded and cells overflowed.
+- Fix: Changed `GRID_HORIZONTAL_PADDING = 0` in `BetaVideoGrid.tsx`. The grid now fills its container edge-to-edge; callers (profile screens) provide horizontal padding via their own containers. `BetaVideoSection.tsx` (route-detail context) already applies `paddingHorizontal: GRID_PADDING` to its container — no change needed there.
+
+**Bug 4 — fetchBetaVideosByUser returns no poster info (anonymous in reel viewer)**
+- Root cause: `fetchBetaVideosByUser` selected only basic columns, omitting the `users!beta_videos_user_id_fkey` join, so `display_name` and `avatar_url` were always `null`.
+- Fix: Updated select to include the users join (same as `fetchBetaVideosForRoute`). Mapped the nested `users` object to top-level `display_name` / `avatar_url` fields via the same flatten pattern.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 431 tests, 31 suites, 0 failures (up from 429 — 2 new Bug 2 tests added in BetaVideoReelViewer.test.tsx; fetchBetaVideosByUser test updated for Bug 4; uploadBetaVideo test updated for upsert pattern; BetaVideoSection/BetaVideoReelViewer mocks updated for `auth.getSession`)
+- Git scope: only `src/modules/mod-beta-video/` files and test files modified. No other modules touched. PASS.
+- Judgment-based: all four bugs resolved; no new native dependencies; no hardcoded values; TypeScript strict mode satisfied; no AC logic changed (the upsert satisfies the same AC-165/AC-166 contract as the previous delete-then-insert, more robustly); `GRID_HORIZONTAL_PADDING = 0` is the correct contract for a fill-container component. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/beta-video-service.ts` — Bug 1A: added `console.error` before insert throw; Bug 1B: INSERT → `upsert` with `onConflict: 'user_id,route_id'`; Bug 4: `fetchBetaVideosByUser` select updated to join users table + flatten poster identity
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — Bug 1B: removed delete block and `supabase` import; removed `hasExistingVideo` from `useCallback` dep array
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — Bug 2: added `supabase` import, `currentUserId` state + `useEffect`, `isOwnVideo` derived from `currentUserId`, poster row and report button gated on `isOwnVideo`
+- `src/modules/mod-beta-video/components/BetaVideoGrid.tsx` — Bug 3: `GRID_HORIZONTAL_PADDING` 16 → 0
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — updated `makeFromMock` for upsert; updated `fetchBetaVideosByUser` test for users join
+- `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — added `auth.getSession` mock; added 2 Bug 2 tests
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — added `auth.getSession` mock
+
+---
+
 **Status**: Bug fix — 2026-09-30 (AC-165 migration — deduplicate before adding UNIQUE constraint)
 
 ### Bug Fix — AC-165 migration: deduplicate before UNIQUE constraint — 2026-09-30

@@ -24,7 +24,7 @@
 
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -35,7 +35,7 @@ import {
   View,
 } from 'react-native';
 import { useTheme } from '../../../lib/theme';
-import { uploadBetaVideo } from '../beta-video-service';
+import { checkExistingBetaVideo, uploadBetaVideo } from '../beta-video-service';
 import type { BetaVideo, UploadProgress } from '../types';
 
 /** Maximum allowed video duration in seconds (AC-030). */
@@ -52,6 +52,10 @@ interface BetaVideoUploaderProps {
   onUploadError?: (message: string) => void;
 }
 
+// AC-161: no per-upload visibility/privacy toggle exists in this component.
+// Beta-video visibility is the account-level users.beta_video_privacy setting
+// (AC-156/AC-157), not a per-upload field.
+
 export default function BetaVideoUploader({
   routeId,
   userId,
@@ -65,6 +69,18 @@ export default function BetaVideoUploader({
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // AC-166: check whether the user already has a video for this route on mount.
+  // If true, show a replace reminder above the confirm button.
+  const [hasExistingVideo, setHasExistingVideo] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    checkExistingBetaVideo(routeId)
+      .then((exists) => { if (!cancelled) setHasExistingVideo(exists); })
+      .catch(() => { /* non-fatal — do not block the upload flow */ });
+    return () => { cancelled = true; };
+  }, [routeId]);
 
   /**
    * AC-035: Validate the selected video is in an accepted container.
@@ -174,6 +190,11 @@ export default function BetaVideoUploader({
     setProgress({ percent: 0, phase: 'thumbnail' });
 
     try {
+      // AC-166 / AC-165: the uploadBetaVideo service uses upsert (ON CONFLICT on
+      // user_id,route_id), so no manual delete step is needed here. The upsert
+      // handles both the new-video and the replace case at the DB level.
+      // The hasExistingVideo state is still used to show the replace reminder UI
+      // to the user before they confirm (see warning text below).
       const video = await uploadBetaVideo(
         {
           route_id: routeId,
@@ -184,6 +205,8 @@ export default function BetaVideoUploader({
         userId,
         (prog) => setProgress(prog),
       );
+      // After a successful replace, the "has existing video" state is still true
+      // (there is now a new video for this route). No reset needed.
       onUploadSuccess(video);
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('betaVideo.errors.uploadFailed');
@@ -209,6 +232,13 @@ export default function BetaVideoUploader({
         <Ionicons name="videocam-outline" size={18} color={theme.colors.primary} />
         <Text style={styles.addButtonText}>{t('betaVideo.addVideo')}</Text>
       </Pressable>
+
+      {/* AC-166: replace reminder — shown when the user already has a video for this route */}
+      {hasExistingVideo ? (
+        <Text style={styles.replaceWarningText} testID="beta-video-replace-warning">
+          {t('betaVideo.replaceWarning')}
+        </Text>
+      ) : null}
 
       {/* Inline error message */}
       {errorMessage ? (
@@ -257,6 +287,11 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       fontSize: theme.fontSize.sm,
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.primary,
+    },
+    replaceWarningText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
     },
     errorText: {
       fontSize: theme.fontSize.sm,
