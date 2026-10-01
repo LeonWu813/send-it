@@ -62,6 +62,9 @@
     "title": "Settings",
     "back": "Back",
     "blockedAccounts": "Blocked Accounts",
+    "betaVideoPrivacy": "Beta Video Visibility",
+    "betaVideoPrivacySubtextPublic": "All users can see your beta videos",
+    "betaVideoPrivacySubtextFollowersOnly": "Only followers can see your beta videos",
     "language": {
       "title": "Language",
       "en": "English",
@@ -272,9 +275,12 @@
     "sectionTitle": "BETA VIDEOS",
     "addVideo": "Add Beta Video",
     "noVideos": "No beta videos yet — be the first to share your technique!",
+    "myVideos": "My Beta Videos",
+    "noVideosYet": "No beta videos yet",
     "uploading": "Uploading…",
     "uploadProgress": "{{percent}}% complete",
     "loadError": "Unable to load video",
+    "replaceWarning": "You already have a beta video for this route. Confirming will replace your existing video.",
     "grid": {
       "openVideo": "Open video"
     },
@@ -290,6 +296,7 @@
       "reportError": "Could not report. Try again.",
       "anonymous": "Anonymous"
     },
+    "userVideos": "Beta Videos",
     "errors": {
       "loadFailed": "Failed to load beta videos. Please try again.",
       "uploadFailed": "Failed to upload beta video. Please try again.",

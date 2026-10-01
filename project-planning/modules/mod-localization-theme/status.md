@@ -2,6 +2,36 @@
 
 ## Engineering Progress
 
+### Bugfix — 2026-09-30 (i18n text corrections + initial-load disabled state)
+
+**Bug 1 — Beta Video Privacy i18n text corrections**
+
+- [pass] `locales/zh-TW/common.json` — `settings.betaVideoPrivacy` updated from "Beta 影片可見度" to "Beta 影片僅限追蹤者"
+- [pass] `locales/en/common.json` — old `settings.betaVideoPrivacySubtext` key removed; two new keys added: `settings.betaVideoPrivacySubtextPublic` ("All users can see your beta videos") and `settings.betaVideoPrivacySubtextFollowersOnly` ("Only followers can see your beta videos")
+- [pass] `locales/zh-TW/common.json` — old `settings.betaVideoPrivacySubtext` key removed; two new keys added: `settings.betaVideoPrivacySubtextPublic` ("所有人皆可觀看你的 Beta 影片") and `settings.betaVideoPrivacySubtextFollowersOnly` ("僅限追蹤者可觀看你的 Beta 影片")
+- [pass] `SettingsScreen.tsx` — subtitle `<Text>` updated to dynamic conditional: `betaVideoPrivacy === 'followers_only' ? t('settings.betaVideoPrivacySubtextFollowersOnly') : t('settings.betaVideoPrivacySubtextPublic')`
+- [pass] `npm run check:i18n` — i18n completeness OK (two new keys in both catalogs, removed key absent from both)
+
+**Bug 2 — Initial-load disabled state to prevent false-state flash**
+
+- [pass] Verified `handleBetaVideoPrivacyToggle` already calls `updateBetaVideoPrivacy(newValue)` from `mod-auth-profile/auth-service` — setting IS account-bound (DB write via Supabase `users` table). No behavior change needed.
+- [pass] `privacyFetched: boolean` state added (default `false`), set to `true` after initial fetch completes (both on session present and session absent paths)
+- [pass] `Switch` `disabled` prop updated from `disabled={privacyLoading}` to `disabled={!privacyFetched || privacyLoading}` — prevents premature interaction before DB value is loaded
+
+**Self-check**
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] `npm run check:i18n` — i18n completeness OK
+- [pass] `npm test -- --watchAll=false` — 427 pass / 2 fail; the 2 failures are in `mod-beta-video/__tests__/beta-video-service.test.ts`, a pre-existing uncommitted modification to MOD-005's test file (present in git status before this session); confirmed pre-existing by stash test
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced (dynamic t() keys)
+- [pass] No new dependencies outside production.md tech stack
+- [pass] TypeScript strict mode — no unguarded `any`
+
+**Files modified**
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+
 ### AC-155 — 2026-09-30
 
 **Blocked Accounts screen and sub-navigation from Settings**
@@ -89,6 +119,66 @@
 - `locales/zh-TW/common.json` (replaced flat `settings` with nested structure)
 - `scripts/check-i18n-completeness.js` (new)
 - `package.json` (added `check:i18n` script)
+
+## Engineering Progress — Rev 22 — 2026-09-30
+
+### AC-157 — Beta Video Privacy toggle in SettingsScreen
+
+- [pass] Imported `updateBetaVideoPrivacy` from `'../../mod-auth-profile'` barrel (MOD-001 public service)
+- [pass] Imported `supabase` from `'../../../lib/supabase'` to fetch current `beta_video_privacy` on mount
+- [pass] `betaVideoPrivacy` state (`'public' | 'followers_only'`, default `'public'`) added
+- [pass] `privacyLoading` state added
+- [pass] `useEffect` on mount fetches `users.beta_video_privacy` via `supabase.auth.getSession()` + `supabase.from('users').select('beta_video_privacy').eq('id', ...).single()`
+- [pass] `handleBetaVideoPrivacyToggle(value: boolean)` calls `updateBetaVideoPrivacy(newValue)` and updates state; silently reverts on error
+- [pass] Privacy section added between Appearance and Blocked Accounts sections, containing a `settingRow` with `settingRowContent` (`optionLabel` + `settingRowSubtext`) and a `Switch` using `theme.colors.border` / `theme.colors.primary` track colors and `theme.colors.background` thumb color
+- [pass] `Switch` imported from `react-native`; `ActivityIndicator` imported from `react-native`
+- [pass] New i18n keys added: `settings.betaVideoPrivacy` (EN "Beta Video Visibility" / zh-TW "Beta 影片可見度"), `settings.betaVideoPrivacySubtext` (EN "Show your beta videos to followers only" / zh-TW "僅向追蹤者顯示你的 Beta 影片")
+- [pass] `npm run check:i18n` — i18n completeness OK (new keys in both locales)
+
+### AC-168 — Logout button in SettingsScreen
+
+- [pass] Imported `signOut` from `'../../mod-auth-profile'` barrel (MOD-001 public service)
+- [pass] `isSigningOut` state and `logoutError` state added
+- [pass] `handleLogout()` calls `signOut()`; on error sets `logoutError` message; `setIsSigningOut(false)` only on error (success: `onAuthStateChange` routes back to signed-out state automatically)
+- [pass] Logout button rendered at the very bottom of the `ScrollView`, below Blocked Accounts section: `Pressable` with `logoutButton` / `logoutButtonPressed` / `logoutButtonDisabled` styles; shows `ActivityIndicator` while signing out, `Text` with `t('profile.logout')` otherwise
+- [pass] `logoutError` rendered above button when non-null
+- [pass] Row order: Language → Appearance → Privacy (Beta Video toggle) → Account (Blocked Accounts) → Logout button — matches spec ordering
+- [pass] Styling: `borderColor: theme.colors.error`, `color: theme.colors.error` — matches former ProfileScreen logout button style
+
+### New styles added
+
+- `settingRow`, `settingRowContent`, `settingRowSubtext` — for the Beta Video Privacy toggle row
+- `logoutButton`, `logoutButtonPressed`, `logoutButtonDisabled`, `logoutButtonText`, `logoutError` — for the Logout button
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 429 tests, 31 suites, all pass |
+| `npm run check:i18n` | PASS — i18n completeness OK |
+| AC-157: Beta Video Privacy toggle reads beta_video_privacy on mount | PASS |
+| AC-157: Toggle calls updateBetaVideoPrivacy from MOD-001 barrel | PASS |
+| AC-157: MOD-010 does NOT write directly to users.beta_video_privacy | PASS |
+| AC-157: New i18n keys present in both EN and zh-TW | PASS |
+| AC-168: Logout button at bottom calls signOut from MOD-001 barrel | PASS |
+| AC-168: Error handling consistent with former ProfileScreen logout | PASS |
+| AC-168: ActivityIndicator shown during sign-out | PASS |
+| Row order matches spec: Language → Appearance → Privacy → Account → Logout | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+| Switch uses theme.colors.border / primary / background tokens only | PASS |
+| No new dependencies outside production.md tech stack | PASS |
+| TypeScript strict mode — no unguarded any | PASS |
+
+**Files modified**
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+
+**Result: READY FOR QA — hand off to qa-mod-localization-theme**
+
+---
 
 ## QA Results
 
