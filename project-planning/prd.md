@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 21
+**Status**: [SUBSTANTIVE] — Revision 22
 **Date**: 2026-09-30
-**Revision**: 21
+**Revision**: 22
 
 ---
 
@@ -174,10 +174,10 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 ### US-012: Set profile privacy
 
 **As a** climber concerned about visibility,
-**I want** to choose between a public profile and followers-only visibility,
-**so that** I control who sees my logs and beta.
+**I want** to choose between a public profile and followers-only visibility, and separately choose whether my beta videos are visible to everyone or only to my followers,
+**so that** I control who sees my logs and who sees my beta.
 
-**Acceptance Criteria**: AC-063
+**Acceptance Criteria**: AC-063, AC-156, AC-157, AC-158
 
 ---
 
@@ -322,7 +322,7 @@ The data flow for the two most important loops:
 
 ### MOD-001: Auth & Profile
 
-**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and expose a Logout control. There is no home gym concept — saved gyms live in MOD-012.
+**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and expose a Logout control. Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). There is no home gym concept — saved gyms live in MOD-012.
 
 **User Stories**: US-001, US-011, US-012, US-022
 
@@ -362,7 +362,7 @@ The data flow for the two most important loops:
 
 ### MOD-005: Beta Video
 
-**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), and filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154).
+**Purpose**: Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154), and filtering out beta videos whose poster has set `beta_video_privacy = followers_only` when the viewer is neither the poster nor a follower (AC-158).
 
 **User Stories**: US-004, US-005, US-015, US-023
 
@@ -412,11 +412,11 @@ The data flow for the two most important loops:
 
 ### MOD-010: Localization & Theming
 
-**Purpose**: Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override. Own the Settings screen "Blocked Accounts" row and the Blocked Accounts screen (AC-155), which lists the current user's blocked users and offers per-row unblock via MOD-009's public services (`fetchMyBlockedUsers` / `unblockUser`).
+**Purpose**: Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override. Own the Settings screen "Blocked Accounts" row and the Blocked Accounts screen (AC-155), which lists the current user's blocked users and offers per-row unblock via MOD-009's public services (`fetchMyBlockedUsers` / `unblockUser`). Own the Settings screen "Beta Video Privacy" toggle row (AC-157), which reads and updates the current user's `beta_video_privacy` setting by calling MOD-001's public service (MOD-001 owns the profile write).
 
-**User Stories**: US-017, US-018
+**User Stories**: US-017, US-018, US-012
 
-**Dependencies**: MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
+**Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
 
 ---
 
@@ -489,6 +489,8 @@ The data flow for the two most important loops:
 **AC-119** (new): The Profile screen shall expose a Logout control at the bottom that ends the session and returns the user to the signed-out state.
 
 **AC-145** (new): The Profile screen shall display, immediately below the user's bio, two tappable count links arranged left (followers count, label "追蹤者") and right (following count, label "追蹤中"). Tapping the followers link navigates to the Followers list screen (AC-146); tapping the following link navigates to the Following list screen (AC-147). The counts are sourced from MOD-006's social-graph public service. This applies to both the current user's own Profile screen and the MOD-008 other-user profile surface (AC-064).
+
+**AC-156** (new): The system shall persist a per-user beta-video privacy setting in a new `users.beta_video_privacy` column (enum `public` (default) | `followers_only`), separate and independent from the existing `privacy_setting` column (AC-063). MOD-001 shall expose a public service function that updates the current user's `beta_video_privacy` value; MOD-001 owns this profile write. When `beta_video_privacy = followers_only`, the user's beta videos shall be visible only to the user themselves and to their followers; when `public` (default), the user's beta videos are visible to all users. This setting governs beta-video visibility only and does not affect `privacy_setting` (which governs logs and the profile surface per AC-063). Adding the column requires a migration.
 
 ---
 
@@ -630,6 +632,8 @@ The data flow for the two most important loops:
 
 **AC-154** (new): In the route detail screen's beta-video list, the system shall filter out beta videos uploaded by users the viewer has blocked or who have blocked the viewer (block in either direction) before rendering, using MOD-009's public service `fetchBlockedUserIds()` as a client-side filter over the fetched beta-video set. This filter applies in addition to the reported-video exclusion (AC-142).
 
+**AC-158** (new): The system shall exclude from every beta-video listing (the route-detail grid per AC-038/AC-142, the fullscreen viewer set per AC-039, and the activity feed per AC-051) any beta video whose poster has set `beta_video_privacy = followers_only` (AC-156) when the requesting viewer is neither the poster nor a follower of the poster. A viewer who is the poster, or who follows the poster, continues to see that poster's beta videos. This beta-video privacy filter applies in addition to the reported-video exclusion (AC-142) and the blocked-user filter (AC-154). The `beta_video_privacy` value is read from the poster's user record (joined on the existing `fetchBetaVideosForRoute` poster join, AC-144); the follower relationship is determined via the `Follow` table (the viewer is a follower when a `Follow` row exists with `follower_id = viewer` and `followee_id = poster`).
+
 ### MOD-006 (Social Graph & Feed) Acceptance Criteria
 
 **AC-050**: The system shall allow a user to follow and unfollow any other user (subject to Block; see AC-083) and reflect the change immediately in the follower's profile counts.
@@ -716,6 +720,8 @@ The data flow for the two most important loops:
 
 **AC-155** (new): The Settings screen (SettingsScreen) shall present a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping the row shall open a Blocked Accounts screen (BlockedAccountsScreen) that lists the users the current user has blocked (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, the user's `display_name`, and an "Unblock" button. Tapping "Unblock" shall call `unblockUser(userId)` (MOD-009, AC-152) and remove that entry from the list. When the current user has blocked no one, the screen shall display an empty state. Navigation to and from the Blocked Accounts screen is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere), with no ProfileNavigator view-state change. The blocked-users list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
 
+**AC-157** (new): The Settings screen (SettingsScreen) shall present a "Beta Video Privacy" toggle row with two states — `public` (default) and `followers_only` — reflecting the current user's `beta_video_privacy` value (AC-156). Changing the toggle shall call MOD-001's public service function to update the current user's `beta_video_privacy` column (MOD-001 owns the write) and reflect the new state immediately. This row is independent from the existing profile privacy setting (AC-063), which is edited via the MOD-001 Edit Profile entry point (AC-117), not here.
+
 ---
 
 ### MOD-011 (Analytics) Acceptance Criteria
@@ -751,7 +757,15 @@ The data flow for the two most important loops:
 ```
 User
  - id, display_name, avatar_url,
-   bio, privacy_setting (public | followers_only), created_at
+   bio, privacy_setting (public | followers_only),
+   beta_video_privacy (public | followers_only, default public), created_at
+   -- privacy_setting governs the profile surface, logs, and beta-video LISTINGS
+   --   for followers-only profiles (AC-063). beta_video_privacy is a SEPARATE,
+   --   independent control (AC-156) governing beta-video visibility only:
+   --   when followers_only, the user's beta videos are visible only to the user
+   --   and their followers (AC-158); when public (default), visible to all.
+   --   MOD-001 owns the write (public service); MOD-010's SettingsScreen calls it
+   --   (AC-157). Adding this column requires a migration.
 
 Gym  (admin-maintained, branch-level rows for multi-branch gyms)
  - id, name, branch_label (nullable, e.g. "萬華", "南港"), city, district,
@@ -890,6 +904,7 @@ Block  (App Store Guideline 1.2 requirement)
 **Notes**:
 
 - All tables are guarded by Supabase Row-Level Security policies.
+- **`User.beta_video_privacy` is a new column (requires a migration).** It is an enum `public` (default) | `followers_only`, independent from `privacy_setting`. It governs beta-video visibility only (AC-156/AC-158): when `followers_only`, a poster's beta videos are visible only to the poster and their followers; when `public`, to all users. MOD-001 owns the write via a public service function (consumed by MOD-010's SettingsScreen, AC-157). The AC-158 filter reads this value from the poster's user record (via the existing `fetchBetaVideosForRoute` poster join, AC-144) and composes it with the `Follow` relationship across every beta-video listing surface (route-detail grid, fullscreen viewer set, activity feed), in addition to the reported-video (AC-142) and blocked-user (AC-154) exclusions. The migration adds the column with a `public` default so existing rows backfill to the current (public) behavior.
 - `SavedGym` is the join table backing the multi-gym saved list (it replaces the removed single `User.home_gym_id`). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved gyms.
 - `SavedRoute` is the join table backing the saved-routes bookmark (US-021, AC-046/AC-047). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved routes. `route_id` is `ON DELETE CASCADE` so a saved-route row disappears if the underlying route is deleted (e.g. a withdrawn pending route). **This is a new join table and requires Tech Lead architecture review (table placement/ownership, RLS policy set, grants) before Doc-Sync/Engineering implements it** — mirror the confirmed `saved_gyms` design (composite PK, dual `ON DELETE CASCADE`, own-rows-only SELECT/INSERT/DELETE RLS, no UPDATE, explicit grants).
 - **`Ascent.is_private` is always `true` in Phase 1** (AC-132): the system sets it on every ascent insert; it is not user-controllable and there is no "set as private" toggle in the log-send form. The column is retained in the schema (no migration) so a public/shared visibility toggle can be introduced in Phase 2.
