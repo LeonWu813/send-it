@@ -4,14 +4,14 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003, MOD-009 (block-status public service `fetchBlockedUserIds`, AC-154)
-**Last Synced from PRD Revision**: 20
+**Last Synced from PRD Revision**: 22
 **Last Updated**: 2026-09-30
 
 ---
 
 ## Purpose
 
-Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), and filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154).
+Handle video capture/selection, client-side compression (≤60 sec cap), client-generated thumbnail, upload to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154), and filtering out beta videos whose poster has set `beta_video_privacy = followers_only` when the viewer is neither the poster nor a follower (AC-158). Own the shared `BetaVideoGrid` component (3-column thumbnail grid, AC-160) consumed by MOD-006 (AC-163) and MOD-001 (AC-164); the `fetchBetaVideosByUser` service (AC-162) consumed by the same; the `reelContext: 'route' | 'profile'` prop on `BetaVideoReelViewer` (AC-164); the account-level upload flow (per-upload visibility toggle removed, AC-161; one-video-per-route enforced by a DB unique constraint AC-165 with an upsert/replace flow and a replace reminder, AC-166).
 
 ---
 
@@ -26,6 +26,10 @@ For US-015, the one-tap beta-video report flow is owned by this module: tapping 
 For US-023, tapping Row 1 (the circular avatar or the `display_name` text) in the bottom-left overlay of the fullscreen viewer dismisses the viewer and navigates the user to that video poster's profile (the MOD-008 other-user profile-and-history surface, AC-064), subject to the poster's privacy setting (AC-063). Navigation is threaded from the viewer to the profile surface via a callback prop supplied by the hosting shell, not by MOD-005 importing the profile screen directly.
 
 For US-023 (AC-154), the route detail screen's beta-video list filters out videos uploaded by blocked users (block in either direction) before rendering, using MOD-009's `fetchBlockedUserIds()` as a client-side filter over the fetched beta-video set. This filter is applied after `fetchBetaVideosForRoute` returns and before rendering, in addition to any existing reported-video exclusions (AC-142).
+
+For US-012 (AC-158), every beta-video listing (route-detail grid, fullscreen viewer, activity feed) shall exclude any beta video whose poster has `beta_video_privacy = followers_only` when the viewer is neither the poster nor a follower. `beta_video_privacy` is read from the poster's user record via the existing `fetchBetaVideosForRoute` poster join (AC-144); the follower relationship is determined via the `Follow` table. This filter composes with the reported-video exclusion (AC-142) and the blocked-user filter (AC-154).
+
+This module owns the shared `BetaVideoGrid` component (`mod-beta-video/components/BetaVideoGrid.tsx`, AC-160) and the `fetchBetaVideosByUser` service (AC-162), both consumed by MOD-006 (AC-163) and MOD-001 (AC-164). The `reelContext: 'route' | 'profile'` prop on `BetaVideoReelViewer` (AC-164) controls whether the poster-identity row is tappable (`'route'`) or visible-but-not-tappable (`'profile'`). The per-upload visibility toggle is removed (AC-161); visibility is the account-level `beta_video_privacy` setting only. A DB `UNIQUE (user_id, route_id)` constraint on `beta_videos` enforces one beta video per user per route (AC-165), and the upload flow uses upsert/replace with a replace reminder (AC-166).
 
 **Non-goals for this module:**
 - Comments on beta videos (out of scope for Phase 1).
@@ -43,13 +47,13 @@ For US-023 (AC-154), the route detail screen's beta-video list filters out video
 - **US-015**: Report inappropriate content (beta-video report flow only — the one-tap AC-139/AC-140 flow; user-profile reports are owned by MOD-009)
 - **US-023**: Open a beta video poster's profile
 
-**US-004 Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130
+**US-004 Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166
 
 **US-005 Acceptance Criteria**: AC-033, AC-034, AC-038, AC-039, AC-133, AC-134, AC-135, AC-136, AC-137, AC-138
 
 **US-015 Acceptance Criteria (beta-video only)**: AC-139, AC-140, AC-141, AC-142, AC-143
 
-**US-023 Acceptance Criteria**: AC-135, AC-144, AC-154
+**US-023 Acceptance Criteria**: AC-135, AC-144, AC-154, AC-163
 
 ---
 
@@ -107,6 +111,20 @@ For US-023 (AC-154), the route detail screen's beta-video list filters out video
 
 ---
 
+**AC-158** (new): The system shall exclude from every beta-video listing (the route-detail grid per AC-038/AC-142, the fullscreen viewer set per AC-039, and the activity feed per AC-051) any beta video whose poster has set `beta_video_privacy = followers_only` (AC-156) when the requesting viewer is neither the poster nor a follower of the poster. A viewer who is the poster, or who follows the poster, continues to see that poster's beta videos. This beta-video privacy filter applies in addition to the reported-video exclusion (AC-142) and the blocked-user filter (AC-154). The `beta_video_privacy` value is read from the poster's user record (joined on the existing `fetchBetaVideosForRoute` poster join, AC-144); the follower relationship is determined via the `Follow` table (the viewer is a follower when a `Follow` row exists with `follower_id = viewer` and `followee_id = poster`).
+
+**AC-160** (new): The system shall provide a shared `BetaVideoGrid` component at `mod-beta-video/components/BetaVideoGrid.tsx` that renders a 3-column grid of beta-video thumbnails. Each cell shall show a Phase 1 placeholder: a gray background with a centered play-icon overlay on a dark gradient. The component's props shall be `videos: BetaVideo[]`, `onPressVideo: (index: number) => void`, and an optional `emptyState?: React.ReactNode`. Tapping a cell shall fire `onPressVideo(index)` with that cell's index. This component is owned by MOD-005 and consumed by MOD-006 (AC-163) and MOD-001 (AC-164).
+
+**AC-161** (new): The system shall remove the per-video visibility toggle from `UploadBetaVideoScreen`. Beta-video visibility is an account-level setting (`beta_video_privacy`, AC-156/AC-157) and shall not be settable per upload.
+
+**AC-162** (new): The system shall add a service function `fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]>` to `mod-beta-video/beta-video-service.ts` that returns all beta videos uploaded by the given user across all routes, ordered by `created_at DESC`. This service is owned by MOD-005 and consumed by MOD-006 (AC-163) and MOD-001 (AC-164). The result remains subject to the existing visibility rules where surfaced (reported-video exclusion AC-142, blocked-user filter AC-154, and beta-video privacy AC-158 as applicable to the viewing context).
+
+**AC-165** (new, DB migration): The system shall add a `UNIQUE (user_id, route_id)` constraint on the `beta_videos` table, enforcing one beta video per user per route at the database level. The migration file shall be `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql`.
+
+**AC-166** (new): In `UploadBetaVideoScreen`, before the final confirm/upload action, the system shall call a new service check `checkExistingBetaVideo(routeId): Promise<boolean>` to determine whether the current user already has a beta video for this route. If an existing video is found, the screen shall display the reminder text "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。" (EN: "You already have a beta video for this route. Confirming will replace your existing video."). The upload shall use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint.
+
+---
+
 ## Integration Points
 
 1. **File to modify**: `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`
@@ -122,8 +140,14 @@ For US-023 (AC-154), the route detail screen's beta-video list filters out video
 3. **Coordinated change — MOD-006**: The `get_activity_feed` RPC's `video_items` CTE must also add the report exclusion filter (`WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)`) to exclude reported-and-not-dismissed beta videos from the activity feed (AC-141). This ships in a MOD-006 migration ordered after `20260928000001_mod_005_video_reports.sql`. See MOD-006 spec for ownership details.
    **AC**: AC-141
 
-4. **MOD-009 block-status dependency (AC-154)**: `fetchBlockedUserIds(userId)` is called once per route detail load from MOD-009's public service (`mod-moderation/moderation-service`). The result is used to filter the `fetchBetaVideosForRoute` array client-side — any video whose `user_id` is in the blocked set is excluded before rendering. This is a direct import of a public service function per the Cross-Module Imports convention.
+4. **MOD-009 block-status dependency (AC-154)**: `fetchBlockedUserIds(userId)` is called once per route detail load from MOD-009's public service (`mod-moderation/moderation-service`). The result is used to filter the `fetchBetaVideosForRoute` result array client-side before rendering. This is a direct import of a public service function per the Cross-Module Imports convention.
    **AC**: AC-154
+
+5. **Shared `BetaVideoGrid` component (AC-160)**: `BetaVideoGrid` at `mod-beta-video/components/BetaVideoGrid.tsx` is exported as a public component from MOD-005. MOD-006 (AC-163) and MOD-001 (AC-164) import and consume it. MOD-005 owns this component.
+
+6. **Shared `fetchBetaVideosByUser` service (AC-162)**: `fetchBetaVideosByUser(userId)` in `mod-beta-video/beta-video-service.ts` is exported as a public service from MOD-005. MOD-006 (AC-163) and MOD-001 (AC-164) import and consume it.
+
+7. **`reelContext` prop on `BetaVideoReelViewer` (AC-164)**: MOD-005 adds `reelContext: 'route' | 'profile'` to `BetaVideoReelViewerProps`. `'route'` = existing behavior (poster row tappable per AC-135); `'profile'` = poster row visible, not tappable. MOD-006 (AC-163) and MOD-001 (AC-164) pass `reelContext = 'profile'`.
 
 ---
 
@@ -135,6 +159,12 @@ BetaVideo
    video_url, thumbnail_url, duration_seconds, caption, created_at,
    is_reported (boolean NOT NULL DEFAULT false),
    report_dismissed (boolean NOT NULL DEFAULT false)
+   -- UNIQUE (user_id, route_id) — enforces one beta video per user per route
+   --   at the DB level (AC-165). Migration: 20260930000001_mod_005_beta_video_unique_per_route.sql.
+   --   The upload flow is upsert/replace (AC-166): if a user already has a video
+   --   for this route, the upload replaces it (delete-old + insert, or ON CONFLICT
+   --   DO UPDATE). Per-upload visibility toggle removed (AC-161) -- visibility is the
+   --   account-level users.beta_video_privacy setting (AC-156/AC-157).
    -- is_reported: set true via a SECURITY DEFINER RPC when any user files a
    --   one-tap report (AC-140). The reporter does not own the row, so the flip
    --   must go through a SECURITY DEFINER RPC, not a direct UPDATE.
@@ -164,6 +194,8 @@ VideoReport  (beta-video one-tap reports — App Store Guideline 1.2)
    --   reports via AC-080; VideoReport = beta-video one-tap reports via AC-140).
 ```
 
+The `users` table gains `beta_video_privacy (public | followers_only, default public)` — this column is owned by MOD-001. MOD-005's AC-158 filter reads `beta_video_privacy` from the poster's user record via the existing `fetchBetaVideosForRoute` poster join (AC-144). No migration in MOD-005 for this column — the migration is owned by MOD-001.
+
 All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are insertable by the uploading user. Readable by all authenticated users (subject to uploader's `privacy_setting` from MOD-001 — if uploader is `followers_only`, non-followers cannot access the video listing). A beta video with `is_reported = true AND report_dismissed = false` is hidden from every user (AC-141/AC-142). Video and thumbnail files are stored in Supabase Storage with RLS policies aligned with the corresponding table policies.
 
 ---
@@ -178,18 +210,21 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 
 **Outputs (upload):**
 - Client-side: video compressed to H.264/HEVC + AAC in `.mp4` or `.mov`; thumbnail generated; both validated for codec conformance before upload
+- `checkExistingBetaVideo(routeId)` called before confirm — if existing video found, replace reminder shown (AC-166)
 - Video artifact and thumbnail uploaded to Supabase Storage
-- `BetaVideo` row inserted in Postgres with `video_url`, `thumbnail_url`, `duration_seconds`, `caption`, `route_id`, `user_id`, `is_reported = false`, `report_dismissed = false`
+- `BetaVideo` row inserted (or upserted) in Postgres with `video_url`, `thumbnail_url`, `duration_seconds`, `caption`, `route_id`, `user_id`, `is_reported = false`, `report_dismissed = false`, consistent with the `UNIQUE (user_id, route_id)` constraint (AC-165)
 - On ingest validation failure: clear error message displayed to user; no file stored
+- Per-upload visibility toggle is not present (AC-161); visibility governed by `users.beta_video_privacy` (AC-156/AC-157)
 
 **Inputs (playback):**
-- `BetaVideo` rows from `fetchBetaVideosForRoute` — including `is_reported`, `report_dismissed`, `user_id`, `display_name`, `avatar_url` (joined from `public.users` via `users!beta_videos_user_id_fkey`)
+- `BetaVideo` rows from `fetchBetaVideosForRoute` — including `is_reported`, `report_dismissed`, `user_id`, `display_name`, `avatar_url` (joined from `public.users` via `users!beta_videos_user_id_fkey`), and `beta_video_privacy` from the poster's user record (for AC-158 filter)
 - Blocked user IDs from `fetchBlockedUserIds(currentUserId)` (MOD-009) — used as client-side filter (AC-154)
+- Follower relationship from `Follow` table — used as part of the AC-158 `beta_video_privacy` filter
 - Render context: route detail page (AC-033/AC-038/AC-039) or activity feed (AC-034)
 
 **Outputs (playback):**
-- Route detail page: three-column thumbnail grid (AC-038), with videos from blocked users filtered out before rendering (AC-154); tapping a cell opens the fullscreen reel viewer (AC-039) with persistent back control (AC-133), poster-identity overlay (AC-134), and two-icon sidebar (AC-138)
-- Activity feed: inline video playback within the app — no external link or browser required (AC-034)
+- Route detail page: three-column thumbnail grid (AC-038), with videos from blocked users filtered out (AC-154) and videos from `followers_only` posters filtered out for non-followers (AC-158) before rendering; tapping a cell opens the fullscreen reel viewer (AC-039) with persistent back control (AC-133), poster-identity overlay (AC-134), and two-icon sidebar (AC-138)
+- Activity feed: inline video playback within the app — no external link or browser required (AC-034); AC-158 filter also applies
 
 **Inputs (report):**
 - `beta_video_id`, authenticated user session
@@ -204,6 +239,18 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 
 **Outputs (AC-154 block filter):**
 - Blocked user IDs used as a client-side filter over the `fetchBetaVideosForRoute` result array before rendering; videos whose `user_id` is in the blocked set are excluded from the rendered grid
+
+**Inputs (BetaVideoGrid — AC-160):**
+- `videos: BetaVideo[]`, `onPressVideo: (index: number) => void`, optional `emptyState?: React.ReactNode`
+
+**Outputs (BetaVideoGrid — AC-160):**
+- 3-column grid; each cell: gray background with centered play-icon overlay on dark gradient (Phase 1 placeholder); tapping fires `onPressVideo(index)`
+
+**Inputs (fetchBetaVideosByUser — AC-162):**
+- `userId: string`, authenticated session
+
+**Outputs (fetchBetaVideosByUser — AC-162):**
+- `Promise<BetaVideo[]>` — all beta videos by the given user across all routes, ordered `created_at DESC`
 
 ---
 
@@ -220,7 +267,14 @@ All tables guarded by Supabase Row-Level Security policies. `BetaVideo` rows are
 - **60-second playability SLA (AC-032)**: The video must be playable inline within 60 seconds of upload completion on a normal 4G/LTE connection. Since there is no server transcoding, this depends on Storage CDN delivery latency — the compression + upload pipeline must keep total time within the SLA.
 - **Phase 1 Storage**: All video stored in Supabase Storage. Migration to Cloudflare Stream is triggered by monthly cost > US$25 OR total storage > 20 GB. At ~10 MB per compressed 60-sec clip, 20 GB ≈ 2,000 videos. A migration runbook should be drafted before Phase 1 GA (even though migration itself is expected in Phase 2).
 - **Attachment constraint**: Each `BetaVideo` row has exactly one `route_id`. A video cannot be attached to multiple routes.
+- **One-per-route unique constraint (AC-165)**: A `UNIQUE (user_id, route_id)` constraint on `beta_videos` enforces one beta video per user per route at the DB level. Migration file: `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql`.
+- **Upsert/replace flow (AC-166)**: In `UploadBetaVideoScreen`, before the confirm/upload action, call `checkExistingBetaVideo(routeId): Promise<boolean>`. If an existing video is found, display the reminder "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。" The upload uses an upsert (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint.
+- **Per-upload visibility toggle removed (AC-161)**: Remove the per-video visibility toggle from `UploadBetaVideoScreen`. Beta-video visibility is the account-level `beta_video_privacy` setting (AC-156/AC-157); it must not be settable per upload.
 - **AC-154 block filter — `fetchBlockedUserIds()` called once per route detail load**: `fetchBlockedUserIds(currentUserId)` is called once when the route detail loads (not once per video). The returned set of blocked user IDs is used to filter the `fetchBetaVideosForRoute` result array client-side before rendering. Direct import from `mod-moderation/moderation-service` (MOD-009 public service). This filter is applied after `fetchBetaVideosForRoute` and after the reported-video exclusion (AC-142), before the video array is passed to the grid renderer.
+- **AC-158 beta-video privacy filter**: Reads `beta_video_privacy` from the poster's user record (returned by the existing poster join in `fetchBetaVideosForRoute`, AC-144). Viewer is a follower when a `Follow` row exists with `follower_id = viewer` and `followee_id = poster`. The filter excludes any video where the poster's `beta_video_privacy = followers_only` AND the viewer is not the poster AND the viewer does not follow the poster. Composes with the reported-video exclusion (AC-142) and the blocked-user filter (AC-154).
+- **`BetaVideoGrid` component (AC-160)**: New file `mod-beta-video/components/BetaVideoGrid.tsx`. 3-column grid of video thumbnails. Phase 1 placeholder: gray background + centered play-icon overlay on dark gradient. Props: `videos: BetaVideo[]`, `onPressVideo: (index: number) => void`, optional `emptyState?: React.ReactNode`. Exported as a public component consumed by MOD-006 (AC-163) and MOD-001 (AC-164).
+- **`fetchBetaVideosByUser` service (AC-162)**: New function in `mod-beta-video/beta-video-service.ts`. Returns all beta videos by `userId` across all routes, ordered `created_at DESC`. Exported as a public service consumed by MOD-006 (AC-163) and MOD-001 (AC-164).
+- **`reelContext` prop on `BetaVideoReelViewer` (AC-164)**: Add `reelContext: 'route' | 'profile'` to `BetaVideoReelViewerProps`. `'route'` = existing behavior (poster row tappable, navigates to poster's profile per AC-135); `'profile'` = poster row visible but NOT tappable (no navigation on Row-1 tap). MOD-006 (AC-163) and MOD-001 (AC-164) pass `reelContext = 'profile'`.
 
 ### Grid and Fullscreen Reel Viewer (AC-038 / AC-039) — Tech Lead Decisions (Rev 13)
 
@@ -341,6 +395,8 @@ The revised AC-135 converts the prior no-op Row-1 tap into a profile-navigation 
 
 The prop is threaded down the mount chain the reel viewer already sits on: `AppShell → GymNavigator → RouteNavigator → RouteDetailScreen → BetaVideoReelViewer`. `onNavigateToRoute` is already threaded down that chain, so `onNavigateToUser` follows the identical, already-proven path. At the top, `AppShell` (MOD-012) wires `onNavigateToUser` to the **same action `handleSelectClimber` already uses for AC-123** (`setTargetUserId(userId)`), which opens `UserProfileScreen` as a modal overlay. This reuses the one existing "open another user's profile from anywhere" code path — do NOT invent a new mechanism.
 
+Note: the `reelContext = 'profile'` mode (AC-164) means `onNavigateToUser` is not called in that context — the poster row is visible but NOT tappable when `reelContext = 'profile'`.
+
 #### AC-144 revised — `user_id` already selected
 
 Tech Lead confirmed (Rev 18 Q4): `fetchBetaVideosForRoute` already selects `user_id` explicitly and the `BetaVideo` TypeScript type already declares `user_id: string`. The `user_id` addition in AC-144 (revised) is a no-op at the data layer — `user_id` is already returned and already typed. The only real change Rev 18 requires for AC-144 is wiring: the reel viewer must use `currentVideo.user_id` in the new `onNavigateToUser` callback (see AC-135 above). No schema change, no migration, no service-query change is needed for AC-144 in Rev 18.
@@ -366,3 +422,4 @@ The filter is applied **after** `fetchBetaVideosForRoute` returns its result and
 - Client-side frame extraction for thumbnail generation (Phase 2; see Phase 1 simplification note above).
 - User-profile reports (owned by MOD-009 — the `Report` table, category + note flow, AC-080).
 - Admin push or email notification for beta-video reports (out of scope for Phase 1 — admin reviews `video_reports` table manually in Supabase Studio; the AC-085 6-hourly email digest covers the `Report` table only and does not include `video_reports`).
+- `users.beta_video_privacy` column write (owned by MOD-001 — MOD-005 reads this value via the existing poster join for AC-158; it does not write the column).

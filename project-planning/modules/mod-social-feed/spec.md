@@ -4,14 +4,14 @@
 **Module Name**: Social Graph & Feed
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-004, MOD-005, MOD-008, MOD-009 (block/unblock actions and block-status service for the UserProfileScreen three-dots sheet + blocked state, AC-150/AC-152/AC-153)
-**Last Synced from PRD Revision**: 20
+**Last Synced from PRD Revision**: 22
 **Last Updated**: 2026-09-30
 
 ---
 
 ## Purpose
 
-Handle follow/unfollow, the chronological activity feed of sends and beta videos from followed users, beta-video like reactions, the Followers and Following list screens (AC-146, AC-147), and the other-user `UserProfileScreen` overlay — including its three-dots action sheet (Report / Block / Unblock, AC-150) and its blocked-state "This profile isn't available" rendering (AC-153). The report and block actions themselves are performed via MOD-009's public services.
+Handle follow/unfollow, beta-video like reactions, the Followers and Following list screens (AC-146, AC-147), and the other-user `UserProfileScreen` overlay — including its three-dots action sheet (Report / Block / Unblock, AC-150), its blocked-state "This profile isn't available" rendering (AC-153), and a 3-column beta-video grid of that user's beta videos below the stats section (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-163). The report and block actions themselves are performed via MOD-009's public services. The chronological activity feed UI is formally deferred to Phase 2 (AC-159): `FeedScreen.tsx` and the `get_activity_feed` RPC remain in the codebase as dead code, never imported or rendered in any navigator or shell.
 
 ---
 
@@ -22,6 +22,10 @@ Climbers connected to the local Taiwan scene want to follow friends and strong l
 For US-022, this module also owns the Followers list screen (AC-146) and Following list screen (AC-147): scrollable lists of users who follow or are followed by the viewed profile, each entry showing a user card with the user's circular avatar and `display_name` only. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064). Blocked users are excluded (AC-082, AC-084). Per-card sends count and highest grade are not displayed on the list cards; aggregate profile stats are surfaced on the other-user profile screen instead (AC-149).
 
 For US-020, the other-user profile screen (`UserProfileScreen`, reached via `handleSelectClimber`) owned by this module now includes a three-dots icon (⋮) fixed in the top-right corner (AC-150) that opens a bottom action sheet with exactly two options: "Report" (AC-151) and a block toggle "Block"/"Unblock" (AC-152). The `isBlocked`/`fetchBlockedUserIds` check from MOD-009 is performed on `UserProfileScreen` load (AC-153): if a block exists in either direction, the screen shows "This profile isn't available", hides the follow/unfollow button and stats section (AC-149), but keeps the ⋮ icon visible so the viewer can unblock.
+
+For US-023 (AC-163), the `UserProfileScreen` displays a 3-column `BetaVideoGrid` (AC-160, owned by MOD-005) below the stats section (AC-149), showing all beta videos by that user via `fetchBetaVideosByUser` (AC-162, owned by MOD-005). Tapping a cell opens `BetaVideoReelViewer` cycling through that user's videos from the tapped index, with `reelContext = 'profile'` — the poster-identity row is visible but NOT tappable. This grid is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state (AC-064) rather than the grid. MOD-006 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer`.
+
+For US-007 (AC-159), the chronological activity feed UI is formally deferred to Phase 2. `FeedScreen.tsx` in `mod-social-feed/screens/` and the `get_activity_feed` RPC remain in the codebase as dead code but are never imported or rendered in any navigator or shell, with zero runtime impact and no new wiring to `HomeScreen`. Phase 1 ships follow/unfollow and surfaces followed climbers on the Home screen (US-020) and their beta videos on profile grids (US-023, AC-163), but not a dedicated feed screen.
 
 **Non-goals for this module:**
 - Comments on sends or beta videos (out of scope for Phase 1).
@@ -39,7 +43,7 @@ For US-020, the other-user profile screen (`UserProfileScreen`, reached via `han
 - **US-020**: See my saved gyms and followed climbers on a Home screen
 - **US-022**: See who follows me and who I follow
 
-**US-007 Acceptance Criteria**: AC-050, AC-051
+**US-007 Acceptance Criteria**: AC-050, AC-051, AC-159
 
 **US-008 Acceptance Criteria**: AC-052, AC-053
 
@@ -59,7 +63,7 @@ For US-020, the other-user profile screen (`UserProfileScreen`, reached via `han
 
 **AC-053**: The system shall not render a comment UI anywhere in the app in Phase 1 and shall not expose a like affordance on plain send logs.
 
-> **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006.
+> **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006. **Phase 1 status (AC-159)**: the feed UI (`FeedScreen.tsx`) and this `get_activity_feed` RPC are deferred to Phase 2 — they remain in the codebase as dead code and are never imported or rendered in Phase 1.
 
 **AC-146** (revised): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar and `display_name` only — no per-card sends count or highest grade is displayed. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
 
@@ -75,6 +79,10 @@ For US-020, the other-user profile screen (`UserProfileScreen`, reached via `han
 
 **AC-153** (new): When `UserProfileScreen` (AC-150) loads, it shall check whether either party has blocked the other using MOD-009's public service (`isBlocked` / `fetchBlockedUserIds`). If a block exists in either direction, the screen shall display a "This profile isn't available" message in place of the profile content: the follow/unfollow button and the stats section (AC-149) shall be hidden. The three-dots icon (AC-150) shall still be shown so the viewer can unblock the user (AC-152).
 
+**AC-159** (new): The social activity feed UI is formally deferred to Phase 2. `FeedScreen.tsx` in `mod-social-feed/screens/` and the `get_activity_feed` RPC shall remain in the codebase as dead code but shall never be imported or rendered in any navigator or shell, with zero runtime impact and no new wiring to `HomeScreen`.
+
+**AC-163** (new): The `UserProfileScreen` (the other-user profile overlay reached via `handleSelectClimber`) shall display a 3-column `BetaVideoGrid` (AC-160) below the stats section (AC-149), showing all beta videos by that user fetched via `fetchBetaVideosByUser` (AC-162). Tapping a cell shall open `BetaVideoReelViewer` cycling through that user's videos, starting at the tapped index. In this context the viewer is passed `reelContext = 'profile'` (AC-164): the poster-identity row is visible but NOT tappable (no navigation on tap). This grid is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state (AC-064) rather than the grid. MOD-006 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer`.
+
 ---
 
 ## Integration Points
@@ -84,6 +92,8 @@ For US-020, the other-user profile screen (`UserProfileScreen`, reached via `han
 **MOD-008 profile-stats dependency (AC-149)**: The other-user profile screen (`UserProfileScreen`) sources its stats section from MOD-008's `fetchProfileStats(targetUserId)` public service wrapper (`get_profile_stats` RPC). MOD-006 imports `fetchProfileStats` directly from `mod-profile-history/history-service.ts` (cross-module import — see Key Implementation Notes). No per-card stats fetch occurs on the Followers or Following list render.
 
 **MOD-009 block-status and action dependency (AC-150/AC-152/AC-153)**: The `UserProfileScreen` consumes MOD-009's public services: `isBlocked`/`fetchBlockedUserIds` for the block-status check on load (AC-153), `blockUser` for the block action (AC-152), and `unblockUser` for the unblock action (AC-152). MOD-006 calls these services via MOD-009's public service layer; it does not read the `Block` table directly for the three-dots sheet logic.
+
+**MOD-005 BetaVideoGrid and fetchBetaVideosByUser dependency (AC-163)**: The `UserProfileScreen` displays a 3-column `BetaVideoGrid` (AC-160) below the stats section, sourcing data via `fetchBetaVideosByUser(targetUserId)` (AC-162). MOD-006 imports `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer` from MOD-005 (`mod-beta-video`). `BetaVideoReelViewer` is opened with `reelContext = 'profile'`. This dependency already exists (MOD-006 → MOD-005); AC-163 exercises it for the profile grid feature.
 
 ---
 
@@ -158,11 +168,21 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 - On screen load: `isBlocked`/`fetchBlockedUserIds` check (MOD-009); if blocked in either direction, show "This profile isn't available", hide follow button and stats section, keep ⋮ icon visible
 - Block action calls `blockUser` (MOD-009); unblock calls `unblockUser` (MOD-009); profile reflects new state immediately
 
+**Inputs (other-user profile screen — AC-163 BetaVideoGrid):**
+- `targetUserId`, authenticated session
+- `fetchBetaVideosByUser(targetUserId)` from MOD-005
+
+**Outputs (other-user profile screen — AC-163 BetaVideoGrid):**
+- 3-column `BetaVideoGrid` below the stats section (AC-149), showing that user's beta videos
+- Tapping a cell opens `BetaVideoReelViewer` from the tapped index with `reelContext = 'profile'`
+- Subject to AC-063: hidden/403 state (AC-064) shown instead of grid for `followers_only` profile requested by a non-follower
+
 ---
 
 ## Key Implementation Notes
 
 - **Feed RPC is a hard requirement**: The activity feed must be implemented as a `SECURITY INVOKER` Postgres RPC that composes Follow ∩ (¬Block, symmetric) ∩ privacy. A raw `SELECT` from the client on the `Ascent` or `BetaVideo` table with a WHERE clause is not permitted for the feed. RLS is the security fence; the RPC is the composition layer. This is required because implementing the full intersection purely in RLS is expensive at scale and hard to maintain.
+- **Feed UI formally deferred to Phase 2 (AC-159)**: `FeedScreen.tsx` in `mod-social-feed/screens/` and the `get_activity_feed` RPC remain in the codebase as dead code. They must never be imported or rendered in any navigator or shell in Phase 1, with zero runtime impact and no new `HomeScreen` wiring. Phase 1 surfaces followed climbers via the Home screen strip (US-020) and profile grids (AC-163), not a dedicated feed screen.
 - **Report exclusion filter in feed RPC (AC-141 — Rev 16 coordinated change)**: The `get_activity_feed` RPC's `video_items` CTE must add `WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` to exclude reported-and-not-dismissed beta videos. This change ships in a MOD-006 migration (`20260928000002_mod_006_feed_exclude_reported.sql`) ordered after `20260928000001_mod_005_video_reports.sql` (the MOD-005 migration that adds the `is_reported` and `report_dismissed` columns). The `ascent_items` CTE needs no change — ascents are not reportable in Phase 1. The exact predicate is the canonical beta-video exclusion filter; use `WHERE (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` — never a bare `is_reported = false`, which would permanently hide admin-dismissed videos and violate AC-143.
 - **Symmetric block in feed**: The feed must exclude activity from users who have blocked the current user AND users the current user has blocked (both directions). The `Block` table is owned by MOD-009; MOD-006 reads it as a dependency.
 - **Privacy filter in feed**: Activity from users with `privacy_setting = followers_only` only appears in the feed of their followers. This check must be part of the RPC composition, not an application-layer filter after fetching.
@@ -174,6 +194,7 @@ Feed query reads from `Ascent` (MOD-004), `BetaVideo` (MOD-005), `Follow`, `Bloc
 - **Three-dots sheet is a `Modal` with translucent background overlay (AC-150)**: The bottom action sheet opened by the ⋮ icon is implemented as an RN `<Modal>` with a translucent, interaction-blocking background overlay. The sheet contains exactly two options: "Report" and the block toggle ("Block"/"Unblock"). The sheet must block interaction with the underlying screen until dismissed.
 - **`isBlocked` check runs as part of initial `loadProfile` Promise.all (AC-153)**: On `UserProfileScreen` load, the block-status check (`isBlocked`/`fetchBlockedUserIds` from MOD-009) is performed in parallel with any other profile-load fetches (e.g. follow status, profile data) as part of a `Promise.all`. If a block is detected in either direction, the screen renders "This profile isn't available", hides the follow button and stats section (AC-149), and keeps the ⋮ icon visible. The three-dots icon must remain mounted and functional in the blocked state so the viewer can unblock via AC-152.
 - **MOD-009 public-service calls for block actions (AC-152)**: The block toggle in the ⋮ sheet calls MOD-009's `blockUser` (when "Block" is selected) or `unblockUser` (when "Unblock" is selected) sequentially in the UI handler. MOD-006 does not write to the `Block` table directly; it delegates to MOD-009's public service layer. After the call completes, the profile reflects the new state immediately (blocked → AC-153 unavailable state; unblocked → normal content).
+- **BetaVideoGrid on UserProfileScreen (AC-163)**: Import `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer` from `mod-beta-video`. Call `fetchBetaVideosByUser(targetUserId)` to source the grid data. Pass `reelContext = 'profile'` to `BetaVideoReelViewer` — poster row is visible but NOT tappable. The grid is subject to AC-063/AC-064 privacy gating: a `followers_only` profile requested by a non-follower shows the hidden/403 state, not the grid.
 
 ### Followers and Following List Screens — Tech Lead Decisions (Rev 18)
 
@@ -203,3 +224,4 @@ MOD-006 → MOD-008 dependency is safe. Express as a direct import: `import { fe
 - New follower notifications (out of scope for Phase 1 push types).
 - Batch profile-stats RPC (Phase 2 optimization — do not build for Phase 1 list sizes).
 - Per-card sends count or highest grade on Followers/Following list cards (removed in Rev 19; stats surfaced on the other-user profile screen via AC-149 instead).
+- Dedicated feed screen in Phase 1 (AC-159 — `FeedScreen.tsx` and `get_activity_feed` RPC are dead code; feed UI is Phase 2).

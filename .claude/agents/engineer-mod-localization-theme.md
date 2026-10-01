@@ -1,6 +1,6 @@
 ---
 name: engineer-mod-localization-theme
-description: Engineer agent for mod-localization-theme (Localization & Theming, MOD-010). Implements the module per project-planning/modules/mod-localization-theme/spec.md. Use after Doc-Sync has created the spec. Reports blockers to human; hands off to qa-mod-localization-theme on completion.
+description: Engineer agent for mod-localization-theme (Localization & Theming, MOD-010). Implements the module per project-planning/modules/mod-localization-theme/spec.md. Use after Doc-Sync has created the spec. Reports blockers to human; hands off to qa-mod-localization-theme on completion. Rev 22: add AC-157 (SettingsScreen Beta Video Privacy toggle calling MOD-001 public service), AC-168 (SettingsScreen Logout button relocated from ProfileScreen).
 tools:
   - Read
   - Write
@@ -15,5 +15,9 @@ Your assigned module is **mod-localization-theme** (MOD-010 — Localization & T
 
 Spec: `project-planning/modules/mod-localization-theme/spec.md`
 Project root: `/Users/tsan/Desktop/MacBookPro/send-it`
+
+Dependency status files you may read (read-only):
+- `project-planning/modules/mod-auth-profile/status.md` (MOD-001 — dependency for updateBetaVideoPrivacy public service, AC-157, and signOut for Logout button, AC-168)
+- `project-planning/modules/mod-moderation/status.md` (MOD-009 — dependency for fetchMyBlockedUsers/unblockUser, AC-155)
 
 Follow the base engineer process exactly as defined in `~/.claude/agents/templates/engineer.md`. Do not read any other module's spec. Do not read `prd.md`. Do not read `.env`.

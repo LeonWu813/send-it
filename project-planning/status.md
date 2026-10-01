@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 88bc9397ebbee795cbd5e9ff6cfb9d9c3b49ef05
-timestamp: 2026-09-30T00:30:00Z
+commit: 14360d52c26fa5922ae7681d8e0d17de85d4993e
+timestamp: 2026-09-30T01:00:00Z
 ```
 
 ## PM Updates
@@ -1459,5 +1459,43 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 
 **verify-sync.sh**: Skipped — trivial passthrough per SKILL.md routing rules.
 
+
+### Sync Report — Delta Sync — 2026-09-30
+
+**Sync type:** delta
+**PRD Revision:** 22
+**PM Update reference:** 2026-09-30 [SUBSTANTIVE] — Separate beta-video privacy setting + BetaVideoGrid/fetchBetaVideosByUser/reelContext/feed-deferral/Logout relocation (PRD Revision 22, including Addendum AC-159–AC-168)
+
+**Files modified:**
+- `project-planning/modules/mod-auth-profile/spec.md` — Last Synced Revision 18 → 22; Dependencies updated (none → MOD-005); Purpose updated (beta_video_privacy write service, own-videos BetaVideoGrid on ProfileScreen, Logout removed); Context updated (US-012/US-011 additions for beta_video_privacy and own-videos grid); US-011 AC list updated (added AC-160, AC-162, AC-164); US-012 AC list updated (added AC-156, AC-157, AC-158); Data Model updated (beta_video_privacy column); Input/Output Contract updated; Requirements updated; AC-156, AC-164, AC-167 added to Acceptance Criteria Covered; Integration Points 4 and 5 added; Key Implementation Notes updated (beta_video_privacy, own-videos grid, Logout removal, circular-dependency note); Out of Scope updated.
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced Revision 20 → 22; Purpose updated (AC-158, AC-160, AC-161, AC-162, AC-164/reelContext, AC-165, AC-166); Context updated (US-012/AC-158, BetaVideoGrid, fetchBetaVideosByUser, reelContext, upsert/replace); US-004 AC list updated (added AC-161, AC-165, AC-166); AC-158, AC-160, AC-161, AC-162, AC-165, AC-166 added to Acceptance Criteria Covered; Integration Points 5, 6, 7 added (BetaVideoGrid, fetchBetaVideosByUser, reelContext); Data Model updated (UNIQUE constraint note, beta_video_privacy read note); Input/Output Contract updated (upload: AC-161 removal, AC-165/AC-166 upsert; playback: AC-158 filter; BetaVideoGrid inputs/outputs; fetchBetaVideosByUser inputs/outputs); Key Implementation Notes updated (AC-158, AC-160, AC-161, AC-162, AC-165, AC-166, reelContext); Out of Scope updated.
+- `project-planning/modules/mod-social-feed/spec.md` — Last Synced Revision 20 → 22; Purpose updated (AC-159 feed deferral, AC-163 BetaVideoGrid on UserProfileScreen); Context updated (US-007/AC-159, US-023/AC-163); US-007 AC list updated (added AC-159); AC-159, AC-163 added to Acceptance Criteria Covered; Integration Point for MOD-005 BetaVideoGrid dependency added; Input/Output Contract updated (AC-163 BetaVideoGrid inputs/outputs); Key Implementation Notes updated (AC-159 feed deferral, AC-163 BetaVideoGrid on UserProfileScreen); Out of Scope updated (AC-159 dead code note).
+- `project-planning/modules/mod-localization-theme/spec.md` — Last Synced Revision 21 → 22; Dependencies updated (MOD-009 only → MOD-001 + MOD-009); Purpose updated (AC-157 Beta Video Privacy toggle, AC-168 Logout button); Context updated (US-012/AC-157, AC-168); US-012 added to Related User Stories; AC-157, AC-168 added to Acceptance Criteria Covered; Integration Point for MOD-001 public service added; Input/Output Contract updated (AC-157 toggle inputs/outputs, AC-168 Logout inputs/outputs); Key Implementation Notes updated (AC-157 toggle, AC-168 Logout, SettingsScreen row order); Out of Scope updated.
+- `.claude/agents/engineer-mod-auth-profile.md` — Description updated for Rev 22 scope; dependency status file for MOD-005 added.
+- `.claude/agents/qa-mod-auth-profile.md` — Description updated for Rev 22 scope; dependency status file for MOD-005 added.
+- `.claude/agents/engineer-mod-beta-video.md` — Description updated for Rev 22 scope; dependency status files for MOD-001, MOD-003, MOD-009 added.
+- `.claude/agents/qa-mod-beta-video.md` — Description updated for Rev 22 scope; dependency status files for MOD-001, MOD-003, MOD-009 added.
+- `.claude/agents/engineer-mod-social-feed.md` — Description updated for Rev 22 scope; dependency status files for MOD-001, MOD-004, MOD-005, MOD-008, MOD-009 added.
+- `.claude/agents/qa-mod-social-feed.md` — Description updated for Rev 22 scope; dependency status files for MOD-001, MOD-004, MOD-005, MOD-008, MOD-009 added.
+- `.claude/agents/engineer-mod-localization-theme.md` — Description updated for Rev 22 scope; dependency status files for MOD-001, MOD-009 added.
+- `.claude/agents/qa-mod-localization-theme.md` — Description updated for Rev 22 scope; dependency status files for MOD-001, MOD-009 added.
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files created:**
+- none
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none — the PRD Revision 22 PM Updates entry and the addendum together provide sufficient detail for all new ACs. The mutual MOD-001 ↔ MOD-005 dependency edge was flagged by PM in the addendum; the PM directed no Tech Lead review for Rev 22 and stated it is a component/service-import coupling rather than a build cycle. Carried into both specs as documented.
+
+**AMBIGUITY markers resolved:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as Rev 18 and Rev 20 (Check 4 grep pattern does not match the `**US-NNN**:` format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ## Skill Recommendations
