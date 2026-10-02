@@ -3,15 +3,17 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: 1e9ccc6ab486ee246813e69b13d3c8680b77e69a
+commit: 018eba7db8cc01ed8dcfaf90c036c215fb220714
 timestamp: 2026-10-02T00:00:00Z
 ```
 
 ## PM Updates
+
+- **2026-10-02 [TRIVIAL]** — AC-169 wording fix (PRD Revision 25). Leon (via coordinator) requested and approved. QA verification of Rev 24 flagged a one-byte spec/code mismatch: AC-169 said the upload is rejected when the native file size is "45 MB or greater" (≥), but the shipped MOD-005 implementation uses strictly-greater-than (`nativeSize > 45_000_000`), so exactly 45,000,000 bytes passes. The implementation is correct — the 1-byte extra headroom is negligible and stays well under the 50 MB Supabase ceiling. **No code change.** §8 MOD-005 AC-169 reworded from "45 MB or greater" to "greater than 45 MB" to match the code. PRD Status line `[TRIVIAL] — Revision 25`; `**Revision**` bumped 24 → 25; Date 2026-10-02. Wording-only — no structural impact on modules, dependencies, or phases; no new ID; the error strings ("under 45 MB") and the 50 MB-ceiling margin sentence are unchanged. Not touched: AC-031 (line 597) and the §5/§10 prose (lines 310/968) still phrase the gate as ≥/"or greater"; per the approved scope this change is AC-169-only. Doc-Sync may carry the AC-169 wording into the MOD-005 spec on the next lightweight pass.
 
 - **2026-10-02 [SUBSTANTIVE]** — Beta-video upload pipeline redesign (PRD Revision 24). Leon (via coordinator) requested and approved this change (Option A for the Phase 2 target). Tech Lead FINAL SIGN-OFF recorded 2026-10-02 (see `## Tech Lead Reviews` → `Review — 2026-10-02 — change (MOD-005 beta-video: FINAL SIGN-OFF …)`), approved conditional on three conditions, all addressed below. Two-part change: **Phase 1** removes client-side compression entirely in favor of an upfront native-file size gate; **Phase 2** consciously overrides the documented video-migration target from Cloudflare Stream to AWS S3 + CloudFront + MediaConvert. PRD Status line `[SUBSTANTIVE] — Revision 24`; `**Revision**` bumped 23 → 24; Date 2026-10-02.
   - **Phase 1 (implement now, $0)**:

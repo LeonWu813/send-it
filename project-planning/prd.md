@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 24
+**Status**: [TRIVIAL] — Revision 25
 **Date**: 2026-10-02
-**Revision**: 24
+**Revision**: 25
 
 ---
 
@@ -652,7 +652,7 @@ The data flow for the two most important loops:
 
 **AC-166** (new): In `UploadBetaVideoScreen`, before the final confirm/upload action, the system shall call a new service check `checkExistingBetaVideo(routeId): Promise<boolean>` to determine whether the current user already has a beta video for this route. If an existing video is found, the screen shall display the reminder text "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。" (EN: "You already have a beta video for this route. Confirming will replace your existing video."). The upload shall use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint.
 
-**AC-169** (revised, Rev 24): Before any upload is attempted — after format validation (AC-035) and the duration check (AC-030), and before the upload begins — the system shall read the native video file's size. If the native file size is 45 MB or greater, or the size cannot be read, the system shall not attempt the upload and shall reject it with the AC-031 error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB". The check shall fail closed: an unreadable size is treated as oversized and the upload is rejected. This upfront source-size gate replaces the former post-compression size guard (Phase 1 performs no compression, AC-031) and prevents an HTTP 413 from ever reaching the user as a cryptic error. The 45 MB threshold sits below the 50 MB Supabase Storage free-tier bucket ceiling to leave a safe margin.
+**AC-169** (revised, Rev 24): Before any upload is attempted — after format validation (AC-035) and the duration check (AC-030), and before the upload begins — the system shall read the native video file's size. If the native file size is greater than 45 MB, or the size cannot be read, the system shall not attempt the upload and shall reject it with the AC-031 error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB". The check shall fail closed: an unreadable size is treated as oversized and the upload is rejected. This upfront source-size gate replaces the former post-compression size guard (Phase 1 performs no compression, AC-031) and prevents an HTTP 413 from ever reaching the user as a cryptic error. The 45 MB threshold sits below the 50 MB Supabase Storage free-tier bucket ceiling to leave a safe margin.
 
 **AC-170** (new, Rev 24): When beta-video storage usage in the Supabase `beta-videos` bucket reaches 800 MB — 80% of the 1 GB free-tier total shared across all Supabase Storage buckets — the system shall surface a storage-watch trigger for the operator (via monitoring and/or manual review) to begin evaluating the Phase 2 video infrastructure migration (§4, §7). This is an operational early-warning threshold; it does not block uploads at 800 MB.
 
