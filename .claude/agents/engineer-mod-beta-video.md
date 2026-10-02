@@ -1,6 +1,6 @@
 ---
 name: engineer-mod-beta-video
-description: Engineer agent for mod-beta-video (Beta Video, MOD-005). Implements the module per project-planning/modules/mod-beta-video/spec.md. Use after Doc-Sync has created the spec. Reports blockers to human; hands off to qa-mod-beta-video on completion. Rev 23: AC-031 revised (react-native-compressor, ordering, AC-036 Compressing phase), AC-169 new (post-compression size guard via expo-file-system getInfoAsync, 50 MB ceiling, zh-TW/EN error string).
+description: Engineer agent for mod-beta-video (Beta Video, MOD-005). Implements the module per project-planning/modules/mod-beta-video/spec.md. Use after Doc-Sync has created the spec. Reports blockers to human; hands off to qa-mod-beta-video on completion. Rev 24: AC-031 revised (native upload as-is, no react-native-compressor, reject >= 45 MB with bilingual error), AC-036 revised (single Uploading phase, no Compressing phase), AC-169 revised (upfront pre-upload size gate, fail-closed, 45 MB ceiling), AC-170 new (800 MB storage-watch threshold, operator trigger, does not block uploads).
 tools:
   - Read
   - Write

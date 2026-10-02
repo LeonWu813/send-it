@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 97be89d0b731fd82e2bf94e943cc76368240dca6
+commit: 1e9ccc6ab486ee246813e69b13d3c8680b77e69a
 timestamp: 2026-10-02T00:00:00Z
 ```
 
@@ -1450,6 +1450,30 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-02 — Delta Sync (Revision 24, [SUBSTANTIVE])
+
+**Trigger**: PM [SUBSTANTIVE] tag (2026-10-02) — Beta-video upload pipeline redesign (PRD Revision 24). Tech Lead FINAL SIGN-OFF recorded 2026-10-02. Two-part change: Phase 1 removes client-side compression in favor of an upfront native-file size gate; Phase 2 overrides the video-migration target from Cloudflare Stream to AWS S3 + CloudFront + MediaConvert.
+
+**Files modified:**
+
+- `project-planning/production.md` — Last synced from PRD rev 23 → rev 24; Last Updated 2026-10-01 → 2026-10-02. Tech Stack video hosting row: "Cloudflare Stream (migrate)" → "AWS S3 + CloudFront + MediaConvert (Phase 2 migrate)" with 800 MB watch trigger note and AWS/Supabase hybrid description. Architecture client bullet: removed "client-side video compression"; added "no video compression — uploads original native video file as-is after upfront size gate (≥ 45 MB rejected)". Architecture Storage bullet: "Cloudflare Stream" → "AWS S3 + CloudFront + MediaConvert" with supersession note. Key data flow 2: "client compresses video" → "client generates thumbnail and (Phase 1) uploads original native video file as-is after upfront 45 MB size gate". Module Index MOD-005: "client-side compression" removed; description updated with 45 MB size gate and no-compression notation. Video Pipeline Conventions section: replaced react-native-compressor mandate with no-compression model; added Upfront native-file size gate convention (AC-169, Rev 24); added Storage watch threshold convention (AC-170); added Phase 2 video migration target (AWS S3 + CloudFront + MediaConvert, superseding Cloudflare Stream); added Phase 2 presigned S3 upload security convention (content-length-range, least-privilege IAM, ≤5 min expiry, server-chosen key). Cross-Cutting NFRs: "Video migration trigger" (monthly cost $25 / 20 GB → Cloudflare Stream) replaced with "Video storage watch threshold" (800 MB → operator evaluation of Phase 2 AWS migration, AC-170).
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 23 → 24; Last Updated 2026-10-01 → 2026-10-02. Purpose: replaced "client-side compression (≤60 sec cap)" with "≤60 sec cap, 45 MB native-file size gate, no client-side compression". Context paragraph 1: removed compression + Cloudflare Stream migration trigger; added no-compression model, upfront 45 MB size gate, 800 MB storage-watch threshold, AWS Phase 2 migration target. Non-goals: "Cloudflare Stream migration" → "AWS S3 + CloudFront + MediaConvert video migration (Phase 2 — 800 MB threshold)". Related User Stories US-004: added known Phase 1 trade-off note (45 MB + 60s = ~22s practical limit at full HEVC bitrate). US-004 AC list: added AC-170. AC-031 (revised, Rev 24): full rewrite — native upload as-is when < 45 MB, reject ≥ 45 MB with bilingual error, no react-native-compressor. AC-036 (revised, Rev 24): single "Uploading…" phase only, "Compressing…" phase removed. AC-169 (revised, Rev 24): upfront pre-upload size gate (not post-compression); fail-closed on unreadable size; 45 MB threshold. AC-170 (new, Rev 24): 800 MB storage-watch threshold, operator trigger, does not block uploads. Data Model BetaVideo comment: updated from post-compression check to upfront native-size gate. Input/Output Contract (upload outputs): removed react-native-compressor line; stated upfront size gate. Key Implementation Notes: replaced compression library + post-compression guard bullets with upfront native-file size gate bullet; replaced progress overlay two-phase description with single Uploading phase; updated codec note to reflect no compression; updated Phase 1 Storage note (AWS target, 800 MB threshold). Out of Scope: "Cloudflare Stream" → "AWS S3 + CloudFront + MediaConvert video migration execution".
+
+- `.claude/agents/engineer-mod-beta-video.md` — description line: Rev 23 text replaced with Rev 24 text (AC-031 revised native upload, AC-036 single Uploading phase, AC-169 upfront gate, AC-170 new storage-watch threshold).
+
+- `.claude/agents/qa-mod-beta-video.md` — description line: Rev 23 text replaced with Rev 24 text (same Rev 24 AC summary as engineer wrapper).
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- All other module specs (MOD-001, MOD-002, MOD-003, MOD-004, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012) — not in scope for this delta.
+- All other agent wrappers — not in scope.
+
+**Ambiguities / Conflicts**: None.
+
+**verify-sync.sh**: 4/6 — same pre-existing script bugs as all prior delta syncs since Rev 18 (Check 4 grep pattern does not match the "**US-NNN**:" format used in spec Related User Stories sections; Check 6 grabs non-phase-name lines from prd.md gym seed data). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ### 2026-09-30 — Trivial Sync (Revision 21, [TRIVIAL])
 

@@ -1,6 +1,6 @@
 ---
 name: qa-mod-beta-video
-description: QA agent for mod-beta-video (Beta Video, MOD-005). Verifies the module against project-planning/modules/mod-beta-video/spec.md. Invoke after Engineer completes or fixes the module. Rev 23: verify AC-031 revised (react-native-compressor, ordering, AC-036 Compressing phase), AC-169 new (post-compression size guard — expo-file-system getInfoAsync, 50 MB ceiling, zh-TW/EN error string, upload not attempted when exceeded).
+description: QA agent for mod-beta-video (Beta Video, MOD-005). Verifies the module against project-planning/modules/mod-beta-video/spec.md. Invoke after Engineer completes or fixes the module. Rev 24: verify AC-031 revised (native upload as-is, no react-native-compressor, reject >= 45 MB with bilingual error), AC-036 revised (single Uploading phase, no Compressing phase), AC-169 revised (upfront pre-upload size gate, fail-closed, 45 MB ceiling, fail-closed on unreadable size), AC-170 new (800 MB storage-watch threshold, does not block uploads).
 tools:
   - Read
   - Write

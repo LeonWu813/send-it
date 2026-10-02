@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 23 (2026-10-01)
-**Last Updated**: 2026-10-01
+**Last synced from PRD**: rev 24 (2026-10-02)
+**Last Updated**: 2026-10-02
 
 ---
 
@@ -22,7 +22,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 | Language         | TypeScript 5.x                                         | Shared across app and Supabase Edge Functions.                                                                                              |
 | App framework    | React Native (Expo SDK 51+)                            | iOS-only build configuration for Phase 1. Android in Phase 2.                                                                               |
 | Backend (BaaS)   | Supabase (Postgres 15+, Auth, Storage, Edge Functions) | Postgres with Row-Level Security. Auth: Email + Apple Sign-In + Google Sign-In. Storage for photos and Phase 1 video.                       |
-| Video hosting    | Supabase Storage (Phase 1) → Cloudflare Stream (migrate) | Migration trigger: monthly cost > US$25 OR total video storage > 20 GB, whichever comes first.                                              |
+| Video hosting    | Supabase Storage (Phase 1) → AWS S3 + CloudFront + MediaConvert (Phase 2 migrate) | Phase 1 stores original native files as-is in Supabase Storage (no transcoding). Phase 2 migrates video ingest + delivery to AWS (S3 storage, MediaConvert HDR→SDR + H.264 transcode, CloudFront CDN); Supabase keeps Postgres, Auth, RLS, PostgREST, and all non-video storage. This supersedes the previously documented Cloudflare Stream target (PM-logged override, Rev 24). Migration watch trigger: beta-video storage reaches 800 MB of the 1 GB free tier (AC-170). |
 | Push             | Apple Push Notification service (APNs) via Expo Push   | Device token table + Supabase Edge Function trigger for beta-video-like events only in Phase 1.                                             |
 | Analytics        | PostHog (free tier)                                    | Product analytics + retention cohorts.                                                                                                      |
 | Admin tooling    | Supabase Studio                                        | Sole admin surface for Phase 1. No in-app admin UI.                                                                                         |
@@ -35,10 +35,10 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 
 Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
 
-- The **client** owns rendering, local UI state, client-side video compression, client-generated thumbnails, and localization. It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
+- The **client** owns rendering, local UI state, client-generated thumbnails, and localization. In Phase 1 the client performs **no** video compression — it uploads the original native video file as-is after an upfront size gate (≥ 45 MB is rejected; see §8 AC-031/AC-169). It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
 - The client's top-level UI is a **persistent three-tab bottom navigation shell**. **Tab 1 (Home)** hosts the Home surface (MOD-012). **Tab 2 (Gyms)** hosts the existing gym navigation stack (MOD-002 gym directory + detail, with MOD-003 route catalog reachable beneath it). **Tab 3 (Profile)** hosts the current user's profile surface (MOD-001) with their embedded send history and stats (MOD-008). The Home tab is the default tab after login. The tab shell (`AppShell`) lives in `src/modules/mod-home/` (MOD-012 owns it). Tab state is a local `useState<TabKey>` in `AppShell`. All tab subtrees are kept alive using `display: 'none'` (never conditional unmount). Session is threaded to each tab navigator as a prop; `useSession` remains the singleton for reactive session changes.
 - **Supabase Postgres** is the system of record. All tables are protected by Row-Level Security (RLS) policies. Read/write access is scoped per-user for logs, follows, reactions, reports, blocks, and notification preferences; gyms are readable by all authenticated users and writable only by admins; routes are readable by all authenticated users for `active` rows, with `pending` rows visible only to their submitter, and are writable by the submitting user on insert (initial status `active` when auto-approve is ON, else `pending`), while status transitions to `retired` or `rejected` and approval of `pending` routes are admin-only via Supabase Studio.
-- **Supabase Storage** hosts avatars, gym photos, route photos, and (Phase 1 only) beta videos + client-generated thumbnails. When the migration trigger fires, video uploads cut over to Cloudflare Stream while metadata continues to live in Postgres.
+- **Supabase Storage** hosts avatars, gym photos, route photos, and (Phase 1 only) beta videos + client-generated thumbnails. When the Phase 2 migration is executed, beta-video ingest and delivery cut over to **AWS S3 + CloudFront + MediaConvert** (superseding the previously documented Cloudflare Stream target, Rev 24) while all metadata — including `beta_videos.video_url`, now a CloudFront URL — continues to live in Postgres on Supabase.
 - **Supabase Edge Functions** handle event-driven workflows that must not run on the client: on `Reaction` insert with `target_type = beta_video`, an Edge Function inserts a `Notification` row and enqueues an APNs push (respecting `NotificationPreference`) via Expo Push to all `DeviceToken` rows for the recipient.
 - **PostHog** SDK ships client-side events (signup, first send, video upload, retention markers). No PII beyond user_id is sent.
 - **Admin operations** (adding gyms, reviewing gym requests, reviewing reports, banning users, merging near-duplicate routes, approving/rejecting pending routes, and retiring routes) are performed exclusively through Supabase Studio in Phase 1. In-app admin UI for route status management is planned for Phase 1.5.
@@ -46,7 +46,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 **Key data flows:**
 
 1. **Log a send**: client → Supabase Auth (session) → Postgres insert into `Ascent` (RLS-checked) → PostHog event. Grade is read from `Route.grade` at display time, never stored per-log.
-2. **Upload beta video → notify**: client compresses video and generates thumbnail → upload to Supabase Storage (Phase 1) → insert `BetaVideo` row → other user views + likes → insert `Reaction` row → Edge Function fires → insert `Notification` row + APNs push to recipient's device tokens (if enabled in `NotificationPreference`).
+2. **Upload beta video → notify**: client generates thumbnail and (Phase 1) uploads the original native video file as-is to Supabase Storage after the upfront 45 MB size gate → insert `BetaVideo` row → other user views + likes → insert `Reaction` row → Edge Function fires → insert `Notification` row + APNs push to recipient's device tokens (if enabled in `NotificationPreference`).
 
 ---
 
@@ -58,7 +58,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 | MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form, and saved-gym bookmark toggle (add/remove from saved_gyms). |
 | MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, 4-value status lifecycle, submitter-only pending visibility, admin approve/reject/retire via Studio. |
 | MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override; ascent style restricted to {flash, top, attempt}.     |
-| MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection, client-side compression, thumbnail, storage upload, inline playback.             |
+| MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection (≤60 sec, 45 MB native-file size gate, no client-side compression), thumbnail, storage upload, inline playback, reel viewer, report flow.             |
 | MOD-006 | mod-social-feed        | Social Graph & Feed          | Follow/unfollow, chronological activity feed via SECURITY INVOKER RPC, beta-video like reactions.        |
 | MOD-007 | mod-notifications      | Notifications                | Device token registration, notification preferences, Edge Function push fan-out, in-app inbox.            |
 | MOD-008 | mod-profile-history    | Profile History & Stats      | Send history with filters, stats bar chart, streak, highest grade — for self and (per privacy) others.    |
@@ -124,7 +124,15 @@ Only vars prefixed `EXPO_PUBLIC_` are safe to inline into the client bundle. Any
 
 ### Video Pipeline Conventions
 
-Accepted upload containers are **MP4 (`.mp4`) and QuickTime (`.mov`)**. Rejection on ingest is codec-based: uploads whose video codec is not H.264 or HEVC, or whose audio codec is not AAC, must be rejected with a clear error surfaced to the user (AC-035). Both `.mp4` and `.mov` files are stored as-is — no server-side transcoding. The recommended client-side compression library is `react-native-compressor` (iOS AVFoundation wrapper, Expo bare compatible; H.264/AAC output, ≤1080p, library-default mobile bitrate); the final library choice is confirmed in the MOD-005 spec. Thumbnails are generated client-side before upload and uploaded alongside the video artifact.
+Accepted upload containers are **MP4 (`.mp4`) and QuickTime (`.mov`)**. Rejection on ingest is codec-based: uploads whose video codec is not H.264 or HEVC, or whose audio codec is not AAC, must be rejected with a clear error surfaced to the user (AC-035). Both `.mp4` and `.mov` files are stored as-is — no server-side transcoding. **Phase 1 performs no client-side compression**: the original native video file is uploaded as-is after an upfront size gate (AC-031, Rev 24). `react-native-compressor` is removed from the project. Thumbnails are generated client-side before upload and uploaded alongside the video artifact.
+
+**Upfront native-file size gate (AC-169, Rev 24)**: before any upload is attempted — after format validation (AC-035) and the duration check (AC-030) — the client reads the native video file's size. If the native file size is 45 MB or greater, or the size cannot be read, the upload is rejected with the bilingual error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB". The check fails closed: an unreadable size is treated as oversized and the upload is rejected. The 45 MB threshold sits below the 50 MB Supabase Storage free-tier bucket ceiling to leave a safe margin.
+
+**Storage watch threshold (AC-170)**: when beta-video storage usage in the Supabase `beta-videos` bucket reaches 800 MB — 80% of the 1 GB free-tier total shared across all Supabase Storage buckets — the operator must begin evaluating the Phase 2 video infrastructure migration. This threshold does not block uploads.
+
+**Phase 2 video migration target**: AWS S3 (ingest/storage) + AWS MediaConvert (HDR→SDR tone-map + H.264 transcode) + AWS CloudFront (CDN delivery), superseding the previously documented Cloudflare Stream target (PM-logged override, Rev 24). Supabase remains the system of record for all Postgres data, Auth, RLS, PostgREST, and non-video storage; only beta-video ingest and delivery move to AWS. The project consequently runs two clouds in Phase 2.
+
+**Phase 2 presigned S3 upload security convention (non-negotiable when Phase 2 is built)**: the client→S3 upload must use a short-lived presigned upload minted by a Supabase Edge Function that verifies the caller's Supabase JWT (Supabase Auth stays the identity layer — no Cognito); the presigned upload must enforce the 45 MB cap server-side via a `content-length-range` policy condition; the IAM principal behind the Edge Function must be least-privilege (`s3:PutObject` on the ingest prefix only, credentials in Edge-Function secrets, never in the client or repo); the presigned URL must expire in ≤ 5 minutes; and the S3 object key must be chosen server-side, never client-supplied.
 
 ### File Upload to Supabase Storage
 
@@ -318,5 +326,5 @@ Follow `~/.claude/skills/coding-conventions/SKILL.md` — conventional commits f
 - **Offline tolerance**: Phase 1 does not queue sends offline. On any network failure, the user sees a clear error message and can retry.
 - **Analytics**: PostHog free tier. No PII beyond `user_id` sent to PostHog.
 - **Admin tooling**: Supabase Studio only for Phase 1. No in-app admin UI.
-- **Video migration trigger**: When monthly video cost exceeds US$25 OR total video storage exceeds 20 GB (whichever comes first), video uploads cut over to Cloudflare Stream. A migration runbook should be drafted before Phase 1 GA.
+- **Video storage watch threshold**: When beta-video storage in the Supabase `beta-videos` bucket reaches 800 MB (80% of the 1 GB free-tier total shared across all Supabase Storage buckets), the operator must begin evaluating the Phase 2 video infrastructure migration (AC-170). This does not block uploads. Phase 2 migration target: AWS S3 + CloudFront + MediaConvert, superseding the previously documented Cloudflare Stream target (Rev 24).
 - **Apple Sign-In**: Required by the App Store because Google Sign-In is offered. Apple Sign-In must be visually equivalent to Google Sign-In (not smaller or hidden) per App Store review guidelines.
