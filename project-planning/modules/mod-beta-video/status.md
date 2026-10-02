@@ -2,6 +2,113 @@
 
 ## Engineering Progress
 
+**Status**: Feature implementation — 2026-10-02 (Rev 24 Phase 1 — remove react-native-compressor, upfront size gate, simplified progress overlay)
+
+### Feature — Rev 24 Phase 1: Remove compression, upfront 45 MB native size gate (AC-031, AC-036, AC-169) — 2026-10-02
+
+**ACs implemented / revised**:
+
+- **AC-031 (revised, Rev 24) ✓**: `react-native-compressor` removed entirely from the project (`npm uninstall react-native-compressor`, plugin removed from `app.json`, moduleNameMapper entry removed from `package.json`). `BetaVideoUploader.tsx` no longer calls `CompressorVideo.compress()`. The native video file is uploaded as-is, after the upfront AC-169 size gate passes. `localVideoUri: asset.uri` (original, not a compressedUri) is passed to `uploadBetaVideo`. `localThumbnailUri: asset.uri` is the Phase 1 placeholder (same URI). No compression step.
+
+- **AC-036 (revised, Rev 24) ✓**: Progress overlay now shows a single "Uploading…" phase (0–100%). The `phase === 'compressing'` conditional is removed from the progress title. Upload progress maps directly 0–100% (no 50%–100% remap from compression era). `setProgress({ percent: 5, phase: 'compressing' })` call and compression progress callback removed.
+
+- **AC-169 (revised, Rev 24) ✓**: The post-compression size check is replaced by an upfront native file size gate that runs before `setIsUploading(true)` — before the upload even starts. Reads `new ExpoFile(asset.uri).size`. Fails closed: `nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES` blocks the upload. BUCKET_LIMIT_BYTES = `45 * 1_000_000` (45 MB decimal). Error key reused: `betaVideo.errors.videoTooLargeAfterCompression` — copy updated in both locales to reflect no-compression context.
+
+**i18n changes**:
+- `betaVideo.compressing` key removed from both locale files (no longer rendered).
+- `betaVideo.errors.videoTooLargeAfterCompression` copy updated:
+  - EN: "Video is too large, please keep it under 45 MB."
+  - zh-TW: "影片檔案過大，請壓縮至 45MB 以下。"
+
+**`UploadProgress.phase` type updated** (`types.ts`): `'compressing'` removed from the union; phase is now `'thumbnail' | 'video' | 'saving'`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 436 tests, 31 suites, 0 failures (up from 435 — 1 new test added: AC-169 fail-closed on size === 0; AC-031 test updated to assert `asset.uri` passed directly; AC-169 over-limit test updated for upfront gate; old AC-031 compressor-call test removed)
+- `grep -r "react-native-compressor\|CompressorVideo\|compressedUri" src/`: only comment references remain (no imports, no runtime references). PASS.
+- Judgment-based: compression removed as spec'd; upfront gate uses `ExpoFile.size` (same SDK 54+ API as the previous post-compression guard); fail-closed on `size === 0` (consistent with prior guard semantics); BUCKET_LIMIT_BYTES uses decimal MB (consistent with prior implementation); progress overlay simplified to a single phase (no conditional); i18n key reused with updated copy (no new key needed); `types.ts` phase union narrowed correctly; no new dependencies; no gold-plating. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — removed `react-native-compressor` import; removed compression block; replaced with upfront `ExpoFile.size` gate; removed `progress?.phase === 'compressing'` conditional from overlay; simplified upload progress callback (direct 0–100%); `quality: 0.7` changed to `quality: 1` (no longer a hint to the picker since we upload as-is)
+- `src/modules/mod-beta-video/types.ts` — removed `'compressing'` from `UploadProgress.phase` union
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — removed `react-native-compressor` import + mock references; removed `mockVideoCompress` from `beforeEach`; replaced AC-031 compression test with Rev 24 direct-URI assertion; updated AC-169 tests for upfront gate; added fail-closed (size === 0) test
+- `locales/en/common.json` — removed `betaVideo.compressing`; updated `betaVideo.errors.videoTooLargeAfterCompression`
+- `locales/zh-TW/common.json` — removed `betaVideo.compressing`; updated `betaVideo.errors.videoTooLargeAfterCompression`
+- `package.json` — removed `react-native-compressor` from `jest.moduleNameMapper` (dependency already removed by `npm uninstall`)
+- `app.json` — removed `"react-native-compressor"` from `plugins` array
+
+**Files deleted** (mock no longer needed):
+- `__mocks__/react-native-compressor.js` — kept on disk but no longer referenced; may be deleted in a future cleanup pass (deletion deferred to avoid disrupting unrelated test infrastructure)
+
+**ACs addressed**:
+- **AC-031 (revised, Rev 24)**: no compression; native file uploaded as-is after size gate
+- **AC-036 (revised, Rev 24)**: single "Uploading…" phase only; no "Compressing…" phase
+- **AC-169 (revised, Rev 24)**: upfront native size gate before upload attempt; fail-closed on unreadable size
+
+---
+
+**Status**: Bug fix — 2026-10-01 (AC-169 size guard — replace deprecated getInfoAsync with File class)
+
+### Bug Fix — AC-169 size guard: replace getInfoAsync with File.size (expo-file-system@57.0.7) — 2026-10-01
+
+**Root cause**: `getInfoAsync` was imported from `expo-file-system` top-level (line 20 of `BetaVideoUploader.tsx`). In expo-file-system@57.0.7 the top-level no longer exports a working `getInfoAsync` — it is deprecated and returns an object with `size: undefined` at runtime, causing the AC-169 size guard to silently pass and allow files of any size to reach storage.
+
+**Fix**:
+
+- **Step 1 — Import removed**: Deleted `import { getInfoAsync } from 'expo-file-system'`. Replaced with `import { File as ExpoFile } from 'expo-file-system'` (same top-level package). `beta-video-service.ts` already used this import pattern as `ExpoFile` — confirmed canonical.
+
+- **Step 2 — Pre-compression guard updated** (source size check, >300 MB early exit): Replaced `getInfoAsync(asset.uri)` + `.size !== undefined && .size > 300 MB` check with `new ExpoFile(asset.uri).size`. `File.size` is a synchronous `number` property returning 0 when the file does not exist or cannot be read (per `NativeFileSystem.types.d.ts` line 222). The `!== undefined` guard is kept because `size` is always a `number` (never `undefined`) — the guard still evaluates correctly.
+
+- **Step 3 — Post-compression guard updated** (AC-169 hard gate, >45 MB bucket block): Replaced `getInfoAsync(compressedUri)` + `.exists && .size !== undefined && .size > BUCKET_LIMIT_BYTES` check with `new ExpoFile(compressedUri).size` + fail-closed logic. Since `size === 0` means unreadable/not-found, the guard now throws when `compressedSize === 0 || compressedSize > BUCKET_LIMIT_BYTES` — refusing to proceed when the compressed file size cannot be determined.
+
+- **Mock updated** (`__mocks__/expo-file-system.js`): Added a `size` getter on the `File` class that reads a module-level `mockFileSize` variable at access time (mirrors the synchronous property behaviour). Exposed `__setMockFileSize(bytes)` helper for tests to control `File.size` per test case. Default is `1024` bytes.
+
+- **Test updated** (`BetaVideoUploader.test.tsx`): Replaced `mockGetInfoAsync` (the now-unused `getInfoAsync` mock reference) with `setMockFileSize` (calling `ExpoFileSystem.__setMockFileSize`). Updated `beforeEach` default, the "60 MB" over-limit case, and the "45 MB" at-threshold case to use `setMockFileSize`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 435 tests, 31 suites, 0 failures (count unchanged — mock strategy changed, no net new tests needed)
+- Git scope: `src/modules/mod-beta-video/components/BetaVideoUploader.tsx`, `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx`, `__mocks__/expo-file-system.js` modified. No other modules touched. PASS.
+- Judgment-based: `File.size` is the correct SDK 57+ synchronous property for file size (confirmed in `NativeFileSystem.types.d.ts`); fail-closed on `compressedSize === 0` prevents unknowable-size files from bypassing the guard; `ExpoFile` import alias matches the existing pattern in `beta-video-service.ts`; no new dependencies; no gold-plating. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — replaced `getInfoAsync` import and both call sites with `new ExpoFile(uri).size`
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — replaced `mockGetInfoAsync` with `setMockFileSize` helper
+- `__mocks__/expo-file-system.js` — added `size` getter on `File` class, `mockFileSize` module variable, `__setMockFileSize` export
+
+**ACs addressed**:
+- **AC-169**: size guard now works correctly at runtime with expo-file-system@57.0.7; fail-closed when size is unreadable
+
+---
+
+**Status**: Bug fix — 2026-10-01 (compression bitrate control, bucket limit threshold correction, 413 error mapping)
+
+### Bug Fix — Manual compression bitrate, conservative bucket threshold, 413 storage error mapping — 2026-10-01
+
+**Bugs addressed**:
+
+- **Fix 1 — Manual bitrate compression (BetaVideoUploader.tsx)**: Switched `compressionMethod` from `'auto'` to `'manual'` with explicit `bitrate: 2_000_000` (2 Mbps) and `maxSize: 1280`. At 2 Mbps a 60-second video produces at most ~15 MB, well under any storage limit. The `'auto'` method was not reducing file size aggressively enough for some source videos.
+
+- **Fix 2 — Bucket limit threshold correction (BetaVideoUploader.tsx)**: Changed `BUCKET_LIMIT_BYTES` from `50 * 1024 * 1024` (52,428,800 bytes, binary MiB) to `45 * 1000 * 1000` (45,000,000 bytes, decimal MB). Supabase's "50 MB" bucket limit uses decimal MB (50,000,000 bytes), so the old binary constant allowed files up to ~52 MB to pass the pre-upload guard and get rejected by storage with an HTTP 413. The new constant is a conservative 45 MB (decimal) to provide headroom.
+
+- **Fix 3 — 413 storage error mapping (beta-video-service.ts + i18n)**: Updated the storage error handler in `uploadBetaVideo` to detect `statusCode === '413'` (or `status === 400`) and throw `'Video is too large. Please trim it and try again.'` instead of the generic `'Failed to upload video. Please try again.'`. Added i18n key `betaVideo.errors.videoTooLargeForStorage` to both locale files (EN: "Video is too large. Please trim it and try again."; zh-TW: "影片超過上限，請修剪影片後再試。"). The service continues to use a fixed English string (consistent with all other service-layer error messages that the uploader component re-maps via `t()` at the catch site); the i18n key is available for the caller to look up the translated string via the error text match pattern.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 435 tests, 31 suites, 0 failures (up from 434 — 1 new test added: 413 storage error mapped to specific message in `beta-video-service.test.ts`)
+- Git scope: `src/modules/mod-beta-video/components/BetaVideoUploader.tsx`, `src/modules/mod-beta-video/beta-video-service.ts`, `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx`, `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`, `locales/en/common.json`, `locales/zh-TW/common.json` modified. No other modules touched. PASS.
+- Judgment-based: compression options follow the spec's `react-native-compressor` manual mode shape; `BUCKET_LIMIT_BYTES` uses decimal MB consistent with Supabase's "50 MB" definition; 413 detection uses `statusCode === '413'` (string, as Supabase JS client surfaces it) with a `status === 400` secondary guard; service error messages remain fixed English strings (consistent with existing pattern); i18n keys added to both locales; existing AC-169 boundary test updated to use the new 45 MB (decimal) threshold; AC-031 compression test assertion updated to match new manual options; no new dependencies; no gold-plating. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — Fix 1: compression options `compressionMethod: 'manual'`, `bitrate: 2_000_000`, `maxSize: 1280`; Fix 2: `BUCKET_LIMIT_BYTES` → `45 * 1000 * 1000`
+- `src/modules/mod-beta-video/beta-video-service.ts` — Fix 3: 413/400 storage error detection with specific "too large" message before generic fallback
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — updated AC-031 assertion for new compression options; updated AC-169 boundary test size from `50 * 1024 * 1024` to `45 * 1000 * 1000`
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — added 413 statusCode test for storage error mapping
+- `locales/en/common.json` — added `betaVideo.errors.videoTooLargeForStorage`
+- `locales/zh-TW/common.json` — added `betaVideo.errors.videoTooLargeForStorage`
+
+---
+
 **Status**: Bug fix — 2026-10-01 (AC-169 pre-compression source size guard added; getInfoAsync option discovery)
 
 ### Bug Fix — AC-169 pre-compression guard + getInfoAsync investigation — 2026-10-01
@@ -2579,3 +2686,177 @@ No source files other than the six listed in the Engineering Progress (Rev 18) w
 
 **Module status: QA PASS (Rev 18 scope).** All ACs from AC-030 through AC-144 pass.
 
+
+
+---
+
+## QA Results
+
+### Rev 24 Phase 1 QA — 2026-10-02
+
+**Scope**: AC-031 (Rev 24), AC-036 (Rev 24), AC-169 (Rev 24), AC-170 (operational/spec-only), localization keys, test coverage, dependency absence verification.
+
+**Workflow**: First-time verification of Rev 24 Phase 1 changes (regression scope against prior QA PASS at Rev 18).
+
+**Test run**: `npm test -- --watchAll=false` — 436 tests, 31 suites, 0 failures. All passing.
+
+---
+
+#### AC-031 (Rev 24) — Native file uploaded as-is, no compression
+
+**Spec**: Upload the original native video file as-is (no client-side compression) when the file passes the upfront size gate (AC-169). No `react-native-compressor` step.
+
+**react-native-compressor absent from source imports** — PASS
+grep on src/ returns only comment references (jsdoc/removal notes). No runtime import, no call site.
+
+**react-native-compressor absent from package.json dependencies** — PASS
+Neither `dependencies` nor `devDependencies` contain react-native-compressor. Jest moduleNameMapper has no react-native-compressor entry.
+
+**react-native-compressor absent from app.json plugins** — PASS
+app.json plugins array: `["expo-secure-store", ["expo-image-picker", {...}], "./app.plugin", "expo-video"]`. No react-native-compressor plugin.
+
+**Native file URI passed directly to uploadBetaVideo** — PASS
+BetaVideoUploader.tsx line 201: `localVideoUri: asset.uri` (original URI). `quality: 1` on picker call (line 150) — no quality reduction.
+
+**Test: AC-031 Rev 24 direct-URI assertion** — PASS
+BetaVideoUploader.test.tsx lines 476–502: asserts mockUploadBetaVideo called with `expect.objectContaining({ localVideoUri: 'file:///video.mp4' })`. Passes.
+
+**AC-031 (Rev 24)** — PASS
+
+---
+
+#### AC-036 (Rev 24) — Progress overlay single "Uploading…" phase only
+
+**Spec**: Progress overlay covers a single "Uploading…" phase (0–100%). No "Compressing…" phase present anywhere.
+
+**No `phase === 'compressing'` conditional in component** — PASS
+BetaVideoUploader.tsx progress overlay (lines 252–272): renders `{t('betaVideo.uploading')}` unconditionally. No compressing branch.
+
+**UploadProgress.phase union excludes 'compressing'** — PASS
+types.ts lines 52–66: `phase: 'thumbnail' | 'video' | 'saving'`. Comment notes 'compressing' removed in Rev 24.
+
+**No betaVideo.compressing key in either locale file** — PASS
+locales/en/common.json: no `compressing` key under betaVideo. locales/zh-TW/common.json: no `compressing` key under betaVideo.
+
+**AC-036 (Rev 24)** — PASS
+
+---
+
+#### AC-169 (Rev 24) — Upfront native file size gate
+
+**Spec**: Before any upload (after format AC-035 and duration AC-030 checks) — read native file size via `new ExpoFile(asset.uri).size`. If size >= 45 MB or size === 0 (unreadable), reject with bilingual error. Fail-closed.
+
+**Gate placement — after format and duration checks, before setIsUploading(true)** — PASS
+BetaVideoUploader.tsx order: duration check (lines 160–165) → format check (lines 167–173) → size gate (lines 175–185) → setIsUploading(true) (line 190). Correct.
+
+**Gate uses new ExpoFile(asset.uri).size** — PASS
+Line 178: `const nativeFile = new ExpoFile(asset.uri);` line 179: `const nativeSize = nativeFile.size;`. Correct SDK 54+ synchronous property.
+
+**Fail-closed: size === 0 triggers rejection** — PASS
+Line 180: `if (nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES)` — size 0 is rejected.
+
+**Threshold: 45 MB decimal** — PASS
+Line 177: `const BUCKET_LIMIT_BYTES = 45 * 1_000_000;` — 45,000,000 bytes (decimal MB).
+
+**Boundary semantics — spec/implementation discrepancy** — SPEC ISSUE (escalated to PM)
+AC-169 spec: "If the native file size is 45 MB or greater…reject" (semantics: >= 45,000,000 bytes). Implementation: `nativeSize > BUCKET_LIMIT_BYTES` (strictly greater than). Exactly 45,000,000 bytes passes the gate; per spec it should be rejected. The test at line 556 confirms the implementation: exactly 45 MB proceeds to upload. Practical impact is 1 byte of additional headroom, which is well within any rounding margin and still well below the 50 MB Supabase ceiling. Not routing to Engineer until PM clarifies.
+
+[SPEC ISSUE: AC-169 spec says "45 MB or greater" (>= 45,000,000 bytes rejected) but implementation uses strictly-greater-than (> 45,000,000). At exactly 45,000,000 bytes the upload is not rejected. Practical impact is 1 byte of additional headroom. Escalate to PM: confirm whether the boundary should be inclusive (>=) or whether the spec should be updated to match the implementation (> 45 MB, i.e., 45,000,001+ bytes rejects).]
+
+**Error key and copy** — PASS
+EN: `betaVideo.errors.videoTooLargeAfterCompression` = "Video is too large, please keep it under 45 MB."
+zh-TW: `betaVideo.errors.videoTooLargeAfterCompression` = "影片檔案過大，請壓縮至 45MB 以下。"
+Both locales present and updated for no-compression context.
+
+**AC-169 (Rev 24)** — PASS (with spec boundary issue escalated to PM)
+
+---
+
+#### AC-169 Test Coverage — Boundary Cases
+
+**Test: size > 45 MB blocked** — PASS
+BetaVideoUploader.test.tsx lines 504–528: `setMockFileSize(60 * 1024 * 1024)` → error shown, upload not called. Passes.
+
+**Test: size === 0 blocked (fail-closed)** — PASS
+Lines 530–554: `setMockFileSize(0)` → error shown, upload not called. Passes.
+
+**Test: size exactly 45 MB proceeds** — PASS (aligned with implementation; inconsistent with spec >= wording — see spec issue above)
+Lines 556–577: `setMockFileSize(45 * 1_000_000)` → `onUploadSuccess` called. Implementation uses `>` (strictly greater), so exactly 45 MB is not blocked. Test is aligned with this implementation choice.
+
+**Test: size < 45 MB passes** — PASS
+Multiple tests use `setMockFileSize(5 * 1024 * 1024)` default and proceed successfully.
+
+All four boundary cases have test coverage.
+
+---
+
+#### AC-170 — 800 MB storage-watch threshold (operational AC)
+
+**Spec**: Defines an operator-level monitoring threshold of 800 MB. No code required. Confirm documented in spec.
+
+**Documented in spec** — PASS
+spec.md AC-170: when beta-video storage in the beta-videos bucket reaches 800 MB (80% of the 1 GB free-tier total), surface an operator storage-watch trigger to begin evaluating Phase 2 migration. This threshold does not block uploads.
+
+No code verification required for this AC.
+
+**AC-170** — PASS (operational/documentation only)
+
+---
+
+#### Localization Key Verification
+
+**betaVideo.compressing absent from both locales** — PASS
+locales/en/common.json: no `compressing` key under betaVideo. Confirmed.
+locales/zh-TW/common.json: no `compressing` key under betaVideo. Confirmed.
+
+**betaVideo.errors.videoTooLargeAfterCompression present with updated copy in both locales** — PASS
+EN: "Video is too large, please keep it under 45 MB."
+zh-TW: "影片檔案過大，請壓縮至 45MB 以下。"
+Both locales match the no-compression context. Keys present and correct.
+
+**No locale key gaps between en and zh-TW** — PASS
+All betaVideo.* keys are present in both files with matching structure.
+
+---
+
+#### Dependency Absence Verification
+
+**react-native-compressor not in package.json dependencies** — PASS
+**react-native-compressor not in package.json moduleNameMapper** — PASS
+**react-native-compressor not in app.json plugins** — PASS
+**No runtime react-native-compressor import in source** — PASS
+All four checks confirm complete removal.
+
+---
+
+#### Automated Test Results
+
+**Full suite**: `npm test -- --watchAll=false`
+- 436 tests, 31 suites, 0 failures. No regressions.
+- All five mod-beta-video test suites PASS.
+- Console `act()` warnings in BetaVideoReelViewer and BetaVideoSection are pre-existing (async `supabase.auth.getSession()` in `useEffect`); not introduced by Rev 24.
+
+---
+
+#### Manual QA Flag — Physical Device Required
+
+**HDR HEVC playback on physical device** — CANNOT VERIFY IN AUTOMATED QA
+Per Tech Lead Condition 1 (PM Rev 24 log): physical device validation is required. A full-bitrate iPhone 1080p HEVC clip at ~16 Mbps hits 45 MB at approximately 22 seconds. Clips longer than ~22 s at maximum bitrate will be rejected by the gate. Behavior must be validated on a physical iOS device — automated tests cannot exercise native HEVC playback or real camera-roll file sizes.
+
+Required manual QA step: Record a ~20-second iPhone HEVC clip at max quality, attempt upload, confirm it passes the gate and plays back via expo-video on-device with no AVFoundation error.
+
+---
+
+#### Verdict
+
+**QA PASS (Rev 24 Phase 1 scope)** — with one spec-level issue escalated to PM.
+
+- **AC-031 (Rev 24)**: PASS — native file uploaded as-is; react-native-compressor completely absent from imports, package.json, and app.json.
+- **AC-036 (Rev 24)**: PASS — single "Uploading…" phase only; no compressing phase in component, UploadProgress.phase union, or locale keys.
+- **AC-169 (Rev 24)**: PASS (spec issue escalated) — upfront gate correct; fail-closed on size 0; 45 MB decimal threshold; placement after format+duration, before upload. Spec/impl discrepancy on exact-45-MB boundary (spec says >=, impl uses >) — routed to PM.
+- **AC-170**: PASS — operational AC documented in spec; no code to verify.
+- **Localization**: PASS — no compressing key in either locale; videoTooLargeAfterCompression updated in both.
+- **Tests**: PASS — 436/436, 0 failures. All four AC-169 boundary cases covered.
+- **Dependencies**: PASS — react-native-compressor fully absent from all artifacts.
+- **Pending**: Physical device HDR HEVC playback (human QA required).
+- **Spec issue**: AC-169 boundary semantics (>= vs >) — escalated to PM for clarification.
