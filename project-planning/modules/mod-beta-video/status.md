@@ -2,6 +2,88 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-10-03 (Rev 24 Phase 1 — two human QA bugs: PHPicker transcoding + profile grid stale data)
+
+### Bug Fix — Rev 24 Phase 1 QA: PHPicker transcoding + profile beta-video grid refetch — 2026-10-03
+
+**Bugs fixed**:
+
+**Bug 1 — HDR/HEVC video still looks blown-out after upload (expo-image-picker PHPicker transcoding)**
+
+- Root cause: `launchImageLibraryAsync` in expo-image-picker SDK 57 uses `PHPickerViewController` under the hood. `PHPickerConfigurationAssetRepresentationMode` defaults to `Automatic`, which allows iOS to transcode HEVC/HDR video to H.264/SDR before returning the asset URI to JS. The `asset.uri` received by the picker callback was already a transcoded copy, defeating the intent of uploading the native file as-is (AC-031, Rev 24).
+- Fix: Added `preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current` to the `launchImageLibraryAsync` call options in `BetaVideoUploader.tsx`. `Current` maps to `PHPickerConfigurationAssetRepresentationMode.current` — it instructs PHPickerViewController to use the existing (original) representation without transcoding. This keeps the HEVC/HDR file intact so the 45 MB native gate and direct upload receive the original file.
+- Note: `videoExportPreset` (the old `UIImagePickerController` option) is `@deprecated` in expo-image-picker SDK 57 and does not apply to the PHPicker path. The correct fix is `preferredAssetRepresentationMode`.
+
+**Bug 2 — Profile tab beta-video grid not updated after upload**
+
+- Root cause: The `useEffect` in `ProfileScreen.tsx` that fetches `betaVideos` and follower/following counts depended only on `profile?.id`. The `refetchKey` (which increments each time the Profile tab becomes active via `isActive → true`) was wired to `SendHistoryProfile` via its `refetchKey` prop but was not included in the dependency array of the beta-videos + follower-counts `useEffect`. After uploading a video and returning to the Profile tab, the grid used stale state.
+- Fix: Added `refetchKey` to the dependency array: `}, [profile?.id, refetchKey])`. This ensures both the send history and the beta-video grid refetch from Supabase every time the Profile tab is focused, consistent with the existing refetch behavior for send history.
+- `UserProfileScreen.tsx` (MOD-006) was checked — it does not have the same pattern. Its `loadProfile` callback is recreated when `targetUserId` changes, and the screen is opened fresh each time as a modal overlay (no keep-alive stale state issue). No change needed there.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 436 tests, 31 suites, 0 failures (count unchanged — new assertion added to existing AC-031 test; no net new test count)
+- Judgment-based: `preferredAssetRepresentationMode.Current` is the SDK 57 PHPicker-correct way to skip transcoding; `videoExportPreset` is deprecated and does not apply; `refetchKey` dep-array fix is minimal and consistent with the existing `isActive`/`refetchKey` pattern; no new dependencies; no hardcoded values; TypeScript strict mode satisfied. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — Bug 1: added `preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Current` to `launchImageLibraryAsync` options
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — Bug 1: added `UIImagePickerPreferredAssetRepresentationMode` enum to `expo-image-picker` mock; added picker-options assertion to AC-031 test
+- `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` — Bug 2: added `refetchKey` to beta-videos + follower-counts `useEffect` dependency array
+
+**ACs addressed**:
+- **AC-031 (Rev 24)**: upload now receives the original HEVC/HDR file from the picker, not a transcoded H.264/SDR copy
+
+---
+
+**Status**: Investigation — 2026-10-03 (Rev 24 Phase 1 — TLS upload failure diagnosis, no code changes)
+
+### Investigation — TLS upload failure (StorageUnknownError: fetch failed) — 2026-10-03
+
+**Trigger**: Human QA of Rev 24 Phase 1 reported the following error during beta video upload on a physical iOS device:
+
+```
+ERROR  [uploadBetaVideo] storage error: [StorageUnknownError: fetch failed: UnexpectedException: TLS錯誤導致安全連線失敗。 (at ExpoModulesCore/Promise.swift:56)]
+ERROR  [uploadBetaVideo] error: [Error: Failed to upload video. Please try again.]
+```
+
+"TLS錯誤導致安全連線失敗" = "TLS error caused secure connection failure" (Traditional Chinese iOS system message). The error originates inside `ExpoModulesCore/Promise.swift`, propagates through the Supabase JS storage client's `handleError` path as a `StorageUnknownError` (the `else` branch at `index.cjs:320` — no HTTP response object, so `fetch` itself threw), and is re-thrown by `uploadBetaVideo` as "Failed to upload video. Please try again."
+
+**Upload path under investigation**:
+
+`BetaVideoUploader.tsx` → `uploadBetaVideo()` in `beta-video-service.ts`:
+1. `new ExpoFile(input.localVideoUri)` — wraps the native file URI
+2. `await expoFile.bytes()` — reads the ENTIRE native video file into a `Uint8Array` in JS heap memory
+3. `supabase.storage.from('beta-videos').upload(fileName, uint8Array, { contentType, upsert: false })` — sends the full `Uint8Array` as a single HTTP POST body via the Supabase JS storage client
+4. The Supabase storage client (`@supabase/storage-js` v2.49.x bundled in `@supabase/supabase-js ^2.49.4`) routes this through `uploadOrUpdate` → `post(this.fetch, url, body, { headers })` — a plain, unconfigured `globalThis.fetch` call with no timeout, no retry, no chunking, no TUS support.
+
+**Candidate causes — ranked by likelihood**:
+
+1. **MOST LIKELY — TLS session timeout / mid-transfer connection drop on large single-chunk payload**: The Supabase JS storage client sends the entire `Uint8Array` as a single HTTP POST with no timeout configuration and no chunking. For a ~20–40 MB HEVC file (Rev 24 removed compression — files are now native size, up to the 45 MB gate), the transfer takes significantly longer than the previous ~15 MB compressed output. iOS enforces its own TLS session keepalive and idle limits. On cellular or weak WiFi, a long-lived TCP connection carrying a large single-chunk body can have its TLS session invalidated mid-transfer by the iOS networking stack (ATSURLSession). The error fires from `ExpoModulesCore/Promise.swift` — the native layer unwrapping the Swift `URLSession` error and re-raising it as an `UnexpectedException`. The `StorageUnknownError` wrapper in `storage-js` confirms this: `handleError` only creates a `StorageUnknownError` (not a `StorageApiError`) when `fetch` itself throws — i.e., the connection never completed, not a 4xx/5xx response. There is no `AbortSignal`, no `fetch` timeout, no retry, and no `duplex` streaming option configured on the upload path. The entire payload must be buffered in memory and sent as one atomic HTTP body.
+
+2. **LIKELY — Memory pressure from `File.bytes()` on large HEVC files**: `File.bytes()` reads the entire native video file into a `Uint8Array` synchronously in JS heap memory before the upload request is even constructed. A 30–40 MB HEVC file means 30–40 MB of `Uint8Array` lives in JS memory simultaneously with the network buffer. On physical devices with memory pressure (background apps, limited JS heap), this allocation can trigger slow GC cycles or an OS-level memory warning, which in turn may cause the iOS networking subsystem to terminate active sessions. This amplifies cause #1 — memory pressure lengthens the time the TLS session must stay alive. The two causes are not mutually exclusive and likely compound each other.
+
+3. **POSSIBLE — Network condition (transient cellular/WiFi drop)**: The error is `fetch failed` at the iOS TLS layer, which is identical to what a simple network drop (cellular handoff, WiFi timeout, airplane mode toggle) produces. If QA was on cellular or weak WiFi during the test, the failure could be environmental rather than structural. **Distinguishing test**: reproduce on a strong, stable WiFi connection with a file of known size (e.g. exactly 20 MB). If the error does not recur on strong WiFi but does recur on cellular, the issue is environment-sensitive rather than architectural. If it recurs on strong WiFi, causes #1 and #2 are confirmed structural.
+
+4. **LESS LIKELY — `Uint8Array` body size limitation in `@supabase/storage-js`**: The storage client's `uploadOrUpdate` checks `fileBody instanceof Blob` and `fileBody instanceof FormData`; `Uint8Array` falls through to the raw-body branch, setting `headers["content-type"]` and passing the buffer directly to `fetch`. There is no internal size cap or chunking in this path. The documented React Native note in storage-js (comment in the `upload()` JSDoc: "For React Native, using either Blob, File or FormData does not work as intended. Upload file using ArrayBuffer from base64 file data instead") aligns with the current approach — `Uint8Array` (which extends `ArrayBuffer`) is the documented correct path. No evidence of a Supabase-side body-size bug in the current client version.
+
+5. **UNLIKELY — TLS handshake failure (new connection)**: The error says the *secure connection* failed, not that the handshake was refused or certificate was rejected. If the TLS handshake itself were failing (cert mismatch, TLS version mismatch), it would fail consistently on small files too, not only on large files or intermittently. No other Supabase network calls (auth, PostgREST queries) are reported as failing, which rules out a blanket TLS configuration issue.
+
+**Structural constraint confirmed**: The project convention in `production.md` §"File Upload to Supabase Storage" mandates `File.bytes()` → `Uint8Array` → `supabase.storage.upload()` as the ONLY approved upload method. `fetch(uri) + response.blob()` is explicitly prohibited. There is no chunked/TUS upload option in `@supabase/storage-js` v2.49.x (confirmed: the `upload()` function calls `uploadOrUpdate` which issues a single `fetch` POST with no streaming, no chunking, no retry). Switching to TUS would require either a different client library (e.g. `tus-js-client`) or Supabase's `uploadToSignedUrl` with a TUS-capable endpoint — neither is available in the current client version without adding a dependency.
+
+**What TUS/resumable upload would require**: Supabase Storage supports TUS (resumable uploads) via the `/upload/resumable` endpoint. However, `@supabase/storage-js` v2.49 does not expose a first-class TUS API in its JS client — calling it would require direct `fetch` calls to the TUS endpoint or adding `tus-js-client`. Adding `tus-js-client` is a native dependency decision that requires Tech Lead sign-off. The `File.bytes()` convention constraint would also need to be formally revisited because TUS clients operate on a `File` or `ReadableStream`, not a pre-materialized `Uint8Array`.
+
+**No fix implemented**: This entry records the investigation findings only. No code changes were made.
+
+**Files read** (no modifications):
+- `src/modules/mod-beta-video/beta-video-service.ts` — upload path confirmed (`File.bytes()` → `Uint8Array` → single-POST upload)
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — no timeout, no retry, no AbortSignal in the upload flow
+- `node_modules/@supabase/storage-js/dist/index.cjs` — confirmed: `upload()` → `uploadOrUpdate()` → single `fetch` POST, no timeout, no TUS, `StorageUnknownError` on `fetch` throw
+- `project-planning/production.md` — confirmed `File.bytes()` + `Uint8Array` convention; confirmed TUS not mentioned; confirmed Phase 2 presigned-S3 pattern exists but is not yet implemented
+
+**Handoff**: findings escalated to Tech Lead for architectural decision on fix approach (timeout configuration, chunked upload, TUS, or convention amendment). See Tech Lead section below.
+
+---
+
 **Status**: Feature implementation — 2026-10-02 (Rev 24 Phase 1 — remove react-native-compressor, upfront size gate, simplified progress overlay)
 
 ### Feature — Rev 24 Phase 1: Remove compression, upfront 45 MB native size gate (AC-031, AC-036, AC-169) — 2026-10-02

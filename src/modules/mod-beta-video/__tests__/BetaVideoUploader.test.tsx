@@ -2,11 +2,15 @@
  * Tests for BetaVideoUploader (MOD-005).
  *
  * AC-030: rejects videos longer than 60 seconds before upload.
+ * AC-031 (Rev 24): uploads the native video file directly — no compression step.
  * AC-035: rejects videos with unsupported format.
- * AC-036: progress overlay shown during upload.
+ * AC-036 (Rev 24): progress overlay shows "Uploading…" only (no "Compressing…" phase).
  * AC-037: "Add beta video" button visible with route context pre-attached.
+ * AC-169 (Rev 24): upfront native file size gate blocks upload if native file >= 45 MB.
+ *                   Fails closed: size === 0 treated as oversized.
  *
- * expo-image-picker and beta-video-service are mocked.
+ * expo-image-picker, beta-video-service, and expo-file-system are mocked.
+ * react-native-compressor is NOT used or mocked (removed in Rev 24).
  * Tests behaviour — not implementation.
  */
 
@@ -16,20 +20,29 @@ jest.mock('../../../lib/supabase', () => ({
 
 jest.mock('../beta-video-service', () => ({
   uploadBetaVideo: jest.fn(),
+  // AC-166: checkExistingBetaVideo is called on mount; default to no existing video.
+  checkExistingBetaVideo: jest.fn().mockResolvedValue(false),
 }));
 
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn(),
   MediaTypeOptions: { Videos: 'Videos' },
+  // AC-031 (Rev 24): enum value used by BetaVideoUploader to skip PHPicker transcoding.
+  UIImagePickerPreferredAssetRepresentationMode: {
+    Automatic: 'automatic',
+    Compatible: 'compatible',
+    Current: 'current',
+  },
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import * as ImagePicker from 'expo-image-picker';
 import { PermissionStatus } from 'expo-modules-core';
+import * as ExpoFileSystem from 'expo-file-system';
 
-import { uploadBetaVideo } from '../beta-video-service';
+import { uploadBetaVideo, checkExistingBetaVideo } from '../beta-video-service';
 import BetaVideoUploader from '../components/BetaVideoUploader';
 import { renderOptions } from '../test-utils';
 import type { BetaVideo } from '../types';
@@ -42,6 +55,11 @@ const mockRequestPermissions =
     typeof ImagePicker.requestMediaLibraryPermissionsAsync
   >;
 const mockUploadBetaVideo = uploadBetaVideo as jest.MockedFunction<typeof uploadBetaVideo>;
+const mockCheckExistingBetaVideo = checkExistingBetaVideo as jest.MockedFunction<typeof checkExistingBetaVideo>;
+
+// AC-169 (Rev 24): expo-file-system File.size mock helper — controls the .size property
+// returned by all File instances created during a test.
+const setMockFileSize = (ExpoFileSystem as any).__setMockFileSize as (bytes: number) => void;
 
 const MOCK_VIDEO: BetaVideo = {
   id: 'vid-001',
@@ -97,6 +115,10 @@ describe('BetaVideoUploader', () => {
       canAskAgain: true,
       status: PermissionStatus.GRANTED,
     });
+    // AC-166: default — no existing video for this route.
+    mockCheckExistingBetaVideo.mockResolvedValue(false);
+    // AC-169 (Rev 24): default — native file is well under 45 MB.
+    setMockFileSize(5 * 1024 * 1024); // 5 MB
   });
 
   it('AC-037: renders the "Add beta video" button', () => {
@@ -455,5 +477,116 @@ describe('BetaVideoUploader', () => {
     await waitFor(() => {
       expect(DEFAULT_PROPS.onUploadError).toHaveBeenCalled();
     });
+  });
+
+  it('AC-031 (Rev 24): passes asset.uri directly to uploadBetaVideo — no compression', async () => {
+    // Rev 24: no react-native-compressor; the native file URI is passed directly.
+    mockLaunchImageLibrary.mockResolvedValue(validAsset());
+    mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      expect(DEFAULT_PROPS.onUploadSuccess).toHaveBeenCalledWith(MOCK_VIDEO);
+    });
+
+    // uploadBetaVideo must receive the original asset URI (no compression URI)
+    expect(mockUploadBetaVideo).toHaveBeenCalledWith(
+      expect.objectContaining({ localVideoUri: 'file:///video.mp4' }),
+      DEFAULT_PROPS.userId,
+      expect.any(Function),
+    );
+
+    // AC-031 (Rev 24): picker must request Current representation mode to prevent
+    // PHPickerViewController from transcoding HEVC/HDR to H.264/SDR before returning.
+    expect(mockLaunchImageLibrary).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preferredAssetRepresentationMode: 'current',
+      }),
+    );
+  });
+
+  it('AC-169 (Rev 24): shows error and does not upload when native file exceeds 45 MB', async () => {
+    mockLaunchImageLibrary.mockResolvedValue(validAsset());
+    // Simulate native file exceeding 45 MB — upfront gate should block upload
+    setMockFileSize(60 * 1024 * 1024); // 60 MB
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      const errorTexts = screen
+        .queryAllByText(/Video is too large/i)
+        .concat(screen.queryAllByText(/影片檔案過大/));
+      expect(errorTexts.length).toBeGreaterThan(0);
+    });
+
+    expect(mockUploadBetaVideo).not.toHaveBeenCalled();
+  });
+
+  it('AC-169 (Rev 24): shows error and does not upload when native file size is 0 (unreadable — fail closed)', async () => {
+    mockLaunchImageLibrary.mockResolvedValue(validAsset());
+    // size === 0 means unreadable — must be treated as oversized (fail closed)
+    setMockFileSize(0);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      const errorTexts = screen
+        .queryAllByText(/Video is too large/i)
+        .concat(screen.queryAllByText(/影片檔案過大/));
+      expect(errorTexts.length).toBeGreaterThan(0);
+    });
+
+    expect(mockUploadBetaVideo).not.toHaveBeenCalled();
+  });
+
+  it('AC-169 (Rev 24): proceeds to upload when native file is exactly at 45 MB threshold', async () => {
+    mockLaunchImageLibrary.mockResolvedValue(validAsset());
+    // Exactly 45,000,000 bytes — should NOT be blocked (> 45,000,000 is the threshold)
+    setMockFileSize(45 * 1_000_000); // 45 MB (decimal)
+    mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    await waitFor(() => {
+      expect(DEFAULT_PROPS.onUploadSuccess).toHaveBeenCalledWith(MOCK_VIDEO);
+    });
+    expect(mockUploadBetaVideo).toHaveBeenCalled();
   });
 });

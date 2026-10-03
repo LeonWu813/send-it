@@ -2,24 +2,24 @@
  * BetaVideoUploader — video selection and upload flow for a single route.
  *
  * AC-030: rejects videos longer than 60 seconds before upload begins.
- * AC-031: client-side compression using react-native-compressor (iOS AVFoundation).
- *         Compression runs after the AC-030 duration check and before the upload.
- *         Output targets H.264/AAC, ≤1080p, library-default mobile bitrate.
+ * AC-031 (Rev 24): uploads the original native video file as-is (no compression).
+ *         No react-native-compressor step. The native file is uploaded directly
+ *         after the upfront AC-169 size gate passes.
  * AC-035: validates that the selected video file is an MP4 or MOV container
  *         before upload (PRD Revision 12 — .mov accepted for iPhone-camera
  *         footage). If validation fails, surfaces a clear error and does not
  *         upload.
- * AC-036: progress overlay covers a "Compressing…" phase followed by an
- *         "Uploading…" phase, blocking further interaction until complete.
+ * AC-036 (Rev 24): progress overlay covers a single "Uploading…" phase (0–100%).
+ *         There is no "Compressing…" phase — compression removed in Rev 24.
+ *         The overlay blocks further interaction until upload completes or fails.
  * AC-037: receives route_id so the upload is bound to the correct route.
- * AC-169: after compression, checks file size via expo-file-system getInfoAsync().
- *         If still > 50 MB (free-tier bucket ceiling), blocks upload and shows
- *         a user-facing error.
+ * AC-169 (Rev 24): upfront native file size gate — runs before upload begins.
+ *         If native file size >= 45 MB or cannot be read, upload is rejected.
+ *         Fails closed: size === 0 means unreadable, treated as oversized.
  */
 
-import { getInfoAsync } from 'expo-file-system';
+import { File as ExpoFile } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import { Video as CompressorVideo } from 'react-native-compressor';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -118,7 +118,7 @@ export default function BetaVideoUploader({
   }
 
   /**
-   * AC-030: Check duration before compression/upload begins.
+   * AC-030: Check duration before upload begins.
    * Returns an error message string if too long, null if valid.
    */
   function validateDuration(asset: ImagePicker.ImagePickerAsset): string | null {
@@ -142,12 +142,20 @@ export default function BetaVideoUploader({
       return;
     }
 
-    // Launch picker — video only, max 60 seconds enforced by the picker
+    // Launch picker — video only, max 60 seconds enforced by the picker.
+    // AC-031 (Rev 24): preferredAssetRepresentationMode.Current tells PHPickerViewController
+    // to return the original representation of the asset (no transcoding). Without this,
+    // iOS PHPicker defaults to UIImagePickerPreferredAssetRepresentationMode.Automatic which
+    // can transcode HEVC/HDR video to H.264/SDR before returning the URI — defeating the
+    // intent of uploading the native file as-is. Setting Current skips that transcoding so
+    // the URI we receive points to the original HEVC/HDR file.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
       videoMaxDuration: MAX_DURATION_SECONDS,
       allowsEditing: false,
-      quality: 0.7, // Expo quality hint; actual compression is device-dependent
+      quality: 1, // No quality reduction — native file is uploaded as-is (AC-031 Rev 24)
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
     });
 
     if (result.canceled || !result.assets || result.assets.length === 0) {
@@ -172,59 +180,25 @@ export default function BetaVideoUploader({
       return;
     }
 
+    // AC-169 (Rev 24): upfront native file size gate — runs before upload, no compression ever.
+    // Fail-closed: size === 0 means unreadable, treat as oversized.
+    const BUCKET_LIMIT_BYTES = 45 * 1_000_000; // 45 MB decimal
+    const nativeFile = new ExpoFile(asset.uri);
+    const nativeSize = nativeFile.size;
+    if (nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES) {
+      const msg = t('betaVideo.errors.videoTooLargeAfterCompression');
+      setErrorMessage(msg);
+      onUploadError?.(msg);
+      return;
+    }
+
     // Duration in seconds for storage
     const durationSeconds = (asset.duration ?? 0) / 1000;
 
     setIsUploading(true);
 
     try {
-      // AC-031: compress before upload using react-native-compressor.
-      // Compression runs after the AC-030 duration check (above) and before
-      // the storage upload. Output: H.264/AAC, ≤1080p, library-default bitrate.
-
-      // Pre-compression guard: warn early if source is extremely large (>300 MB).
-      // Compression will still be attempted — the post-compression AC-169 guard is the hard gate.
-      // expo-file-system legacy API: size is always present on existing files (no option required).
-      const sourceInfo = await getInfoAsync(asset.uri);
-      if (sourceInfo.exists && sourceInfo.size !== undefined && sourceInfo.size > 300 * 1024 * 1024) {
-        throw new Error(t('betaVideo.errors.videoTooLargeAfterCompression'));
-      }
-
-      setProgress({ percent: 5, phase: 'compressing' });
-      const compressedUri = await CompressorVideo.compress(
-        asset.uri,
-        {
-          compressionMethod: 'auto',
-          // 'auto' targets H.264, ≤1080p, library-default mobile bitrate
-        },
-        (compressionProgress) => {
-          // Map compressor's 0→1 progress to 5%→50% on the overlay
-          setProgress({
-            percent: Math.round(compressionProgress * 45) + 5,
-            phase: 'compressing',
-          });
-        },
-      );
-
-      // AC-169: post-compression size guard.
-      // If the compressed file still exceeds the Supabase Storage free-tier
-      // bucket ceiling (50 MB), block the upload and show a user-facing error
-      // instead of receiving a cryptic HTTP 413 from the server.
-      const BUCKET_LIMIT_BYTES = 50 * 1024 * 1024; // 50 MB
-      const fileInfo = await getInfoAsync(compressedUri);
-      if (
-        fileInfo.exists &&
-        fileInfo.size !== undefined &&
-        fileInfo.size > BUCKET_LIMIT_BYTES
-      ) {
-        throw new Error(t('betaVideo.errors.videoTooLargeAfterCompression'));
-      }
-
-      // For Phase 1, use the compressed video URI as the thumbnail source.
-      // True client-side frame extraction is deferred to Phase 2 (AC-031
-      // Phase 1 simplification clause).
-      const localThumbnailUri = compressedUri;
-
+      // AC-031 (Rev 24): upload the original native file as-is — no compression step.
       // AC-166 / AC-165: the uploadBetaVideo service uses upsert (ON CONFLICT on
       // user_id,route_id), so no manual delete step is needed here. The upsert
       // handles both the new-video and the replace case at the DB level.
@@ -233,14 +207,14 @@ export default function BetaVideoUploader({
       const video = await uploadBetaVideo(
         {
           route_id: routeId,
-          localVideoUri: compressedUri,   // compressed, not asset.uri
-          localThumbnailUri,
+          localVideoUri: asset.uri,   // native file, no compression
+          localThumbnailUri: asset.uri, // Phase 1 placeholder: same URI as video (AC-031 Phase 1 simplification)
           duration_seconds: Math.max(durationSeconds, 0.1), // guard against 0
         },
         userId,
         (prog) => {
-          // Remap upload progress to 50%–100% range (compression occupied 5%–50%)
-          setProgress({ percent: Math.round(prog.percent / 2) + 50, phase: prog.phase });
+          // AC-036 (Rev 24): upload progress maps directly 0–100% (no compression phase).
+          setProgress({ percent: prog.percent, phase: prog.phase });
         },
       );
       // After a successful replace, the "has existing video" state is still true
@@ -283,7 +257,7 @@ export default function BetaVideoUploader({
         <Text style={styles.errorText}>{errorMessage}</Text>
       ) : null}
 
-      {/* AC-036: Progress overlay — blocks further interaction during upload */}
+      {/* AC-036 (Rev 24): Progress overlay — single "Uploading…" phase, blocks further interaction */}
       <Modal
         visible={isUploading}
         transparent
@@ -294,9 +268,7 @@ export default function BetaVideoUploader({
           <View style={styles.progressCard}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
             <Text style={styles.progressTitle}>
-              {progress?.phase === 'compressing'
-                ? t('betaVideo.compressing')
-                : t('betaVideo.uploading')}
+              {t('betaVideo.uploading')}
             </Text>
             {progress ? (
               <Text style={styles.progressPercent}>
