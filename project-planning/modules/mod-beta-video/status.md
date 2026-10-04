@@ -3013,3 +3013,84 @@ Required manual QA step: Record a ~20-second iPhone HEVC clip at max quality, at
 - **Dependencies**: PASS — react-native-compressor fully absent from all artifacts.
 - **Pending**: Physical device HDR HEVC playback (human QA required).
 - **Spec issue**: AC-169 boundary semantics (>= vs >) — escalated to PM for clarification.
+
+---
+
+### AC-031 Rev 26 Regression QA — 2026-10-03
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (AC-031 Rev 26 change verification)
+**Date**: 2026-10-03
+**Scope**: AC-031 (Rev 26) change verification + AC-169 and AC-036 regression checks.
+
+---
+
+#### Test Run
+
+`npx jest src/modules/mod-beta-video --watchAll=false` — **86 tests, 5 suites, 0 failures**. All passing. Console output is pre-existing act() warnings from async `supabase.auth.getSession()` in `BetaVideoReelViewer` `useEffect`; none introduced by the Rev 26 change.
+
+---
+
+#### Item 1 — AC-031 (Rev 26): `preferredAssetRepresentationMode` absent from `launchImageLibraryAsync` call
+
+**Spec (AC-031, Rev 26)**: The picker must NOT set `preferredAssetRepresentationMode: Current`. The picker uses iOS default `Automatic` mode (HEVC/HLG transcoded to H.264 SDR before URI is returned).
+
+**Verification**: `BetaVideoUploader.tsx` lines 150–155, `launchImageLibraryAsync` options object:
+- `mediaTypes: ['videos']`
+- `videoMaxDuration: MAX_DURATION_SECONDS`
+- `allowsEditing: false`
+- `quality: 1`
+
+`preferredAssetRepresentationMode` is absent. No reference to `UIImagePickerPreferredAssetRepresentationMode.Current` anywhere in the options block or anywhere in the component. The preceding comment at line 147–149 explicitly documents the Rev 26 rationale (Automatic mode, HEVC/HLG → H.264 SDR transcode, Phase 1 limitation).
+
+**AC-031 (Rev 26)** — PASS
+
+---
+
+#### Item 2 — AC-031 test updated: asserts absence of `preferredAssetRepresentationMode`
+
+**Spec requirement**: The test must assert `preferredAssetRepresentationMode` is absent (e.g., `expect.not.objectContaining`), not present.
+
+**Verification**: `BetaVideoUploader.test.tsx` lines 513–517, the AC-031 (Rev 26) test:
+```
+expect(mockLaunchImageLibrary).toHaveBeenCalledWith(
+  expect.not.objectContaining({
+    preferredAssetRepresentationMode: expect.anything(),
+  }),
+);
+```
+The test name is "AC-031 (Rev 26): passes asset.uri directly to uploadBetaVideo — no compression, Automatic picker mode". The assertion uses `expect.not.objectContaining` to verify the option is absent from the picker call. The prior Rev 24 assertion (`expect.objectContaining({ preferredAssetRepresentationMode: 'current' })`) is gone. The mock comment at lines 31–37 notes the enum is retained in the mock for completeness but is not used by the component.
+
+**AC-031 test** — PASS
+
+---
+
+#### Item 3 — AC-169: 45 MB size gate unchanged
+
+**Spec**: `BUCKET_LIMIT_BYTES = 45 * 1_000_000`; gate condition `nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES`.
+
+**Verification**: `BetaVideoUploader.tsx` line 181: `const BUCKET_LIMIT_BYTES = 45 * 1_000_000;`. Line 184: `if (nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES)`. Both the constant and the fail-closed condition are unmodified from the Rev 24 baseline. The test at line 626–647 confirms exactly 45,000,000 bytes passes (consistent with the prior QA Run's spec-boundary note, already escalated to PM and resolved as [TRIVIAL] Rev 25 wording fix).
+
+**AC-169** — PASS (no regression)
+
+---
+
+#### Item 4 — AC-036: progress overlay shows only `t('betaVideo.uploading')`
+
+**Spec**: Overlay covers a single "Uploading…" phase. No "Compressing…" phase.
+
+**Verification**: `BetaVideoUploader.tsx` line 279: `{t('betaVideo.uploading')}` is rendered unconditionally inside the progress card. No `phase === 'compressing'` conditional exists anywhere in the component. The `UploadProgress.phase` union (`types.ts`) remains `'thumbnail' | 'video' | 'saving'` — `'compressing'` is absent.
+
+**AC-036** — PASS (no regression)
+
+---
+
+#### Verdict
+
+**QA PASS (AC-031 Rev 26 regression scope)**
+
+- **AC-031 (Rev 26)**: PASS — `preferredAssetRepresentationMode: Current` is absent from `launchImageLibraryAsync` options. iOS Automatic mode applies. Comment documents the Rev 26 rationale.
+- **AC-031 test**: PASS — test uses `expect.not.objectContaining({ preferredAssetRepresentationMode: expect.anything() })` to assert absence. Prior assertion of presence is gone.
+- **AC-169 (unchanged)**: PASS — `BUCKET_LIMIT_BYTES = 45 * 1_000_000`; fail-closed `nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES`; no regression.
+- **AC-036 (unchanged)**: PASS — single "Uploading…" phase only; no compression phase anywhere in the component or type union.
+- **Tests**: PASS — 86/86, 0 failures. No regressions introduced by the Rev 26 change.
