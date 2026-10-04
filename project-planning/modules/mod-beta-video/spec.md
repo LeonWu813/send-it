@@ -4,7 +4,7 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003, MOD-009 (block-status public service `fetchBlockedUserIds`, AC-154)
-**Last Synced from PRD Revision**: 26
+**Last Synced from PRD Revision**: 27
 **Last Updated**: 2026-10-03
 
 ---
@@ -44,7 +44,7 @@ This module owns the shared `BetaVideoGrid` component (`mod-beta-video/component
 
 - **US-004**: Upload a beta video for a route
 
-  > **Known Phase 1 trade-off (Rev 24)**: The 45 MB size gate combined with the 60-second duration cap means a full-bitrate iPhone 1080p HEVC clip at ~16 Mbps hits 45 MB at approximately 22 seconds of footage. Users recording long clips at maximum iPhone bitrate will encounter the size limit before the duration limit. This is an accepted Phase 1 trade-off; client-side compression or a higher threshold are Phase 2 considerations.
+  > **Known Phase 1 trade-off (accepted, not a bug)**: Phase 1 performs no client-side compression (AC-031); the iOS picker runs in `Automatic` representation mode, so it transcodes HEVC/HLG source footage to H.264 SDR before returning the file, and the app uploads that file as-is. Because the 45 MB size gate (AC-169) applies to the picker's H.264 SDR output (~8–10 Mbps for iPhone 1080p), the gate is reached at roughly 36–45 seconds — much closer to the 60-second duration cap (AC-030) than under the earlier no-transcode model. As a result, only long clips are rejected with the AC-031 error, and those users are expected to trim the clip or lower their camera's recording quality. This is a deliberate Phase 1 limitation of the no-client-compression approach; the Phase 2 server-side video pipeline (§4, §7) removes it with a proper server-side HDR→SDR tone-map and transcode.
 
 - **US-005**: Watch beta inline on a route
 - **US-015**: Report inappropriate content (beta-video report flow only — the one-tap AC-139/AC-140 flow; user-profile reports are owned by MOD-009)

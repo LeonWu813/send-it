@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: 9954107ddeead4b9b913c4482bc49cac95f29f61
+commit: a0e6da703076f636a15da935469e6382957008d6
 
 
 - **2026-10-03 [TRIVIAL]** — Rev 26 prose reconciliation: aligned four (+one comment) prose passages with the AC-031 transcode model (PRD Revision 27). Leon (via coordinator) approved all five corrections verbatim and directed the [TRIVIAL] tag and the 26 → 27 revision bump. Tech Lead's 2026-10-03 advisory review supplied the exact replacement text (status.md Tech Lead Reviews) and recommended [TRIVIAL] as a single batch. PRD Status line `[TRIVIAL] — Revision 27`; `**Revision**` 26 → 27. **No behavioral change** — AC-031 is the single source of truth for behavior and was already correct at Rev 26; these are factual/consistency corrections to prose that previously described the pre-Rev-26 "original native HEVC file uploaded as-is" model, which contradicted the Rev 26 `Automatic`-mode HEVC/HLG → H.264 SDR transcode. Changes applied:
@@ -1619,6 +1619,29 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-03 — Trivial Passthrough (Revision 27, [TRIVIAL])
+
+**Trigger**: PM [TRIVIAL] tag (2026-10-03) — Rev 27 prose corrections to US-004 trade-off note in §3; no AC change, no behavioral change.
+
+**Files modified:**
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 26 → 27. Related User Stories US-004 trade-off note updated: replaced old "~16 Mbps raw HEVC → ~22 s" figure and "full-bitrate iPhone 1080p HEVC clip" premise with PRD Rev 27 language describing the iOS picker Automatic-mode H.264 SDR transcode model (~8–10 Mbps, ~36–45 s gate). Blockquote heading updated from "(Rev 24)" to "(accepted, not a bug)" to match Rev 27 text. Context section and AC-031 text were already correct from Rev 26 sync and were not touched.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/production.md` — PM confirmed no production.md change required for Rev 27.
+- All other module specs (MOD-001 through MOD-004, MOD-006 through MOD-012) — not in scope for this trivial passthrough.
+- All agent wrappers — not in scope (no new module, no new dependency).
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** skipped — [TRIVIAL] passthrough per skill routing rules.
 
 ### 2026-10-03 — Delta Sync (Revision 26, [SUBSTANTIVE])
 
