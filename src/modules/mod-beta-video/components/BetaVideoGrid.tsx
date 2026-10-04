@@ -30,25 +30,11 @@ import type { BetaVideo } from '../types';
 /** Number of columns in the thumbnail grid. */
 const NUM_COLUMNS = 3;
 
-/**
- * Horizontal padding on each side of the grid container.
- * Set to 0 — the grid fills its container edge-to-edge. Callers are responsible
- * for providing horizontal padding via their own container (e.g. a wrapping View
- * with paddingHorizontal: 16 in BetaVideoSection for the route-detail context).
- * Profile-screen callers (MOD-001, MOD-006) already have their own section padding.
- */
-const GRID_HORIZONTAL_PADDING = 0;
-
 /** Gap between cells. */
 const GRID_GAP = 2;
 
-/**
- * Cell size: one third of the (screenWidth minus total horizontal padding),
- * minus inter-cell gaps. Portrait-locked, so screen width is stable.
- */
+/** Screen width — portrait-locked, so this is stable for the app lifetime. */
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const CELL_SIZE =
-  (SCREEN_WIDTH - GRID_HORIZONTAL_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
 
 /** Play icon size (centered absolutely over the cell). */
 const PLAY_ICON_SIZE = 28;
@@ -63,6 +49,20 @@ export interface BetaVideoGridProps {
    * If not provided and videos is empty, nothing is rendered.
    */
   emptyState?: React.ReactNode;
+  /**
+   * Horizontal padding (in dp) applied by the caller's wrapping container on
+   * each side of the grid. Used to compute the correct cell size so the three
+   * columns fit exactly within the available width without the third cell
+   * clipping.
+   *
+   * Profile-screen callers (MOD-001, MOD-006) render this grid edge-to-edge
+   * inside their own section padding — they should omit this prop (defaults to 0).
+   *
+   * BetaVideoSection (route-detail context) wraps the grid in a container with
+   * paddingHorizontal: 16; it passes horizontalPadding={16} so cell size is
+   * reduced accordingly.
+   */
+  horizontalPadding?: number;
 }
 
 /**
@@ -76,9 +76,14 @@ export default function BetaVideoGrid({
   videos,
   onPressVideo,
   emptyState,
+  horizontalPadding = 0,
 }: BetaVideoGridProps): React.JSX.Element | null {
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  // Cell size accounts for the caller's wrapping container padding so all three
+  // columns fit within the available width without the third cell clipping.
+  const cellSize =
+    (SCREEN_WIDTH - horizontalPadding * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
+  const styles = makeStyles(theme, cellSize);
 
   const renderCell = useCallback(
     (video: BetaVideo, index: number): React.JSX.Element => (
@@ -126,10 +131,13 @@ export default function BetaVideoGrid({
     rows.push(
       <View key={rowStart} style={styles.row}>
         {rowVideos.map((video, colIdx) => renderCell(video, rowStart + colIdx))}
-        {/* Fill empty slots in the last row so cells align correctly. */}
+        {/* Fill empty slots in the last row so cells align correctly.
+            Spacers are transparent — they exist only for layout alignment,
+            not as visible cells. Without backgroundColor: 'transparent' the
+            cell style's surface colour makes them look like broken video slots. */}
         {rowVideos.length < NUM_COLUMNS
           ? Array.from({ length: NUM_COLUMNS - rowVideos.length }).map((_, i) => (
-              <View key={`spacer-${i}`} style={styles.cell} />
+              <View key={`spacer-${i}`} style={[styles.cell, styles.spacerCell]} />
             ))
           : null}
       </View>,
@@ -144,7 +152,7 @@ export default function BetaVideoGrid({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], cellSize: number) {
   return StyleSheet.create({
     grid: {
       flexDirection: 'column',
@@ -155,8 +163,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       marginBottom: GRID_GAP,
     },
     cell: {
-      width: CELL_SIZE,
-      height: CELL_SIZE,
+      width: cellSize,
+      height: cellSize,
       position: 'relative',
       overflow: 'hidden',
       borderRadius: theme.borderRadius.sm,
@@ -175,7 +183,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       left: 0,
       right: 0,
       bottom: 0,
-      height: CELL_SIZE / 2,
+      height: cellSize / 2,
       backgroundColor: 'rgba(0,0,0,0.35)',
     },
     playIconContainer: {
@@ -186,6 +194,15 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       bottom: 0,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    /**
+     * Spacer cells exist purely for layout alignment in the last row.
+     * They must be invisible — backgroundColor: 'transparent' overrides
+     * the surface colour from `cell` so they don't look like broken video
+     * slots when there are 1 or 2 videos in the last row.
+     */
+    spacerCell: {
+      backgroundColor: 'transparent',
     },
   });
 }

@@ -232,23 +232,35 @@ export default function BetaVideoUploader({
 
   return (
     <>
-      {/* AC-037: "Add beta video" entry point — visible on route detail screen */}
+      {/* AC-037: "Add beta video" entry point — visible on route detail screen.
+          Bug fix: when hasExistingVideo is true, the button is disabled and greyed
+          out. The user must delete their existing video first. This is a UI-level
+          block only — the DB UNIQUE (user_id, route_id) constraint and upsert
+          logic in beta-video-service remain unchanged (AC-165). */}
       <Pressable
-        style={styles.addButton}
+        style={[styles.addButton, hasExistingVideo && styles.addButtonDisabled]}
         onPress={() => { void handleSelectVideo(); }}
-        disabled={isUploading}
+        disabled={isUploading || hasExistingVideo}
         accessibilityRole="button"
         accessibilityLabel={t('betaVideo.addVideo')}
-        accessibilityState={{ disabled: isUploading }}
+        accessibilityState={{ disabled: isUploading || hasExistingVideo }}
       >
-        <Ionicons name="videocam-outline" size={18} color={theme.colors.primary} />
-        <Text style={styles.addButtonText}>{t('betaVideo.addVideo')}</Text>
+        <Ionicons
+          name="videocam-outline"
+          size={18}
+          color={hasExistingVideo ? theme.colors.textDisabled : theme.colors.primary}
+        />
+        <Text style={[styles.addButtonText, hasExistingVideo && styles.addButtonTextDisabled]}>
+          {t('betaVideo.addVideo')}
+        </Text>
       </Pressable>
 
-      {/* AC-166: replace reminder — shown when the user already has a video for this route */}
+      {/* AC-166 (revised): when the user already has a video for this route, show a
+          blocking message instead of the old replace reminder. The button is disabled
+          above — this message explains why. */}
       {hasExistingVideo ? (
-        <Text style={styles.replaceWarningText} testID="beta-video-replace-warning">
-          {t('betaVideo.replaceWarning')}
+        <Text style={styles.alreadyHasVideoText} testID="beta-video-already-has-video">
+          {t('betaVideo.alreadyHasVideo')}
         </Text>
       ) : null}
 
@@ -297,10 +309,28 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignSelf: 'flex-start',
       marginTop: theme.spacing.sm,
     },
+    /** Applied on top of addButton when the user already has a video for this route. */
+    addButtonDisabled: {
+      borderColor: theme.colors.textDisabled,
+      opacity: 0.6,
+    },
     addButtonText: {
       fontSize: theme.fontSize.sm,
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.primary,
+    },
+    addButtonTextDisabled: {
+      color: theme.colors.textDisabled,
+    },
+    /**
+     * Shown instead of replaceWarningText when the user already has a video
+     * for this route. The button is disabled — this message explains why and
+     * instructs the user to delete first.
+     */
+    alreadyHasVideoText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+      marginTop: theme.spacing.xs,
     },
     replaceWarningText: {
       fontSize: theme.fontSize.sm,

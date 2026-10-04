@@ -281,6 +281,7 @@
     "uploadProgress": "{{percent}}% 完成",
     "loadError": "無法載入影片",
     "replaceWarning": "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。",
+    "alreadyHasVideo": "你已有此路線的 Beta 影片，請先刪除現有影片再上傳新的。",
     "grid": {
       "openVideo": "開啟影片"
     },
@@ -302,7 +303,9 @@
       "uploadFailed": "上傳 Beta 影片失敗，請再試一次。",
       "tooLong": "影片長度必須在 60 秒以內。",
       "invalidFormat": "僅支援 MP4 和 MOV 格式的影片，請選擇其他檔案。",
-      "permissionDenied": "需要相簿存取權限才能選擇影片。"
+      "permissionDenied": "需要相簿存取權限才能選擇影片。",
+      "videoTooLargeAfterCompression": "影片檔案過大，請壓縮至 45MB 以下。",
+      "videoTooLargeForStorage": "影片超過上限，請修剪影片後再試。"
     }
   },
   "socialFeed": {

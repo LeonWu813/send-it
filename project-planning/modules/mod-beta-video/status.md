@@ -2,6 +2,48 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-10-03 (two human QA bugs: grid spacer cells visible + upload not blocked when existing video)
+
+### Bug Fix — Grid spacer transparency + upload block on existing video — 2026-10-03
+
+**Bugs fixed**:
+
+**Bug 1 — Profile page "My Beta Videos" grid shows gray spacer cells that look broken**
+
+- Root cause: `BetaVideoGrid.tsx` spacer cells (used to fill the last row when the video count is not a multiple of 3) inherited `backgroundColor: theme.colors.surface` from the `cell` style. This rendered them as visible gray squares, indistinguishable from real (but empty) video slots — visually broken.
+- Fix: Added a `spacerCell` style with `backgroundColor: 'transparent'` and applied it as a style override on the spacer `<View>` (`style={[styles.cell, styles.spacerCell]}`). Spacers now take up layout space but are fully invisible to the user. Also added an inline comment explaining the intent.
+
+**Bug 2 — Upload not blocked when user already has a beta video for the route**
+
+- Root cause: `BetaVideoUploader.tsx` set `hasExistingVideo` state on mount (via `checkExistingBetaVideo`) and showed a replace-reminder text, but the button remained enabled and the upload proceeded (the upsert at the service layer silently replaced the existing video). The user's intent — block the upload and require deletion first — was not enforced.
+- Fix:
+  - Button `disabled` prop changed to `isUploading || hasExistingVideo`.
+  - Button `accessibilityState.disabled` updated to match.
+  - Button border and icon color now use `theme.colors.textDisabled` + `opacity: 0.6` when `hasExistingVideo` is true (`addButtonDisabled` / `addButtonTextDisabled` styles added to `makeStyles`).
+  - Replace-reminder text replaced with a new blocking message rendered via the new i18n key `betaVideo.alreadyHasVideo`, with `testID="beta-video-already-has-video"`.
+  - New i18n keys added to both locale files:
+    - EN: "You already have a beta video for this route. Delete your existing video first before uploading a new one."
+    - zh-TW: "你已有此路線的 Beta 影片，請先刪除現有影片再上傳新的。"
+  - Note: DB UNIQUE (user_id, route_id) constraint (AC-165) and the upsert logic in `beta-video-service.ts` (AC-166) are unchanged — this is a UI-level block only.
+
+**Self-check results**:
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npm test -- --watchAll=false`: PASS — 438 tests, 31 suites, 0 failures (up from 436 — 2 new tests for AC-166 revised behavior: blocking message visible + upload not called when button is disabled)
+- Judgment-based: spacer fix is minimal (one additional style, transparent override); upload-block fix uses the existing `hasExistingVideo` state already populated by `checkExistingBetaVideo`; new i18n keys follow the existing pattern in both locales; `theme.colors.textDisabled` is a theme token (no hardcoded hex); no new dependencies; no gold-plating; TypeScript strict mode satisfied. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoGrid.tsx` — Bug 1: spacer cells now use `[styles.cell, styles.spacerCell]` with `spacerCell.backgroundColor: 'transparent'`
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — Bug 2: `disabled={isUploading || hasExistingVideo}`; disabled button styles; blocking message text with new i18n key; removed old replace-reminder rendering
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — Bug 2: 2 new tests (blocking message visible, upload not called when disabled)
+- `locales/en/common.json` — Bug 2: added `betaVideo.alreadyHasVideo`
+- `locales/zh-TW/common.json` — Bug 2: added `betaVideo.alreadyHasVideo`
+
+**ACs addressed**:
+- **AC-160**: spacer cells now invisible — grid looks correct with 1 or 2 videos in the last row
+- **AC-166 (revised)**: user is fully blocked from uploading a second video; must delete existing video first; button is disabled with a clear explanation message
+
+---
+
 **Status**: Bug fix — 2026-10-03 (Rev 24 Phase 1 — two human QA bugs: PHPicker transcoding + profile grid stale data)
 
 ### Bug Fix — Rev 24 Phase 1 QA: PHPicker transcoding + profile beta-video grid refetch — 2026-10-03

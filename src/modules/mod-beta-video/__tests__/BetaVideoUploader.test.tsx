@@ -567,6 +567,60 @@ describe('BetaVideoUploader', () => {
     expect(mockUploadBetaVideo).not.toHaveBeenCalled();
   });
 
+  it('AC-166 (revised): shows blocking message and disables button when user already has a video', async () => {
+    // When hasExistingVideo is true, the button must be disabled and a blocking
+    // message must appear instructing the user to delete first — not a replace warning.
+    mockCheckExistingBetaVideo.mockResolvedValue(true);
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const blockingTexts = screen
+        .queryAllByText(/You already have a beta video for this route/i)
+        .concat(screen.queryAllByText(/你已有此路線的 Beta 影片/));
+      expect(blockingTexts.length).toBeGreaterThan(0);
+    });
+
+    // Button must be disabled (accessibilityState.disabled === true)
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    expect(addButton).toBeTruthy();
+    expect(addButton?.props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it('AC-166 (revised): does not call upload when button is disabled due to existing video', async () => {
+    mockCheckExistingBetaVideo.mockResolvedValue(true);
+    mockLaunchImageLibrary.mockResolvedValue(validAsset());
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    // Wait for the check to resolve
+    await waitFor(() => {
+      const blockingTexts = screen
+        .queryAllByText(/You already have a beta video for this route/i)
+        .concat(screen.queryAllByText(/你已有此路線的 Beta 影片/));
+      expect(blockingTexts.length).toBeGreaterThan(0);
+    });
+
+    // Even if the user somehow triggers the button, upload must not be called
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    // Upload must never be called — button is disabled
+    await waitFor(() => {
+      expect(mockUploadBetaVideo).not.toHaveBeenCalled();
+    });
+  });
+
   it('AC-169 (Rev 24): proceeds to upload when native file is exactly at 45 MB threshold', async () => {
     mockLaunchImageLibrary.mockResolvedValue(validAsset());
     // Exactly 45,000,000 bytes — should NOT be blocked (> 45,000,000 is the threshold)

@@ -281,6 +281,7 @@
     "uploadProgress": "{{percent}}% complete",
     "loadError": "Unable to load video",
     "replaceWarning": "You already have a beta video for this route. Confirming will replace your existing video.",
+    "alreadyHasVideo": "You already have a beta video for this route. Delete your existing video first before uploading a new one.",
     "grid": {
       "openVideo": "Open video"
     },
@@ -302,7 +303,9 @@
       "uploadFailed": "Failed to upload beta video. Please try again.",
       "tooLong": "Video must be 60 seconds or shorter.",
       "invalidFormat": "Only MP4 and MOV videos are supported. Please select a different file.",
-      "permissionDenied": "Photo library access is required to select a video."
+      "permissionDenied": "Photo library access is required to select a video.",
+      "videoTooLargeAfterCompression": "Video is too large, please keep it under 45 MB.",
+      "videoTooLargeForStorage": "Video is too large. Please trim it and try again."
     }
   },
   "socialFeed": {
