@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 6479360114be48949918a0875f0a5ad8ed1ec709
+commit: 75bf2e516cdc490fc526ca672ca100d91e2e3d35
 timestamp: 2026-10-03T00:00:00Z
 ```
 
@@ -1613,6 +1613,35 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-03 — Delta Sync (Revision 26, [SUBSTANTIVE])
+
+**Trigger**: PM [SUBSTANTIVE] tag (2026-10-03) — AC-031 iOS picker representation-mode change (PRD Revision 26). Scope: AC-031 only per coordinator's explicit instruction.
+
+**Files modified:**
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 24 → 26; Last Updated 2026-10-02 → 2026-10-03. AC-031 in Acceptance Criteria Covered: full replacement of Rev 24 text with Rev 26 text (picker uses iOS `Automatic` mode transcoding HEVC/HLG → H.264 SDR before returning URI; client uploads picker-returned file as-is when under 45 MB; Phase 1 limitation: lossy HDR→SDR transcode accepted, Phase 2 MediaConvert does proper tone-map; uploaded file is standard QuickTime `.mov` H.264 SDR, not original HEVC/HDR capture; `preferredAssetRepresentationMode: Current` removed). Context paragraph 1 updated: removed "original native video file is uploaded as-is" framing; added picker `Automatic` mode → H.264 SDR transcode description; added Phase 1 HDR→SDR limitation note. Input/Output Contract (upload inputs): "duration checked client-side before compression begins" → "duration checked client-side before upload begins". Input/Output Contract (upload outputs): "otherwise original native video file uploaded as-is" → "otherwise the picker-returned H.264 SDR `.mov` file uploaded as-is (AC-031, Rev 26)". Key Implementation Notes: replaced "Codec validation" bullet (which said "original native file is uploaded as-is (AC-031, Rev 24)") with new "Picker representation mode (AC-031, Rev 26)" bullet documenting the `Automatic`-mode transcode, no `preferredAssetRepresentationMode: Current`, H.264 SDR output, Phase 1 HDR→SDR limitation, and playability note. Data Model comment: added clarifying note that the 45 MB gate applies to whatever file the picker returns (AC-031, Rev 26).
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/production.md` — PM confirmed no production.md change required by this AC-031 edit itself.
+- All other module specs (MOD-001 through MOD-004, MOD-006 through MOD-012) — not in scope for this delta (AC-031-only scope per coordinator's explicit instruction).
+- All agent wrappers — not in scope (no new module, no new dependency).
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**AMBIGUITY markers resolved:**
+- none
+
+**CONFLICT markers added:**
+- none — the PM Notes logged known internal-consistency tensions (§5 client bullet, §9 Data Model note, §10 NFR Video paragraph, US-004 trade-off note still reference the pre-Rev-26 model). These are not resolved in this sync per the AC-031-only scope; they are on the record in PM Updates and flagged for a follow-up reconciliation pass. Doc-Sync does not add CONFLICT markers for out-of-scope prose not changed in this revision.
+
+**verify-sync.sh**: 4/6 — same two pre-existing script bugs as all prior delta syncs since Rev 18. Check 4: awk range pattern does not match the `**US-NNN**:` bold format used in spec Related User Stories sections (all specs have correct content). Check 6: script over-matches non-phase-plan PRD content (gym seed data, etc.) as "phase names" — Phase Plan section in status.md is correctly written. Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ### 2026-10-02 — Delta Sync (Revision 24, [SUBSTANTIVE])
 
