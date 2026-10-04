@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: 2d88b8c4368c21e59ba90aa835c99eee594c6818
+commit: a543df8b98844384c66b90253e7698324be02810
 timestamp: 2026-10-04T00:00:00Z
 ```
 
@@ -1737,6 +1737,31 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-04 — Trivial Passthrough ([TRIVIAL])
+
+**Trigger**: PM [TRIVIAL] tag (2026-10-04) — Two engineering Shared Conventions for keep-alive screens (no PRD revision bump; `prd.md` untouched). Source: Tech Lead review dated 2026-10-04 ("ProfileScreen crashed on device: `useFocusEffect` used inside AppShell's keep-alive mount"). Conventions route into `production.md` Shared Conventions only; no module spec change required per PM Update.
+
+**Files modified:**
+
+- `project-planning/production.md` — Two new `###` sections inserted after "App Shell & Tab Navigation" and before "Bottom Safe Area for Pinned Bottom Bars". `Last Updated` updated to 2026-10-04.
+  1. **Keep-Alive Screen Focus Pattern** — Keep-alive screens (AppShell `display:none`/`display:flex` mount) must not use `useFocusEffect` or any navigation-context hook; use `isActive: boolean` prop + `useEffect([isActive])` instead; exempt: stack/tab navigator screens (`RouteDetailScreen`, `UserProfileScreen`); each keep-alive screen must carry a specified top-of-file comment.
+  2. **Keep-Alive Screen Test Pattern** — Tests for keep-alive screens must not mock `useFocusEffect` or `@react-navigation/native`; flip the `isActive` prop to simulate tab focus events; if mocking a dependency makes a test pass that would fail in production, the mock is hiding a real bug.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — not modified (no PRD revision bump; [TRIVIAL] passthrough only).
+- All module specs — not in scope per PM Update (conventions are project-wide, live in `production.md`).
+- All agent wrappers — not in scope (no new module, no dependency change).
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** skipped — [TRIVIAL] passthrough per skill routing rules.
 
 ### 2026-10-03 — Delta Sync (Revision 29, [SUBSTANTIVE])
 

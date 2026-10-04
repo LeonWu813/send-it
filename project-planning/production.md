@@ -3,7 +3,7 @@
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
 **Last synced from PRD**: rev 24 (2026-10-02)
-**Last Updated**: 2026-10-02
+**Last Updated**: 2026-10-04
 
 ---
 
@@ -199,6 +199,22 @@ For admin-controlled feature toggles read server-side, use a single `public.app_
 The persistent tab shell lives in the module that owns it (MOD-012, `src/modules/mod-home/`), not a separate top-level directory. Tab state is a local `useState<TabKey>` in the shell component (`AppShell.tsx`), defaulting to `'home'` (AC-110: Home tab is the default after login). This follows the state-machine-per-navigator convention already used by `GymNavigator`, `RouteNavigator`, and `AuthNavigator`.
 
 Tabs use a **keep-alive mount strategy**: all three tab subtrees are rendered simultaneously and toggled with `display: activeTab === key ? 'flex' : 'none'`. Do NOT use conditional unmount (component state is lost) and do NOT use `flex: 0` (still lays out, leaks touch targets). Keep-alive preserves each tab's internal navigation stack and scroll position across tab switches. Session is threaded to tab navigators as a prop; `useSession` remains the singleton for reactive session changes.
+
+### Keep-Alive Screen Focus Pattern
+
+Keep-alive screens (AppShell `display:none`/`display:flex` mount) must not use `useFocusEffect` or any navigation-context hook. `AppShell` uses a keep-alive mount strategy (`display:none` / `display:flex`) for the main tab screens to preserve state across tab switches; these screens are **not** inside a `NavigationContainer`. Any `@react-navigation/native` hook that requires navigation context (`useFocusEffect`, `useNavigation`, `useRoute`) will throw at runtime on them.
+
+Rules:
+
+1. Any screen rendered via AppShell's keep-alive pattern must receive an `isActive: boolean` prop and use `useEffect([isActive])` for focus-triggered behavior — never `useFocusEffect`.
+2. Screens rendered inside a stack/tab navigator (e.g. `RouteDetailScreen`, `UserProfileScreen`) are exempt and may use `useFocusEffect` normally.
+3. Each keep-alive screen must carry a top-of-file comment: "This screen is rendered via AppShell's keep-alive pattern and has no NavigationContainer ancestor. Do not use useFocusEffect or any other @react-navigation/native hook that requires navigation context. Use the isActive prop instead."
+
+Affected keep-alive screens (current): `ProfileScreen`. Correct alternative: `isActive` prop + `useEffect([isActive])`. Exempt: any stack/tab navigator screen.
+
+### Keep-Alive Screen Test Pattern
+
+Tests for keep-alive screens must **not** mock `useFocusEffect` or `@react-navigation/native` — those screens render in production without a `NavigationContainer`, and the test must reflect that reality so any future navigation-context hook crashes CI immediately. To assert focus-triggered behavior on a keep-alive screen, flip the `isActive` prop (false → true) directly rather than simulating navigation events. Generally: if mocking a dependency makes a test pass that would fail in production, the mock is hiding a real bug — fix the incompatibility, do not mock over it.
 
 ### Bottom Safe Area for Pinned Bottom Bars
 
