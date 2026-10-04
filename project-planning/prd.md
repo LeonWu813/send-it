@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 27
+**Status**: [SUBSTANTIVE] — Revision 28
 **Date**: 2026-10-03
-**Revision**: 27
+**Revision**: 28
 
 ---
 
@@ -650,7 +650,11 @@ The data flow for the two most important loops:
 
 **AC-165** (new, DB migration): The system shall add a `UNIQUE (user_id, route_id)` constraint on the `beta_videos` table, enforcing one beta video per user per route at the database level. The migration file shall be `supabase/migrations/20260930000001_mod_005_beta_video_unique_per_route.sql`.
 
-**AC-166** (new): In `UploadBetaVideoScreen`, before the final confirm/upload action, the system shall call a new service check `checkExistingBetaVideo(routeId): Promise<boolean>` to determine whether the current user already has a beta video for this route. If an existing video is found, the screen shall display the reminder text "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。" (EN: "You already have a beta video for this route. Confirming will replace your existing video."). The upload shall use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint.
+**AC-166** (revised, Rev 28): In `UploadBetaVideoScreen`, the upload control shall always be enabled and shall never be disabled on the basis of the user already having a beta video for the route (`hasExistingVideo`). When the user activates the upload control, the system shall first call the service check `checkExistingBetaVideo(routeId): Promise<boolean>` to determine whether the current user already has a beta video for this route:
+- If an existing video is found (`hasExistingVideo === true`), the system shall present a confirmation dialog **before** opening the video picker. The dialog shall show the title "替換 Beta 影片" / "Replace Beta Video" (`betaVideo.replaceConfirmTitle`), the message "你已有此路線的 Beta 影片，繼續操作將會取代現有影片。" / "You already have a beta video for this route. If you proceed, the old video will be replaced." (`betaVideo.replaceConfirmMessage`), and exactly two actions: a destructive confirm "替換" / "Replace" (`betaVideo.replaceConfirmOk`) and a "取消" / "Cancel" (`betaVideo.replaceConfirmCancel`). Activating **Replace** shall dismiss the dialog and proceed with the normal flow (open the picker, select the video, upload). Activating **Cancel** shall dismiss the dialog and take no further action — the picker shall not open.
+- If no existing video is found (`hasExistingVideo === false`), the system shall open the video picker directly with no confirmation dialog, as in the ordinary upload flow.
+
+There shall be no disabled-button state and no "delete your existing video first" static message. The upload itself shall continue to use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint — the database upsert (AC-165) handles the replacement, and no backend change is required.
 
 **AC-169** (revised, Rev 24): Before any upload is attempted — after format validation (AC-035) and the duration check (AC-030), and before the upload begins — the system shall read the native video file's size. If the native file size is greater than 45 MB, or the size cannot be read, the system shall not attempt the upload and shall reject it with the AC-031 error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB". The check shall fail closed: an unreadable size is treated as oversized and the upload is rejected. This upfront source-size gate replaces the former post-compression size guard (Phase 1 performs no compression, AC-031) and prevents an HTTP 413 from ever reaching the user as a cryptic error. The 45 MB threshold sits below the 50 MB Supabase Storage free-tier bucket ceiling to leave a safe margin.
 
