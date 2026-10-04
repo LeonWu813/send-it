@@ -25,7 +25,6 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -112,9 +111,8 @@ export default function ProfileScreen({
   // on subsequent focus events without resetting counts/videos to empty.
   const hasLoadedOnce = useRef(false);
 
-  // AC-145 + AC-164: Memoised fetch — called by useFocusEffect and by the
-  // tab-switch useEffect below. Does NOT reset state before fetching so existing
-  // data stays visible during a silent background refresh (no flash).
+  // AC-145 + AC-164: Memoised fetch — does NOT reset state before fetching so
+  // existing data stays visible during a silent background refresh (no flash).
   const loadData = useCallback(async (): Promise<void> => {
     if (!profile?.id) return;
     const userId = profile.id;
@@ -125,27 +123,20 @@ export default function ProfileScreen({
     setFollowerCount(counts.follower_count);
     setFollowingCount(counts.following_count);
     setBetaVideos(videos);
+    hasLoadedOnce.current = true;
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Primary data load: fires on screen mount (and again on React Navigation
-  // focus events when a NavigationContainer is present). Silent on refetch —
-  // existing data stays visible while new data loads in the background.
-  useFocusEffect(
-    useCallback(() => {
-      void loadData().finally(() => {
-        hasLoadedOnce.current = true;
-      });
-    }, [loadData]),
-  );
-
-  // Tab-switch silent refetch: useFocusEffect from @react-navigation/native does
-  // not fire on custom display:none tab switches (this app uses no NavigationContainer).
-  // When the Profile tab becomes active and data has already loaded once, refetch
-  // silently without resetting state so there is no loading flash.
+  // Initial load: fires on mount once profile.id is available.
+  // Keep-alive pattern — no NavigationContainer, no useFocusEffect.
   useEffect(() => {
-    if (isActive && hasLoadedOnce.current) {
-      void loadData();
-    }
+    if (!profile?.id) return;
+    void loadData();
+  }, [profile?.id, loadData]);
+
+  // Trigger refetch when tab becomes active (keep-alive pattern — no NavigationContainer).
+  // Guard with hasLoadedOnce so we don't double-fetch on the first mount cycle.
+  useEffect(() => {
+    if (isActive && hasLoadedOnce.current) void loadData();
   }, [isActive, loadData]);
 
   // ── Profile header (AC-116 + AC-117 + AC-145) ───────────────────────────────

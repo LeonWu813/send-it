@@ -1149,6 +1149,45 @@ PASS. `followCountLabel` style: `color: theme.colors.primary`. `followCountNumbe
 
 ---
 
+## Engineering Progress — Bugfix — 2026-10-04 (useFocusEffect crash in keep-alive shell)
+
+**Issue**: `ProfileScreen.tsx` imported and called `useFocusEffect` from `@react-navigation/native`. `ProfileScreen` is rendered inside `AppShell`'s keep-alive pattern (`display:none`, no `NavigationContainer`), so `useFocusEffect` has no navigation context and crashes at runtime with "Couldn't find a navigation object. Is your component inside NavigationContainer?"
+
+**Fix applied — two files changed**:
+
+1. `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`
+   - Removed `useFocusEffect` from the `@react-navigation/native` import line. The import is now deleted entirely (no remaining imports from that package).
+   - Removed the `useFocusEffect(useCallback(...))` block.
+   - Replaced with a two-`useEffect` pattern (no new state variables required):
+     - Initial load effect: `useEffect(() => { if (!profile?.id) return; void loadData(); }, [profile?.id, loadData])` — fires on mount once profile is available.
+     - Tab-switch silent refetch: `useEffect(() => { if (isActive && hasLoadedOnce.current) void loadData(); }, [isActive, loadData])` — guards with `hasLoadedOnce.current` to avoid double-fetch on first mount cycle.
+   - Moved `hasLoadedOnce.current = true` into the body of `loadData` (after the Promise.all resolves) so both effects correctly update the guard flag.
+   - `useCallback`, `useRef`, `useState` imports retained (all still used). No new imports.
+
+2. `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx`
+   - Removed the `jest.mock('@react-navigation/native', ...)` block and its associated comment — `ProfileScreen` no longer imports from that package.
+   - Updated file-level JSDoc comment to reflect the keep-alive/no-NavigationContainer design.
+
+**Self-check results**:
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest src/modules/mod-auth-profile` | PASS — 17 tests, 3 suites, all pass |
+| `useFocusEffect` removed from ProfileScreen.tsx (import + call site) | PASS |
+| `@react-navigation/native` no longer imported in ProfileScreen.tsx | PASS |
+| Initial load `useEffect([profile?.id, loadData])` in place | PASS |
+| Tab-switch refetch `useEffect([isActive, loadData])` guarded by `hasLoadedOnce.current` | PASS |
+| `hasLoadedOnce.current = true` set inside `loadData` after fetch completes | PASS |
+| `useCallback`, `useRef`, `useState` — all still used, no dead imports | PASS |
+| AC-062 `refetchKey` / `SendHistoryProfile` mechanism unchanged | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## Engineering Progress — UI Alignment Fix — 2026-10-04 (BetaVideoGrid horizontal padding)
 
 **Issue**: On `ProfileScreen`, the "Beta Videos" section title had `paddingHorizontal: theme.spacing.lg` (24 px) but `BetaVideoGrid` received no `horizontalPadding` prop, rendering the grid edge-to-edge and misaligning the title left-edge with the grid left-edge.

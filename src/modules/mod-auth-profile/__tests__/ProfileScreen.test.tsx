@@ -4,21 +4,9 @@
  * Verifies that the profile header, follower/following counts, beta-video grid,
  * and edit-profile affordance render correctly for an authenticated user.
  *
- * useFocusEffect is mocked to immediately invoke the callback, replicating the
- * behaviour of a component mounted inside a NavigationContainer with an active
- * focus state. This lets tests work without a real navigation context.
+ * ProfileScreen uses only core React hooks (useEffect/useCallback/useRef/useState)
+ * and the isActive prop for keep-alive tab focus — no NavigationContainer required.
  */
-
-// Mock useFocusEffect — this app does not use NavigationContainer, so the hook
-// is mocked to call the effect once on mount (same as first-focus behaviour).
-jest.mock('@react-navigation/native', () => ({
-  useFocusEffect: (cb: () => void) => {
-    // Call once on mount, same as the first-focus trigger.
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const React = require('react');
-    React.useEffect(cb, []);
-  },
-}));
 
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
