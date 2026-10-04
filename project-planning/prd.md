@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 25
-**Date**: 2026-10-02
-**Revision**: 25
+**Status**: [SUBSTANTIVE] — Revision 26
+**Date**: 2026-10-03
+**Revision**: 26
 
 ---
 
@@ -594,7 +594,7 @@ The data flow for the two most important loops:
 
 **AC-030**: The system shall reject beta video uploads longer than 60 seconds before upload begins.
 
-**AC-031** (revised, Rev 24): The system shall upload the original native video file as-is, with no client-side compression and no re-encoding, when the native file's size is under 45 MB. If the native file's size is 45 MB or greater, or the native file's size cannot be read, the system shall reject the upload before any upload attempt and display the bilingual error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB". There is no client-side compression step in Phase 1. The system shall generate a thumbnail on the client and upload it alongside the video. **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1. (Because nothing is re-encoded, the stored file retains its original container and codec — see AC-035 for the accepted container/codec set — and the size check replaces the former post-compression guard; see AC-169 for the gate's timing and fail-closed behavior.)
+**AC-031** (revised, Rev 26): The system shall select the beta video from the photo library **without** setting `preferredAssetRepresentationMode: Current` on the picker; the picker therefore uses the iOS default (`Automatic`) representation mode, under which iOS transcodes HEVC/HLG source footage to **H.264 SDR** before returning the URI. The system shall upload the file the picker returns as-is, with no additional client-side compression and no further re-encoding, when that file's size is under 45 MB. If the returned file's size is 45 MB or greater, or its size cannot be read, the system shall reject the upload before any upload attempt and display the bilingual error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB". There is no separate client-side compression step in Phase 1. The uploaded file is therefore a standard QuickTime (`.mov`) H.264 SDR file produced by the iOS picker (accepted per AC-035), not the original HEVC/HDR capture. **Phase 1 limitation (accepted, not a bug)**: the iOS `Automatic`-mode transcode from HDR (BT.2020 HLG) to SDR is lossy — some HDR color/dynamic-range information is discarded — because Phase 1's playback path (expo-video `VideoView`) renders HLG without an extended display range and would otherwise appear severely overexposed on SDR displays; the Phase 2 server-side MediaConvert pipeline (§4, §7) performs a proper HDR→SDR tone-map and removes this limitation. The system shall generate a thumbnail on the client and upload it alongside the video. **Phase 1 simplification**: the thumbnail may use the selected video's URI as a placeholder rather than an extracted still frame; true client-side frame extraction (e.g. a frame at 1 second) is deferred to Phase 2 (requires a frame-extraction library such as `expo-video-thumbnails`). `BetaVideo.thumbnail_url` must still be populated with a valid, retrievable URL in Phase 1. (The size check and its fail-closed behavior are unchanged — see AC-169 for the gate's timing; the 45 MB gate applies to whatever file the picker returns.)
 
 **AC-032**: The system shall attach a beta video to exactly one `Route` and make it playable inline within 60 seconds of upload completion on a normal 4G/LTE connection.
 
