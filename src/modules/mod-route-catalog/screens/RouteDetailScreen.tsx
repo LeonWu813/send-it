@@ -9,12 +9,14 @@
  *   - Beta video section (MOD-005)
  *   - Added date as footer at the bottom (AC-126)
  *
- * Data refresh: uses useFocusEffect so route details, saved status, achievement
- * icon, and send ascents are re-fetched silently whenever the user navigates
- * back to this screen (e.g. from SendHistoryDetail, after logging a send, or
- * after any other navigation). The loading spinner is shown only on the very
- * first load (when no data is cached); subsequent focus-triggered refreshes
- * update state in the background without resetting data to null/[].
+ * Data refresh: uses a plain useEffect on mount. RouteNavigator renders this
+ * screen conditionally (unmounts on navigate-away, remounts on navigate-back),
+ * so useEffect fires on every mount — equivalent to the "every focus" behaviour
+ * useFocusEffect would provide, without requiring a NavigationContainer ancestor
+ * (which RouteNavigator, a useState-based state machine, does not provide).
+ * The loading spinner is shown only on the very first mount (when no data is
+ * cached); subsequent mount-triggered refreshes update state in the background
+ * without resetting data to null/[].
  *
  * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
  * AC-046: bookmark toggle (filled yellow = saved; outline gray = unsaved) in header;
@@ -36,8 +38,7 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -218,16 +219,14 @@ export default function RouteDetailScreen({
     }
   }, [routeId, t]);
 
-  // Refresh data whenever the screen comes into focus — covers both the initial
-  // mount and any subsequent return navigation (e.g. back from SendHistoryDetail
-  // or after logging a send). The loading spinner is suppressed after the first
-  // successful load so re-focus refreshes are silent (no data reset to null/[]).
-  useFocusEffect(
-    useCallback(() => {
-      void fetchRoute();
-      void fetchMyAscents();
-    }, [fetchRoute, fetchMyAscents]),
-  );
+  // Fetch data on mount. RouteNavigator renders RouteDetailScreen conditionally
+  // (unmounts on navigate-away, remounts on navigate-back), so a plain useEffect
+  // fires on every mount — equivalent to useFocusEffect without requiring a
+  // NavigationContainer ancestor (which this navigator does not provide).
+  useEffect(() => {
+    void fetchRoute();
+    void fetchMyAscents();
+  }, [fetchRoute, fetchMyAscents]);
 
   /**
    * AC-046: Optimistic bookmark toggle.

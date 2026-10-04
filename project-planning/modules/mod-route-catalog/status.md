@@ -2,6 +2,35 @@
 
 ## Engineering Progress
 
+### Crash fix — replace useFocusEffect with useEffect (2026-10-04)
+
+**Issue (device crash)**: `RouteDetailScreen` imported `useFocusEffect` from `@react-navigation/native` and used it as the sole data-load trigger. The app has no `NavigationContainer` anywhere in the tree — all navigators (including `RouteNavigator`) are custom `useState`-based state machines. At runtime this threw "Couldn't find a navigation object. Is your component inside NavigationContainer?", crashing the screen on every device mount.
+
+**Root cause**: `RouteNavigator` renders `RouteDetailScreen` conditionally (`{view.name === 'detail' && <RouteDetailScreen .../>}`). The screen unmounts when the user navigates away and remounts on navigate-back, so a plain `useEffect` fires on every mount — identical behaviour to what `useFocusEffect` was intended to provide. There is no need for `useFocusEffect` here.
+
+**Fix:**
+1. Removed the `useFocusEffect` import from `@react-navigation/native` (was line 39).
+2. Added `useEffect` to the React import (already had `useCallback`, `useRef`, `useState`).
+3. Replaced the `useFocusEffect(useCallback(..., [fetchRoute, fetchMyAscents]))` block with a plain `useEffect(() => { void fetchRoute(); void fetchMyAscents(); }, [fetchRoute, fetchMyAscents])`.
+4. Updated the top-of-file JSDoc comment and the inline comment above the effect to reflect the plain-`useEffect`/conditional-unmount rationale.
+5. `hasLoadedOnceRef` is unchanged — it still correctly guards the loading spinner (ref reinitialises on each mount because `useRef` runs on every mount, so the spinner shows only on the first fetch of each mount lifecycle).
+
+**Test fix:**
+- Removed the `jest.mock('@react-navigation/native', ...)` block from `RouteDetailScreen.test.tsx`. That mock was added solely to paper over the crash (making `useFocusEffect` behave like `useEffect` in tests). With `@react-navigation/native` no longer imported by the screen, the mock is both unnecessary and a production-incompatibility mask. All 24 tests continue to pass without it.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — removed `useFocusEffect` import; added `useEffect` to React import; replaced `useFocusEffect(useCallback(...))` with `useEffect(...)`; updated top-of-file and inline comments.
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — removed `jest.mock('@react-navigation/native', ...)` block.
+
+**Self-check (2026-10-04):**
+- PASS: `npx tsc --noEmit` — 0 errors in mod-route-catalog
+- PASS: `npx jest RouteDetailScreen --watchAll=false` — 24 tests, 1 suite, 0 failures
+- PASS: `hasLoadedOnceRef` retained — spinner suppression on re-fetch still works within a single mount
+- PASS: No `@react-navigation/native` import remaining in the screen — crash cannot recur
+- PASS: No gold-plating — strictly the three-line fix described in the invocation
+
+---
+
 ### Bugfix — useFocusEffect for silent re-focus data refresh (2026-10-04)
 
 **Task**: Replace `useEffect` on RouteDetailScreen with `useFocusEffect` so data refreshes silently whenever the user navigates back to the screen, not just on first mount. No loading flash on refetch — spinner shown only on first load when data is null.
