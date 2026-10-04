@@ -1977,3 +1977,31 @@ No bugs found. All acceptance criteria confirmed correct on device. Module compl
 ### Blocker
 
 `npm run check:uploads` cannot pass until `src/modules/mod-auth-profile/auth-service.ts` line 261 is updated to use `ExpoFile.bytes()` instead of `response.blob()`. That file is owned by MOD-001 (mod-auth-profile). This engineer has no write scope over MOD-001 source files.
+
+---
+
+## Engineering Progress — Upload error placement fix (2026-10-04)
+
+**Task**: Surface beta-video upload errors (file too large, video too long) between the action buttons row and `BetaVideoSection` on `RouteDetailScreen`, instead of inside `BetaVideoSection`.
+
+### What changed
+
+`BetaVideoSection` (commit `85abebd`) already added `onUploadError?: (message: string) => void` — when provided, `BetaVideoUploader` suppresses its inline error and fires the callback instead.
+
+**Changes to `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx`**:
+
+1. Added `uploadErrorMessage` state (`useState<string | null>(null)`).
+2. In `handleUploadBetaPress`: clears `uploadErrorMessage` to `null` before invoking the launcher, so any stale error is dismissed when a new upload attempt begins.
+3. Added `onUploadError={(msg) => { setUploadErrorMessage(msg); }}` prop to `<BetaVideoSection>` so upload errors are forwarded to this screen.
+4. Rendered `{uploadErrorMessage ? <Text style={styles.uploadErrorText}>{uploadErrorMessage}</Text> : null}` immediately before `<BetaVideoSection>` (between the action row and the section).
+5. Added `uploadErrorText` style: `fontSize: theme.fontSize.sm`, `color: theme.colors.error`, `marginHorizontal: 16`, `marginBottom: theme.spacing.sm`.
+
+No new test file changes needed — the mock for `BetaVideoSection` already ignores unknown props and all existing tests pass.
+
+### Self-check (2026-10-04)
+
+- PASS: `npx tsc --noEmit` — 0 errors in mod-route-catalog (2 pre-existing errors in mod-beta-video test file unrelated to this change)
+- PASS: `npm test -- --watchAll=false --forceExit` — 448 tests, 31 suites, 0 failures
+- PASS: No gold-plating — change confined to the reported error-placement issue
+- PASS: No new dependencies introduced
+- PASS: `uploadErrorText` style uses `theme.colors.error`, `theme.fontSize.sm`, `theme.spacing.sm` — no hardcoded color hex (marginHorizontal: 16 is a layout constant matching the existing `contentContainer.paddingHorizontal: theme.spacing.lg` = 16)

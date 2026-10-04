@@ -119,6 +119,10 @@ export default function RouteDetailScreen({
   // Used to compute the AC-127 summary cards via summarizeAscents.
   const [myAscents, setMyAscents] = useState<AscentWithProfile[]>([]);
 
+  // Upload error message — shown between the action buttons row and BetaVideoSection.
+  // Set by onUploadError from BetaVideoSection; cleared when a new upload attempt begins.
+  const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
+
   /**
    * AC-130: ref to the BetaVideoSection's upload launcher.
    * BetaVideoSection registers its launch handler here via onRegisterUploadLauncher.
@@ -229,6 +233,8 @@ export default function RouteDetailScreen({
   }
 
   function handleUploadBetaPress(): void {
+    // Clear any previous upload error when a new attempt begins.
+    setUploadErrorMessage(null);
     uploadLauncherRef.current?.();
   }
 
@@ -434,15 +440,24 @@ export default function RouteDetailScreen({
         />
       </Modal>
 
+      {/* Upload error — rendered between the action buttons row and BetaVideoSection
+           so it is visible without scrolling into the beta video section. */}
+      {uploadErrorMessage ? (
+        <Text style={styles.uploadErrorText}>{uploadErrorMessage}</Text>
+      ) : null}
+
       {/* ── Beta Videos (MOD-005) — AC-033, AC-037 ───────────────────────────
            BetaVideoSection is the public entry point imported from mod-beta-video.
            AC-130: onRegisterUploadLauncher wires the AC-130 "Upload Beta Video"
            button to BetaVideoSection's upload flow, so no upload button is
-           rendered inside the section itself. */}
+           rendered inside the section itself.
+           onUploadError: forwards file-too-large / video-too-long errors to
+           this screen so they render between the action row and the section. */}
       <BetaVideoSection
         routeId={route.id}
         session={session}
         onRegisterUploadLauncher={handleRegisterUploadLauncher}
+        onUploadError={(msg) => { setUploadErrorMessage(msg); }}
         routeName={routeName}
         gymName={gymName}
         onNavigateToUser={onNavigateToUser}
@@ -630,6 +645,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     retryButtonText: {
       fontSize: theme.fontSize.md,
       color: theme.colors.primary,
+    },
+    // Upload error — shown between the action row and BetaVideoSection.
+    uploadErrorText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.error,
+      marginHorizontal: 16,
+      marginBottom: theme.spacing.sm,
     },
     // ── AC-126: added date footer ─────────────────────────────────────────────
     addedDateFooter: {
