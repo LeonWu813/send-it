@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-auth-profile
-mode: bugfix
-module: mod-auth-profile
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: ffaa5caaf7587aced8887390b3e035fd2fe0c43b
+commit: 0b58116fa7d88159a7c20b9fa6984ef67fc0d57f
 timestamp: 2026-10-04T00:00:00Z
 ```
 
@@ -263,6 +263,29 @@ timestamp: 2026-10-04T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-04 — blocker (ProfileScreen crashed on device: `useFocusEffect` used inside AppShell's keep-alive mount, which has no NavigationContainer ancestor; invisible in CI because the test mocked `@react-navigation/native`)
+
+**Context**: Advisory review requested by the coordinator after a device crash in `ProfileScreen`. Root cause (supplied and confirmed): `ProfileScreen` called `useFocusEffect` from `@react-navigation/native`, which requires a `NavigationContainer` in the tree. But `ProfileScreen` is rendered via `AppShell`'s keep-alive mount strategy (`display:none` / `display:flex` to preserve tab state across switches), which has **no `NavigationContainer` ancestor**. The hook threw at runtime on device. It was invisible in CI because `ProfileScreen.test.tsx` mocked `@react-navigation/native` so `useFocusEffect` degraded to a plain `useEffect` — the test environment did not match the production mount context. This is the same class of green-but-broken defect flagged on 2026-10-03 (test fixtures diverging from production wiring). **Advisory only — no source, spec, or PRD files edited. The fix and the test-mock removal route through `engineer-mod-auth-profile`; these two conventions route PM → Doc-Sync into `production.md` Shared Conventions.**
+
+**Concerns** (must address before this is considered resolved):
+- **C1 — Keep-alive screens must not call navigation-context hooks.** `AppShell`'s keep-alive screens have no `NavigationContainer` ancestor, so any `@react-navigation/native` hook requiring navigation context (`useFocusEffect`, `useNavigation`, `useRoute`) throws at runtime. Affected screen (current): `ProfileScreen`. Owner: `engineer-mod-auth-profile`.
+- **C2 — The test masked the production incompatibility.** `ProfileScreen.test.tsx` mocked `@react-navigation/native`, making a hook pass in test that crashes in production. The mock must be removed so the mismatch surfaces in CI (it now is removed per the fix). Any mock that papers over a test-vs-production mount incompatibility is hiding a real bug.
+
+**Recommendations** (suggested improvements):
+- **R1** — Keep-alive screens receive an `isActive: boolean` prop and use `useEffect([isActive])` for focus-triggered behavior instead of `useFocusEffect`.
+- **R2** — Add a top-of-file comment to each keep-alive screen stating it has no `NavigationContainer` ancestor and must not use `@react-navigation/native` navigation-context hooks (use `isActive` instead).
+- **R3** — Tests for keep-alive screens exercise focus behavior by flipping the `isActive` prop (false → true), never by mocking navigation or simulating navigation events.
+
+**Approved** (what is solid and should be kept):
+- The `isActive`-prop + `useEffect` pattern is the correct substitute for `useFocusEffect` on keep-alive screens and should be the standard going forward.
+- Removing the `@react-navigation/native` mock from keep-alive screen tests is correct — it makes any future reintroduction of a navigation-context hook fail CI immediately rather than only on device.
+
+**Proposed Shared Conventions** (for PM → Doc-Sync to carry into production.md):
+- **Keep-alive screens must not use `useFocusEffect` (or any navigation-context hook).** `AppShell` uses a keep-alive mount strategy (`display:none` / `display:flex`) for the main tab screens to preserve state across tab switches; these screens are **not** inside a `NavigationContainer`. Any `@react-navigation/native` hook that requires navigation context (`useFocusEffect`, `useNavigation`, `useRoute`) will throw at runtime on them. Rules: (1) Any screen rendered via AppShell's keep-alive pattern must receive an `isActive: boolean` prop and use `useEffect([isActive])` for focus-triggered behavior — never `useFocusEffect`. (2) Screens rendered inside a stack/tab navigator (e.g. `RouteDetailScreen`, `UserProfileScreen`) are exempt and may use `useFocusEffect` normally. (3) Each keep-alive screen must carry a top-of-file comment: "This screen is rendered via AppShell's keep-alive pattern and has no NavigationContainer ancestor. Do not use useFocusEffect or any other @react-navigation/native hook that requires navigation context. Use the isActive prop instead." Affected keep-alive screens (current): `ProfileScreen`. Correct alternative: `isActive` prop + `useEffect([isActive])`. Exempt: any stack/tab navigator screen.
+- **Tests must not mock away a test-vs-production mount incompatibility.** Tests for keep-alive screens must **not** mock `useFocusEffect` or `@react-navigation/native` — those screens render in production without a `NavigationContainer`, and the test must reflect that reality so any future navigation-context hook crashes CI immediately. To assert focus-triggered behavior on a keep-alive screen, flip the `isActive` prop (false → true) directly rather than simulating navigation events. Generally: if mocking a dependency makes a test pass that would fail in production, the mock is hiding a real bug — fix the incompatibility, do not mock over it.
+
+---
 
 ### Review — 2026-10-03 — blocker (two human-QA device failures after a green pipeline: AC-166 replace-dialog never shows; AC-031 HDR video still overexposed — plus the systemic reason 88 passing tests missed both)
 
