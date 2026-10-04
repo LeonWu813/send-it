@@ -3130,3 +3130,134 @@ The test name is "AC-031 (Rev 26): passes asset.uri directly to uploadBetaVideo 
 - **AC-169 (unchanged)**: PASS — `BUCKET_LIMIT_BYTES = 45 * 1_000_000`; fail-closed `nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES`; no regression.
 - **AC-036 (unchanged)**: PASS — single "Uploading…" phase only; no compression phase anywhere in the component or type union.
 - **Tests**: PASS — 86/86, 0 failures. No regressions introduced by the Rev 26 change.
+
+---
+
+### AC-166 Rev 28 Regression QA — 2026-10-03
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (AC-166 Rev 28 change verification)
+**Date**: 2026-10-03
+**Scope**: AC-166 (Rev 28) — always-enabled button + pre-picker confirmation dialog; i18n key additions/removals; AC-169 and AC-031 regression checks.
+
+---
+
+#### Test Run
+
+`npx jest src/modules/mod-beta-video --watchAll=false` — **88 tests, 5 suites, 0 failures**. All passing. Console output is pre-existing `act()` warnings from async `supabase.auth.getSession()` in `BetaVideoReelViewer` `useEffect`; none introduced by the Rev 28 change.
+
+---
+
+#### Item 1 — AC-166 (Rev 28): button always enabled — `hasExistingVideo` absent from `disabled` and `accessibilityState.disabled`
+
+**Spec (AC-166, Rev 28)**: The upload control shall always be enabled and shall never be disabled on the basis of `hasExistingVideo`. Button must only be disabled when `isUploading === true`.
+
+**Verification**: `BetaVideoUploader.tsx` lines 270 and 273:
+- `disabled={isUploading}` — only `isUploading`, not `isUploading || hasExistingVideo`.
+- `accessibilityState={{ disabled: isUploading }}` — same: only `isUploading`.
+
+`hasExistingVideo` does not appear in the `disabled` prop or `accessibilityState.disabled` anywhere in the component.
+
+**AC-166 (Rev 28) — button always enabled**: PASS
+
+---
+
+#### Item 2 — AC-166 (Rev 28): no static "alreadyHasVideo" message
+
+**Spec**: No `alreadyHasVideoText` element and no `t('betaVideo.alreadyHasVideo')` in the component.
+
+**Verification**: `grep alreadyHasVideo BetaVideoUploader.tsx` returns no output. The element and key are fully absent from the component.
+
+**AC-166 (Rev 28) — no static message**: PASS
+
+---
+
+#### Item 3 — AC-166 (Rev 28): confirmation dialog on tap when `hasExistingVideo === true`
+
+**Spec**: `Alert.alert` is called with the four correct i18n keys — `betaVideo.replaceConfirmTitle`, `betaVideo.replaceConfirmMessage`, `betaVideo.replaceConfirmOk`, `betaVideo.replaceConfirmCancel` — when `hasExistingVideo === true`.
+
+**Verification**: `BetaVideoUploader.tsx` lines 147–166 (`handleSelectVideo`, inside `if (hasExistingVideo)` branch):
+```
+Alert.alert(
+  t('betaVideo.replaceConfirmTitle'),
+  t('betaVideo.replaceConfirmMessage'),
+  [
+    { text: t('betaVideo.replaceConfirmCancel'), style: 'cancel', onPress: () => resolve(false) },
+    { text: t('betaVideo.replaceConfirmOk'),     style: 'destructive', onPress: () => resolve(true) },
+  ],
+  { cancelable: false },
+);
+```
+All four keys present. Cancel is index 0 (`style: 'cancel'`), Replace is index 1 (`style: 'destructive'`).
+
+Test: `BetaVideoUploader.test.tsx` — "AC-166 (Rev 28): calls Alert.alert with correct title and message when hasExistingVideo is true" — passes. The test spies on `Alert.alert` and verifies the title matches `/Replace Beta Video|替換 Beta 影片/` and message matches `/already have a beta video|已有此路線的 Beta 影片/`.
+
+**AC-166 (Rev 28) — dialog on tap when hasExistingVideo**: PASS
+
+---
+
+#### Item 4 — AC-166 (Rev 28): Replace confirms → picker opens
+
+**Spec**: Confirming (pressing Replace) shall proceed with the normal flow (open picker, select, upload).
+
+**Verification**: Test "opens picker when user confirms Replace in the dialog" mocks `Alert.alert` to immediately invoke `buttons[1].onPress()` (the destructive Replace action). After button press: `mockLaunchImageLibrary` is called and `onUploadSuccess` fires with the mock video.
+
+**AC-166 (Rev 28) — Replace confirms → picker opens**: PASS
+
+---
+
+#### Item 5 — AC-166 (Rev 28): Cancel → picker does not open
+
+**Spec**: Pressing Cancel shall dismiss with no further action — the picker shall not open.
+
+**Verification**: Test "does NOT open picker when user cancels the dialog" mocks `Alert.alert` to immediately invoke `buttons[0].onPress()` (the Cancel action). After button press: `mockLaunchImageLibrary` is not called, `mockUploadBetaVideo` is not called.
+
+**AC-166 (Rev 28) — Cancel → picker does not open**: PASS
+
+---
+
+#### Item 6 — i18n keys: four `replaceConfirm*` keys added, `alreadyHasVideo` removed from both locales
+
+**Spec**: ADD `betaVideo.replaceConfirmTitle`, `betaVideo.replaceConfirmMessage`, `betaVideo.replaceConfirmOk`, `betaVideo.replaceConfirmCancel`. REMOVE `betaVideo.alreadyHasVideo`.
+
+**Verification** — `locales/en/common.json`:
+- `replaceConfirmTitle`: "Replace Beta Video" — present
+- `replaceConfirmMessage`: "You already have a beta video for this route. If you proceed, the old video will be replaced." — present
+- `replaceConfirmOk`: "Replace" — present
+- `replaceConfirmCancel`: "Cancel" — present
+- `alreadyHasVideo`: absent (grep returns no output)
+
+**Verification** — `locales/zh-TW/common.json`:
+- `replaceConfirmTitle`: "替換 Beta 影片" — present
+- `replaceConfirmMessage`: "你已有此路線的 Beta 影片，繼續操作將會取代現有影片。" — present
+- `replaceConfirmOk`: "替換" — present
+- `replaceConfirmCancel`: "取消" — present
+- `alreadyHasVideo`: absent (grep returns no output)
+
+**i18n keys**: PASS
+
+---
+
+#### Item 7 — AC-169 and AC-031 unchanged (no regression)
+
+**AC-169**: `BetaVideoUploader.tsx` lines 213–221 — `BUCKET_LIMIT_BYTES = 45 * 1_000_000`; gate `nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES` is unchanged. Test suite includes all four AC-169 boundary cases; all pass.
+
+**AC-031 (Rev 26)**: `BetaVideoUploader.tsx` lines 182–187 — `launchImageLibraryAsync` options contain no `preferredAssetRepresentationMode`. Test "AC-031 (Rev 26): passes asset.uri directly…" asserts `expect.not.objectContaining({ preferredAssetRepresentationMode: expect.anything() })`; passes.
+
+**AC-169 and AC-031 — no regression**: PASS
+
+---
+
+#### Verdict
+
+**QA PASS (AC-166 Rev 28 regression scope)**
+
+- **AC-166 (Rev 28) — always-enabled button**: PASS — `disabled={isUploading}` only; `hasExistingVideo` absent from `disabled` and `accessibilityState.disabled`.
+- **AC-166 (Rev 28) — no static message**: PASS — `alreadyHasVideo` key and `alreadyHasVideoText` element fully removed from the component.
+- **AC-166 (Rev 28) — dialog with correct keys**: PASS — `Alert.alert` called with all four `replaceConfirm*` i18n keys when `hasExistingVideo === true`.
+- **AC-166 (Rev 28) — Replace confirms → picker opens**: PASS — test verifies picker launched after user confirms.
+- **AC-166 (Rev 28) — Cancel → picker does not open**: PASS — test verifies picker not opened after cancel.
+- **i18n keys**: PASS — four `replaceConfirm*` keys present in both locales; `alreadyHasVideo` absent from both.
+- **AC-169 (unchanged)**: PASS — 45 MB gate and fail-closed logic unmodified; all boundary tests pass.
+- **AC-031 (Rev 26) (unchanged)**: PASS — `preferredAssetRepresentationMode` still absent from picker call; no regression.
+- **Tests**: PASS — 88/88, 0 failures across 5 suites.
