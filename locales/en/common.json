@@ -281,7 +281,10 @@
     "uploadProgress": "{{percent}}% complete",
     "loadError": "Unable to load video",
     "replaceWarning": "You already have a beta video for this route. Confirming will replace your existing video.",
-    "alreadyHasVideo": "You already have a beta video for this route. Delete your existing video first before uploading a new one.",
+    "replaceConfirmTitle": "Replace Beta Video",
+    "replaceConfirmMessage": "You already have a beta video for this route. If you proceed, the old video will be replaced.",
+    "replaceConfirmOk": "Replace",
+    "replaceConfirmCancel": "Cancel",
     "grid": {
       "openVideo": "Open video"
     },

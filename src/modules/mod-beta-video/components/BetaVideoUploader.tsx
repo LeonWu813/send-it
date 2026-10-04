@@ -14,6 +14,11 @@
  *         There is no "Compressing…" phase — compression removed in Rev 24.
  *         The overlay blocks further interaction until upload completes or fails.
  * AC-037: receives route_id so the upload is bound to the correct route.
+ * AC-166 (Rev 28): upload control is always enabled. On activation, if
+ *         hasExistingVideo === true (cached from mount-time checkExistingBetaVideo
+ *         call), a confirmation dialog is shown before opening the picker.
+ *         Confirming proceeds to the picker; cancelling dismisses with no action.
+ *         No disabled-button state; no "delete first" static message.
  * AC-169 (Rev 24): upfront native file size gate — runs before upload begins.
  *         If native file size >= 45 MB or cannot be read, upload is rejected.
  *         Fails closed: size === 0 means unreadable, treated as oversized.
@@ -25,6 +30,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Alert,
   ActivityIndicator,
   Modal,
   Pressable,
@@ -68,8 +74,9 @@ export default function BetaVideoUploader({
   const [progress, setProgress] = useState<UploadProgress | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // AC-166: check whether the user already has a video for this route on mount.
-  // If true, show a replace reminder above the confirm button.
+  // AC-166 (Rev 28): check whether the user already has a video for this route on
+  // mount. Cached in state — do NOT re-call checkExistingBetaVideo on every tap.
+  // If true, a confirmation dialog is shown before the picker opens (see handleSelectVideo).
   const [hasExistingVideo, setHasExistingVideo] = useState(false);
 
   useEffect(() => {
@@ -134,6 +141,31 @@ export default function BetaVideoUploader({
   const handleSelectVideo = useCallback(async (): Promise<void> => {
     setErrorMessage(null);
 
+    // AC-166 (Rev 28): if user already has a video, confirm before opening picker.
+    // Uses the cached hasExistingVideo state (set on mount) — no re-fetch on tap.
+    if (hasExistingVideo) {
+      const confirmed = await new Promise<boolean>((resolve) => {
+        Alert.alert(
+          t('betaVideo.replaceConfirmTitle'),
+          t('betaVideo.replaceConfirmMessage'),
+          [
+            {
+              text: t('betaVideo.replaceConfirmCancel'),
+              style: 'cancel',
+              onPress: () => resolve(false),
+            },
+            {
+              text: t('betaVideo.replaceConfirmOk'),
+              style: 'destructive',
+              onPress: () => resolve(true),
+            },
+          ],
+          { cancelable: false },
+        );
+      });
+      if (!confirmed) return;
+    }
+
     // Request permissions
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permissionResult.granted) {
@@ -195,11 +227,11 @@ export default function BetaVideoUploader({
 
     try {
       // AC-031 (Rev 24): upload the original native file as-is — no compression step.
-      // AC-166 / AC-165: the uploadBetaVideo service uses upsert (ON CONFLICT on
-      // user_id,route_id), so no manual delete step is needed here. The upsert
+      // AC-166 (Rev 28) / AC-165: the uploadBetaVideo service uses upsert (ON CONFLICT
+      // on user_id,route_id), so no manual delete step is needed here. The upsert
       // handles both the new-video and the replace case at the DB level.
-      // The hasExistingVideo state is still used to show the replace reminder UI
-      // to the user before they confirm (see warning text below).
+      // The confirmation dialog (shown above when hasExistingVideo === true) ensures
+      // the user has explicitly confirmed the replacement before reaching this point.
       const video = await uploadBetaVideo(
         {
           route_id: routeId,
@@ -213,8 +245,8 @@ export default function BetaVideoUploader({
           setProgress({ percent: prog.percent, phase: prog.phase });
         },
       );
-      // After a successful replace, the "has existing video" state is still true
-      // (there is now a new video for this route). No reset needed.
+      // After a successful replace, the "has existing video" state remains true
+      // (there is still a video for this route — just a new one). No reset needed.
       onUploadSuccess(video);
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('betaVideo.errors.uploadFailed');
@@ -224,41 +256,31 @@ export default function BetaVideoUploader({
       setIsUploading(false);
       setProgress(null);
     }
-  }, [routeId, userId, onUploadSuccess, onUploadError, t]);
+  }, [hasExistingVideo, routeId, userId, onUploadSuccess, onUploadError, t]);
 
   return (
     <>
       {/* AC-037: "Add beta video" entry point — visible on route detail screen.
-          Bug fix: when hasExistingVideo is true, the button is disabled and greyed
-          out. The user must delete their existing video first. This is a UI-level
-          block only — the DB UNIQUE (user_id, route_id) constraint and upsert
-          logic in beta-video-service remain unchanged (AC-165). */}
+          AC-166 (Rev 28): upload control is always enabled. When hasExistingVideo
+          is true, a confirmation dialog is shown (handleSelectVideo) before the
+          picker opens — no disabled-button state, no "delete first" message. */}
       <Pressable
-        style={[styles.addButton, hasExistingVideo && styles.addButtonDisabled]}
+        style={styles.addButton}
         onPress={() => { void handleSelectVideo(); }}
-        disabled={isUploading || hasExistingVideo}
+        disabled={isUploading}
         accessibilityRole="button"
         accessibilityLabel={t('betaVideo.addVideo')}
-        accessibilityState={{ disabled: isUploading || hasExistingVideo }}
+        accessibilityState={{ disabled: isUploading }}
       >
         <Ionicons
           name="videocam-outline"
           size={18}
-          color={hasExistingVideo ? theme.colors.textDisabled : theme.colors.primary}
+          color={theme.colors.primary}
         />
-        <Text style={[styles.addButtonText, hasExistingVideo && styles.addButtonTextDisabled]}>
+        <Text style={styles.addButtonText}>
           {t('betaVideo.addVideo')}
         </Text>
       </Pressable>
-
-      {/* AC-166 (revised): when the user already has a video for this route, show a
-          blocking message instead of the old replace reminder. The button is disabled
-          above — this message explains why. */}
-      {hasExistingVideo ? (
-        <Text style={styles.alreadyHasVideoText} testID="beta-video-already-has-video">
-          {t('betaVideo.alreadyHasVideo')}
-        </Text>
-      ) : null}
 
       {/* Inline error message */}
       {errorMessage ? (
@@ -305,33 +327,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignSelf: 'flex-start',
       marginTop: theme.spacing.sm,
     },
-    /** Applied on top of addButton when the user already has a video for this route. */
-    addButtonDisabled: {
-      borderColor: theme.colors.textDisabled,
-      opacity: 0.6,
-    },
     addButtonText: {
       fontSize: theme.fontSize.sm,
       fontWeight: theme.fontWeight.medium,
       color: theme.colors.primary,
-    },
-    addButtonTextDisabled: {
-      color: theme.colors.textDisabled,
-    },
-    /**
-     * Shown instead of replaceWarningText when the user already has a video
-     * for this route. The button is disabled — this message explains why and
-     * instructs the user to delete first.
-     */
-    alreadyHasVideoText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      marginTop: theme.spacing.xs,
-    },
-    replaceWarningText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      marginTop: theme.spacing.xs,
     },
     errorText: {
       fontSize: theme.fontSize.sm,

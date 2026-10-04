@@ -281,7 +281,10 @@
     "uploadProgress": "{{percent}}% 完成",
     "loadError": "無法載入影片",
     "replaceWarning": "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。",
-    "alreadyHasVideo": "你已有此路線的 Beta 影片，請先刪除現有影片再上傳新的。",
+    "replaceConfirmTitle": "替換 Beta 影片",
+    "replaceConfirmMessage": "你已有此路線的 Beta 影片，繼續操作將會取代現有影片。",
+    "replaceConfirmOk": "替換",
+    "replaceConfirmCancel": "取消",
     "grid": {
       "openVideo": "開啟影片"
     },

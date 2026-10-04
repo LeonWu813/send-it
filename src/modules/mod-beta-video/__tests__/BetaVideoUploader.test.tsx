@@ -39,6 +39,7 @@ jest.mock('expo-image-picker', () => ({
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { PermissionStatus } from 'expo-modules-core';
 import * as ExpoFileSystem from 'expo-file-system';
@@ -569,57 +570,113 @@ describe('BetaVideoUploader', () => {
     expect(mockUploadBetaVideo).not.toHaveBeenCalled();
   });
 
-  it('AC-166 (revised): shows blocking message and disables button when user already has a video', async () => {
-    // When hasExistingVideo is true, the button must be disabled and a blocking
-    // message must appear instructing the user to delete first — not a replace warning.
-    mockCheckExistingBetaVideo.mockResolvedValue(true);
+  describe('AC-166 (Rev 28): pre-picker confirmation dialog when existing video', () => {
+    it('calls Alert.alert with correct title and message when hasExistingVideo is true', async () => {
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      mockCheckExistingBetaVideo.mockResolvedValue(true);
 
-    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+      render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
 
-    await waitFor(() => {
-      const blockingTexts = screen
-        .queryAllByText(/You already have a beta video for this route/i)
-        .concat(screen.queryAllByText(/你已有此路線的 Beta 影片/));
-      expect(blockingTexts.length).toBeGreaterThan(0);
+      // Wait for mount-time check to resolve
+      await waitFor(() => expect(mockCheckExistingBetaVideo).toHaveBeenCalled());
+
+      const addButton = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Add Beta Video' ||
+          el.props.accessibilityLabel === '新增 Beta 影片',
+      );
+      expect(addButton).toBeTruthy();
+      fireEvent.press(addButton!);
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+
+      const [title, message] = alertSpy.mock.calls[0];
+      expect(title).toMatch(/Replace Beta Video|替換 Beta 影片/);
+      expect(message).toMatch(/already have a beta video|已有此路線的 Beta 影片/);
+
+      alertSpy.mockRestore();
     });
 
-    // Button must be disabled (accessibilityState.disabled === true)
-    const addButton = screen.queryAllByRole('button').find(
-      (el) =>
-        el.props.accessibilityLabel === 'Add Beta Video' ||
-        el.props.accessibilityLabel === '新增 Beta 影片',
-    );
-    expect(addButton).toBeTruthy();
-    expect(addButton?.props.accessibilityState?.disabled).toBe(true);
-  });
+    it('opens picker when user confirms Replace in the dialog', async () => {
+      mockCheckExistingBetaVideo.mockResolvedValue(true);
+      mockLaunchImageLibrary.mockResolvedValue(validAsset());
+      mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
 
-  it('AC-166 (revised): does not call upload when button is disabled due to existing video', async () => {
-    mockCheckExistingBetaVideo.mockResolvedValue(true);
-    mockLaunchImageLibrary.mockResolvedValue(validAsset());
+      // Simulate user pressing the destructive "Replace" button (index 1)
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(
+        (_title, _message, buttons) => {
+          const confirmButton = (buttons as Alert.AlertButton[])[1];
+          confirmButton?.onPress?.();
+        },
+      );
 
-    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+      render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => expect(mockCheckExistingBetaVideo).toHaveBeenCalled());
 
-    // Wait for the check to resolve
-    await waitFor(() => {
-      const blockingTexts = screen
-        .queryAllByText(/You already have a beta video for this route/i)
-        .concat(screen.queryAllByText(/你已有此路線的 Beta 影片/));
-      expect(blockingTexts.length).toBeGreaterThan(0);
+      const addButton = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Add Beta Video' ||
+          el.props.accessibilityLabel === '新增 Beta 影片',
+      );
+      fireEvent.press(addButton!);
+
+      await waitFor(() => expect(mockLaunchImageLibrary).toHaveBeenCalled());
+      await waitFor(() => expect(DEFAULT_PROPS.onUploadSuccess).toHaveBeenCalledWith(MOCK_VIDEO));
+
+      alertSpy.mockRestore();
     });
 
-    // Even if the user somehow triggers the button, upload must not be called
-    const addButton = screen.queryAllByRole('button').find(
-      (el) =>
-        el.props.accessibilityLabel === 'Add Beta Video' ||
-        el.props.accessibilityLabel === '新增 Beta 影片',
-    );
-    if (addButton) {
-      fireEvent.press(addButton);
-    }
+    it('does NOT open picker when user cancels the dialog', async () => {
+      mockCheckExistingBetaVideo.mockResolvedValue(true);
+      mockLaunchImageLibrary.mockResolvedValue(validAsset());
 
-    // Upload must never be called — button is disabled
-    await waitFor(() => {
+      // Simulate user pressing the "Cancel" button (index 0)
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(
+        (_title, _message, buttons) => {
+          const cancelButton = (buttons as Alert.AlertButton[])[0];
+          cancelButton?.onPress?.();
+        },
+      );
+
+      render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => expect(mockCheckExistingBetaVideo).toHaveBeenCalled());
+
+      const addButton = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Add Beta Video' ||
+          el.props.accessibilityLabel === '新增 Beta 影片',
+      );
+      fireEvent.press(addButton!);
+
+      await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+      // Picker must not have been opened
+      expect(mockLaunchImageLibrary).not.toHaveBeenCalled();
       expect(mockUploadBetaVideo).not.toHaveBeenCalled();
+
+      alertSpy.mockRestore();
+    });
+
+    it('does NOT call Alert when hasExistingVideo is false — picker opens directly', async () => {
+      mockCheckExistingBetaVideo.mockResolvedValue(false);
+      mockLaunchImageLibrary.mockResolvedValue(validAsset());
+      mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
+
+      const alertSpy = jest.spyOn(Alert, 'alert');
+
+      render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => expect(mockCheckExistingBetaVideo).toHaveBeenCalled());
+
+      const addButton = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Add Beta Video' ||
+          el.props.accessibilityLabel === '新增 Beta 影片',
+      );
+      fireEvent.press(addButton!);
+
+      await waitFor(() => expect(mockLaunchImageLibrary).toHaveBeenCalled());
+      expect(alertSpy).not.toHaveBeenCalled();
+
+      alertSpy.mockRestore();
     });
   });
 

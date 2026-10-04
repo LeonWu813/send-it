@@ -2,6 +2,42 @@
 
 ## Engineering Progress
 
+**Status**: Change — 2026-10-03 (AC-166 Rev 28 — replace disabled-button with pre-picker confirmation dialog)
+
+### Change — AC-166 Rev 28: pre-picker confirmation dialog replaces disabled-button approach — 2026-10-03
+
+**What changed**:
+
+AC-166 is revised from the prior disabled-button/static-message approach to a pre-picker confirmation dialog (Rev 28). The upload control is now always enabled. When `hasExistingVideo === true` (cached from the mount-time `checkExistingBetaVideo` call), tapping the button presents a native `Alert.alert` dialog before the picker opens. The dialog has a destructive "Replace" action (proceeds to picker) and a "Cancel" action (dismisses with no action). When `hasExistingVideo === false`, the picker opens directly with no dialog. The disabled-button state (`disabled={isUploading || hasExistingVideo}`), the `alreadyHasVideoText` block, and the associated unused styles (`addButtonDisabled`, `addButtonTextDisabled`, `alreadyHasVideoText`, `replaceWarningText`) are all removed.
+
+**Changes made**:
+
+1. `BetaVideoUploader.tsx` — file-level docstring updated to reference AC-166 Rev 28 and dialog behavior.
+2. `BetaVideoUploader.tsx` — added `Alert` to the `react-native` import.
+3. `BetaVideoUploader.tsx` — `handleSelectVideo`: added `hasExistingVideo` confirmation dialog block before the permission request; dialog uses `t('betaVideo.replaceConfirmTitle')`, `t('betaVideo.replaceConfirmMessage')`, `t('betaVideo.replaceConfirmOk')`, `t('betaVideo.replaceConfirmCancel')`. Returns early if user cancels.
+4. `BetaVideoUploader.tsx` — Pressable: removed `hasExistingVideo && styles.addButtonDisabled` from style, removed `hasExistingVideo` from `disabled` and `accessibilityState.disabled`, removed conditional icon color and text style.
+5. `BetaVideoUploader.tsx` — Removed `{hasExistingVideo ? (<Text ...>{t('betaVideo.alreadyHasVideo')}</Text>) : null}` block.
+6. `BetaVideoUploader.tsx` — `makeStyles`: removed `addButtonDisabled`, `addButtonTextDisabled`, `alreadyHasVideoText`, and `replaceWarningText` styles.
+7. `BetaVideoUploader.tsx` — `useCallback` dep array: added `hasExistingVideo` (now referenced inside the callback).
+8. `locales/en/common.json` — removed `betaVideo.alreadyHasVideo`; added `betaVideo.replaceConfirmTitle`, `betaVideo.replaceConfirmMessage`, `betaVideo.replaceConfirmOk`, `betaVideo.replaceConfirmCancel`.
+9. `locales/zh-TW/common.json` — removed `betaVideo.alreadyHasVideo`; added `betaVideo.replaceConfirmTitle`, `betaVideo.replaceConfirmMessage`, `betaVideo.replaceConfirmOk`, `betaVideo.replaceConfirmCancel`.
+10. `BetaVideoUploader.test.tsx` — removed two old AC-166 tests ("shows blocking message and disables button" and "does not call upload when button is disabled"); added four new AC-166 (Rev 28) tests inside a `describe` block: (1) `Alert.alert` called with correct title/message when `hasExistingVideo` is true; (2) picker opens when user confirms Replace; (3) picker does NOT open when user cancels; (4) `Alert.alert` not called and picker opens directly when `hasExistingVideo` is false.
+
+**Self-check results**:
+- `npx jest src/modules/mod-beta-video --watchAll=false`: PASS — 88 tests, 5 suites, 0 failures (up from 86: net +2 from 4 new tests replacing 2 removed tests)
+- Judgment-based: confirmation dialog uses `Alert.alert` (RN built-in, no new dependency); `hasExistingVideo` added to `useCallback` dep array (correct — now referenced inside the callback); removed styles were truly unused after this change; i18n keys added to both locales following existing patterns; `alreadyHasVideo` key removed from both locales as specified; tests mock `Alert.alert` via `jest.spyOn` and control button presses by calling `onPress` on the buttons array directly; no schema changes; no migration; no new dependencies. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — Alert import, confirmation dialog, disabled state removed, unused styles removed
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — 2 old AC-166 tests removed, 4 new AC-166 (Rev 28) tests added
+- `locales/en/common.json` — removed `alreadyHasVideo`, added 4 replaceConfirm keys
+- `locales/zh-TW/common.json` — removed `alreadyHasVideo`, added 4 replaceConfirm keys
+
+**ACs addressed**:
+- **AC-166 (Rev 28)**: upload control always enabled; pre-picker confirmation dialog when `hasExistingVideo === true`; picker opens directly when `hasExistingVideo === false`; no disabled-button state; no static "delete first" message
+
+---
+
 **Status**: Change — 2026-10-03 (AC-031 Rev 26 — remove preferredAssetRepresentationMode:Current, use iOS Automatic mode)
 
 ### Change — AC-031 Rev 26: omit preferredAssetRepresentationMode so iOS uses Automatic mode — 2026-10-03
