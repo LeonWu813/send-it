@@ -28,7 +28,8 @@ jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn(),
   MediaTypeOptions: { Videos: 'Videos' },
-  // AC-031 (Rev 24): enum value used by BetaVideoUploader to skip PHPicker transcoding.
+  // AC-031 (Rev 26): preferredAssetRepresentationMode is NOT set by BetaVideoUploader;
+  // the enum is kept in the mock only so referencing it elsewhere does not throw.
   UIImagePickerPreferredAssetRepresentationMode: {
     Automatic: 'automatic',
     Compatible: 'compatible',
@@ -479,8 +480,9 @@ describe('BetaVideoUploader', () => {
     });
   });
 
-  it('AC-031 (Rev 24): passes asset.uri directly to uploadBetaVideo — no compression', async () => {
-    // Rev 24: no react-native-compressor; the native file URI is passed directly.
+  it('AC-031 (Rev 26): passes asset.uri directly to uploadBetaVideo — no compression, Automatic picker mode', async () => {
+    // Rev 26: no react-native-compressor; the native file URI is passed directly.
+    // preferredAssetRepresentationMode is NOT set — iOS uses Automatic mode (HEVC/HLG → H.264 SDR).
     mockLaunchImageLibrary.mockResolvedValue(validAsset());
     mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
 
@@ -506,11 +508,11 @@ describe('BetaVideoUploader', () => {
       expect.any(Function),
     );
 
-    // AC-031 (Rev 24): picker must request Current representation mode to prevent
-    // PHPickerViewController from transcoding HEVC/HDR to H.264/SDR before returning.
+    // AC-031 (Rev 26): picker must NOT set preferredAssetRepresentationMode — iOS Automatic
+    // mode transcodes HEVC/HLG → H.264 SDR, which prevents overexposure in VideoView.
     expect(mockLaunchImageLibrary).toHaveBeenCalledWith(
-      expect.objectContaining({
-        preferredAssetRepresentationMode: 'current',
+      expect.not.objectContaining({
+        preferredAssetRepresentationMode: expect.anything(),
       }),
     );
   });

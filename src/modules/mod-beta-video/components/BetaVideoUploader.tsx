@@ -2,9 +2,10 @@
  * BetaVideoUploader — video selection and upload flow for a single route.
  *
  * AC-030: rejects videos longer than 60 seconds before upload begins.
- * AC-031 (Rev 24): uploads the original native video file as-is (no compression).
- *         No react-native-compressor step. The native file is uploaded directly
- *         after the upfront AC-169 size gate passes.
+ * AC-031 (Rev 26): picker uses iOS `Automatic` mode — HEVC/HLG is transcoded to
+ *         H.264 SDR by iOS before the URI is returned. The picker-returned file is
+ *         uploaded directly after the AC-169 size gate passes. No client-side
+ *         compression step.
  * AC-035: validates that the selected video file is an MP4 or MOV container
  *         before upload (PRD Revision 12 — .mov accepted for iPhone-camera
  *         footage). If validation fails, surfaces a clear error and does not
@@ -143,19 +144,14 @@ export default function BetaVideoUploader({
     }
 
     // Launch picker — video only, max 60 seconds enforced by the picker.
-    // AC-031 (Rev 24): preferredAssetRepresentationMode.Current tells PHPickerViewController
-    // to return the original representation of the asset (no transcoding). Without this,
-    // iOS PHPicker defaults to UIImagePickerPreferredAssetRepresentationMode.Automatic which
-    // can transcode HEVC/HDR video to H.264/SDR before returning the URI — defeating the
-    // intent of uploading the native file as-is. Setting Current skips that transcoding so
-    // the URI we receive points to the original HEVC/HDR file.
+    // AC-031 (Rev 26): omit preferredAssetRepresentationMode so iOS uses Automatic mode,
+    // which transcodes HEVC/HLG → H.264 SDR before returning the URI — preventing
+    // overexposure in expo-video's VideoView (Phase 1 limitation; Phase 2 fixes properly).
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
       videoMaxDuration: MAX_DURATION_SECONDS,
       allowsEditing: false,
-      quality: 1, // No quality reduction — native file is uploaded as-is (AC-031 Rev 24)
-      preferredAssetRepresentationMode:
-        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+      quality: 1, // No quality reduction — native file is uploaded as-is (AC-031 Rev 26)
     });
 
     if (result.canceled || !result.assets || result.assets.length === 0) {

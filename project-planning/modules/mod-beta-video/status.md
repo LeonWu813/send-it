@@ -2,6 +2,35 @@
 
 ## Engineering Progress
 
+**Status**: Change — 2026-10-03 (AC-031 Rev 26 — remove preferredAssetRepresentationMode:Current, use iOS Automatic mode)
+
+### Change — AC-031 Rev 26: omit preferredAssetRepresentationMode so iOS uses Automatic mode — 2026-10-03
+
+**What changed**:
+
+AC-031 is revised from Rev 24 to Rev 26. Previously `launchImageLibraryAsync` set `preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Current`, which told PHPickerViewController to return the original (HEVC/HDR) file without transcoding. Rev 26 removes this option entirely so iOS falls back to its default `Automatic` mode, which transcodes HEVC/HLG source footage to H.264 SDR before returning the URI. This prevents the overexposure rendering artifact in expo-video's `VideoView` when playing HLG content on SDR displays (Phase 1 accepted limitation; Phase 2 MediaConvert pipeline performs a proper HDR→SDR tone-map).
+
+**Changes made**:
+
+1. `BetaVideoUploader.tsx` — file-level docstring AC-031 line updated from Rev 24 to Rev 26 wording (Automatic mode, picker-returned H.264 SDR file, no client-side compression).
+2. `BetaVideoUploader.tsx` — multi-line comment before `launchImageLibraryAsync` replaced with Rev 26 comment (explains Automatic mode and Phase 1 limitation).
+3. `BetaVideoUploader.tsx` — `preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current` line removed from `launchImageLibraryAsync` options.
+4. `BetaVideoUploader.test.tsx` — mock comment updated to reflect Rev 26 (enum kept in mock for completeness, not used by component).
+5. `BetaVideoUploader.test.tsx` — AC-031 test name and body updated: renamed to "Rev 26", replaced `expect.objectContaining({ preferredAssetRepresentationMode: 'current' })` assertion with `expect.not.objectContaining({ preferredAssetRepresentationMode: expect.anything() })` to verify the option is absent.
+
+**Self-check results**:
+- `npx jest src/modules/mod-beta-video --watchAll=false`: PASS — 86 tests, 5 suites, 0 failures (count unchanged)
+- Judgment-based: removal of a single picker option; no new dependencies; no schema changes; no migration; test updated to assert the absence of the option rather than its presence; all console.error output is from pre-existing error-path tests, not new failures. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — docstring, comment, and `preferredAssetRepresentationMode` option removed
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — mock comment and AC-031 test updated for Rev 26
+
+**ACs addressed**:
+- **AC-031 (Rev 26)**: picker now uses iOS Automatic mode — HEVC/HLG transcoded to H.264 SDR before URI is returned; uploaded file is the picker-returned SDR file as-is
+
+---
+
 **Status**: Bug fix — 2026-10-03 (two human QA bugs: grid spacer cells visible + upload not blocked when existing video)
 
 ### Bug Fix — Grid spacer transparency + upload block on existing video — 2026-10-03
