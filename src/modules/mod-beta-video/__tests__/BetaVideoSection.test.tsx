@@ -6,6 +6,9 @@
  * AC-033/AC-038: three-column thumbnail grid (replaced old per-video BetaVideoPlayer list).
  * AC-037: "Add beta video" entry point visible on route detail screen.
  * AC-039: tapping a grid cell opens the fullscreen reel viewer.
+ * AC-130 integration: when onRegisterUploadLauncher is provided, the registered
+ *   launcher invokes BetaVideoUploader's handleSelectVideo — the single canonical
+ *   upload implementation that enforces AC-166 dialog and AC-169 size gate.
  *
  * beta-video-service is mocked; no real network activity.
  */
@@ -55,13 +58,16 @@ jest.mock('expo-image-picker', () => ({
   MediaTypeOptions: { Videos: 'Videos' },
 }));
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import React from 'react';
+import { Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import type { Session } from '@supabase/supabase-js';
 
 import {
   fetchBetaVideosForRoute,
   getVideoSignedUrl,
+  checkExistingBetaVideo,
 } from '../beta-video-service';
 import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import BetaVideoSection from '../components/BetaVideoSection';
@@ -71,6 +77,8 @@ import type { BetaVideo } from '../types';
 const mockFetchBetaVideos = fetchBetaVideosForRoute as jest.MockedFunction<typeof fetchBetaVideosForRoute>;
 const mockGetVideoSignedUrl = getVideoSignedUrl as jest.MockedFunction<typeof getVideoSignedUrl>;
 const mockFetchBlockedUserIds = fetchBlockedUserIds as jest.MockedFunction<typeof fetchBlockedUserIds>;
+const mockCheckExistingBetaVideo = checkExistingBetaVideo as jest.MockedFunction<typeof checkExistingBetaVideo>;
+const mockLaunchImageLibrary = ImagePicker.launchImageLibraryAsync as jest.MockedFunction<typeof ImagePicker.launchImageLibraryAsync>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -371,6 +379,140 @@ describe('BetaVideoSection', () => {
     await waitFor(() => {
       expect(mockFetchBetaVideos).toHaveBeenCalledWith('route-001');
       expect(mockFetchBlockedUserIds).toHaveBeenCalled();
+    });
+  });
+
+  // AC-130 integration tests — verify the registered launcher invokes the single
+  // canonical BetaVideoUploader upload implementation (AC-166 dialog + AC-169 size gate).
+
+  describe('AC-130 integration: onRegisterUploadLauncher wires through BetaVideoUploader', () => {
+    it('registers a launcher with the parent when onRegisterUploadLauncher is provided', async () => {
+      mockFetchBetaVideos.mockResolvedValue([]);
+
+      const onRegisterUploadLauncher = jest.fn();
+
+      render(
+        <BetaVideoSection
+          routeId="route-001"
+          session={MOCK_SESSION}
+          onRegisterUploadLauncher={onRegisterUploadLauncher}
+        />,
+        renderOptions(),
+      );
+
+      // After BetaVideoUploader registers its handler (async effect), the parent
+      // should have received a launcher function.
+      await waitFor(() => {
+        expect(onRegisterUploadLauncher).toHaveBeenCalledWith(expect.any(Function));
+      });
+    });
+
+    it('AC-166: launcher fires AC-166 confirmation dialog when hasExistingVideo is true', async () => {
+      mockFetchBetaVideos.mockResolvedValue([]);
+      // Simulate user already having a video for this route.
+      mockCheckExistingBetaVideo.mockResolvedValue(true);
+
+      let capturedLauncher: (() => void) | null = null;
+      const onRegisterUploadLauncher = jest.fn((fn: () => void) => {
+        capturedLauncher = fn;
+      });
+
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+      render(
+        <BetaVideoSection
+          routeId="route-001"
+          session={MOCK_SESSION}
+          onRegisterUploadLauncher={onRegisterUploadLauncher}
+        />,
+        renderOptions(),
+      );
+
+      // Wait for the mount-time checkExistingBetaVideo to resolve and the
+      // launcher to be registered.
+      await waitFor(() => {
+        expect(onRegisterUploadLauncher).toHaveBeenCalled();
+        expect(capturedLauncher).not.toBeNull();
+      });
+
+      // Invoke the launcher as the header button would.
+      await act(async () => {
+        capturedLauncher!();
+        // Allow async handleSelectVideo to reach the Alert.alert call.
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      // AC-166: confirmation dialog must fire because hasExistingVideo === true.
+      await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+
+      const [title, message] = alertSpy.mock.calls[0];
+      expect(title).toMatch(/Replace Beta Video|替換 Beta 影片/);
+      expect(message).toMatch(/already have a beta video|已有此路線的 Beta 影片/);
+
+      alertSpy.mockRestore();
+    });
+
+    it('AC-166: launcher opens picker directly when hasExistingVideo is false', async () => {
+      mockFetchBetaVideos.mockResolvedValue([]);
+      // No existing video — picker should open directly without a dialog.
+      mockCheckExistingBetaVideo.mockResolvedValue(false);
+      mockLaunchImageLibrary.mockResolvedValue({ canceled: true, assets: null });
+
+      let capturedLauncher: (() => void) | null = null;
+      const onRegisterUploadLauncher = jest.fn((fn: () => void) => {
+        capturedLauncher = fn;
+      });
+
+      const alertSpy = jest.spyOn(Alert, 'alert');
+
+      render(
+        <BetaVideoSection
+          routeId="route-001"
+          session={MOCK_SESSION}
+          onRegisterUploadLauncher={onRegisterUploadLauncher}
+        />,
+        renderOptions(),
+      );
+
+      await waitFor(() => {
+        expect(onRegisterUploadLauncher).toHaveBeenCalled();
+        expect(capturedLauncher).not.toBeNull();
+      });
+
+      await act(async () => {
+        capturedLauncher!();
+        await new Promise((r) => setTimeout(r, 50));
+      });
+
+      // AC-166: no dialog when hasExistingVideo === false.
+      expect(alertSpy).not.toHaveBeenCalled();
+      // Picker should have been opened.
+      await waitFor(() => expect(mockLaunchImageLibrary).toHaveBeenCalled());
+
+      alertSpy.mockRestore();
+    });
+
+    it('does not render a visible "Add beta video" button in AC-130 mode', async () => {
+      mockFetchBetaVideos.mockResolvedValue([]);
+
+      render(
+        <BetaVideoSection
+          routeId="route-001"
+          session={MOCK_SESSION}
+          onRegisterUploadLauncher={jest.fn()}
+        />,
+        renderOptions(),
+      );
+
+      await waitFor(() => {
+        // The upload button must not be visible (it is hidden via hideButton=true).
+        const addButton = screen.queryAllByRole('button').find(
+          (el) =>
+            el.props.accessibilityLabel === 'Add Beta Video' ||
+            el.props.accessibilityLabel === '新增 Beta 影片',
+        );
+        expect(addButton).toBeUndefined();
+      });
     });
   });
 });

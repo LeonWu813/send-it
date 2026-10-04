@@ -2,6 +2,51 @@
 
 ## Engineering Progress
 
+**Status**: Bug fix — 2026-10-03 (critical: dead-code upload path — BetaVideoSection.handleLaunchUpload bypassed BetaVideoUploader, skipping AC-166 dialog and AC-169 size gate on AC-130 live path)
+
+### Bug Fix — Eliminate duplicate upload path in BetaVideoSection (AC-130 live path) — 2026-10-03
+
+**Root cause**:
+
+`BetaVideoSection` had two upload code paths:
+1. Legacy mode (no `onRegisterUploadLauncher`): rendered `<BetaVideoUploader>` in the tree. All ACs enforced.
+2. AC-130 mode (`onRegisterUploadLauncher` provided): rendered `handleLaunchUpload` (a duplicate inside `BetaVideoSection`) as the launcher. `BetaVideoUploader` was NOT rendered. `handleLaunchUpload` had no AC-166 confirmation dialog, no AC-169 45 MB size gate, and no `checkExistingBetaVideo` check.
+
+`RouteDetailScreen` always passes `onRegisterUploadLauncher` (AC-130 mode), so the live app always hit the duplicate code path. The AC-166 dialog and AC-169 gate were dead code on device.
+
+**Fix**:
+
+1. Added two props to `BetaVideoUploader`: `onRegisterSelectHandler?: (fn: () => Promise<void>) => void` and `hideButton?: boolean`.
+2. Added a `useEffect` in `BetaVideoUploader` that calls `onRegisterSelectHandler(handleSelectVideo)` once `handleSelectVideo` is stable — registering the single canonical upload implementation with the parent.
+3. `BetaVideoSection` now always renders `<BetaVideoUploader>` in the tree. In AC-130 mode (`onRegisterUploadLauncher` provided), it passes `hideButton={true}` (suppresses the visible button) and `onRegisterSelectHandler={handleRegisterSelectHandler}` which stores `handleSelectVideo` in a `selectHandlerRef` and registers it via `onRegisterUploadLauncher` with the parent. In legacy mode, `hideButton` defaults to false and `onRegisterSelectHandler` is not passed.
+4. Removed `handleLaunchUpload` entirely from `BetaVideoSection` — it is dead code. Also removed the upload state it used (`isUploading`, `uploadProgress`, `uploadError`), the duplicate progress modal block, and the now-unused `MAX_DURATION_SECONDS`, `ImagePicker`, `uploadBetaVideo`, and `UploadProgress` imports.
+5. The call chain on device is now: header button → `uploadLauncherRef.current?.()` → `handleSelectVideo` in `BetaVideoUploader` → AC-166 dialog check → picker → AC-169 size gate → upload. All ACs enforced.
+
+**Changes made**:
+
+1. `BetaVideoUploader.tsx` — added `onRegisterSelectHandler?` and `hideButton?` props; added `useEffect` to register `handleSelectVideo` via `onRegisterSelectHandler`; button render wrapped in `hideButton ? null : (...)`.
+2. `BetaVideoSection.tsx` — removed `handleLaunchUpload` (duplicate upload implementation), upload state (`isUploading`, `uploadProgress`, `uploadError`), duplicate progress modal, and registration `useEffect`; replaced with `selectHandlerRef` + `handleRegisterSelectHandler` (stable `useCallback`); `<BetaVideoUploader>` now always rendered with `onRegisterSelectHandler` and `hideButton` props wired correctly for both modes; removed unused imports (`ImagePicker`, `uploadBetaVideo`, `UploadProgress`, `MAX_DURATION_SECONDS`, `Modal`, `ActivityIndicator` for RN, `UploadProgress` type, `useRef` added).
+3. `BetaVideoSection.test.tsx` — added `describe('AC-130 integration: ...')` block with 4 new tests: (1) launcher is registered with the parent; (2) launcher fires AC-166 dialog when `hasExistingVideo === true`; (3) launcher opens picker directly when `hasExistingVideo === false`; (4) no visible "Add beta video" button in AC-130 mode.
+
+**Self-check results**:
+- `npx tsc --noEmit`: 2 pre-existing errors only (in `BetaVideoUploader.test.tsx` — `Alert.AlertButton` namespace, introduced by the prior AC-166 Rev 28 change). No new TypeScript errors introduced.
+- `npx jest src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx --watchAll=false`: PASS — 19 tests, 0 failures (15 existing + 4 new AC-130 integration tests).
+- `npx jest --watchAll=false`: 1 failure (pre-existing `BetaVideoReelViewer › AC-139` — confirmed failing before this change), 443 passing. No regressions introduced.
+- Judgment-based: `handleLaunchUpload` fully deleted; `BetaVideoUploader` is always in the render tree; the live upload path now flows through `handleSelectVideo`; no new dependencies; `hideButton` prop is the minimal interface needed; `useEffect` dep array `[onRegisterSelectHandler, handleSelectVideo]` is correct — both are stable `useCallback` functions. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — `onRegisterSelectHandler`, `hideButton` props; registration `useEffect`; conditional button render
+- `src/modules/mod-beta-video/components/BetaVideoSection.tsx` — deleted `handleLaunchUpload` and all duplicate upload state/logic; always renders `<BetaVideoUploader>`; `handleRegisterSelectHandler` wires through to parent
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — 4 new AC-130 integration tests
+
+**ACs enforced on live path (AC-130 mode) after this fix**:
+- **AC-166 (Rev 28)**: confirmation dialog fires when `hasExistingVideo === true`
+- **AC-169 (Rev 24)**: 45 MB native file size gate enforced before upload
+- **AC-030**: 60-second duration check enforced
+- **AC-035**: format validation enforced
+
+---
+
 **Status**: Change — 2026-10-03 (AC-166 Rev 28 — replace disabled-button with pre-picker confirmation dialog)
 
 ### Change — AC-166 Rev 28: pre-picker confirmation dialog replaces disabled-button approach — 2026-10-03

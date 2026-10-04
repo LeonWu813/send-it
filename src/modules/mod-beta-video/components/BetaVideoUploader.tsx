@@ -54,6 +54,19 @@ interface BetaVideoUploaderProps {
   onUploadSuccess: (video: BetaVideo) => void;
   /** Called when the user cancels or an error occurs. */
   onUploadError?: (message: string) => void;
+  /**
+   * AC-130: When provided, BetaVideoUploader registers its handleSelectVideo
+   * function via this callback so the parent (BetaVideoSection) can wire it
+   * through to the external launcher ref (RouteDetailScreen's header button).
+   * This is the single upload implementation — no duplicate logic in BetaVideoSection.
+   */
+  onRegisterSelectHandler?: (fn: () => Promise<void>) => void;
+  /**
+   * AC-130: When true, the visible "Add beta video" button is not rendered.
+   * The progress modal and all AC logic remain active.
+   * Used when the upload trigger lives outside the section (header button).
+   */
+  hideButton?: boolean;
 }
 
 // AC-161: no per-upload visibility/privacy toggle exists in this component.
@@ -65,6 +78,8 @@ export default function BetaVideoUploader({
   userId,
   onUploadSuccess,
   onUploadError,
+  onRegisterSelectHandler,
+  hideButton = false,
 }: BetaVideoUploaderProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -258,29 +273,43 @@ export default function BetaVideoUploader({
     }
   }, [hasExistingVideo, routeId, userId, onUploadSuccess, onUploadError, t]);
 
+  /**
+   * AC-130: Register handleSelectVideo with the parent so the external launcher
+   * (RouteDetailScreen's header button) can invoke the single upload implementation
+   * that includes AC-166 dialog, AC-169 size gate, and all other AC logic.
+   * Called once after handleSelectVideo is stable (useCallback identity).
+   */
+  useEffect(() => {
+    onRegisterSelectHandler?.(handleSelectVideo);
+  }, [onRegisterSelectHandler, handleSelectVideo]);
+
   return (
     <>
       {/* AC-037: "Add beta video" entry point — visible on route detail screen.
           AC-166 (Rev 28): upload control is always enabled. When hasExistingVideo
           is true, a confirmation dialog is shown (handleSelectVideo) before the
-          picker opens — no disabled-button state, no "delete first" message. */}
-      <Pressable
-        style={styles.addButton}
-        onPress={() => { void handleSelectVideo(); }}
-        disabled={isUploading}
-        accessibilityRole="button"
-        accessibilityLabel={t('betaVideo.addVideo')}
-        accessibilityState={{ disabled: isUploading }}
-      >
-        <Ionicons
-          name="videocam-outline"
-          size={18}
-          color={theme.colors.primary}
-        />
-        <Text style={styles.addButtonText}>
-          {t('betaVideo.addVideo')}
-        </Text>
-      </Pressable>
+          picker opens — no disabled-button state, no "delete first" message.
+          AC-130: hideButton=true suppresses this button when the trigger is the
+          external header button registered via onRegisterSelectHandler. */}
+      {hideButton ? null : (
+        <Pressable
+          style={styles.addButton}
+          onPress={() => { void handleSelectVideo(); }}
+          disabled={isUploading}
+          accessibilityRole="button"
+          accessibilityLabel={t('betaVideo.addVideo')}
+          accessibilityState={{ disabled: isUploading }}
+        >
+          <Ionicons
+            name="videocam-outline"
+            size={18}
+            color={theme.colors.primary}
+          />
+          <Text style={styles.addButtonText}>
+            {t('betaVideo.addVideo')}
+          </Text>
+        </Pressable>
+      )}
 
       {/* Inline error message */}
       {errorMessage ? (

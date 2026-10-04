@@ -5,7 +5,7 @@
  *   1. Fetches beta videos for the given route.
  *   2. Renders a three-column thumbnail grid (AC-038).
  *   3. Opens the fullscreen reel viewer when a grid cell is tapped (AC-039).
- *   4. Exposes upload flow via BetaVideoUploader (AC-037).
+ *   4. Exposes upload flow via BetaVideoUploader (AC-037 / AC-130).
  *
  * RouteDetailScreen imports ONLY this component from mod-beta-video (cross-module
  * import rule: never import internal screens/ or components/ directly from another
@@ -13,19 +13,19 @@
  *
  * AC-032: each BetaVideo is attached to exactly one route (route_id pre-filled).
  * AC-033: inline playback without leaving the app.
- * AC-036: upload progress overlay owned by BetaVideoUploader (legacy) or this
- *         component's own progress modal (when onRegisterUploadLauncher provided).
- * AC-037: upload flow launched via BetaVideoUploader when no launcher registration
- *         is used, or via the registered launcher when the AC-130 action row is
- *         the trigger point.
+ * AC-036: upload progress overlay owned entirely by BetaVideoUploader (single
+ *         implementation, no duplicate modal here).
+ * AC-037: upload flow is owned entirely by BetaVideoUploader — this component
+ *         never contains picker/upload logic of its own.
  * AC-038: three-column thumbnail grid with camera-icon overlay.
  * AC-039: fullscreen reel viewer opened on thumbnail tap.
  *
- * AC-130: When `onRegisterUploadLauncher` is provided, this component registers
- * its own upload handler with the parent so the AC-130 action row button in
- * RouteDetailScreen can trigger the MOD-005 upload flow without rendering an
- * internal upload button inside this section. The upload flow and progress modal
- * remain owned by MOD-005 (implemented here via the same service functions).
+ * AC-130: When `onRegisterUploadLauncher` is provided, BetaVideoUploader's
+ * handleSelectVideo is registered via onRegisterSelectHandler so the AC-130
+ * header button in RouteDetailScreen invokes the single, canonical upload
+ * implementation — with AC-166 dialog, AC-169 size gate, and all other ACs.
+ * BetaVideoUploader is always in the render tree; hideButton=true suppresses
+ * its visible button in AC-130 mode (trigger is the header button).
  *
  * Tech Lead decisions (Rev 13):
  * - Grid cells show a neutral placeholder (#1C1C1E) + camera icon (no VideoView
@@ -37,24 +37,23 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
-import { fetchBetaVideosForRoute, uploadBetaVideo } from '../beta-video-service';
-import type { BetaVideo, UploadProgress } from '../types';
+import { fetchBetaVideosForRoute } from '../beta-video-service';
+import type { BetaVideo } from '../types';
 import BetaVideoReelViewer from './BetaVideoReelViewer';
 import BetaVideoUploader from './BetaVideoUploader';
 
@@ -69,9 +68,6 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_PADDING = 16; // left + right padding for the section container
 const GRID_GAP = 2;      // gap between cells
 const CELL_SIZE = (SCREEN_WIDTH - GRID_PADDING * 2 - GRID_GAP * (NUM_COLUMNS - 1)) / NUM_COLUMNS;
-
-/** Maximum allowed video duration in seconds (AC-030). */
-const MAX_DURATION_SECONDS = 60;
 
 interface BetaVideoSectionProps {
   /** The route whose beta videos to display. Pre-attached to the uploader (AC-037). */
@@ -130,10 +126,13 @@ export default function BetaVideoSection({
   // AC-039: null = viewer closed, N = viewer open at grid index N.
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
-  // Upload state used when onRegisterUploadLauncher is provided (AC-130 mode).
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  /**
+   * AC-130: ref that holds BetaVideoUploader's handleSelectVideo once it
+   * registers via onRegisterSelectHandler. When onRegisterUploadLauncher is
+   * provided, BetaVideoSection wires this ref through to the parent so the
+   * header button calls the single canonical upload implementation.
+   */
+  const selectHandlerRef = useRef<(() => Promise<void>) | null>(null);
 
   const loadVideos = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -149,16 +148,49 @@ export default function BetaVideoSection({
           return new Set<string>();
         }),
       ]);
-      // AC-154: filter out videos uploaded by blocked users (either direction)
-      // before passing the array to the grid renderer.
-      const filtered = rows.filter((v) => !blockedIds.has(v.user_id));
-      setBetaVideos(filtered);
+
+      // AC-154: filter out videos uploaded by blocked users (either direction).
+      const afterBlockFilter = rows.filter((v) => !blockedIds.has(v.user_id));
+
+      // AC-158: filter out followers-only videos from non-followers.
+      // Collect poster IDs whose privacy is 'followers_only' and who are not the
+      // current viewer (viewers always see their own videos).
+      const currentUserId = session.user.id;
+      const followersOnlyPosterIds = afterBlockFilter
+        .filter(
+          (v) =>
+            v.beta_video_privacy === 'followers_only' && v.user_id !== currentUserId,
+        )
+        .map((v) => v.user_id);
+
+      // Batch-check follow status for all affected poster IDs in one query.
+      let followedPosterIds = new Set<string>();
+      if (followersOnlyPosterIds.length > 0) {
+        const { data: followRows } = await supabase
+          .from('follows')
+          .select('followee_id')
+          .eq('follower_id', currentUserId)
+          .in('followee_id', followersOnlyPosterIds);
+        followedPosterIds = new Set(
+          (followRows ?? []).map((r: { followee_id: string }) => r.followee_id),
+        );
+      }
+
+      // Apply AC-158 filter: exclude videos where poster is followers_only AND
+      // viewer is not the poster AND viewer does not follow the poster.
+      const afterPrivacyFilter = afterBlockFilter.filter((v) => {
+        if (v.beta_video_privacy !== 'followers_only') return true;
+        if (v.user_id === currentUserId) return true; // viewer is the poster
+        return followedPosterIds.has(v.user_id); // viewer follows the poster
+      });
+
+      setBetaVideos(afterPrivacyFilter);
     } catch {
       setLoadError(t('betaVideo.errors.loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, [routeId, t]);
+  }, [routeId, session.user.id, t]);
 
   useEffect(() => {
     void loadVideos();
@@ -173,92 +205,21 @@ export default function BetaVideoSection({
   }, []);
 
   /**
-   * AC-130: Upload launcher used when onRegisterUploadLauncher is provided.
-   * Implements the same validation + upload logic as BetaVideoUploader, but
-   * the trigger comes from the AC-130 action row rather than an internal button.
-   * The upload flow (progress modal, error display) is still owned by this
-   * MOD-005 component.
+   * AC-130: Called by BetaVideoUploader once handleSelectVideo is stable.
+   * Stores the function in selectHandlerRef, then registers it with the parent
+   * (onRegisterUploadLauncher) so the header button invokes the single canonical
+   * upload implementation — including AC-166 dialog and AC-169 size gate.
+   * Uses a stable ref wrapper to avoid re-registering on every render.
    */
-  const handleLaunchUpload = useCallback(async (): Promise<void> => {
-    setUploadError(null);
-
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permissionResult.granted) {
-      setUploadError(t('betaVideo.errors.permissionDenied'));
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['videos'],
-      videoMaxDuration: MAX_DURATION_SECONDS,
-      allowsEditing: false,
-      quality: 0.7,
-    });
-
-    if (result.canceled || !result.assets || result.assets.length === 0) {
-      return;
-    }
-
-    const asset = result.assets[0];
-
-    // Duration validation (AC-030)
-    const durationMs = asset.duration ?? 0;
-    if (durationMs / 1000 > MAX_DURATION_SECONDS) {
-      setUploadError(t('betaVideo.errors.tooLong'));
-      return;
-    }
-
-    // Format validation (AC-035)
-    const ACCEPTED_MIME_TYPES = new Set([
-      'video/mp4',
-      'video/quicktime',
-      'video/mov',
-    ]);
-    const lowerUri = asset.uri.toLowerCase();
-    if (
-      (asset.mimeType && !ACCEPTED_MIME_TYPES.has(asset.mimeType)) ||
-      (!asset.mimeType && !lowerUri.endsWith('.mp4') && !lowerUri.endsWith('.mov'))
-    ) {
-      setUploadError(t('betaVideo.errors.invalidFormat'));
-      return;
-    }
-
-    const durationSeconds = Math.max(durationMs / 1000, 0.1);
-    const localThumbnailUri = asset.uri; // Phase 1 simplification
-
-    setIsUploading(true);
-    setUploadProgress({ percent: 0, phase: 'thumbnail' });
-
-    try {
-      const video = await uploadBetaVideo(
-        {
-          route_id: routeId,
-          localVideoUri: asset.uri,
-          localThumbnailUri,
-          duration_seconds: durationSeconds,
-        },
-        session.user.id,
-        (prog) => { setUploadProgress(prog); },
-      );
-      handleUploadSuccess(video);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t('betaVideo.errors.uploadFailed');
-      setUploadError(msg);
-    } finally {
-      setIsUploading(false);
-      setUploadProgress(null);
-    }
-  }, [routeId, session.user.id, t, handleUploadSuccess]);
-
-  /**
-   * Register the upload launcher with the parent when onRegisterUploadLauncher
-   * is provided. Called once on mount (and when the callback identity changes).
-   */
-  useEffect(() => {
-    if (onRegisterUploadLauncher) {
-      onRegisterUploadLauncher(() => { void handleLaunchUpload(); });
-    }
-  }, [onRegisterUploadLauncher, handleLaunchUpload]);
+  const handleRegisterSelectHandler = useCallback(
+    (fn: () => Promise<void>): void => {
+      selectHandlerRef.current = fn;
+      if (onRegisterUploadLauncher) {
+        onRegisterUploadLauncher(() => { void selectHandlerRef.current?.(); });
+      }
+    },
+    [onRegisterUploadLauncher],
+  );
 
   /** AC-038: render a single grid cell (thumbnail placeholder + camera icon). */
   const renderCell = useCallback(
@@ -320,46 +281,26 @@ export default function BetaVideoSection({
       ) : null}
 
       {/*
-       * AC-037 / AC-130: Upload entry point.
-       * When onRegisterUploadLauncher is NOT provided (legacy mode), render
-       * BetaVideoUploader with its own button. When it IS provided (AC-130 mode),
-       * the trigger lives in RouteDetailScreen's action row — no button here.
-       * The progress modal is rendered separately below in AC-130 mode.
+       * AC-037 / AC-130: BetaVideoUploader is always in the render tree so that
+       * handleSelectVideo (the single upload implementation with AC-166 dialog,
+       * AC-169 size gate, and all other ACs) is always active.
+       * - AC-130 mode (onRegisterUploadLauncher provided): hideButton=true
+       *   suppresses the visible button; the upload trigger is the header button
+       *   in RouteDetailScreen, wired via onRegisterSelectHandler → selectHandlerRef
+       *   → onRegisterUploadLauncher. Progress modal and all AC logic remain in
+       *   BetaVideoUploader.
+       * - Legacy mode (no onRegisterUploadLauncher): hideButton defaults to false
+       *   and BetaVideoUploader renders its own "Add beta video" button as before.
        */}
-      {onRegisterUploadLauncher ? null : (
-        <BetaVideoUploader
-          routeId={routeId}
-          userId={session.user.id}
-          onUploadSuccess={handleUploadSuccess}
-        />
-      )}
-
-      {/* AC-036 / AC-130: Progress overlay for AC-130 mode uploads */}
-      {onRegisterUploadLauncher ? (
-        <>
-          {uploadError ? (
-            <Text style={styles.errorText}>{uploadError}</Text>
-          ) : null}
-          <Modal
-            visible={isUploading}
-            transparent
-            animationType="fade"
-            onRequestClose={() => { /* intentionally non-dismissable during upload */ }}
-          >
-            <View style={styles.progressOverlay}>
-              <View style={styles.progressCard}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
-                <Text style={styles.progressTitle}>{t('betaVideo.uploading')}</Text>
-                {uploadProgress ? (
-                  <Text style={styles.progressPercent}>
-                    {t('betaVideo.uploadProgress', { percent: uploadProgress.percent })}
-                  </Text>
-                ) : null}
-              </View>
-            </View>
-          </Modal>
-        </>
-      ) : null}
+      <BetaVideoUploader
+        routeId={routeId}
+        userId={session.user.id}
+        onUploadSuccess={handleUploadSuccess}
+        onRegisterSelectHandler={
+          onRegisterUploadLauncher ? handleRegisterSelectHandler : undefined
+        }
+        hideButton={!!onRegisterUploadLauncher}
+      />
 
       {/* AC-039: Fullscreen reel viewer (Modal) */}
       <BetaVideoReelViewer
@@ -436,29 +377,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       backgroundColor: theme.colors.overlay,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    progressOverlay: {
-      flex: 1,
-      backgroundColor: theme.colors.overlay,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    progressCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-      padding: theme.spacing.xl,
-      alignItems: 'center',
-      minWidth: 200,
-      gap: theme.spacing.md,
-    },
-    progressTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    progressPercent: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
     },
   });
 }
