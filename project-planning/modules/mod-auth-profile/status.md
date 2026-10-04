@@ -1188,6 +1188,29 @@ PASS. `followCountLabel` style: `color: theme.colors.primary`. `followCountNumbe
 
 ---
 
+## Engineering Progress — Chore — 2026-10-04 (remove unused @react-navigation packages)
+
+### Changes Implemented
+
+- Ran `npm uninstall @react-navigation/native @react-navigation/native-stack` — removed both packages (14 transitive packages removed) and updated `package-lock.json`.
+- Removed `react-navigation|@react-navigation/.*|` from the `transformIgnorePatterns` regex in the `"jest"` config block in `package.json`. These entries were dead since the app uses no `NavigationContainer` and neither package is imported anywhere in `src/`, `__mocks__/`, or test files.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --watchAll=false` | PASS — 449 tests, 32 suites, all pass |
+| `@react-navigation/native` absent from `package.json` dependencies | PASS |
+| `@react-navigation/native-stack` absent from `package.json` dependencies | PASS |
+| `react-navigation|@react-navigation/.*|` removed from `transformIgnorePatterns` | PASS |
+| Remaining regex valid — no syntax change to non-react-navigation segments | PASS |
+| No source code changes — `package.json` and `package-lock.json` only | PASS |
+
+**Result: COMPLETE**
+
+---
+
 ## Engineering Progress — UI Alignment Fix — 2026-10-04 (BetaVideoGrid horizontal padding)
 
 **Issue**: On `ProfileScreen`, the "Beta Videos" section title had `paddingHorizontal: theme.spacing.lg` (24 px) but `BetaVideoGrid` received no `horizontalPadding` prop, rendering the grid edge-to-edge and misaligning the title left-edge with the grid left-edge.
