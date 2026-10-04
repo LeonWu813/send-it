@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 6c648eb4dbd50d69b5ddce665e252aee02819609
+commit: c457d3d877292300ad255c638098df1bd066aee2
 
 
 - **2026-10-03 [SUBSTANTIVE]** — AC-166 replace-confirmation redesign (PRD Revision 28). Leon (via coordinator) approved the exact AC-166 replacement text verbatim and directed the [SUBSTANTIVE] tag. PRD Status line `[SUBSTANTIVE] — Revision 28`; `**Revision**` bumped 27 → 28; Date 2026-10-03. Change: AC-166 (§8 MOD-005) replaced entirely. **Observable behavior change** — the upload control is now ALWAYS enabled (no disabled-button state, no "delete your existing video first" static message). On activation it first calls `checkExistingBetaVideo(routeId): Promise<boolean>`: if the user already has a beta video for the route (`hasExistingVideo === true`), a confirmation dialog is shown **before** the picker opens — title `betaVideo.replaceConfirmTitle` ("替換 Beta 影片" / "Replace Beta Video"), message `betaVideo.replaceConfirmMessage` ("你已有此路線的 Beta 影片，繼續操作將會取代現有影片。" / "You already have a beta video for this route. If you proceed, the old video will be replaced."), with exactly two actions: destructive confirm `betaVideo.replaceConfirmOk` ("替換" / "Replace") and `betaVideo.replaceConfirmCancel` ("取消" / "Cancel"). Replace dismisses the dialog and proceeds (open picker → select → upload); Cancel dismisses and the picker does not open. If no existing video (`hasExistingVideo === false`), the picker opens directly with no dialog. The upload continues to use the AC-165 upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) — the DB upsert handles replacement; **no backend change required**.
@@ -2058,5 +2058,32 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 - none
 
 **verify-sync.sh:** 4/6 — same two pre-existing script bugs as Rev 18, Rev 20, and Rev 22 (Check 4 grep pattern does not match the `**US-NNN**:` format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
+
+### Sync Report — Delta Sync — 2026-10-03
+
+**Sync type:** delta
+**PRD Revision:** 28
+**PM Update reference:** 2026-10-03 [SUBSTANTIVE] — AC-166 replace-confirmation redesign (PRD Revision 28)
+
+**Files modified:**
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 27 → 28; Last Updated 2026-10-03. AC-166 replaced entirely (revised, Rev 28): upload control now always enabled (no disabled-button state); on activation, `checkExistingBetaVideo` result read from cached `hasExistingVideo` state (no re-call on each tap); if `hasExistingVideo === true`, pre-picker confirmation dialog shown (title `betaVideo.replaceConfirmTitle`, message `betaVideo.replaceConfirmMessage`, confirm `betaVideo.replaceConfirmOk`, cancel `betaVideo.replaceConfirmCancel`); if `hasExistingVideo === false`, picker opens directly. Static "already has a video" reminder text removed. Purpose line updated to reflect always-enabled control + pre-picker dialog. Context line updated (no more "replace reminder" language). Input/Output Contract (upload outputs) updated to document dialog flow. Key Implementation Notes: "Upsert/replace flow" bullet replaced with "Upload control and replace-confirmation dialog" bullet including cached-state note; i18n: ADD four `replaceConfirm*` keys, REMOVE `betaVideo.alreadyHasVideo`. Data Model AC-166 comment updated to reflect Rev 28 behavior.
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files created:**
+- none
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**AMBIGUITY markers resolved:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as Rev 18, Rev 20, Rev 22, and Rev 23 (Check 4 grep pattern does not match the `**US-NNN**:` format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ## Skill Recommendations
