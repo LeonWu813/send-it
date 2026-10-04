@@ -1,8 +1,8 @@
 # Retrospective: Proposed Changes
 
-**Date:** 2026-09-21 (updated 2026-09-22, 2026-10-01)
-**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion; MOD-003 cross-module integration gap; MOD-005 human QA session — AC-169 mock-fidelity gap
-**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership; human QA preparation for MOD-003 revealed `RouteNavigator` was never wired into `GymDetailScreen` (MOD-002); human QA on MOD-005 revealed AC-169 size guard silently never fired due to a mock that hid option-gated API behavior
+**Date:** 2026-09-21 (updated 2026-09-22, 2026-10-01, 2026-10-04)
+**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion; MOD-003 cross-module integration gap; MOD-005 human QA session — AC-169 mock-fidelity gap. **2026-10-04 addition:** Beta video pipeline wrong-layer diagnosis (AC-031 HDR overexposure, three PM/Doc-Sync/Engineer/QA cycles burned on picker layer when player layer was the cause); dead-code upload path (AC-166 dialog implemented in `BetaVideoUploader`, never executed because `RouteDetailScreen` always mounts `BetaVideoSection` in AC-130 mode); ProfileScreen `useFocusEffect` crash (mock hid NavigationContainer incompatibility in keep-alive screen, crash invisible in CI, caught only by human QA on device).
+**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership; human QA preparation for MOD-003 revealed `RouteNavigator` was never wired into `GymDetailScreen` (MOD-002); human QA on MOD-005 revealed AC-169 size guard silently never fired due to a mock that hid option-gated API behavior. **2026-10-04:** Two additional human-QA-only device failures after 88 green CI tests (AC-166 dead-code path; AC-031 wrong-layer HDR fix); one device crash after QA-pass (ProfileScreen useFocusEffect in keep-alive mount).
 
 ---
 
@@ -24,7 +24,41 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 2. Add Safe Area Insets Judgment Item to Engineer Checklist
+### 2. Production Wiring Verification — Confirm Which Component Is Actually Mounted Before Implementing
+
+**Target file:** `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section
+
+**Rationale:** AC-166 (replace-confirmation dialog) and AC-169 (45 MB size gate) were implemented and tested against `BetaVideoUploader`, a component that is never mounted in the production call path. `RouteDetailScreen` always passes `onRegisterUploadLauncher` to `BetaVideoSection`, which caused `BetaVideoSection.handleLaunchUpload` — a duplicate upload path with no dialog or size gate — to run instead. 88 tests passed; both ACs were dead code on device. This burned multiple PM → Doc-Sync → Engineer → QA cycles and was caught only by human QA. The Skill Recommendation logged on 2026-10-03/04 explicitly names this pattern. Adding a pre-implementation "confirm which component is actually mounted" gate and an "integration tests must exercise the production entry point, not a bypassed component" judgment item would have caught this before any implementation.
+
+**Draft:** `project-planning/retrospective/drafts/production-wiring-verification.proposal.md`
+
+---
+
+### 3. Mock Reality Check — Tests for Framework Hooks Must Reflect Production Mounting Context
+
+**Target files:**
+- `~/.claude/skills/qa-checklist/references/common-failure-patterns.md` — append as new pattern
+- `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section
+
+**Rationale:** `ProfileScreen` called `useFocusEffect` (requires `NavigationContainer`). The test mocked `@react-navigation/native` so the hook degraded to plain `useEffect` — the test passed, the QA agent wrote a passing report, and the crash surfaced only on device. Root cause: `ProfileScreen` is rendered via `AppShell`'s keep-alive mount (`display:none`/`display:flex`), which has no `NavigationContainer` ancestor. The mock papered over a real mount incompatibility. The Tech Lead Review 2026-10-04 and the Skill Recommendation both identify this as the same "green-but-broken" class as the AC-166 dead-code failure. A QA audit step ("does this mock make a hook pass that would fail in production?") and an Engineer judgment item ("no mock papers over a mount incompatibility") together close this gap.
+
+**Draft:** `project-planning/retrospective/drafts/mock-reality-check-navigation-hooks.proposal.md`
+
+---
+
+### 4. Wrong-Layer Diagnosis — Confirm Which Layer Owns a Bug Before Fixing It
+
+**Target files:**
+- `~/.claude/skills/qa-checklist/references/common-failure-patterns.md` — append as new pattern
+- `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section
+
+**Rationale:** The AC-031 HDR overexposure was routed to the picker layer (Rev 26: omit `preferredAssetRepresentationMode: Current`, use iOS `Automatic` transcode to H.264 SDR). Human QA reported video still overexposed after the fix. Tech Lead investigation confirmed the root cause was the `expo-video VideoView` player layer (no EDR/dynamic-range config) — the picker layer was never the cause. The fix targeted the wrong layer because the initial hypothesis was encoded into an AC without device observation at the picker layer. Rev 29 reverted the picker change and accepted HDR overexposure as a known Phase 1 limitation. Total cost: four PM revisions, two Doc-Sync delta syncs, two Engineer passes, multiple human QA sessions. A QA convention (state which layer the symptom was observed at before routing to Engineer) and an Engineer pre-implementation gate (confirm the layer where bad output was observed matches the layer being changed) would catch this class of wrong-layer fix.
+
+**Draft:** `project-planning/retrospective/drafts/diagnosis-layer-verification.proposal.md`
+
+---
+
+### 5. Add Safe Area Insets Judgment Item to Engineer Checklist
 
 **Target file:** `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section
 
@@ -34,7 +68,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 3. Add Safe Area Insets to QA Common Failure Patterns
+### 6. Add Safe Area Insets to QA Common Failure Patterns
 
 **Target file:** `~/.claude/skills/qa-checklist/references/common-failure-patterns.md` — append as next numbered pattern
 
@@ -44,7 +78,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 4. Mock-Fidelity Gap — Option-Gated API Return Fields (Engineer + QA + Cross-Project)
+### 7. Mock-Fidelity Gap — Option-Gated API Return Fields (Engineer + QA + Cross-Project)
 
 **Target files:**
 - `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section (Change 1: mock-fidelity rule)
@@ -57,7 +91,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 5. Document production.md Ownership and Mid-Project Escalation Path
+### 8. Document production.md Ownership and Mid-Project Escalation Path
 
 **Target file:** New project-level skill — suggested `~/.claude/skills/agent-workflow/SKILL.md` (create via create-agent-skills skill)
 
@@ -73,4 +107,4 @@ For each approved proposal, tell Claude Code:
 
 > "Use the create-agent-skills skill to create a project-level skill based on `project-planning/retrospective/drafts/<proposal-file>.md`"
 
-For proposals targeting existing skill files (proposals 2, 3, and 4 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
+For proposals targeting existing skill files (proposals 2, 3, 4, 5, 6, and 7 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
