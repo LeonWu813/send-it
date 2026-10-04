@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: 72a9db8fcf28361df9b95a00aeaf58e7b67163e3
+commit: 23e19a391555fdcffae42e280b2c49ce4dff8386
 timestamp: 2026-10-04T00:00:00Z
 ```
 
@@ -1786,6 +1786,29 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-04 — Trivial Passthrough ([TRIVIAL])
+
+**Trigger**: PM [TRIVIAL] tag (2026-10-04) — Correction to the Keep-Alive Screen Focus Pattern Shared Convention in `production.md` (no PRD revision bump; `prd.md` untouched). Source: Tech Lead review dated 2026-10-04 ("correction: the 2026-10-04 Keep-Alive Screen Focus Pattern exemption is wrong — `RouteDetailScreen` + `UserProfileScreen` crashed the same way — the whole app has no NavigationContainer"). The corrected convention replaces the entire `### Keep-Alive Screen Focus Pattern` section with an app-wide ban on all `@react-navigation/native` navigation-context hooks, removing the erroneous "exempt" clause and renaming the section to `### No @react-navigation/native Hooks (App-Wide)`.
+
+**Files modified:**
+
+- `project-planning/production.md` — `### Keep-Alive Screen Focus Pattern` section (lines 203–213) replaced in its entirety with `### No @react-navigation/native Hooks (App-Wide)`. The corrected convention: (1) states the app-wide ban on `useFocusEffect`, `useNavigation`, `useRoute`, and all other `@react-navigation/native` navigation-context hooks; (2) explains the root cause (no `NavigationContainer` at any level; all `*Navigator` components are custom `useState` state machines); (3) replaces the erroneous "Exempt" rule with rule (1) explaining `useEffect` for conditionally-mounted screens; (4) retains rule (2) for keep-alive screens (`isActive` prop + `useEffect([isActive])`); (5) absorbs the test-mock rule (formerly in `### Keep-Alive Screen Test Pattern`) as rule (3) to make the app-wide scope explicit. `Last Updated` header remains 2026-10-04 (already correct). `### Keep-Alive Screen Test Pattern` section (lines 214–216) left unchanged.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — not modified (no PRD revision bump; [TRIVIAL] passthrough only).
+- All module specs — not in scope per PM Update (convention is project-wide, lives in `production.md`).
+- All agent wrappers — not in scope (no new module, no dependency change).
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** skipped — [TRIVIAL] passthrough per skill routing rules.
 
 ### 2026-10-04 — Trivial Passthrough ([TRIVIAL])
 

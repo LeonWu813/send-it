@@ -200,17 +200,16 @@ The persistent tab shell lives in the module that owns it (MOD-012, `src/modules
 
 Tabs use a **keep-alive mount strategy**: all three tab subtrees are rendered simultaneously and toggled with `display: activeTab === key ? 'flex' : 'none'`. Do NOT use conditional unmount (component state is lost) and do NOT use `flex: 0` (still lays out, leaks touch targets). Keep-alive preserves each tab's internal navigation stack and scroll position across tab switches. Session is threaded to tab navigators as a prop; `useSession` remains the singleton for reactive session changes.
 
-### Keep-Alive Screen Focus Pattern
+### No `@react-navigation/native` Hooks (App-Wide)
 
-Keep-alive screens (AppShell `display:none`/`display:flex` mount) must not use `useFocusEffect` or any navigation-context hook. `AppShell` uses a keep-alive mount strategy (`display:none` / `display:flex`) for the main tab screens to preserve state across tab switches; these screens are **not** inside a `NavigationContainer`. Any `@react-navigation/native` hook that requires navigation context (`useFocusEffect`, `useNavigation`, `useRoute`) will throw at runtime on them.
+No screen in this app may use `useFocusEffect`, `useNavigation`, `useRoute`, or any other `@react-navigation/native` navigation-context hook.
+
+The app intentionally uses custom state-machine navigators (`GymNavigator`, `RouteNavigator`, `ProfileNavigator`, `HomeNavigator`, `AuthNavigator`) and mounts no `NavigationContainer` anywhere. The composition root is `SafeAreaProvider → ThemeProvider → AuthNavigator → AppShell` — there is no react-navigation `NavigationContainer` at any level. Any `@react-navigation/native` hook requiring navigation context will throw "Couldn't find a navigation object. Is your component inside NavigationContainer?" at runtime.
 
 Rules:
-
-1. Any screen rendered via AppShell's keep-alive pattern must receive an `isActive: boolean` prop and use `useEffect([isActive])` for focus-triggered behavior — never `useFocusEffect`.
-2. Screens rendered inside a stack/tab navigator (e.g. `RouteDetailScreen`, `UserProfileScreen`) are exempt and may use `useFocusEffect` normally.
-3. Each keep-alive screen must carry a top-of-file comment: "This screen is rendered via AppShell's keep-alive pattern and has no NavigationContainer ancestor. Do not use useFocusEffect or any other @react-navigation/native hook that requires navigation context. Use the isActive prop instead."
-
-Affected keep-alive screens (current): `ProfileScreen`. Correct alternative: `isActive` prop + `useEffect([isActive])`. Exempt: any stack/tab navigator screen.
+1. **Conditionally-mounted screens** (e.g. `RouteDetailScreen`, `UserProfileScreen`, and any screen rendered with a conditional expression `{condition && <Screen />}`) — use a plain `useEffect` for data loading. These screens unmount and remount on each navigation, so `useEffect` fires on every mount — equivalent to `useFocusEffect` without the crash.
+2. **Keep-alive screens** (e.g. `ProfileScreen`, and any screen rendered via AppShell's `display:none`/`display:flex` keep-alive pattern) — use an `isActive: boolean` prop + `useEffect([isActive])` for focus-triggered behavior. These screens never unmount, so remounting is not available as a refresh trigger. Each keep-alive screen must carry a top-of-file comment: _"This screen is rendered via AppShell's keep-alive pattern and has no NavigationContainer ancestor. Do not use useFocusEffect or any other @react-navigation/native hook that requires navigation context. Use the isActive prop instead."_
+3. **Tests for any screen** — keep-alive or conditionally-mounted — must NOT mock `@react-navigation/native` or `useFocusEffect`. If a screen's test needed that mock to pass, the mock was hiding a production crash.
 
 ### Keep-Alive Screen Test Pattern
 
