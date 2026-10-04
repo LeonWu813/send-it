@@ -3,11 +3,13 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: c457d3d877292300ad255c638098df1bd066aee2
+commit: faae7e1e8dceaf992e069b3c96937d4121d5f263
+timestamp: 2026-10-03T00:00:00Z
+```
 
 
 - **2026-10-03 [SUBSTANTIVE]** — AC-166 replace-confirmation redesign (PRD Revision 28). Leon (via coordinator) approved the exact AC-166 replacement text verbatim and directed the [SUBSTANTIVE] tag. PRD Status line `[SUBSTANTIVE] — Revision 28`; `**Revision**` bumped 27 → 28; Date 2026-10-03. Change: AC-166 (§8 MOD-005) replaced entirely. **Observable behavior change** — the upload control is now ALWAYS enabled (no disabled-button state, no "delete your existing video first" static message). On activation it first calls `checkExistingBetaVideo(routeId): Promise<boolean>`: if the user already has a beta video for the route (`hasExistingVideo === true`), a confirmation dialog is shown **before** the picker opens — title `betaVideo.replaceConfirmTitle` ("替換 Beta 影片" / "Replace Beta Video"), message `betaVideo.replaceConfirmMessage` ("你已有此路線的 Beta 影片，繼續操作將會取代現有影片。" / "You already have a beta video for this route. If you proceed, the old video will be replaced."), with exactly two actions: destructive confirm `betaVideo.replaceConfirmOk` ("替換" / "Replace") and `betaVideo.replaceConfirmCancel` ("取消" / "Cancel"). Replace dismisses the dialog and proceeds (open picker → select → upload); Cancel dismisses and the picker does not open. If no existing video (`hasExistingVideo === false`), the picker opens directly with no dialog. The upload continues to use the AC-165 upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) — the DB upsert handles replacement; **no backend change required**.
@@ -251,6 +253,77 @@ commit: c457d3d877292300ad255c638098df1bd066aee2
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-03 — blocker (two human-QA device failures after a green pipeline: AC-166 replace-dialog never shows; AC-031 HDR video still overexposed — plus the systemic reason 88 passing tests missed both)
+
+**Context**: Advisory investigation requested by the coordinator after two bugs surfaced in human QA that the full PM → Doc-Sync → Engineer → QA pipeline (88 tests, 0 failures) had green-lit. I read `BetaVideoUploader.tsx`, `beta-video-service.ts`, `BetaVideoSection.tsx`, `RouteDetailScreen.tsx`, `BetaVideoReelViewer.tsx` (imports + player config), the `BetaVideoUploader.test.tsx` suite, and confirmed `expo-video@57.0.5` with no HDR/EDR/tone-map config anywhere in `src`. **Advisory only — no source, spec, or PRD files edited. Fixes below route through the owning Engineer per the coordinator; architectural options for Failure 2 route PM → Tech Lead re-review if they change behavior.**
+
+---
+
+#### FAILURE 1 — Replace-confirmation dialog never shows. ROOT CAUSE FOUND: the dialog was built in the wrong (dead) component.
+
+This is **not** any of the four hypotheses in the brief (it is not a silent `checkExistingBetaVideo` failure, not a broken `Alert` Promise, not a missing `routeId`, not a stale `useCallback` dep). AC-166 was correctly implemented in `BetaVideoUploader.tsx` — the `Promise<boolean>` + `Alert.alert` pattern there is sound and the tests that exercise it genuinely pass. **The problem is that `BetaVideoUploader` is not the component that runs on the route detail screen.** There are TWO upload code paths in MOD-005:
+
+1. `BetaVideoUploader.tsx` — has the AC-166 dialog, the mount-time `checkExistingBetaVideo`, the AC-169 size gate, `quality: 1`, no `preferredAssetRepresentationMode`. **This is where every AC-166 test points.**
+2. `BetaVideoSection.tsx` → `handleLaunchUpload` (lines 216–285) — a **duplicate, parallel upload implementation** with its own permission check, duration check, format check, and `uploadBetaVideo` call. It has **no `checkExistingBetaVideo`, no AC-166 confirmation dialog, no AC-169 size gate**, still uses `quality: 0.7`, and still sets a `'thumbnail'` progress phase (removed in Rev 24).
+
+`BetaVideoSection` renders `BetaVideoUploader` **only** in "legacy mode" — when `onRegisterUploadLauncher` is NOT provided (line 363: `onRegisterUploadLauncher ? null : <BetaVideoUploader …>`). But `RouteDetailScreen.tsx` **always** passes `onRegisterUploadLauncher={handleRegisterUploadLauncher}` (line 445, AC-130 mode). The AC-130 "Upload Beta Video" action-row button calls `uploadLauncherRef.current?.()` (line 232), which is wired to `BetaVideoSection.handleLaunchUpload` — path #2. **In the shipped app, `BetaVideoUploader` is dead code and every line of AC-166 never executes.** The picker opens immediately because path #2 has no dialog. That exactly matches the observed "picker opens immediately (or button does nothing)."
+
+**Why 88 tests missed it**: the AC-166 tests render `BetaVideoUploader` in isolation (`render(<BetaVideoUploader {...DEFAULT_PROPS} />)`) — the legacy-mode component — and never render `BetaVideoSection` with `onRegisterUploadLauncher` set, which is the only configuration the app actually uses. The test exercised a component the user never reaches. This is a **test-fixture/production-wiring divergence**, the most dangerous class of green-but-broken: the code under test is correct and the test is correct, but neither is on the live path.
+
+**Secondary finding (same root cause, latent)**: because path #2 also lacks the AC-169 size gate, the 45 MB upfront rejection (Rev 24) is *also* not enforced on the live path — a >45 MB file reaches `uploadBetaVideo` and fails as a raw storage 413 instead of the friendly bilingual error. QA passed AC-169 for the same reason it passed AC-166: the test hit `BetaVideoUploader`, not the live path. This should be verified and fixed in the same pass.
+
+---
+
+#### FAILURE 2 — HDR video still overexposed. ROOT CAUSE: this is a PLAYER problem, not a picker or upload problem. The Rev 26 fix targeted the wrong layer.
+
+Of the three hypotheses in the brief, **#3 is correct** and #1 is also partially true. Concretely:
+
+- **The picker assumption behind Rev 26 is unreliable (hypothesis #1).** `PHPickerViewController` in `Automatic` representation mode does **not** guarantee an HEVC/HLG → H.264 SDR transcode. `Automatic` lets the system choose a representation "best suited for the app," which for a video asset already in a widely-playable container (HEVC in a `.mov` is fully AVFoundation-playable) frequently means **returning the original HEVC/HLG file untouched**. Transcoding is neither promised by the API nor consistent across iOS versions / source asset types. So removing `preferredAssetRepresentationMode: Current` did not reliably change what the picker returns. The prior `mdls`/`ffprobe` evidence (BT.2020 HLG stored in the bucket) is consistent with the picker still handing back the original HLG file.
+- **Even a successful H.264 transcode would not fix it (hypothesis #2).** H.264 can carry BT.2020 / HLG transfer characteristics in its VUI color metadata. A container/codec change is not a color-space change; the overexposure is driven by the transfer function, not the codec.
+- **The actual cause is the player (hypothesis #3).** `BetaVideoReelViewer.tsx` renders `expo-video`'s `VideoView` (line 603) via `useVideoPlayer` (line 328) with **no dynamic-range / EDR configuration** — I grepped the entire `src` tree and there is zero HDR/EDR/tone-map/BT.2020/HLG handling. Under the hood AVPlayer renders HLG content correctly only when the view is on an EDR-capable rendering path; without that, HLG's upper range is mapped as if it were SDR and the midtones blow out — exactly "overexposed." This is independent of the codec/container and is why no picker or upload change can fix it.
+
+**Conclusion for Failure 2**: overexposure is a **playback-layer rendering problem**. The Rev 26 picker change addressed a layer that was never the cause, which is why the device still fails. Do not patch the picker further.
+
+---
+
+#### HOLISTIC PROPOSAL
+
+**Fix for Failure 1 (clear, low-risk, Engineer-owned):** Eliminate the duplicate upload path. The correct architecture is a single upload implementation. Recommended: delete `BetaVideoSection.handleLaunchUpload`'s inline logic and have the AC-130 launcher drive the *same* code path as `BetaVideoUploader` — i.e. lift the full `BetaVideoUploader.handleSelectVideo` flow (mount-time `checkExistingBetaVideo` → cached `hasExistingVideo` → AC-166 dialog → picker → AC-030/AC-035/AC-169 gates → `uploadBetaVideo`) into a single shared hook or function that both the AC-130 launcher and any legacy button call. There must be exactly one place where the picker is launched. Until that consolidation lands, the minimum fix is to port the AC-166 dialog, the `checkExistingBetaVideo` mount check, and the AC-169 size gate into `handleLaunchUpload` — but the duplication is the actual defect and will keep re-biting; collapse the two paths. This is a MOD-005 change; `RouteDetailScreen` wiring does not change. Route to `engineer-mod-beta-video`.
+
+**Fix for Failure 2 (architectural — needs a real decision, likely PM → Tech Lead re-review):** Because the cause is the player, the options are:
+1. **Fix the player's dynamic range (correct long-term fix).** Configure the `expo-video` `VideoView` for the device's dynamic range so HLG renders tone-mapped rather than blown out. Verify whether `expo-video@57` exposes an EDR / preferred-dynamic-range prop; if it does, set it and validate on a physical HDR-capture device. If it does not, this needs either an upstream capability or a small native view config — a larger lift that Tech Lead must re-scope.
+2. **Transcode HDR→SDR for real, server-side (the already-planned Phase 2 path).** The PRD's Phase 2 AWS MediaConvert pipeline does a proper HDR→SDR tone-map. This is the architecturally clean fix and it is already on the roadmap — the honest answer may be that correct HDR playback is a Phase 2 capability and Phase 1 should *detect and warn* rather than claim a transcode it cannot reliably perform.
+3. **Do a reliable on-device SDR transcode at upload (only if Phase 1 must ship correct playback).** Not via the picker's `Automatic` mode (unreliable, as shown) but via an explicit AVFoundation export with a forced SDR color space. This re-introduces a native transcode step (the `react-native-compressor`-class dependency removed in Rev 24) and should not be taken without a deliberate PM decision.
+   **My recommendation**: stop treating this as a picker bug. Either (1) if `expo-video` exposes a dynamic-range prop (cheap, test on device first) or (2) accept it as a known Phase 1 limitation and correct AC-031 to say so honestly, deferring the real fix to the Phase 2 MediaConvert tone-map. Any of these changes AC-031's claimed behavior, so it is a PRD change: **route PM → Tech Lead re-review**, do not let it be patched silently.
+
+**Fix for the systemic testing gap (the actual ask):** The pipeline is green-but-broken because tests validate components in isolation that the app never mounts, and because device-only behaviors (iOS picker output, AVPlayer HDR rendering, `Alert` event-loop timing, real upload) are mocked away. Recommendations:
+1. **Integration test at the real entry point, not the leaf component.** AC-166/AC-169 must be tested by rendering `BetaVideoSection` *with* `onRegisterUploadLauncher` set (the production configuration) and firing the registered launcher — not by rendering `BetaVideoUploader` directly. A test that renders a component the app never reaches provides false assurance. This single rule would have caught Failure 1.
+2. **Ban duplicated feature logic across components.** Two parallel upload implementations is the structural defect behind Failure 1. One behavior, one implementation (shared hook/function). This belongs as a Shared Convention (proposed below).
+3. **Mandatory device-verification checklist before QA handoff for anything the harness cannot exercise.** Jest mocks `expo-image-picker`, `Alert.alert` (synchronous), `expo-file-system`, and cannot render `expo-video` playback at all. Any AC touching the picker, native file size, `Alert` dialogs, upload, or video rendering must carry an Engineer "verified on physical device" note in the module `status.md` before QA. A green Jest run is necessary but explicitly **not sufficient** evidence for these ACs — this mirrors the existing Native Build Gate convention and should be stated with the same force.
+4. **Device-behavior assumptions must be verified, not assumed, before they become an AC.** Rev 26 encoded an unverified belief ("`Automatic` mode transcodes to SDR") directly into an acceptance criterion, and the brief itself notes there was never a post-change device test. Claims about third-party/OS runtime behavior (picker output, player rendering) need a captured device result before they are written as settled behavior.
+
+**Concerns** (must address before this is considered resolved):
+- **C1 — Duplicate upload path (Failure 1 root cause).** `BetaVideoSection.handleLaunchUpload` shadows `BetaVideoUploader` on the live AC-130 path; AC-166 and AC-169 do not execute in the shipped app. Must be consolidated to one path. Owner: `engineer-mod-beta-video`.
+- **C2 — AC-031 encodes an unreliable assumption.** The picker `Automatic`-mode "transcodes to SDR" premise is not guaranteed by iOS; the real overexposure cause is the `expo-video` player having no dynamic-range config. AC-031 as written cannot deliver its stated outcome. Needs a PM decision among the three options above, then Tech Lead re-review. Do not patch the picker again.
+- **C3 — Test fixtures diverge from production wiring.** The suite that "covers" AC-166/AC-169 renders a component configuration the app never uses. Until MOD-005's upload is integration-tested through `BetaVideoSection` + `onRegisterUploadLauncher`, those ACs are effectively untested on the live path.
+
+**Recommendations** (suggested improvements):
+- **R1** — Collapse the two upload implementations into one shared hook/function; there must be exactly one picker-launch site in MOD-005.
+- **R2** — Add an integration test rendering `BetaVideoSection` in AC-130 mode and driving the registered launcher, asserting the AC-166 dialog and AC-169 gate fire on that path.
+- **R3** — If `expo-video@57` exposes a dynamic-range/EDR prop, set it and device-test before pursuing any transcode option; this may be the cheapest correct fix for Failure 2.
+- **R4** — For Failure 2, if no cheap player fix exists, correct AC-031 to state the Phase 1 limitation honestly and defer correct HDR playback to the Phase 2 MediaConvert tone-map (already on the roadmap).
+
+**Approved** (what is solid and should be kept):
+- The AC-166 dialog implementation *inside* `BetaVideoUploader` (the `Promise<boolean>` + `Alert.alert` three-arg pattern, mount-time `checkExistingBetaVideo` with cached `hasExistingVideo`, `cancelable: false`) is correct — it simply is not on the live path. Reuse it as the single shared implementation.
+- The AC-169 fail-closed size gate in `BetaVideoUploader` is correct and should be the one that survives consolidation.
+
+**Proposed Shared Conventions** (for PM → Doc-Sync to carry into production.md):
+- **Single-entry-point for cross-module features.** A module that exposes a feature through a registered launcher/callback (the AC-130 pattern) must route that launcher through the *same* implementation as its standalone component — never a duplicated parallel code path. One behavior, one implementation. Duplicated feature logic across two components is a defect, not a style choice.
+- **Integration tests must mount the production wiring.** Where a component is only ever rendered by a parent in a specific configuration (e.g. `BetaVideoSection` always passes `onRegisterUploadLauncher`), the behavior must be tested through that parent in that configuration. A passing test against a configuration the app never mounts is not evidence the feature works.
+- **Device-verification gate for un-mockable behavior.** ACs that depend on native picker output, `Alert`/native-dialog event-loop timing, real file I/O, network upload, or video (`expo-video`) rendering require a documented physical-device verification note in the module `status.md` before QA handoff. A green Jest run is necessary but not sufficient evidence for these ACs — same force as the existing Native Build Gate.
+
+---
 
 ### Review — 2026-10-03 — change (Rev 26 prose reconciliation: AC-031 switched the picker from `preferredAssetRepresentationMode: Current` to iOS `Automatic` transcode — surrounding prose in US-004, §5, §9, §10 still describes the old no-transcode model)
 
@@ -2087,3 +2160,7 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 **verify-sync.sh:** 4/6 — same two pre-existing script bugs as Rev 18, Rev 20, Rev 22, and Rev 23 (Check 4 grep pattern does not match the `**US-NNN**:` format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ## Skill Recommendations
+
+Pattern: A full test suite (88 tests, 0 failures) green-lit two bugs that failed on device. Root causes: (1) AC-166/AC-169 tests rendered `BetaVideoUploader` in isolation, but the app only ever mounts `BetaVideoSection` with `onRegisterUploadLauncher` set, which runs a duplicate upload path that never had the dialog — the tested component was dead code on the live path; (2) a device-only behavior (iOS picker output / `expo-video` HDR rendering) was asserted as settled in an AC without a device test, while Jest mocked the picker and cannot render video playback at all.
+Why: This "green-but-broken" failure mode recurs whenever (a) a feature has two implementations and tests cover the one the app doesn't use, or (b) an AC depends on native/OS/player runtime behavior the harness mocks away. A skill codifying "integration-test the production wiring, not the leaf component" + "device-verification gate for un-mockable ACs (picker, Alert timing, file I/O, upload, video rendering)" + "verify third-party/OS runtime assumptions on-device before writing them into an AC" would prevent repeat occurrences. Complements the existing Native Build Gate convention.
+Agent: tech-lead
