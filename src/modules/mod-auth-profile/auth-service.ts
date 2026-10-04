@@ -278,3 +278,30 @@ export async function uploadAvatar(
   const { data } = supabase.storage.from('avatars').getPublicUrl(storagePath);
   return data.publicUrl;
 }
+
+/**
+ * AC-157 / AC-156: Update the current user's beta_video_privacy column.
+ *
+ * MOD-001 owns this write; MOD-010's SettingsScreen calls this function for
+ * the "Beta Video Privacy" toggle (AC-157). Governing spec: spec.md AC-156.
+ */
+export async function updateBetaVideoPrivacy(
+  value: 'public' | 'followers_only',
+): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    throw new Error('Not authenticated');
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .update({ beta_video_privacy: value })
+    .eq('id', session.user.id);
+
+  if (error) {
+    throw new Error('Failed to update beta video privacy setting. Please try again.');
+  }
+}

@@ -1094,6 +1094,61 @@ PASS. `followCountLabel` style: `color: theme.colors.primary`. `followCountNumbe
 
 ---
 
+## Engineering Progress — useFocusEffect + Style Fix — 2026-10-04
+
+### Changes Implemented
+
+**1. useFocusEffect on ProfileScreen (follower/following counts + beta video grid)**
+
+- Added `useFocusEffect` import from `@react-navigation/native` and `useCallback`, `useRef` from `react`.
+- Extracted `fetchFollowerCounts` + `fetchBetaVideosByUser` fetch logic into a memoised `loadData = useCallback(async () => {...}, [profile?.id])` that does NOT reset state before fetching (no loading flash on refetch).
+- Replaced the previous `useEffect(..., [profile?.id, refetchKey])` data-fetch with:
+  - `useFocusEffect(useCallback(() => { void loadData()... }, [loadData]))` — fires on mount.
+  - A separate `useEffect(() => { if (isActive && hasLoadedOnce.current) void loadData(); }, [isActive, loadData])` — fires on tab switch (because this app uses a custom display:none keep-alive pattern with no `NavigationContainer`, so `useFocusEffect` focus events do not fire on tab switches; the `isActive` prop bridges that gap).
+- Added `hasLoadedOnce = useRef(false)` to gate the tab-switch refetch (skip on first mount — `useFocusEffect` already handles the initial load).
+- Error handling preserved: `loadData` resolves silently on error (counts stay at 0, videos stay empty — non-critical display data).
+- AC-062 `refetchKey` / `SendHistoryProfile` mechanism left unchanged.
+
+**2. updateBetaVideoPrivacy added to auth-service.ts (AC-156/AC-157)**
+
+- `updateBetaVideoPrivacy(value)` function was referenced in `index.ts` and `SettingsScreen.tsx` but missing from `auth-service.ts`, causing 2 TypeScript errors. Added the implementation: `supabase.from('users').update({ beta_video_privacy: value }).eq('id', session.user.id)` with session guard.
+
+**3. videoSectionContainer style fix on ProfileScreen**
+
+- Moved `paddingHorizontal: theme.spacing.lg` from `videoSectionTitle` to `videoSectionContainer` so the container owns the horizontal inset and the title inherits it. `BetaVideoGrid` keeps `horizontalPadding={theme.spacing.lg}` for correct cell-width calculation.
+
+**4. ProfileScreen.test.tsx created**
+
+- New test file following the "one test file per source file" convention.
+- Includes `jest.mock('@react-navigation/native', ...)` replicating `UserProfileScreen.test.tsx` mock pattern.
+- Covers: smoke render, Edit Profile affordance (AC-117), follower/following count links (AC-145).
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | 4 pre-existing errors in `mod-beta-video` (outside scope); 0 new errors from changed files. `mod-auth-profile/index.ts` and `mod-localization-theme/SettingsScreen.tsx` errors fixed by adding `updateBetaVideoPrivacy` to `auth-service.ts`. |
+| `npm test -- --watchAll=false --testPathPattern="ProfileScreen"` | PASS — 17 tests, 2 suites, all pass |
+| `useFocusEffect` fires on mount (first load) — `hasLoadedOnce.current` false | PASS |
+| Tab-switch refetch silent — `isActive` effect guards on `hasLoadedOnce.current` | PASS |
+| No state reset before refetch — `loadData` does not call `setX(initialValue)` before fetch | PASS |
+| Error path silent — catches silently, no state reset | PASS |
+| Existing optimistic updates (follow/unfollow counts) unchanged | PASS |
+| AC-062 `refetchKey` / `SendHistoryProfile` mechanism unchanged | PASS |
+| `@react-navigation/native` mock in ProfileScreen.test.tsx matches UserProfileScreen.test.tsx pattern | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+| No new dependencies outside production.md tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` in changed files | PASS |
+
+**Pre-existing TypeScript errors (outside mod-auth-profile scope, not introduced by this change):**
+- `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` lines 613, 641: `Alert` namespace issue (noted in previous status entries)
+- `mod-beta-video/components/BetaVideoSection.tsx` lines 159, 179: `beta_video_privacy` not on `BetaVideo` type (pre-existing, requires fix in mod-beta-video)
+
+**Result: READY FOR QA**
+
+---
+
 ## Engineering Progress — UI Alignment Fix — 2026-10-04 (BetaVideoGrid horizontal padding)
 
 **Issue**: On `ProfileScreen`, the "Beta Videos" section title had `paddingHorizontal: theme.spacing.lg` (24 px) but `BetaVideoGrid` received no `horizontalPadding` prop, rendering the grid edge-to-edge and misaligning the title left-edge with the grid left-edge.
