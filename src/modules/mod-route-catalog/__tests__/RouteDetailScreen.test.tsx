@@ -14,6 +14,16 @@
  * AC-130: Record Send and Upload Beta Video action buttons present.
  */
 
+// Mock @react-navigation/native so useFocusEffect calls its callback immediately
+// in tests (behaves like useEffect). Without this the test renderer throws
+// "Couldn't find a navigation object" because there is no NavigationContainer.
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (cb: () => void) => {
+    const React = require('react');
+    React.useEffect(cb, []);
+  },
+}));
+
 jest.mock('../../../lib/supabase', () => ({
   supabase: { from: jest.fn() },
 }));

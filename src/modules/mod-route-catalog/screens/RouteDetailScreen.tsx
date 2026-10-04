@@ -9,6 +9,13 @@
  *   - Beta video section (MOD-005)
  *   - Added date as footer at the bottom (AC-126)
  *
+ * Data refresh: uses useFocusEffect so route details, saved status, achievement
+ * icon, and send ascents are re-fetched silently whenever the user navigates
+ * back to this screen (e.g. from SendHistoryDetail, after logging a send, or
+ * after any other navigation). The loading spinner is shown only on the very
+ * first load (when no data is cached); subsequent focus-triggered refreshes
+ * update state in the background without resetting data to null/[].
+ *
  * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
  * AC-046: bookmark toggle (filled yellow = saved; outline gray = unsaved) in header;
  *         optimistic update; achievement icon next to route name.
@@ -29,7 +36,8 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import {
@@ -124,6 +132,14 @@ export default function RouteDetailScreen({
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
 
   /**
+   * Tracks whether at least one successful data fetch has completed.
+   * Used to suppress the loading spinner on re-focus background refreshes —
+   * the spinner is shown only during the very first load (when no route data
+   * is cached yet). A ref (not state) avoids triggering an extra re-render.
+   */
+  const hasLoadedOnceRef = useRef<boolean>(false);
+
+  /**
    * AC-130: ref to the BetaVideoSection's upload launcher.
    * BetaVideoSection registers its launch handler here via onRegisterUploadLauncher.
    * The "Upload Beta Video" action button calls this ref when pressed.
@@ -150,7 +166,12 @@ export default function RouteDetailScreen({
   }, [routeId]);
 
   const fetchRoute = useCallback(async (): Promise<void> => {
-    setIsLoading(true);
+    // Only show the loading spinner on the very first load. On re-focus
+    // refetches (after navigating back to this screen) the spinner is suppressed
+    // so existing data remains visible while fresh data loads in the background.
+    if (!hasLoadedOnceRef.current) {
+      setIsLoading(true);
+    }
     setErrorMessage(null);
     try {
       // Fetch route detail, saved status, and current user's ascents in parallel.
@@ -162,6 +183,9 @@ export default function RouteDetailScreen({
       if (!data) {
         setErrorMessage(t('routes.errors.notFound'));
       } else {
+        // Mark that we have successfully loaded data at least once. After this
+        // point, re-focus refetches will update state silently (no spinner).
+        hasLoadedOnceRef.current = true;
         setRoute(data);
         setIsSaved(savedIds.includes(routeId));
 
@@ -194,10 +218,16 @@ export default function RouteDetailScreen({
     }
   }, [routeId, t]);
 
-  useEffect(() => {
-    void fetchRoute();
-    void fetchMyAscents();
-  }, [fetchRoute, fetchMyAscents]);
+  // Refresh data whenever the screen comes into focus — covers both the initial
+  // mount and any subsequent return navigation (e.g. back from SendHistoryDetail
+  // or after logging a send). The loading spinner is suppressed after the first
+  // successful load so re-focus refreshes are silent (no data reset to null/[]).
+  useFocusEffect(
+    useCallback(() => {
+      void fetchRoute();
+      void fetchMyAscents();
+    }, [fetchRoute, fetchMyAscents]),
+  );
 
   /**
    * AC-046: Optimistic bookmark toggle.

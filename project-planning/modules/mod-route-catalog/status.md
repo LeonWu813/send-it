@@ -2,6 +2,35 @@
 
 ## Engineering Progress
 
+### Bugfix — useFocusEffect for silent re-focus data refresh (2026-10-04)
+
+**Task**: Replace `useEffect` on RouteDetailScreen with `useFocusEffect` so data refreshes silently whenever the user navigates back to the screen, not just on first mount. No loading flash on refetch — spinner shown only on first load when data is null.
+
+**Changes:**
+
+- Replaced `useEffect(() => { void fetchRoute(); void fetchMyAscents(); }, [fetchRoute, fetchMyAscents])` with `useFocusEffect(useCallback(..., [fetchRoute, fetchMyAscents]))`.
+- Added `hasLoadedOnceRef = useRef<boolean>(false)` as a stable flag (not state, to avoid extra re-renders).
+- `fetchRoute` now calls `setIsLoading(true)` only when `!hasLoadedOnceRef.current` (first load). On re-focus refetches, existing `route`, `photoUri`, `isSaved`, and `achievement` state remains visible while new data arrives in the background.
+- Set `hasLoadedOnceRef.current = true` inside the successful data branch of `fetchRoute`, so subsequent focus events skip the spinner.
+- `fetchMyAscents` is unchanged in behavior — it updates `myAscents` in place without resetting to `[]` first (it was already silent).
+- Added `useFocusEffect` import from `@react-navigation/native`; removed now-unused `useEffect` from the React import.
+- Added mock for `@react-navigation/native` in `RouteDetailScreen.test.tsx` so `useFocusEffect` calls its callback synchronously in tests (standard pattern when no NavigationContainer is present in test renderer).
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — `useFocusEffect` replaces `useEffect`; `hasLoadedOnceRef` declared; `fetchRoute` conditionally shows spinner only on first load; `@react-navigation/native` import added; `useEffect` removed from React import.
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — `@react-navigation/native` mock added at top of file (makes `useFocusEffect` call callback via `React.useEffect` in test context).
+
+**Self-check (2026-10-04):**
+- PASS: `npx tsc --noEmit` — 0 errors in mod-route-catalog (pre-existing errors in mod-beta-video and mod-auth-profile are unrelated and unchanged)
+- PASS: `npm test -- --watchAll=false --testPathPattern="mod-route-catalog"` — 97 tests, 5 suites, 0 failures
+- PASS: No loading flash on refetch — `hasLoadedOnceRef` guards `setIsLoading(true)` to first load only; no state reset to null/[] before fetching
+- PASS: `uploadErrorMessage` state cleared only in `handleUploadBetaPress` — unchanged, not touched
+- PASS: All optimistic updates (bookmark toggle) unchanged
+- PASS: No new dependencies — `@react-navigation/native` was already a transitive dependency in the project
+- PASS: No gold-plating — strictly the useFocusEffect pattern + no-flash requirement
+
+---
+
 ### Bugfix — fetchMyAscentsForRoute auth resilience + order column (2026-09-27)
 
 **Issue reported (human QA)**: After wiring `fetchMyAscentsForRoute` into `RouteDetailScreen`, the send history section shows nothing or an error state on a live device.
