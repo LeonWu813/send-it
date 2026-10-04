@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 2d24910af92f9d94c23b9d997364f96d11b19121
-timestamp: 2026-10-03T23:45:00Z
+commit: 501c144cb3d01786e7e26fa631481443ed3b984f
+timestamp: 2026-10-03T23:55:00Z
 ```
 
 
@@ -1707,6 +1707,41 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-03 — Delta Sync (Revision 29, [SUBSTANTIVE])
+
+**Trigger**: PM [SUBSTANTIVE] tag (2026-10-03) — AC-031 reverted to native HEVC upload + `.Current` picker mode; accepted Phase 1 HDR playback limitation documented (PRD Revision 29). Scope: MOD-005 (mod-beta-video) spec only — no `production.md` change in scope per PM Update.
+
+**Files modified:**
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 28 → 29; Last Updated 2026-10-03. Changes applied:
+  - **Header**: `Last Synced from PRD Revision` bumped 28 → 29.
+  - **Context paragraph 1**: Removed all "iOS default (`Automatic`) representation mode", "transcodes HEVC/HLG source footage to **H.264 SDR** before returning the URI", "The uploaded file is a standard QuickTime (`.mov`) H.264 SDR file produced by the iOS picker" language (Rev 26/27). Replaced with: picker uses `preferredAssetRepresentationMode: Current`; PHPickerViewController returns original representation without iOS transcoding; client uploads original native file as-is after 45 MB gate; Phase 1 known limitation (HLG/HDR overexposure due to expo-video `VideoView` lacking EDR config) documented.
+  - **Related User Stories — US-004 trade-off note**: Removed Rev 27 "~8–10 Mbps / ~36–45 s / iOS picker Automatic-mode H.264 SDR output" framing. Restored ~22 s at full 1080p HEVC bitrate reaching 45 MB gate. Added Phase 1 known limitation note (HDR overexposure, accepted, fixed in Phase 2 MediaConvert).
+  - **AC-031 (Acceptance Criteria Covered)**: Full replacement of Rev 26 text. Revision tag changed to `(revised, Rev 29)`. `preferredAssetRepresentationMode: Current` restored. "original native file" upload language restored. "H.264 SDR" and "iOS `Automatic`-mode transcode" language removed throughout. Phase 1 known limitation added: HLG/HDR (BT.2020, Dolby Vision) may appear overexposed because expo-video `VideoView` renders HLG without EDR configuration; AVPlayer default path applies no HLG tone-mapping on SDR displays; Phase 2 MediaConvert fixes this. Thumbnail and size-gate clauses unchanged.
+  - **Data Model BetaVideo comment**: Updated "The 45 MB gate applies to whatever file the picker returns (AC-031, Rev 26)" to "The 45 MB gate applies to the native file (AC-031, Rev 29). NO client-side compression (AC-031). Picker uses preferredAssetRepresentationMode: Current — original native file returned and uploaded as-is."
+  - **Input/Output Contract (upload outputs)**: Removed "picker-returned H.264 SDR `.mov` file" wording; replaced with "original native file uploaded as-is (AC-031, Rev 29)".
+  - **Key Implementation Notes — Picker representation mode bullet**: Revision tag changed to `(AC-031, Rev 29)`. Content rewritten: `preferredAssetRepresentationMode: Current` must be set (not omitted); original native file uploaded as-is; Phase 1 known limitation (HLG/HDR overexposure, EDR not configured, accepted trade-off, Phase 2 MediaConvert fixes); removed all "Automatic mode", "H.264 SDR transcode", "iOS-transcoded" language.
+  - **Key Implementation Notes — Upfront native-file size gate bullet**: Reference updated from "(AC-031, Rev 26)" to "(AC-031, Rev 29)" for the 45 MB gate applicability clause.
+  - **Key Implementation Notes — 60-second playability SLA**: Removed "the compression + upload pipeline" phrasing; replaced with "the upload pipeline" (no compression).
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/production.md` — PM confirmed no production.md change required for Rev 29.
+- All other module specs (MOD-001 through MOD-004, MOD-006 through MOD-012) — not in scope for this delta.
+- All agent wrappers — not in scope (no new module, no new dependency).
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh**: 4/6 — same two pre-existing script bugs as all prior delta syncs since Rev 18. Check 4: awk range pattern does not match the `**US-NNN**:` bold format used in spec Related User Stories sections (all specs have correct content). Check 6: script over-matches non-phase-plan PRD content (gym seed data, etc.) as "phase names" — Phase Plan section in status.md is correctly written. Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
 
 ### 2026-10-03 — Trivial Passthrough (Revision 27, [TRIVIAL])
 
