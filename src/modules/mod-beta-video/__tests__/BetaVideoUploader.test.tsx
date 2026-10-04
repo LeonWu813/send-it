@@ -28,8 +28,8 @@ jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn(),
   MediaTypeOptions: { Videos: 'Videos' },
-  // AC-031 (Rev 26): preferredAssetRepresentationMode is NOT set by BetaVideoUploader;
-  // the enum is kept in the mock only so referencing it elsewhere does not throw.
+  // AC-031 (Rev 29): BetaVideoUploader sets preferredAssetRepresentationMode.Current;
+  // the enum is kept in the mock so the component can reference it without throwing.
   UIImagePickerPreferredAssetRepresentationMode: {
     Automatic: 'automatic',
     Compatible: 'compatible',
@@ -481,9 +481,10 @@ describe('BetaVideoUploader', () => {
     });
   });
 
-  it('AC-031 (Rev 26): passes asset.uri directly to uploadBetaVideo — no compression, Automatic picker mode', async () => {
-    // Rev 26: no react-native-compressor; the native file URI is passed directly.
-    // preferredAssetRepresentationMode is NOT set — iOS uses Automatic mode (HEVC/HLG → H.264 SDR).
+  it('AC-031 (Rev 29): passes asset.uri directly to uploadBetaVideo — no compression, Current picker mode preserves native HEVC/HLG', async () => {
+    // Rev 29: no react-native-compressor; the native file URI is passed directly.
+    // preferredAssetRepresentationMode.Current is set — iOS returns the original asset
+    // without transcoding so the native HEVC/HLG file is uploaded as-is.
     mockLaunchImageLibrary.mockResolvedValue(validAsset());
     mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
 
@@ -509,11 +510,15 @@ describe('BetaVideoUploader', () => {
       expect.any(Function),
     );
 
-    // AC-031 (Rev 26): picker must NOT set preferredAssetRepresentationMode — iOS Automatic
-    // mode transcodes HEVC/HLG → H.264 SDR, which prevents overexposure in VideoView.
-    expect(mockLaunchImageLibrary).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        preferredAssetRepresentationMode: expect.anything(),
+    // AC-031 (Rev 29): picker must set preferredAssetRepresentationMode.Current so
+    // PHPickerViewController returns the original file without iOS transcoding.
+    const mockLaunchImageLibraryAsync = ImagePicker.launchImageLibraryAsync as jest.MockedFunction<
+      typeof ImagePicker.launchImageLibraryAsync
+    >;
+    expect(mockLaunchImageLibraryAsync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
       }),
     );
   });

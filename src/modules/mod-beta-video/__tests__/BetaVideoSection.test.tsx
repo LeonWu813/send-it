@@ -56,6 +56,13 @@ jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
   launchImageLibraryAsync: jest.fn(),
   MediaTypeOptions: { Videos: 'Videos' },
+  // AC-031 (Rev 29): BetaVideoUploader references this enum at runtime; include in mock
+  // so BetaVideoSection integration tests do not throw on the property access.
+  UIImagePickerPreferredAssetRepresentationMode: {
+    Automatic: 'automatic',
+    Compatible: 'compatible',
+    Current: 'current',
+  },
 }));
 
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';

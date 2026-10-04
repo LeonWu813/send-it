@@ -2,6 +2,37 @@
 
 ## Engineering Progress
 
+**Status**: Change — 2026-10-03 (AC-031 Rev 29 — restore preferredAssetRepresentationMode.Current; update Phase 1 HDR limitation comments)
+
+### Change — AC-031 Rev 29: restore preferredAssetRepresentationMode.Current and update HDR comments — 2026-10-03
+
+**What changed**:
+
+AC-031 is revised from Rev 26 back to Rev 29. Rev 26 had omitted `preferredAssetRepresentationMode` so iOS used Automatic mode (HEVC/HLG → H.264 SDR transcoding). Rev 29 restores `preferredAssetRepresentationMode: UIImagePickerPreferredAssetRepresentationMode.Current` so PHPickerViewController returns the original native file without transcoding. The Phase 1 known limitation (HLG/HDR overexposure in `VideoView` on SDR displays) is now an explicitly accepted trade-off rather than something worked around by transcoding; the Phase 2 MediaConvert pipeline will tone-map HDR→SDR server-side.
+
+**Changes made**:
+
+1. `BetaVideoUploader.tsx` — file-level docstring AC-031 line updated from Rev 26 to Rev 29 wording (Current mode, original native HEVC/HLG file, Phase 1 HDR limitation accepted).
+2. `BetaVideoUploader.tsx` — multi-line comment before `launchImageLibraryAsync` replaced with Rev 29 comment (explains Current mode, HEVC/HLG preservation, Phase 1 overexposure limitation, Phase 2 fix).
+3. `BetaVideoUploader.tsx` — `preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current` line restored in `launchImageLibraryAsync` options (after `allowsEditing: false`).
+4. `BetaVideoUploader.test.tsx` — mock comment updated to reflect Rev 29 (enum now actively used by component).
+5. `BetaVideoUploader.test.tsx` — AC-031 test name updated to "Rev 29"; assertion flipped from `expect.not.objectContaining` to `expect.objectContaining({ preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current })`.
+6. `BetaVideoSection.test.tsx` — `expo-image-picker` mock updated to include `UIImagePickerPreferredAssetRepresentationMode` enum (previously absent; now required at runtime because `BetaVideoUploader` references it when the picker fires).
+
+**Self-check results**:
+- `npx jest src/modules/mod-beta-video --watchAll=false`: 91 passing, 1 failure (pre-existing `BetaVideoReelViewer › AC-139` — present before this change), 5 suites. No regressions introduced.
+- Judgment-based: restoring a single picker option that was previously present; no new dependencies; no schema changes; no migration; test updated from asserting absence to asserting presence; `UIImagePickerPreferredAssetRepresentationMode` enum added to BetaVideoSection mock so the enum access at runtime does not throw. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — docstring, comment, and `preferredAssetRepresentationMode` option restored
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — mock comment and AC-031 test updated for Rev 29 (assertion flipped to PRESENT)
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — `UIImagePickerPreferredAssetRepresentationMode` enum added to `expo-image-picker` mock
+
+**ACs addressed**:
+- **AC-031 (Rev 29)**: picker now uses Current mode — original native HEVC/HLG file returned and uploaded as-is; Phase 1 HDR overexposure limitation accepted
+
+---
+
 **Status**: Bug fix — 2026-10-03 (critical: dead-code upload path — BetaVideoSection.handleLaunchUpload bypassed BetaVideoUploader, skipping AC-166 dialog and AC-169 size gate on AC-130 live path)
 
 ### Bug Fix — Eliminate duplicate upload path in BetaVideoSection (AC-130 live path) — 2026-10-03
