@@ -31,6 +31,34 @@
 - PASS — Three-dots icon and sheet not rendered for `isOwnProfile`
 - PASS — Cross-module imports: `blockUser`, `unblockUser`, `reportUser`, `fetchBlockedUserIds` from `../../mod-moderation/moderation-service` (public service layer, permitted per production.md)
 
+### useFocusEffect Silent Refetch (2026-10-04)
+
+**Change**: Replaced the `useEffect` that called `loadProfile()` on first mount with `useFocusEffect` so profile data, beta videos, and follow/block state refresh silently whenever the user navigates back to `UserProfileScreen` (e.g. after dismissing the reel viewer or pressing back from a sub-screen).
+
+**Implementation**:
+- Added `useRef` import (already using `useCallback` and `useState`).
+- Added `useFocusEffect` import from `@react-navigation/native`.
+- Removed `useEffect` import (no longer used).
+- Added `hasLoadedOnce = useRef(false)` to track whether the first load has completed.
+- Replaced `useEffect(() => { setLoading(true); void loadProfile().finally(() => setLoading(false)); }, [loadProfile])` with a `useFocusEffect(useCallback(..., [loadProfile]))` that:
+  - Sets `loading = true` only when `hasLoadedOnce.current === false` (first load only — prevents loading flash on refetch).
+  - Calls `loadProfile()` on every focus event.
+  - Sets `hasLoadedOnce.current = true` and `loading = false` in the `.finally()` handler.
+- No state is reset to `null`/`[]` before fetching — existing profile and video data stays visible during silent background refetch.
+- All existing optimistic updates for follow/unfollow and block/unblock are unchanged.
+
+**Test file update** (`UserProfileScreen.test.tsx`):
+- Added `jest.mock('@react-navigation/native', ...)` that implements `useFocusEffect` as a `useEffect` with an empty dep array, firing once on mount — equivalent to the initial focus event in tests.
+- Added `jest.mock('../../mod-beta-video', ...)` with `BetaVideoGrid: () => null`, `BetaVideoReelViewer: () => null`, `fetchBetaVideosByUser: jest.fn()` (these mocks are required because `UserProfileScreen.tsx` imports from `mod-beta-video`).
+- Added `fetchBetaVideosByUser` import and `mockFetchBetaVideosByUser` cast.
+- Added `mockFetchBetaVideosByUser.mockResolvedValue([])` to `beforeEach`.
+
+**Self-check**:
+- PASS — `npx tsc --noEmit` — 0 errors in mod-social-feed (pre-existing errors in other modules are unrelated)
+- PASS — `npx jest --testPathPattern="mod-social-feed"` — 57/57 tests pass
+- PASS — No state reset before refetch; `hasLoadedOnce` ref gates the spinner correctly
+- PASS — All optimistic updates unchanged
+
 ### Human QA UI Changes (2026-09-30)
 
 **Change 1 — Simplify FollowersListScreen and FollowingListScreen cards**: Removed the per-card stats display (sends count "X 攀登" and highest grade "最高 VX") from both list screens following human QA feedback. The `useCardStats` hook, `fetchProfileStats` import, and `ProfileStats` type import are fully removed from both files. Each card now renders circular avatar + display_name only. The `onNavigateToUser(userId)` tap behaviour, nav bar, empty state, and loading state are all preserved unchanged. No new i18n keys needed — removed keys (`sends`, `highestGrade`, `noGrade`) remain in the locale files as they are used elsewhere.

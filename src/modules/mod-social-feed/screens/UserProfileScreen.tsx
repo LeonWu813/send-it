@@ -24,7 +24,8 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -127,6 +128,11 @@ export default function UserProfileScreen({
 
   const isOwnProfile = session.user.id === targetUserId;
 
+  // Tracks whether the first data load has completed. Used to decide whether to
+  // show the full-screen loading spinner (first load only) or silently refetch
+  // in the background on subsequent focus events.
+  const hasLoadedOnce = useRef(false);
+
   // ── Load profile data ───────────────────────────────────────────────────────
 
   const loadProfile = useCallback(async (): Promise<void> => {
@@ -186,10 +192,21 @@ export default function UserProfileScreen({
     }
   }, [targetUserId, isOwnProfile, t, session.user.id]);
 
-  useEffect(() => {
-    setLoading(true);
-    void loadProfile().finally(() => setLoading(false));
-  }, [loadProfile]);
+  useFocusEffect(
+    useCallback(() => {
+      // Only show the full-screen loading spinner on the very first load.
+      // On subsequent focus refetches (e.g. returning from a sub-screen or pressing
+      // the back button), data is refreshed silently — the existing profile content
+      // and video list remain visible while new data loads in the background.
+      if (!hasLoadedOnce.current) {
+        setLoading(true);
+      }
+      void loadProfile().finally(() => {
+        hasLoadedOnce.current = true;
+        setLoading(false);
+      });
+    }, [loadProfile]),
+  );
 
   // ── Follow / Unfollow ───────────────────────────────────────────────────────
 

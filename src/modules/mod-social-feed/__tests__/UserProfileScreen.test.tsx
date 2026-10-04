@@ -12,6 +12,23 @@
  * mocked; no real network activity.
  */
 
+// useFocusEffect is mocked to immediately invoke the callback, replicating the
+// behaviour of a component mounted inside a NavigationContainer with an active
+// focus state. This lets existing tests work without a real navigation context.
+jest.mock('@react-navigation/native', () => ({
+  useFocusEffect: (cb: () => void) => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks, @typescript-eslint/no-var-requires
+    const { useEffect } = require('react');
+    useEffect(cb, []);
+  },
+}));
+
+jest.mock('../../mod-beta-video', () => ({
+  fetchBetaVideosByUser: jest.fn(),
+  BetaVideoGrid: () => null,
+  BetaVideoReelViewer: () => null,
+}));
+
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
     from: jest.fn(),
@@ -44,6 +61,7 @@ import React from 'react';
 
 import { supabase } from '../../../lib/supabase';
 import { fetchProfileStats } from '../../mod-profile-history/history-service';
+import { fetchBetaVideosByUser } from '../../mod-beta-video';
 import {
   fetchBlockedUserIds,
   blockUser,
@@ -69,6 +87,7 @@ const mockFetchBlockedUserIds = fetchBlockedUserIds as jest.MockedFunction<typeo
 const mockBlockUser = blockUser as jest.MockedFunction<typeof blockUser>;
 const mockUnblockUser = unblockUser as jest.MockedFunction<typeof unblockUser>;
 const mockReportUser = reportUser as jest.MockedFunction<typeof reportUser>;
+const mockFetchBetaVideosByUser = fetchBetaVideosByUser as jest.MockedFunction<typeof fetchBetaVideosByUser>;
 
 const CURRENT_USER_ID = 'user-001';
 const TARGET_USER_ID = 'user-002';
@@ -115,6 +134,8 @@ describe('UserProfileScreen', () => {
     mockBlockUser.mockResolvedValue(undefined);
     mockUnblockUser.mockResolvedValue(undefined);
     mockReportUser.mockResolvedValue(undefined);
+    // AC-163: default — no beta videos
+    mockFetchBetaVideosByUser.mockResolvedValue([]);
   });
 
   function setupProfileMock(profile: typeof MOCK_PROFILE = MOCK_PROFILE): void {
