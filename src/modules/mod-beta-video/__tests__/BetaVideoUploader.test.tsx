@@ -39,7 +39,7 @@ jest.mock('expo-image-picker', () => ({
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, type AlertButton } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { PermissionStatus } from 'expo-modules-core';
 import * as ExpoFileSystem from 'expo-file-system';
@@ -610,7 +610,7 @@ describe('BetaVideoUploader', () => {
       // Simulate user pressing the destructive "Replace" button (index 1)
       const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(
         (_title, _message, buttons) => {
-          const confirmButton = (buttons as Alert.AlertButton[])[1];
+          const confirmButton = (buttons as AlertButton[])[1];
           confirmButton?.onPress?.();
         },
       );
@@ -638,7 +638,7 @@ describe('BetaVideoUploader', () => {
       // Simulate user pressing the "Cancel" button (index 0)
       const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(
         (_title, _message, buttons) => {
-          const cancelButton = (buttons as Alert.AlertButton[])[0];
+          const cancelButton = (buttons as AlertButton[])[0];
           cancelButton?.onPress?.();
         },
       );

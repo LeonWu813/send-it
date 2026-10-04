@@ -24,6 +24,13 @@ export interface BetaVideo {
   display_name: string | null;
   /** Poster's avatar URL, joined from public.users via beta_videos_user_id_fkey (AC-144). */
   avatar_url: string | null;
+  /**
+   * Poster's account-level beta-video privacy setting, joined from public.users via
+   * beta_videos_user_id_fkey (AC-158). Used by BetaVideoSection to filter out
+   * followers-only videos for non-followers. Optional because legacy rows fetched
+   * without the join will not have this field.
+   */
+  beta_video_privacy?: 'public' | 'followers_only';
 }
 
 /** Input payload for uploading a new beta video. */

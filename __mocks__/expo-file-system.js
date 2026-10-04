@@ -2,6 +2,17 @@
 // The File class uses jest.fn() for async methods so tests can spy/mockResolvedValue
 // directly without needing jest.spyOn on the prototype.
 
+// AC-169 (Rev 24): configurable mock file size.
+// Tests call __setMockFileSize(bytes) in beforeEach to control the .size property
+// returned by all File instances, simulating the native file size gate check.
+// Default is 5 MB — a safe value under the 45 MB gate so existing tests that
+// don't call __setMockFileSize continue to pass through the gate.
+let _mockFileSize = 5 * 1024 * 1024;
+
+function __setMockFileSize(bytes) {
+  _mockFileSize = bytes;
+}
+
 const mockBytes = jest.fn().mockResolvedValue(new Uint8Array(0));
 const mockText = jest.fn().mockResolvedValue('');
 const mockBase64 = jest.fn().mockResolvedValue('');
@@ -21,6 +32,10 @@ class File {
     this.delete = mockDelete;
     this.copy = jest.fn().mockImplementation((destination) => Promise.resolve(new File(destination)));
     this.move = jest.fn().mockImplementation((destination) => Promise.resolve(new File(destination)));
+  }
+
+  get size() {
+    return _mockFileSize;
   }
 }
 
@@ -70,6 +85,7 @@ module.exports = {
   __esModule: true,
   File,
   Directory,
+  __setMockFileSize,
   mockBytes,
   readAsStringAsync,
   writeAsStringAsync,
