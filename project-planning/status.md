@@ -7,7 +7,7 @@ agent: pm
 mode: change
 module: n/a
 result: success
-commit: 0331fc7dfc655ea2763627f6eb372f7a5c3e5f21
+commit: 6c648eb4dbd50d69b5ddce665e252aee02819609
 
 
 - **2026-10-03 [SUBSTANTIVE]** — AC-166 replace-confirmation redesign (PRD Revision 28). Leon (via coordinator) approved the exact AC-166 replacement text verbatim and directed the [SUBSTANTIVE] tag. PRD Status line `[SUBSTANTIVE] — Revision 28`; `**Revision**` bumped 27 → 28; Date 2026-10-03. Change: AC-166 (§8 MOD-005) replaced entirely. **Observable behavior change** — the upload control is now ALWAYS enabled (no disabled-button state, no "delete your existing video first" static message). On activation it first calls `checkExistingBetaVideo(routeId): Promise<boolean>`: if the user already has a beta video for the route (`hasExistingVideo === true`), a confirmation dialog is shown **before** the picker opens — title `betaVideo.replaceConfirmTitle` ("替換 Beta 影片" / "Replace Beta Video"), message `betaVideo.replaceConfirmMessage` ("你已有此路線的 Beta 影片，繼續操作將會取代現有影片。" / "You already have a beta video for this route. If you proceed, the old video will be replaced."), with exactly two actions: destructive confirm `betaVideo.replaceConfirmOk` ("替換" / "Replace") and `betaVideo.replaceConfirmCancel` ("取消" / "Cancel"). Replace dismisses the dialog and proceeds (open picker → select → upload); Cancel dismisses and the picker does not open. If no existing video (`hasExistingVideo === false`), the picker opens directly with no dialog. The upload continues to use the AC-165 upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) — the DB upsert handles replacement; **no backend change required**.
