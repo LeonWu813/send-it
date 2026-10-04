@@ -3,14 +3,27 @@
 ## Last Action
 
 ```
-agent: tech-lead
-mode: review
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: e222223cfd1db25b81ad88f0315d48075c2360e1
+commit: 3e2bdd86b87c917c7d0814cfd25645b81e7a0800
 timestamp: 2026-10-04T00:00:00Z
 ```
 
+
+- **2026-10-04 [TRIVIAL]** — **Correction to the Keep-Alive Screen Focus Pattern convention in `production.md`** (production.md-only change; **no PRD revision bump** — `prd.md` untouched, no behavioral AC change). Leon (via coordinator) requested and approved logging this correction. The "Exempt" clause in the recently-added Keep-Alive Screen Focus Pattern convention is **wrong**: it named `RouteDetailScreen` (`mod-route-catalog`) and `UserProfileScreen` (`mod-social-feed`) as exempt on the mistaken premise that an ancestor named `*Navigator` implies a react-navigation `NavigationContainer`. Both screens then crashed on device with "Couldn't find a navigation object. Is your component inside NavigationContainer?" after `useFocusEffect` was added. **Confirmed root cause**: the entire app has **no `NavigationContainer` anywhere** — all `*Navigator` components (`AuthNavigator`, `GymNavigator`, `RouteNavigator`, `ProfileNavigator`, `HomeNavigator`) are custom React `useState` state machines, not react-navigation navigators. The ban on `@react-navigation/native` navigation-context hooks is therefore **app-wide**, not keep-alive-only, and there is **no exemption**. Source: Tech Lead review dated 2026-10-04 (see `## Tech Lead Reviews` → `Review — 2026-10-04 — correction (the 2026-10-04 "Keep-Alive Screen Focus Pattern" Shared Convention exemption is wrong ...)`). The source fixes + test-mock removals for both screens already routed through `engineer-mod-route-catalog` and `engineer-mod-social-feed` (confirmed applied per the review); this PM entry covers only the project-wide convention correction.
+  - **Why [TRIVIAL]**: no PRD text change, no new/changed AC, no new module, no new dependency, no DB migration, no module-boundary change, no phase-plan change. This is a correction to a project-wide Shared Convention that lives in `production.md`, not `prd.md` or any module spec. Consistent with the prior production.md-only convention entries.
+  - **For Doc-Sync**: **Replace the entire `### Keep-Alive Screen Focus Pattern` section** in `production.md` with the corrected convention below. The following `### Keep-Alive Screen Test Pattern` section is **unchanged** (it already applies to all screens). PM did not edit `production.md` or any module spec — this PM Updates tag is the trigger for Doc-Sync to sync it in. No module spec changes required.
+    - **Corrected convention (verbatim) — replaces the whole `### Keep-Alive Screen Focus Pattern` section**:
+      **No screen in this app may use `useFocusEffect`, `useNavigation`, `useRoute`, or any other `@react-navigation/native` navigation-context hook.** The app intentionally uses custom state-machine navigators (`GymNavigator`, `RouteNavigator`, `ProfileNavigator`, `HomeNavigator`, `AuthNavigator`) and mounts no `NavigationContainer` anywhere. Any `@react-navigation/native` hook requiring navigation context will throw "Couldn't find a navigation object" at runtime.
+      Rules:
+      1. **Conditionally-mounted screens** (`RouteDetailScreen`, `UserProfileScreen`, and any screen rendered with a conditional expression) — use a plain `useEffect` for data loading. These screens unmount and remount on each navigation, so `useEffect` fires on every mount, equivalent to `useFocusEffect` without the crash.
+      2. **Keep-alive screens** (`ProfileScreen`, and any screen rendered via AppShell's `display:none`/`display:flex` keep-alive pattern) — use an `isActive: boolean` prop + `useEffect([isActive])` for focus-triggered behavior. These screens never unmount, so remounting is not available as a refresh trigger.
+      3. Each keep-alive screen must carry a top-of-file comment: "This screen is rendered via AppShell's keep-alive pattern and has no NavigationContainer ancestor. Do not use useFocusEffect or any other @react-navigation/native hook that requires navigation context. Use the isActive prop instead."
+      4. Tests for any screen — keep-alive or conditionally-mounted — must NOT mock `@react-navigation/native` or `useFocusEffect`. If a screen's test needed that mock to pass, the mock was hiding a production crash.
+    - The false "Exempt" clause is replaced by rule (1), which explains *what to use instead* for conditionally-mounted screens, not that they are exempt from the ban.
+  - **Run `claude --agent doc-sync`.** Doc-Sync NOT invoked here.
 
 - **2026-10-04 [TRIVIAL]** — Two engineering Shared Conventions for keep-alive screens (production.md-only change; **no PRD revision bump** — `prd.md` untouched, no behavioral AC change). Leon (via coordinator) requested and approved logging the two Proposed Shared Conventions from the Tech Lead review dated 2026-10-04 (see `## Tech Lead Reviews` → `Review — 2026-10-04 — blocker (ProfileScreen crashed on device: useFocusEffect ...)`), and directed the [TRIVIAL] tag with no revision bump. These are engineering/testing conventions, not user-facing behavior; the affected artifact is `production.md` (Shared Conventions section), not `prd.md`. Root cause context: `ProfileScreen` crashed on device because it called `useFocusEffect` while rendered via `AppShell`'s keep-alive mount (`display:none`/`display:flex`), which has no `NavigationContainer` ancestor; the crash was invisible in CI because the test mocked `@react-navigation/native`. The source fix + test-mock removal route separately through `engineer-mod-auth-profile` (already applied per the review) — this PM entry covers only the two project-wide conventions.
   - **Why [TRIVIAL]**: no PRD text change, no new/changed AC, no new module, no new dependency, no DB migration, no module-boundary change, no phase-plan change. Project-wide conventions live in `production.md`, not `prd.md` or a single module spec. This mirrors the prior production.md-only convention entries (e.g. 2026-09-30 file-upload convention, 2026-09-25 conventions).
