@@ -2,7 +2,7 @@
  * BetaVideoGrid — shared 3-column beta video thumbnail grid.
  *
  * AC-160: 3-column grid of beta-video thumbnails. Each cell shows a Phase 1
- * placeholder: gray background + centered play-icon overlay on a dark gradient.
+ * placeholder: gray background with a small camera icon overlaid top-left.
  * Tapping a cell fires onPressVideo(index). If videos.length === 0 and emptyState
  * is provided, renders emptyState instead of the grid.
  *
@@ -13,7 +13,10 @@
  * Tech Lead decisions (Rev 13, point 6):
  * - No VideoView per grid cell (avoid N live decoders).
  * - No frame-extraction library (Phase 2 scope).
- * - Gray background + play icon overlay is the correct Phase 1 affordance.
+ * - Camera icon top-left is the correct Phase 1 affordance (AC-038).
+ *   The dark gradient overlay and centered play icon have been replaced with a
+ *   small camera icon (Ionicons "videocam") in a rounded top-left container,
+ *   matching the route-detail inline cell style (Fix 3).
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -35,9 +38,6 @@ const GRID_GAP = 2;
 
 /** Screen width — portrait-locked, so this is stable for the app lifetime. */
 const SCREEN_WIDTH = Dimensions.get('window').width;
-
-/** Play icon size (centered absolutely over the cell). */
-const PLAY_ICON_SIZE = 28;
 
 export interface BetaVideoGridProps {
   /** Ordered array of beta videos to display. */
@@ -67,8 +67,7 @@ export interface BetaVideoGridProps {
 
 /**
  * BetaVideoGrid renders a 3-column grid of beta-video placeholder cells.
- * Each cell: gray background + dark gradient overlay (bottom half) + centered
- * play icon. Tapping fires onPressVideo(index).
+ * Each cell: gray background + small camera icon top-left. Tapping fires onPressVideo(index).
  *
  * When videos.length === 0 and emptyState is provided, renders emptyState.
  */
@@ -99,19 +98,13 @@ export default function BetaVideoGrid({
         <View style={styles.placeholderBg} />
 
         {/*
-         * Dark gradient overlay — bottom half of cell.
-         * Implemented as an absolute View (no LinearGradient dependency).
+         * Camera icon top-left — "this is a video" affordance (AC-038 / Fix 3).
+         * Small rounded dark container, same style as the route-detail inline cells.
          */}
-        <View style={styles.gradientOverlay} />
-
-        {/*
-         * Centered play icon — absolutely positioned over the full cell.
-         * Rendered last so it sits above all other layers.
-         */}
-        <View style={styles.playIconContainer} pointerEvents="none">
+        <View style={styles.iconContainer} pointerEvents="none">
           <Ionicons
-            name="play"
-            size={PLAY_ICON_SIZE}
+            name="videocam"
+            size={14}
             color="#FFFFFF"
           />
         </View>
@@ -178,22 +171,17 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], cellSize: numbe
       bottom: 0,
       backgroundColor: theme.colors.surface,
     },
-    gradientOverlay: {
+    /**
+     * Camera icon container — top-left corner, small rounded dark background.
+     * Matches the inline cell style used in BetaVideoSection (Fix 3).
+     */
+    iconContainer: {
       position: 'absolute',
-      left: 0,
-      right: 0,
-      bottom: 0,
-      height: cellSize / 2,
-      backgroundColor: 'rgba(0,0,0,0.35)',
-    },
-    playIconContainer: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      alignItems: 'center',
-      justifyContent: 'center',
+      top: 6,
+      left: 6,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+      borderRadius: 4,
+      padding: 3,
     },
     /**
      * Spacer cells exist purely for layout alignment in the last row.

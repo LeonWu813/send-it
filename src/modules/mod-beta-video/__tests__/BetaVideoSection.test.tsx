@@ -46,6 +46,8 @@ jest.mock('../beta-video-service', () => ({
   reportBetaVideo: jest.fn(),
   // AC-166: BetaVideoUploader (rendered inside BetaVideoSection) calls this on mount.
   checkExistingBetaVideo: jest.fn().mockResolvedValue(false),
+  // Required by BetaVideoUploader upload flow (Fix 1 replace test).
+  uploadBetaVideo: jest.fn(),
 }));
 
 jest.mock('../../mod-moderation/moderation-service', () => ({
@@ -75,6 +77,7 @@ import {
   fetchBetaVideosForRoute,
   getVideoSignedUrl,
   checkExistingBetaVideo,
+  uploadBetaVideo,
 } from '../beta-video-service';
 import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import BetaVideoSection from '../components/BetaVideoSection';
@@ -85,6 +88,7 @@ const mockFetchBetaVideos = fetchBetaVideosForRoute as jest.MockedFunction<typeo
 const mockGetVideoSignedUrl = getVideoSignedUrl as jest.MockedFunction<typeof getVideoSignedUrl>;
 const mockFetchBlockedUserIds = fetchBlockedUserIds as jest.MockedFunction<typeof fetchBlockedUserIds>;
 const mockCheckExistingBetaVideo = checkExistingBetaVideo as jest.MockedFunction<typeof checkExistingBetaVideo>;
+const mockUploadBetaVideo = uploadBetaVideo as jest.MockedFunction<typeof uploadBetaVideo>;
 const mockLaunchImageLibrary = ImagePicker.launchImageLibraryAsync as jest.MockedFunction<typeof ImagePicker.launchImageLibraryAsync>;
 
 const MOCK_SESSION = {
@@ -306,6 +310,132 @@ describe('BetaVideoSection', () => {
 
     // There should be exactly 1 grid cell before upload
     expect(screen.queryByTestId(`beta-video-grid-cell-${MOCK_VIDEO_2.id}`)).toBeNull();
+  });
+
+  it('Fix 1 (replace dedup): after upload success on a replace, the list contains exactly one video for the (user_id, route_id) pair', async () => {
+    // The initial list has MOCK_VIDEO (user-001, route-001).
+    // Simulate a replace: a new upload for the same (user_id, route_id) pair.
+    const REPLACED_VIDEO: BetaVideo = {
+      id: 'vid-new',
+      route_id: 'route-001',   // same route
+      user_id: 'user-001',     // same user — this is the replace scenario
+      video_url: 'user-001/route-001/new.mp4',
+      thumbnail_url: 'user-001/route-001/new_thumb.jpg',
+      duration_seconds: 20,
+      caption: 'New take',
+      created_at: '2026-10-04T12:00:00Z',
+      is_reported: false,
+      report_dismissed: false,
+      display_name: 'Test Climber',
+      avatar_url: null,
+    };
+
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
+    // No existing video confirmation dialog needed for this test.
+    mockCheckExistingBetaVideo.mockResolvedValue(false);
+    // Service returns the newly uploaded REPLACED_VIDEO.
+    mockUploadBetaVideo.mockResolvedValue(REPLACED_VIDEO);
+    // Picker returns a valid short MP4.
+    mockLaunchImageLibrary.mockResolvedValue({
+      canceled: false,
+      assets: [{
+        uri: 'file:///new.mp4',
+        mimeType: 'video/mp4',
+        duration: 20_000,
+        type: 'video',
+        width: 1920,
+        height: 1080,
+        fileName: 'new.mp4',
+        fileSize: 5_000_000,
+        assetId: null,
+        base64: null,
+        exif: null,
+        pairedVideoAsset: null,
+      }],
+    });
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    // Old video (vid-001) is visible before the replace.
+    await waitFor(() => {
+      expect(screen.getByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeTruthy();
+    });
+
+    // Press the "Add beta video" button to trigger the upload flow.
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+    }
+
+    // After the upload resolves, the grid must contain only REPLACED_VIDEO (vid-new),
+    // not the old MOCK_VIDEO (vid-001) — the filter-before-prepend ensures this.
+    await waitFor(() => {
+      expect(screen.getByTestId(`beta-video-grid-cell-${REPLACED_VIDEO.id}`)).toBeTruthy();
+    });
+    expect(screen.queryByTestId(`beta-video-grid-cell-${MOCK_VIDEO.id}`)).toBeNull();
+  });
+
+  it('Fix 2 (suppressInlineError): onUploadError is called but inline error is not rendered when onUploadError prop is provided', async () => {
+    // Verify that when onUploadError is provided, the error message is forwarded
+    // to the callback but NOT rendered inline inside BetaVideoSection.
+    mockFetchBetaVideos.mockResolvedValue([]);
+    mockCheckExistingBetaVideo.mockResolvedValue(false);
+    // Picker returns an unsupported container (triggers a format error).
+    mockLaunchImageLibrary.mockResolvedValue({
+      canceled: false,
+      assets: [{
+        uri: 'file:///video.avi',
+        mimeType: 'video/x-msvideo',
+        duration: 20_000,
+        type: 'video',
+        width: 1920,
+        height: 1080,
+        fileName: 'video.avi',
+        fileSize: 5_000_000,
+        assetId: null,
+        base64: null,
+        exif: null,
+        pairedVideoAsset: null,
+      }],
+    });
+
+    const onUploadError = jest.fn();
+
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} onUploadError={onUploadError} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      // The empty state shows (no videos loaded).
+      expect(screen.queryByTestId('beta-video-grid')).toBeNull();
+    });
+
+    // Press the "Add beta video" button to trigger the upload flow.
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    if (addButton) {
+      fireEvent.press(addButton);
+
+      // onUploadError must be called with the error message (error propagation is unaffected).
+      await waitFor(() => expect(onUploadError).toHaveBeenCalled());
+
+      // The inline error text must NOT appear inside BetaVideoSection because
+      // suppressInlineError is true (derived from onUploadError being provided).
+      const inlineErrors = screen.queryAllByText(/Only MP4 and MOV videos are supported/i)
+        .concat(screen.queryAllByText(/僅支援 MP4 和 MOV 格式的影片/));
+      expect(inlineErrors).toHaveLength(0);
+    }
   });
 
   // AC-154: block filter tests

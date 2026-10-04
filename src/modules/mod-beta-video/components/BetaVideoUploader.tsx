@@ -68,6 +68,13 @@ interface BetaVideoUploaderProps {
    * Used when the upload trigger lives outside the section (header button).
    */
   hideButton?: boolean;
+  /**
+   * Fix 2 (error placement): When true, the inline error text is not rendered
+   * inside this component even when an error occurs. onUploadError is still
+   * called with the message so the parent (RouteDetailScreen) can display it.
+   * When false (default), the inline error text is rendered here as before.
+   */
+  suppressInlineError?: boolean;
 }
 
 // AC-161: no per-upload visibility/privacy toggle exists in this component.
@@ -81,6 +88,7 @@ export default function BetaVideoUploader({
   onUploadError,
   onRegisterSelectHandler,
   hideButton = false,
+  suppressInlineError = false,
 }: BetaVideoUploaderProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -316,8 +324,8 @@ export default function BetaVideoUploader({
         </Pressable>
       )}
 
-      {/* Inline error message */}
-      {errorMessage ? (
+      {/* Inline error message — suppressed when the parent handles error display (Fix 2). */}
+      {errorMessage && !suppressInlineError ? (
         <Text style={styles.errorText}>{errorMessage}</Text>
       ) : null}
 

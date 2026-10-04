@@ -685,6 +685,105 @@ describe('BetaVideoUploader', () => {
     });
   });
 
+  describe('Fix 2 (suppressInlineError)', () => {
+    it('does NOT render inline error text when suppressInlineError is true', async () => {
+      // When suppressInlineError is true the error message must NOT appear inline;
+      // onUploadError must still be called with the message.
+      const unsupportedAsset: ImagePicker.ImagePickerSuccessResult = {
+        canceled: false,
+        assets: [
+          {
+            uri: 'file:///video.avi',
+            mimeType: 'video/x-msvideo',
+            duration: 30_000,
+            type: 'video',
+            width: 1920,
+            height: 1080,
+            fileName: 'video.avi',
+            fileSize: 10_000_000,
+            assetId: null,
+            base64: null,
+            exif: null,
+            pairedVideoAsset: null,
+          },
+        ],
+      };
+      mockLaunchImageLibrary.mockResolvedValue(unsupportedAsset);
+
+      const onUploadError = jest.fn();
+
+      render(
+        <BetaVideoUploader
+          {...DEFAULT_PROPS}
+          onUploadError={onUploadError}
+          suppressInlineError
+        />,
+        renderOptions(),
+      );
+
+      const addButton = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Add Beta Video' ||
+          el.props.accessibilityLabel === '新增 Beta 影片',
+      );
+      if (addButton) {
+        fireEvent.press(addButton);
+      }
+
+      // onUploadError must still be called (error propagation is unaffected).
+      await waitFor(() => expect(onUploadError).toHaveBeenCalled());
+
+      // Inline error text must NOT be rendered.
+      const inlineErrors = screen
+        .queryAllByText(/Only MP4 and MOV videos are supported/i)
+        .concat(screen.queryAllByText(/僅支援 MP4 和 MOV 格式的影片/));
+      expect(inlineErrors).toHaveLength(0);
+    });
+
+    it('renders inline error text when suppressInlineError is false (default)', async () => {
+      // Baseline: default behavior renders inline error text when suppressInlineError is absent.
+      const unsupportedAsset: ImagePicker.ImagePickerSuccessResult = {
+        canceled: false,
+        assets: [
+          {
+            uri: 'file:///video.avi',
+            mimeType: 'video/x-msvideo',
+            duration: 30_000,
+            type: 'video',
+            width: 1920,
+            height: 1080,
+            fileName: 'video.avi',
+            fileSize: 10_000_000,
+            assetId: null,
+            base64: null,
+            exif: null,
+            pairedVideoAsset: null,
+          },
+        ],
+      };
+      mockLaunchImageLibrary.mockResolvedValue(unsupportedAsset);
+
+      render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+      const addButton = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel === 'Add Beta Video' ||
+          el.props.accessibilityLabel === '新增 Beta 影片',
+      );
+      if (addButton) {
+        fireEvent.press(addButton);
+      }
+
+      // Inline error text must appear (suppressInlineError defaults to false).
+      await waitFor(() => {
+        const inlineErrors = screen
+          .queryAllByText(/Only MP4 and MOV videos are supported/i)
+          .concat(screen.queryAllByText(/僅支援 MP4 和 MOV 格式的影片/));
+        expect(inlineErrors.length).toBeGreaterThan(0);
+      });
+    });
+  });
+
   it('AC-169 (Rev 24): proceeds to upload when native file is exactly at 45 MB threshold', async () => {
     mockLaunchImageLibrary.mockResolvedValue(validAsset());
     // Exactly 45,000,000 bytes — should NOT be blocked (> 45,000,000 is the threshold)

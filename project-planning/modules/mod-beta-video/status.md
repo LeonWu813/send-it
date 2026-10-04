@@ -2,6 +2,67 @@
 
 ## Engineering Progress
 
+**Status**: Bug fixes + UI — 2026-10-04 (Fix 1: stale UI after video replace; Fix 2: error message placement prop; Fix 3: shared BetaVideoGrid component with camera icon on route-detail screen)
+
+### Bug Fixes + UI — Fix 1 (replace dedup), Fix 2 (suppressInlineError), Fix 3 (BetaVideoGrid unification) — 2026-10-04
+
+**What changed**:
+
+Three coordinated fixes to BetaVideoSection, BetaVideoUploader, and BetaVideoGrid.
+
+**Fix 1 — Stale UI after video replace (BetaVideoSection.tsx)**
+
+`handleUploadSuccess` blindly prepended the new video onto `betaVideos` state. On a replace, the old row for the same `(user_id, route_id)` pair was still in state even though the DB upsert had already removed it — the grid momentarily showed two cells for the same pair. Fixed by filtering out any existing row matching the new video's `(user_id, route_id)` before prepending:
+
+```ts
+setBetaVideos((prev) => [
+  video,
+  ...prev.filter(
+    (v) => !(v.user_id === video.user_id && v.route_id === video.route_id),
+  ),
+]);
+```
+
+**Fix 2 — Error message placement (BetaVideoUploader.tsx + BetaVideoSection.tsx)**
+
+Upload errors were rendered inline inside `BetaVideoUploader`. RouteDetailScreen (MOD-003) wants to display errors in its own action row below the "Log Send / Upload Video" buttons, not inside the section. Added:
+
+- `suppressInlineError?: boolean` to `BetaVideoUploaderProps` — when `true`, the inline `<Text>` error is not rendered, but `onUploadError?.(msg)` is still called so error propagation is unaffected.
+- `onUploadError?: (message: string) => void` to `BetaVideoSectionProps` — passed through to `BetaVideoUploader` with `suppressInlineError={!!onUploadError}`.
+
+**Fix 3 — BetaVideoGrid camera icon + BetaVideoSection FlatList removal (BetaVideoGrid.tsx + BetaVideoSection.tsx)**
+
+`BetaVideoSection` had its own inline `FlatList`/`renderCell` implementation duplicating the shared `BetaVideoGrid` component already used by `UserProfileScreen` (MOD-006) and `ProfileScreen` (MOD-001). Unified:
+
+1. `BetaVideoGrid.tsx`: Replaced the dark gradient overlay and centered play icon with a small camera icon (`Ionicons "videocam"`, size 14, white) in a rounded dark container top-left (`top: 6, left: 6, backgroundColor: rgba(0,0,0,0.45), borderRadius: 4, padding: 3`). Removed `gradientOverlay`, `playIconContainer`, and `PLAY_ICON_SIZE`. Added `iconContainer` style.
+2. `BetaVideoSection.tsx`: Deleted the inline `FlatList`, `renderCell`, and all associated dead code (`NUM_COLUMNS`, `GRID_GAP`, `CELL_SIZE` constants; `FlatList`, `Pressable`, `Dimensions` RN imports; camera-icon styles `gridCell`, `thumbnailPlaceholder`, `cameraIconContainer`, `grid`, `gridRow`). Replaced with `<BetaVideoGrid videos={betaVideos} onPressVideo={handlePressVideo} horizontalPadding={16} emptyState={...} />`. The `horizontalPadding={16}` matches the section container's `paddingHorizontal: 16` so cell sizes are computed correctly.
+3. `UserProfileScreen.tsx` (MOD-006): already uses `BetaVideoGrid` — camera icon update cascades automatically, no source changes required.
+
+**Changes made**:
+
+1. `BetaVideoGrid.tsx` — replaced gradient overlay + play icon with `iconContainer` + `Ionicons "videocam"` size 14; removed `gradientOverlay`, `playIconContainer`, `PLAY_ICON_SIZE`.
+2. `BetaVideoSection.tsx` — removed inline FlatList/renderCell; added `BetaVideoGrid` usage with `horizontalPadding={GRID_PADDING}`; added `handlePressVideo` callback; added `onUploadError` prop; `suppressInlineError={!!onUploadError}` on `BetaVideoUploader`; dedup filter in `handleUploadSuccess`; removed all dead imports and styles.
+3. `BetaVideoUploader.tsx` — added `suppressInlineError?: boolean` prop; conditional render `{errorMessage && !suppressInlineError ? ... : null}`.
+4. `BetaVideoSection.test.tsx` — added `uploadBetaVideo: jest.fn()` to mock factory; added `mockUploadBetaVideo` typed variable; added Fix 1 dedup test and Fix 2 suppressInlineError test.
+5. `BetaVideoUploader.test.tsx` — added `describe('Fix 2 (suppressInlineError)')` with two tests: inline error absent when `suppressInlineError=true`; inline error present when `suppressInlineError=false`.
+
+**Self-check results**:
+- `npx jest src/modules/mod-beta-video --watchAll=false`: **96 passing, 0 failures, 5 suites.** No regressions.
+- Judgment-based: dedup filter is correct — DB guarantees at most one row per `(user_id, route_id)` via UNIQUE constraint and upsert; `suppressInlineError` only gates JSX rendering, all `onUploadError` propagation unchanged; `BetaVideoSection` now uses the shared component without dead code; `horizontalPadding={16}` correctly accounts for the container's `paddingHorizontal`. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoGrid.tsx` — camera icon replaces gradient/play icon
+- `src/modules/mod-beta-video/components/BetaVideoSection.tsx` — dedup fix, suppressInlineError prop, shared BetaVideoGrid, dead code removed
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — suppressInlineError prop
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — Fix 1 and Fix 2 tests
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — Fix 2 suppressInlineError tests
+
+**ACs addressed**:
+- **AC-038**: three-column thumbnail grid — route-detail screen now uses same shared BetaVideoGrid as profile screens
+- **AC-165 / AC-166 (Rev 28)**: replace flow UI is now correct — no stale duplicate cell after upsert
+
+---
+
 **Status**: Change — 2026-10-03 (AC-031 Rev 29 — restore preferredAssetRepresentationMode.Current; update Phase 1 HDR limitation comments)
 
 ### Change — AC-031 Rev 29: restore preferredAssetRepresentationMode.Current and update HDR comments — 2026-10-03
