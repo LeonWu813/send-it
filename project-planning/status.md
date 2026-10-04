@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: 38b637c6dfe5d9b2b8b06f97958b391d6ffa52cb
+commit: 6479360114be48949918a0875f0a5ad8ed1ec709
 timestamp: 2026-10-03T00:00:00Z
 ```
 
@@ -240,6 +240,72 @@ timestamp: 2026-10-03T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-03 — change (Rev 26 prose reconciliation: AC-031 switched the picker from `preferredAssetRepresentationMode: Current` to iOS `Automatic` transcode — surrounding prose in US-004, §5, §9, §10 still describes the old no-transcode model)
+
+**Context**: Advisory review requested by PM. PRD Rev 26 revised AC-031 (line 597) so the picker no longer sets `preferredAssetRepresentationMode: Current` — it uses the iOS default `Automatic` representation mode, under which iOS transcodes HEVC/HLG source footage to H.264 SDR before returning the URI, and the app uploads that iOS-transcoded file as-is (still no additional client-side compression, still gated at 45 MB). AC-031 itself is internally consistent and correct. The problem is that AC-031's prose neighbors were written for the earlier "upload the original native HEVC file untouched" model and now contradict the transcode model. I read §2 Goals (line 27), US-004 known-trade-off note (line 100), §4 tech-stack video-hosting row (line 297), §5 architecture client bullet + data-flow loop 2 (lines 310, 321), MOD-005 purpose (line 369), AC-031/AC-035/AC-169 (lines 597, 605, 655), §9 Data Model BetaVideo upload-size note (lines 880–886), and §10 NFR Video bullet (line 968). **These are prose-only corrections with no behavioral change** — AC-031 is the single source of truth for behavior and it is already correct. No source, migration, spec, or PRD files changed here. **Advisory only — PM decides whether to apply, and whether to batch as [TRIVIAL]. Any PRD edit routes PM → Doc-Sync; I do not edit `prd.md`.**
+
+**Recommended tagging**: **[TRIVIAL]** — batch all four corrections below in a single PM pass. Each is a factual/consistency correction to prose that describes behavior AC-031 already fully specifies; none changes an acceptance criterion, a data-model field, a dependency, or any user-facing behavior. Doc-Sync will then re-sync MOD-005's spec so the module reference prose matches. (If PM prefers, the §10 figure correction could stand alone, but there is no reason to split them — they are one logical reconciliation.)
+
+**Concerns** (must address before Rev 26 is considered internally consistent):
+
+- **C1 — US-004 trade-off figure is wrong under the transcode model (line 100).** The note cites "~16 Mbps" raw HEVC hitting 45 MB "at roughly 22 seconds." Under Rev 26 the picker returns an iOS `Automatic`-mode H.264 SDR export, whose bitrate is materially lower than raw HEVC (iOS H.264 1080p exports land ~8–10 Mbps, not ~16 Mbps). I confirmed the arithmetic: 45 MB = 45 × 8 = 360 Mbit; at 8 Mbps that is 45 s, at 10 Mbps 36 s. The practical limit is now **~36–45 s**, not ~22 s — the transcode actually *improves* the user-facing limit (closer to the 60 s cap). Leaving "~22 s" understates the product and contradicts AC-031. **Note**: the identical ~22 s figure is repeated in the §10 NFR bullet (line 968, "at full iPhone 1080p HEVC bitrate the 45 MB gate is reached at ~22 s") and must be corrected in both places (see C4).
+
+- **C2 — §5 client bullet says "uploads the original native video file as-is" (line 310).** Under Rev 26 the uploaded file is the iOS-transcoded H.264 SDR file the picker returns, not the original native capture. "As-is" is still true *relative to the picker's output* (no further client re-encoding), but "original native video file" is now wrong — the original HEVC/HDR capture is not what gets uploaded. The data-flow loop 2 (line 321) repeats the same "original native video file as-is" phrasing and needs the same fix.
+
+- **C3 — §9 Data Model and §10 NFR assert "no re-encoding" / "stored as-is" / "without conversion" (lines 880–886, 968).** These are now inconsistent with the transcode model. **Precision note for PM**: the §9 BetaVideo upload-size note (lines 880–886) does *not* actually contain the strings "HEVC stored as-is" or "no re-encoding" — it only says "Phase 1 performs NO client-side compression," which remains **true** under Rev 26 (iOS does the transcode, not the app). So §9's upload-size note needs only a one-clause clarification, not a rewrite. The "no re-encoding," "stored as-is," and "iPhone `.mov`/HEVC footage uploads without conversion" language actually lives in the **§10 NFR Video bullet (line 968)** and in **§5 (lines 310, 321)** — those are the strings that are flatly wrong and must change. (AC-035 at line 605, "Both containers are stored as-is (no server-side transcoding)," remains correct — it is about *server*-side, and the Rev 26 transcode is on-device, pre-upload. Do not touch AC-035.)
+
+- **C4 — The ~22 s figure and the "no re-encoding" framing both recur in the §10 NFR bullet (line 968).** This bullet is the densest concentration of the inconsistency: it states "Phase 1 performs no client-side compression or re-encoding" (the "no re-encoding" half is now wrong — iOS re-encodes), "iPhone-camera `.mov`/HEVC footage uploads without conversion" (now wrong — it is converted to H.264 SDR by the picker), and "at full iPhone 1080p HEVC bitrate the 45 MB gate is reached at ~22 s" (now ~36–45 s at H.264 SDR). All three clauses in this one bullet need correcting together.
+
+**Recommendations** (suggested improvements, not blocking):
+
+- **R1** — When PM applies these, add a short parenthetical pointer in each corrected passage back to AC-031 as the behavioral source of truth (e.g. "(the picker's iOS `Automatic`-mode H.264 SDR output; see AC-031)"), so a future reader who finds the prose does not re-introduce the "original native file" framing. This is the second time this cluster of prose has drifted from AC-031 (Rev 24 → Rev 26); a single explicit cross-reference reduces the chance of a third drift.
+- **R2** — Keep the "no *client-side* compression" wording wherever it appears (it is still accurate and is a real Phase-1 property) but never let it sit next to "no re-encoding" or "original native file" — the distinction PM must hold throughout is: **the app performs no compression/encoding; iOS (the picker) performs a transcode.** Both statements are true simultaneously, and the prose must stop conflating them.
+
+**Approved** (already correct — do not change):
+
+- AC-031 (line 597) — internally consistent, correctly describes the `Automatic`-mode transcode, the H.264 SDR output, the 45 MB gate on the returned file, the lossy HDR→SDR Phase-1 limitation, and the Phase-2 MediaConvert removal. This is the source of truth.
+- AC-035 (line 605) — "stored as-is (no server-side transcoding)" is about the server and remains correct; the Rev 26 transcode is on-device/pre-upload. Do not edit.
+- AC-169 (line 655) — the 45 MB gate "applies to whatever file the picker returns"; consistent with Rev 26.
+- §4 tech-stack video-hosting row (line 297) and the §9 storage-watch note — "stores original native files as-is in Supabase Storage (no transcoding)" at line 297 is borderline (the uploaded file is the picker's transcode, not the native capture), but it is describing *Supabase Storage's* behavior (no *server* transcoding), which is still accurate. **Optional** for PM to tighten "original native files" → "the files the client uploads" for precision; not required for correctness.
+
+---
+
+**Exact corrected text for PM to apply cleanly** (prose only; PM owns `prd.md`, applied via PM → Doc-Sync):
+
+**Correction 1 — US-004 known-trade-off note (line 100).** Replace:
+
+> **Known Phase 1 trade-off (accepted, not a bug)**: Phase 1 uploads the original native video with no client-side compression (AC-031). Because the 45 MB size gate (AC-169) applies to the raw file, a full-bitrate iPhone 1080p HEVC clip (~16 Mbps) reaches the 45 MB limit at roughly 22 seconds — well before the 60-second duration cap (AC-030). As a result, long high-quality clips are rejected with the AC-031 error, and users are expected to trim the clip or lower their camera's recording quality. This is a deliberate Phase 1 limitation of the no-compression approach; the Phase 2 server-side video pipeline (§4, §7) removes it by transcoding server-side.
+
+with:
+
+> **Known Phase 1 trade-off (accepted, not a bug)**: Phase 1 performs no client-side compression (AC-031); the iOS picker runs in `Automatic` representation mode, so it transcodes HEVC/HLG source footage to H.264 SDR before returning the file, and the app uploads that file as-is. Because the 45 MB size gate (AC-169) applies to the picker's H.264 SDR output (~8–10 Mbps for iPhone 1080p), the gate is reached at roughly 36–45 seconds — much closer to the 60-second duration cap (AC-030) than under the earlier no-transcode model. As a result, only long clips are rejected with the AC-031 error, and those users are expected to trim the clip or lower their camera's recording quality. This is a deliberate Phase 1 limitation of the no-client-compression approach; the Phase 2 server-side video pipeline (§4, §7) removes it with a proper server-side HDR→SDR tone-map and transcode.
+
+**Correction 2 — §5 architecture client bullet (line 310).** Replace:
+
+> - The **client** owns rendering, local UI state, client-generated thumbnails, and localization. In Phase 1 the client performs **no** video compression — it uploads the original native video file as-is after an upfront size gate (≥ 45 MB is rejected; see §8 AC-031/AC-169). It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
+
+with:
+
+> - The **client** owns rendering, local UI state, client-generated thumbnails, and localization. In Phase 1 the client performs **no** video compression of its own — it uploads the file the iOS picker returns as-is after an upfront size gate (≥ 45 MB is rejected; see §8 AC-031/AC-169). Because the picker runs in `Automatic` representation mode, that file is an iOS-transcoded H.264 SDR `.mov`, not the original HEVC/HDR capture (AC-031). It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
+
+**Correction 3 — §5 data-flow loop 2 (line 321).** Replace the phrase:
+
+> uploads the original native video file as-is to Supabase Storage after the upfront 45 MB size gate
+
+with:
+
+> uploads the file the iOS picker returns (an `Automatic`-mode H.264 SDR `.mov`, AC-031) as-is to Supabase Storage after the upfront 45 MB size gate
+
+**Correction 4 — §10 NFR Video bullet (line 968).** Replace the three affected clauses. Specifically:
+
+- Replace "**Phase 1 performs no client-side compression or re-encoding** — the original native file is uploaded as-is (AC-031, Rev 24)." with: "**Phase 1 performs no client-side compression** — the app uploads the file the iOS picker returns as-is, with no additional re-encoding. Because the picker runs in `Automatic` representation mode, iOS transcodes HEVC/HLG source footage to H.264 SDR before returning it, so the uploaded file is an iOS-transcoded H.264 SDR `.mov`, not the original native capture (AC-031, Rev 26)."
+- Replace "because nothing is re-encoded, the file is stored as-is (per AC-035), so iPhone-camera `.mov`/HEVC footage uploads without conversion (Phase 1 relies on a container check only — iPhone camera/library footage is H.264 or HEVC + AAC by construction; a codec probe is a Phase 2 nicety)." with: "the file is stored as-is on the server (no *server-side* transcoding, per AC-035); the on-device iOS picker has already transcoded iPhone HEVC/HLG footage to an H.264 SDR `.mov` before upload (AC-031). Phase 1 relies on a container check only — the picker's output is H.264 + AAC by construction; a codec probe is a Phase 2 nicety."
+- Replace "**Known Phase 1 trade-off**: at full iPhone 1080p HEVC bitrate the 45 MB gate is reached at ~22 s, well before the 60 s cap, so long high-quality clips are rejected and users trim or lower recording quality (see US-004) — this is removed by the Phase 2 server-side pipeline." with: "**Known Phase 1 trade-off**: at the picker's H.264 SDR export bitrate (~8–10 Mbps for iPhone 1080p) the 45 MB gate is reached at ~36–45 s, much closer to the 60 s cap, so only long clips are rejected and those users trim or lower recording quality (see US-004) — this is removed by the Phase 2 server-side pipeline." 
+
+**Correction 5 (optional, precision) — §9 Data Model BetaVideo upload-size note (lines 880–886).** The note is not wrong (it only says "NO client-side compression," which stays true), but for consistency PM may append after "Phase 1 performs NO client-side compression (AC-031).": "(The iOS picker runs in `Automatic` mode and transcodes HEVC/HLG to H.264 SDR on-device before upload; the app adds no compression or re-encoding of its own — AC-031, Rev 26.)" No schema change; comment-only.
+
+---
 
 ### Review — 2026-10-03 — blocker (MOD-005 beta-video: HDR overexposure on physical-device playback persists after `preferredAssetRepresentationMode.Current` applied to the picker — diagnosis + fix-direction decision)
 
