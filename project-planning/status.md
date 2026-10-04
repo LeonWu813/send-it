@@ -3,15 +3,21 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
+agent: pm
+mode: change
 module: n/a
 result: success
-commit: 75bf2e516cdc490fc526ca672ca100d91e2e3d35
-timestamp: 2026-10-03T00:00:00Z
-```
+commit: 9954107ddeead4b9b913c4482bc49cac95f29f61
+
 
-## PM Updates
+- **2026-10-03 [TRIVIAL]** — Rev 26 prose reconciliation: aligned four (+one comment) prose passages with the AC-031 transcode model (PRD Revision 27). Leon (via coordinator) approved all five corrections verbatim and directed the [TRIVIAL] tag and the 26 → 27 revision bump. Tech Lead's 2026-10-03 advisory review supplied the exact replacement text (status.md Tech Lead Reviews) and recommended [TRIVIAL] as a single batch. PRD Status line `[TRIVIAL] — Revision 27`; `**Revision**` 26 → 27. **No behavioral change** — AC-031 is the single source of truth for behavior and was already correct at Rev 26; these are factual/consistency corrections to prose that previously described the pre-Rev-26 "original native HEVC file uploaded as-is" model, which contradicted the Rev 26 `Automatic`-mode HEVC/HLG → H.264 SDR transcode. Changes applied:
+  - **C1 — US-004 trade-off note (§3, line 100)**: replaced the "~16 Mbps raw HEVC → ~22 s" figure with "picker H.264 SDR output ~8–10 Mbps → ~36–45 s"; corrected the premise to "Phase 1 performs no client-side compression; the iOS picker `Automatic` mode transcodes HEVC/HLG → H.264 SDR"; Phase 2 removal reworded to "proper server-side HDR→SDR tone-map and transcode."
+  - **C2 — §5 architecture client bullet (line 310)**: "uploads the original native video file as-is" → "uploads the file the iOS picker returns as-is … an iOS-transcoded H.264 SDR `.mov`, not the original HEVC/HDR capture (AC-031)."
+  - **C3 — §5 data-flow loop 2 (line 321)**: same phrase corrected to "uploads the file the iOS picker returns (an `Automatic`-mode H.264 SDR `.mov`, AC-031) as-is."
+  - **C4 — §10 NFR Video bullet (line 968)**: three clauses corrected — (a) "no client-side compression or re-encoding / original native file uploaded as-is (Rev 24)" → "no client-side compression; picker returns iOS-transcoded H.264 SDR `.mov` (Rev 26)"; (b) "because nothing is re-encoded … iPhone-camera `.mov`/HEVC footage uploads without conversion" → "stored as-is on the server (no *server-side* transcoding, AC-035); the on-device picker already transcoded to H.264 SDR before upload"; (c) the "~22 s at full HEVC bitrate" trade-off figure → "~36–45 s at the picker's H.264 SDR export bitrate."
+  - **C5 — §9 Data Model BetaVideo upload-size SQL comment (lines 880–886)**: appended a clarifying parenthetical (no schema change) noting the picker transcodes HEVC/HLG → H.264 SDR on-device before upload and the app adds no compression/re-encoding of its own.
+  - **Why [TRIVIAL]**: wording/consistency only — no AC changed, no new AC ID, no data-model field, no dependency, no module boundary, no phase-plan change, no user-facing behavior change. Per Tech Lead recommendation R1, each corrected passage now carries an explicit AC-031 cross-reference to prevent a third prose drift (Rev 24 → 26 → this reconciliation). This resolves the internal-consistency tension logged in the Rev 26 [SUBSTANTIVE] entry above.
+  - **Impact**: module boundaries, dependencies, and phase plan unchanged; no new modules. Affected spec for Doc-Sync delta: **MOD-005 (mod-beta-video)** — the module reference prose should match the corrected §3/§5/§9/§10 language (the already-synced Rev 26 AC-031 text is unchanged by this pass; this only aligns surrounding prose). No `production.md` change required. PM did not edit any module spec — this tag is the Doc-Sync trigger. **Run `claude --agent doc-sync`.**
 
 - **2026-10-03 [SUBSTANTIVE]** — AC-031 iOS picker representation-mode change (PRD Revision 26). Leon (via coordinator) approved the exact AC-031 replacement text verbatim and directed the [SUBSTANTIVE] tag. PRD Status line `[SUBSTANTIVE] — Revision 26`; `**Revision**` bumped 25 → 26; Date 2026-10-03. Change: AC-031 (§8 MOD-005) replaced entirely. Observable behavior change — the picker is now selected WITHOUT `preferredAssetRepresentationMode: Current`, so the iOS default `Automatic` mode transcodes HEVC/HLG source footage to **H.264 SDR** before returning the URI; the client uploads the picker-returned file as-is (no additional compression, no further re-encoding) when it is under 45 MB, else rejects with the unchanged bilingual error. The uploaded file is therefore a standard QuickTime `.mov` H.264 SDR file (accepted per AC-035), not the original HEVC/HDR capture. Accepted **Phase 1 limitation (not a bug)**: the `Automatic`-mode HDR (BT.2020 HLG)→SDR transcode is lossy, done because Phase 1's expo-video `VideoView` playback path renders HLG without extended display range (would otherwise appear overexposed on SDR displays); the Phase 2 MediaConvert pipeline (§4, §7) does a proper HDR→SDR tone-map and removes this. Thumbnail-placeholder clause unchanged. "under 45 MB" pass wording confirmed consistent with the shipped `> 45 MB` reject gate (exactly 45 MB passes) — unchanged from Rev 25.
   - **Scope — AC-031 only (per coordinator's explicit instruction)**: AC-035, AC-036, AC-169, and the §4/§5/§7 architecture sections are NOT edited. No new module, no new user story, no new dependency, no new DB migration, no phase-plan change, no new AC ID. The AC-031 ID remains cited in US-004 (§3) and resolves in §8.
