@@ -24,7 +24,7 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import FollowersListScreen from '../mod-social-feed/screens/FollowersListScreen';
 import FollowingListScreen from '../mod-social-feed/screens/FollowingListScreen';
@@ -64,6 +64,15 @@ export default function ProfileNavigator({
 }: ProfileNavigatorProps): React.JSX.Element {
   const [view, setView] = useState<ProfileView>('profile');
   const { profile } = useSession();
+
+  // Reset to the main profile view each time the Profile tab becomes active.
+  // The keep-alive mount strategy (display:none) preserves component state
+  // across tab switches, so without this reset the user would return to
+  // whichever sub-view (settings, notifications, followers, following) they
+  // left the tab on — rather than the expected main profile surface.
+  useEffect(() => {
+    if (isActive) setView('profile');
+  }, [isActive]);
 
   if (view === 'editProfile') {
     return (

@@ -1315,6 +1315,39 @@ All acceptance criteria pass. The AC-114 deep-link fix is verified: tapping a sa
 
 ---
 
+## Engineering Progress — Bugfix — 2026-10-04 (profile tab resets to main view on activation)
+
+### Root Cause
+
+The `ProfileNavigator` uses a local `view` state machine (`'profile' | 'editProfile' | 'settings' | 'notifications' | 'followers' | 'following'`). Because AppShell uses the keep-alive mount strategy (`display: 'none'` on inactive tabs), the `ProfileNavigator` never unmounts — its `view` state is preserved across tab switches. When the user navigates to a sub-view (settings, notifications, followers, or following) and then switches to another tab, re-tapping the Profile tab (person icon) returns them to whichever sub-view was last active rather than the main profile surface.
+
+The user experienced this as "the home/house icon takes me to Settings/Notifications/Followers/Following instead of Profile" — indicating the profile tab was not resetting to its root view when reactivated.
+
+### Fix Applied
+
+**`src/modules/mod-auth-profile/ProfileNavigator.tsx`** — added `useEffect` import alongside `useState`; added a `useEffect([isActive])` that calls `setView('profile')` whenever `isActive` flips to `true`. The `isActive` prop was already being passed from `AppShell` (`isActive={activeTab === 'profile'}`); the hook was simply not present to act on it.
+
+Note: `ProfileNavigator.tsx` is owned by MOD-001. This cross-module edit was explicitly authorized by the coordinator's invocation ("trace the navigation stack and fix the root cause").
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | Pre-existing errors in `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` (unrelated to this change — confirmed present before the edit via `git stash` + tsc run). No new errors introduced. |
+| `npx jest --passWithNoTests --watchAll=false` | PASS — 448 tests, 31 suites, all pass |
+| `npx jest --testPathPattern="mod-auth-profile" --passWithNoTests --watchAll=false` | PASS — 15 tests, 2 suites |
+| ProfileNavigator resets to 'profile' view when isActive flips to true | PASS (code inspection) |
+| Keep-alive strategy unaffected (display:none logic in AppShell unchanged) | PASS |
+| Sub-view navigation (settings, notifications, followers, following) still functional | PASS — setView() callbacks on ProfileScreen buttons unchanged |
+| isActive already threaded AppShell → ProfileNavigator | PASS — `isActive={activeTab === 'profile'}` in AppShell.tsx |
+| No inline string literals introduced | PASS |
+| No hardcoded hex colors introduced | PASS |
+| TypeScript strict mode — no new unguarded `any` | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## Engineering Progress — Final Verification — 2026-09-29
 
 ### Summary
