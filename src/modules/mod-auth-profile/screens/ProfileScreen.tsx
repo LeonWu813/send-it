@@ -239,6 +239,7 @@ export default function ProfileScreen({
           setReelStartIndex(index);
           setShowReel(true);
         }}
+        horizontalPadding={theme.spacing.lg}
         emptyState={
           <Text style={styles.videoSectionEmpty}>{t('betaVideo.noVideosYet')}</Text>
         }

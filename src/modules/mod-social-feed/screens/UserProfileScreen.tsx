@@ -41,6 +41,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchProfileStats } from '../../mod-profile-history/history-service';
 import type { ProfileStats } from '../../mod-profile-history/types';
 import {
+  BetaVideoGrid,
+  BetaVideoReelViewer,
+  fetchBetaVideosByUser,
+} from '../../mod-beta-video';
+import type { BetaVideo } from '../../mod-beta-video';
+import {
   blockUser,
   fetchBlockedUserIds,
   reportUser,
@@ -110,6 +116,11 @@ export default function UserProfileScreen({
   // AC-150: sheet visibility
   const [sheetVisible, setSheetVisible] = useState(false);
 
+  // AC-163: beta video grid + reel viewer
+  const [betaVideos, setBetaVideos] = useState<BetaVideo[]>([]);
+  const [reelStartIndex, setReelStartIndex] = useState(0);
+  const [showReel, setShowReel] = useState(false);
+
   // Sheet action state
   const [sheetLoading, setSheetLoading] = useState(false);
   const [sheetError, setSheetError] = useState<string | null>(null);
@@ -122,7 +133,7 @@ export default function UserProfileScreen({
     setError(null);
     try {
       // AC-153: include fetchBlockedUserIds() in the Promise.all
-      const [profileResult, countsResult, followingResult, statsResult, blockedIds] =
+      const [profileResult, countsResult, followingResult, statsResult, blockedIds, videosResult] =
         await Promise.all([
           supabase
             .from('users')
@@ -134,6 +145,8 @@ export default function UserProfileScreen({
           fetchProfileStats(targetUserId).catch(() => null),
           // AC-153: fetch block set (both directions)
           isOwnProfile ? Promise.resolve(new Set<string>()) : fetchBlockedUserIds().catch(() => new Set<string>()),
+          // AC-163: fetch beta videos for profile grid
+          fetchBetaVideosByUser(targetUserId).catch(() => [] as BetaVideo[]),
         ]);
 
       if (profileResult.error) {
@@ -144,6 +157,8 @@ export default function UserProfileScreen({
       setCounts(countsResult);
       setIsFollowing(followingResult);
       setStats(statsResult);
+      // AC-163: set beta videos (silently empty on error via .catch above)
+      setBetaVideos(videosResult as BetaVideo[]);
 
       // AC-153: derive blocked states
       const blocked = blockedIds as Set<string>;
@@ -499,9 +514,34 @@ export default function UserProfileScreen({
                 )}
               </>
             )}
+
+            {/* AC-163: Beta video grid — below stats section, hidden when profile is blocked */}
+            <View style={styles.videoSection}>
+              <Text style={styles.videoSectionTitle}>{t('betaVideo.userVideos')}</Text>
+              <BetaVideoGrid
+                videos={betaVideos}
+                onPressVideo={(index) => {
+                  setReelStartIndex(index);
+                  setShowReel(true);
+                }}
+                emptyState={
+                  <Text style={styles.videoSectionEmpty}>{t('betaVideo.noVideosYet')}</Text>
+                }
+              />
+            </View>
           </>
         )}
       </ScrollView>
+
+      {/* AC-163: BetaVideoReelViewer — rendered at top level to overlay correctly */}
+      <BetaVideoReelViewer
+        videos={betaVideos}
+        initialIndex={reelStartIndex}
+        visible={showReel}
+        onDismiss={() => { setShowReel(false); }}
+        session={session}
+        reelContext="profile"
+      />
 
       {/* AC-150: Bottom action sheet modal — rendered outside ScrollView */}
       {!isOwnProfile && (
@@ -836,6 +876,23 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       fontSize: theme.fontSize.xs,
       color: theme.colors.textSecondary,
       textAlign: 'right',
+    },
+    // ── Beta video grid section (AC-163) ─────────────────────────────────────
+    videoSection: {
+      paddingTop: theme.spacing.lg,
+    },
+    videoSectionTitle: {
+      fontSize: theme.fontSize.md,
+      fontWeight: theme.fontWeight.bold,
+      color: theme.colors.textPrimary,
+      marginBottom: theme.spacing.sm,
+    },
+    videoSectionEmpty: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+      textAlign: 'center',
+      paddingVertical: theme.spacing.lg,
+      paddingHorizontal: theme.spacing.lg,
     },
   });
 }

@@ -1009,3 +1009,115 @@ PASS. `followCountLabel` style: `color: theme.colors.primary`. `followCountNumbe
 **New regressions: 0**
 
 **MOD-001 Rev 18 scope (AC-145) — QA PASS.**
+
+---
+
+## Engineering Progress — Rev 22 — 2026-09-30
+
+### Changes Implemented
+
+**AC-167: Remove Logout from ProfileScreen**
+- Removed `profileFooter` JSX block (the `<View style={styles.footerContainer}>` containing the Logout button and error message).
+- Removed `listFooterComponent={profileFooter}` (the footer is now the video section, see AC-164).
+- Removed `isSigningOut`, `errorMessage` state and `handleLogout` function.
+- Removed `signOut` import from `'../auth-service'`.
+- Removed `ActivityIndicator` import (no longer needed).
+- Removed related styles: `footerContainer`, `errorText`, `logoutButton`, `logoutButtonPressed`, `logoutButtonDisabled`, `logoutButtonText`.
+- Updated file-level comment and scroll architecture comment.
+
+**AC-164: BetaVideoGrid on ProfileScreen**
+- Added imports: `BetaVideoGrid`, `BetaVideoReelViewer`, `fetchBetaVideosByUser` from `'../../mod-beta-video'`; `BetaVideo` type.
+- Added state: `betaVideos: BetaVideo[]`, `reelStartIndex: number`, `showReel: boolean`.
+- Merged the two `useEffect` fetches (follower counts + beta videos) into a single `Promise.all` call for efficiency; both remain non-critical (silent error handling).
+- New `profileFooter` JSX (replaces removed logout footer) passed as `listFooterComponent`: `<View style={styles.videoSectionContainer}>` containing section title `t('betaVideo.myVideos')`, `<BetaVideoGrid>`, and empty state `<Text>t('betaVideo.noVideosYet')</Text>`.
+- `BetaVideoReelViewer` rendered in the root `<View style={styles.root}>` as a conditional sibling: `visible={showReel}`, `initialIndex={reelStartIndex}`, `session={_session}`, `reelContext="profile"`, `onDismiss={() => setShowReel(false)}`.
+- New styles added to `makeStyles`: `videoSectionContainer`, `videoSectionTitle`, `videoSectionEmpty`.
+- New i18n keys added:
+  - `locales/en/common.json` — `betaVideo.myVideos: "My Beta Videos"`, `betaVideo.noVideosYet: "No beta videos yet"`
+  - `locales/zh-TW/common.json` — `betaVideo.myVideos: "我的 Beta 影片"`, `betaVideo.noVideosYet: "還沒有 Beta 影片"`
+
+**New public service — `updateBetaVideoPrivacy` (AC-157)**
+- Added `updateBetaVideoPrivacy(value: 'public' | 'followers_only'): Promise<void>` to `src/modules/mod-auth-profile/auth-service.ts`.
+- Gets session via `supabase.auth.getSession()`; throws if not authenticated.
+- Updates `users.beta_video_privacy` column for the current user.
+- Consumed by MOD-010 SettingsScreen (AC-157).
+
+**Module barrel created**
+- Created `src/modules/mod-auth-profile/index.ts` — exports `ProfileNavigator`, `AuthNavigator`, all auth-service functions including `updateBetaVideoPrivacy`, `useSession` hook, and types `UserProfile`/`PrivacySetting`.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 421/429 MOD-001 and all non-UserProfileScreen tests pass; 8 failures in `UserProfileScreen.test.tsx` (MOD-006, pre-existing, unrelated to this change) |
+| i18n key completeness (`i18n.test.ts`) | PASS — `betaVideo.myVideos` and `betaVideo.noVideosYet` present in both EN and zh-TW |
+| AC-167: Logout removed from ProfileScreen | PASS |
+| AC-164: BetaVideoGrid below send history | PASS |
+| AC-164: BetaVideoReelViewer with reelContext="profile" opens on cell tap | PASS |
+| AC-164: `fetchBetaVideosByUser` called with `profile.id` | PASS |
+| `updateBetaVideoPrivacy` added to auth-service.ts | PASS |
+| `updateBetaVideoPrivacy` exported from module barrel | PASS |
+| No hardcoded hex colors in new/changed code | PASS |
+| No inline string literals — all new strings through `t()` | PASS |
+| No new dependencies outside production.md tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| `_session` passed to BetaVideoReelViewer (`session` prop required) | PASS |
+| `visible={showReel}` passed to BetaVideoReelViewer | PASS |
+
+**Result: READY FOR QA**
+
+---
+
+## Engineering Progress — Migration Hotfix — 2026-09-30 (AC-156 beta_video_privacy)
+
+**Issue**: `users.beta_video_privacy` column (AC-156) was added to `auth-service.ts` and `updateBetaVideoPrivacy` service function in the Rev 22 engineering pass, but the required migration file was never created. MOD-005's AC-158 filter already reads this column from the poster join; without the migration the column is absent in the deployed schema.
+
+**Fix applied**: Created `supabase/migrations/20260930000002_mod_001_beta_video_privacy.sql`.
+- `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS beta_video_privacy privacy_setting NOT NULL DEFAULT 'public';`
+- Reuses the existing `privacy_setting` enum (created in `20260920000001_mod_001_user_profile.sql`).
+- `DEFAULT 'public'` backfills all existing rows to current (public) behavior — no data loss, no RLS policy change required.
+- `IF NOT EXISTS` makes the migration idempotent.
+- The existing `users_update_own` RLS policy (`FOR UPDATE USING (auth.uid() = id)`) already covers all columns; no RLS change needed.
+
+**Self-check results**:
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| Migration file created at correct path | PASS |
+| Uses existing `privacy_setting` enum (no new type created) | PASS |
+| `IF NOT EXISTS` guard — idempotent | PASS |
+| `DEFAULT 'public'` — safe backfill of existing rows | PASS |
+| No RLS policy change required — existing update policy covers all columns | PASS |
+| No source code changes required — service function already present from Rev 22 | PASS |
+
+---
+
+## Engineering Progress — UI Alignment Fix — 2026-10-04 (BetaVideoGrid horizontal padding)
+
+**Issue**: On `ProfileScreen`, the "Beta Videos" section title had `paddingHorizontal: theme.spacing.lg` (24 px) but `BetaVideoGrid` received no `horizontalPadding` prop, rendering the grid edge-to-edge and misaligning the title left-edge with the grid left-edge.
+
+On `UserProfileScreen`, the same misalignment existed in the opposite direction: the title had an extra `paddingHorizontal: theme.spacing.lg` on top of the container's `paddingHorizontal: theme.spacing.lg` (double-indented title), while the grid received only the container's padding — so the title was over-indented relative to the grid.
+
+**Files changed**:
+
+1. `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`
+   - Added `horizontalPadding={theme.spacing.lg}` prop to `<BetaVideoGrid>` in `profileFooter`. `BetaVideoGrid` uses `horizontalPadding` to compute the correct per-cell width so the grid fills to the same inset as the title.
+
+2. `src/modules/mod-social-feed/screens/UserProfileScreen.tsx`
+   - Removed `paddingHorizontal: theme.spacing.lg` from `videoSectionTitle` style in `makeStyles`. The `contentContainer` already provides `paddingHorizontal: theme.spacing.lg`; the extra padding on the title was causing double-indentation. Grid and title now share the single container inset (no `horizontalPadding` prop needed on `BetaVideoGrid` there).
+
+**Self-check results**:
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 2 pre-existing errors in `mod-beta-video/__tests__/BetaVideoUploader.test.tsx` (Alert namespace, present before this change); 0 errors in changed files |
+| `BetaVideoGrid` `horizontalPadding` prop — type correct (`number`, optional, default 0) | PASS |
+| `ProfileScreen`: title left-edge and grid left-edge both inset by `theme.spacing.lg` (24 px) | PASS |
+| `UserProfileScreen`: title and grid both inset by container's single `paddingHorizontal: theme.spacing.lg` | PASS |
+| No hardcoded values — padding references `theme.spacing.lg` token | PASS |
+| No new i18n keys introduced | PASS |
+| No new dependencies | PASS |
+
+**Result: READY FOR QA**
