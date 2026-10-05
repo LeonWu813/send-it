@@ -2,6 +2,50 @@
 
 ## Engineering Progress
 
+**Status**: Convention fix — 2026-10-04 (fetchBetaVideosForRoute: add console.error before throw per project logging convention)
+
+### Convention fix — console.error before throw in fetchBetaVideosForRoute — 2026-10-04
+
+**What changed**: Added `console.error('[fetchBetaVideosForRoute] error:', error)` immediately before the `throw new Error(...)` at line 54 of `beta-video-service.ts`. This brings `fetchBetaVideosForRoute` in line with the project-wide convention (logged in `production.md`) requiring all service functions to log the raw Supabase error before throwing a user-facing string. The throw and its message are unchanged.
+
+**Self-check results**: `npm run lint` (tsc --noEmit): **0 errors**. PASS.
+
+**Files modified**: `src/modules/mod-beta-video/beta-video-service.ts` — `console.error` added before throw in `fetchBetaVideosForRoute` error handler.
+
+---
+
+**Status**: Runtime fix — 2026-10-04 (fetchBetaVideosByUser: drop nested FK hint `gyms!routes_gym_id_fkey` → `gyms(name)`; add console.error before throw)
+
+### Runtime fix — fetchBetaVideosByUser PostgREST join error + error logging — 2026-10-04
+
+**What changed**:
+
+**Change 1 — fix the join string (`beta-video-service.ts` line 243)**
+
+Dropped the explicit FK hint `!routes_gym_id_fkey` from the nested `gyms` embed inside `fetchBetaVideosByUser`. PostgREST does not reliably support explicit FK hints at multiple nesting levels, and the `routes → gyms` relationship is unambiguous (only one FK: `routes.gym_id → gyms.id`), so the hint is unnecessary. The outer FK hint on `routes!beta_videos_route_id_fkey` is retained — it disambiguates the FK from `beta_videos` to `routes`.
+
+Old: `routes!beta_videos_route_id_fkey(name, gyms!routes_gym_id_fkey(name))`
+New: `routes!beta_videos_route_id_fkey(name, gyms(name))`
+
+The flatten map (`(row.routes as any)?.gyms?.name ?? null`) is unchanged — it correctly reads the resolved `gyms` object regardless of whether the FK hint was present.
+
+**Change 2 — log the real error before throwing (`beta-video-service.ts` line 250)**
+
+Added `console.error('[fetchBetaVideosByUser] error:', error)` before the `throw new Error(...)` so the actual Supabase error is visible in device logs, making future diagnosis possible.
+
+**Self-check results**:
+- `npm run lint` (tsc --noEmit): **0 errors**. PASS.
+- No test change required — tests mock the Supabase client and do not exercise this class of runtime PostgREST error; the fix must be validated on device.
+- Judgment-based: minimal-footprint fix; only the nested FK hint string and one log line changed; no type changes, no new imports, no AC text changed; flatten map is unaffected. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/beta-video-service.ts` — join string: `gyms!routes_gym_id_fkey(name)` → `gyms(name)`; `console.error` added before throw in `fetchBetaVideosByUser` error handler
+
+**ACs addressed**:
+- **AC-162**: `fetchBetaVideosByUser` now resolves correctly on device; route/gym join works without the ambiguous nested FK hint
+
+---
+
 **Status**: Bug fixes — 2026-10-04 (QA Bug 1: AC-166 replace dialog missing in same-session re-upload; QA Bug 2: route/gym name missing in profile reel viewer; QA Bug 3: prior video visible while next video buffers on swipe)
 
 ### Bug Fixes — QA Bug 1 (AC-166 same-session), Bug 2 (profile reel Row 2), Bug 3 (swipe loading overlay) — 2026-10-04
