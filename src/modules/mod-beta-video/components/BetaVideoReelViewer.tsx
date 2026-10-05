@@ -45,6 +45,7 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
+import { useEventListener } from 'expo';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import React, {
   useCallback,
@@ -291,14 +292,18 @@ export default function BetaVideoReelViewer({
   // Applied as `translateY` on the entire content Animated.View.
   const dragY = useRef(new Animated.Value(0)).current;
 
-  // ── Video loading overlay (Bug 3 fix) ─────────────────────────────────────
-  // True from the moment currentIndex changes until VideoView fires
-  // onFirstFrameRender (the expo-video equivalent of RN Video's onReadyForDisplay).
-  // While true, a black overlay with a centered ActivityIndicator is rendered above
-  // the VideoView so the previous video's last frame is not visible during buffering.
+  // ── Video loading overlay (AC-039 / AC-133 timing fix) ────────────────────
+  // True from the moment a swipe is committed (set immediately in the swipe
+  // handler — Root cause 1 fix) until the player fires statusChange=readyToPlay
+  // (Root cause 2 fix: useEventListener replaces the unreliable onFirstFrameRender).
+  // The useEffect below is a belt-and-suspenders fallback: for the initial open
+  // and any non-swipe index change it ensures the overlay is shown; for swipes it
+  // is a no-op (overlay is already true from the swipe handler).
+  // The overlay is rendered as a sibling of the dragY-transformed Animated.View
+  // (Root cause 3 fix) so it covers the full screen during the slide animation.
   const [isVideoLoading, setIsVideoLoading] = useState(false);
 
-  // Reset isVideoLoading whenever the active index changes.
+  // Fallback: ensure overlay is on whenever the active index changes.
   useEffect(() => {
     setIsVideoLoading(true);
   }, [currentIndex]);
@@ -339,6 +344,22 @@ export default function BetaVideoReelViewer({
   // ── Video player ─────────────────────────────────────────────────────────
   const player = useVideoPlayer(null, (p) => {
     p.loop = false;
+  });
+
+  /**
+   * AC-039 / AC-133 fix (Root cause 2):
+   * Use the player's `statusChange` event to clear the loading overlay.
+   * `onFirstFrameRender` on VideoView is scoped to the mounted view and can
+   * re-fire mid-playback — it is not a reliable per-source signal.
+   * `statusChange` fires with `readyToPlay` when the new source has buffered
+   * enough to play, which is the correct signal to clear the black overlay.
+   */
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status === 'readyToPlay') setIsVideoLoading(false);
+    if (status === 'error') {
+      setIsVideoLoading(false);
+      setUrlError(true);
+    }
   });
 
   useEffect(() => {
@@ -490,6 +511,11 @@ export default function BetaVideoReelViewer({
         if (dy < -SWIPE_THRESHOLD) {
           // Swipe up → next video (if one exists).
           if (currentIndexRef.current < videosLengthRef.current - 1) {
+            // AC-039 / AC-133 fix (Root cause 1): set the overlay immediately on
+            // swipe commit — before the 250 ms slide animation — so the old video
+            // is covered by the black overlay from the moment the user lifts their
+            // finger, not 250 ms later when the index finally changes.
+            setIsVideoLoading(true);
             Animated.timing(dragY, {
               toValue: -screenHeight,
               duration: 250,
@@ -505,6 +531,8 @@ export default function BetaVideoReelViewer({
         } else if (dy > SWIPE_THRESHOLD) {
           // Swipe down → previous video or dismiss.
           if (currentIndexRef.current > 0) {
+            // AC-039 / AC-133 fix (Root cause 1): same early overlay for swipe-down.
+            setIsVideoLoading(true);
             Animated.timing(dragY, {
               toValue: screenHeight,
               duration: 250,
@@ -627,7 +655,6 @@ export default function BetaVideoReelViewer({
               style={StyleSheet.absoluteFill}
               contentFit="contain"
               nativeControls={false}
-              onFirstFrameRender={() => { setIsVideoLoading(false); }}
               testID="beta-video-reel-video-view"
             />
           ) : null}
@@ -640,21 +667,6 @@ export default function BetaVideoReelViewer({
                 color={theme.colors.textInverse}
                 testID="beta-video-reel-loading"
               />
-            </View>
-          ) : null}
-
-          {/*
-           * Bug 3 fix: black loading overlay while the next video buffers.
-           * Shown from the moment currentIndex changes until the VideoView fires
-           * onFirstFrameRender. Prevents the previous video's last frame from
-           * being visible while the new video loads. Rendered above VideoView and
-           * below the interactive overlay layers so it does not block gestures.
-           * Hidden once the first frame is ready, or if there is a URL error
-           * (the error state view is shown instead).
-           */}
-          {isVideoLoading && !urlError ? (
-            <View style={styles.videoLoadingOverlay} testID="beta-video-reel-video-loading">
-              <ActivityIndicator size="large" color="#fff" />
             </View>
           ) : null}
 
@@ -847,6 +859,24 @@ export default function BetaVideoReelViewer({
           </View>
 
         </Animated.View>
+
+        {/*
+         * AC-039 / AC-133 fix (Root cause 3): black loading overlay rendered as a
+         * sibling of the dragY-transformed Animated.View, NOT inside it.
+         * Placing the overlay inside the Animated.View caused it to slide off-screen
+         * together with the outgoing video during the 250 ms swipe animation,
+         * exposing the previous video's last frame. As a sibling, the overlay covers
+         * the full screen regardless of where dragY translates the content beneath it.
+         * Shown from the moment of swipe commit (setIsVideoLoading called before
+         * Animated.timing starts — Root cause 1 fix) until the statusChange event
+         * fires readyToPlay (Root cause 2 fix). Hidden when there is a URL error
+         * (the error state view inside the Animated.View is shown instead).
+         */}
+        {isVideoLoading && !urlError ? (
+          <View style={styles.videoLoadingOverlay} testID="beta-video-reel-video-loading">
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        ) : null}
       </View>
     </Modal>
   );

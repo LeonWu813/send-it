@@ -2,6 +2,60 @@
 
 ## Engineering Progress
 
+**Status**: Behavioral fix — 2026-10-05 (AC-039/AC-133 overlay timing: early overlay on swipe commit, statusChange replaces onFirstFrameRender, overlay moved outside dragY-animated view)
+
+### Behavioral Fix — AC-039/AC-133 loading overlay timing (three root causes) — 2026-10-05
+
+**Root cause 1 — overlay set too late (fixed)**: `setIsVideoLoading(true)` was only called from `useEffect([currentIndex])`, which runs *after* `Animated.timing` (250 ms slide) completes and `setCurrentIndex` fires in the completion callback. The previous video played unobscured for the entire 250 ms transition. Fix: `setIsVideoLoading(true)` is now called immediately in the swipe-complete handler, before `Animated.timing` starts, for both swipe-up and swipe-down cases.
+
+**Root cause 2 — unreliable ready signal (fixed)**: `onFirstFrameRender` on `VideoView` is scoped to the mounted view and can re-fire mid-playback — not a reliable per-source signal. Fix: replaced with `useEventListener(player, 'statusChange', ({ status }) => { if (status === 'readyToPlay') setIsVideoLoading(false); if (status === 'error') { setIsVideoLoading(false); setUrlError(true); } })` imported from `expo`. `useEventListener` internally calls `player.addListener` (already mocked) and cleans up on unmount via `subscription.remove()`.
+
+**Root cause 3 — overlay inside the animated view (fixed)**: the `videoLoadingOverlay` was a child of the `Animated.View` with `transform: [{ translateY: dragY }]`. During the 250 ms slide, the overlay translated off-screen with the outgoing video, exposing the previous video's last frame. Fix: overlay moved to be a sibling of the `Animated.View`, rendered outside it as a direct child of the outermost `fullscreen` `View`.
+
+**Self-check results**:
+- `npm run lint` (tsc --noEmit): **0 errors**. PASS.
+- `npx jest src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx --watchAll=false`: **27 passing, 0 failures**. PASS.
+- Pre-existing failure in `beta-video-service.test.ts` (`fetchBetaVideosByUser route_name` assertion) confirmed pre-existing — present before these changes in the uncommitted state of `beta-video-service.ts`; not caused by this fix.
+- Judgment-based: `useEventListener` is imported from `expo` (confirmed in `node_modules/expo/build/Expo.d.ts`); uses `player.addListener` (already in the mock); no new native dependency; no new hex literals; no AC text changed; overlay placement verified correct (outside `Animated.View`). PASS.
+- `__mocks__/expo-video.js` updated to remove `onFirstFrameRender` pass-through (now unused); comment updated to explain the new `statusChange` listener pattern for tests.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — `useEventListener` import from `expo`; `useEventListener(player, 'statusChange', ...)` hook replacing `onFirstFrameRender`; `setIsVideoLoading(true)` called before `Animated.timing` in both swipe handlers; `videoLoadingOverlay` moved outside `Animated.View` as a sibling
+- `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — Bug 3 test comment updated to reflect new mechanism
+- `__mocks__/expo-video.js` — removed `onFirstFrameRender` pass-through from VideoView mock; updated comment
+
+**ACs addressed**: AC-039, AC-133 (overlay timing fix — correct "ready" signal via statusChange; immediate overlay on swipe commit; overlay outside animated slide)
+
+---
+
+**Status**: Bug fix — 2026-10-04 (fetchBetaVideosByUser: fix PostgREST 42703 — routes has no `name` column; select grade+color_tag instead)
+
+### Bug Fix — fetchBetaVideosByUser routes.name column does not exist (42703) — 2026-10-04
+
+**Root cause**: The `routes` table has no `name` text column. Routes are identified by `grade` (enum: VB|V0…V10) and `color_tag` (enum: red|orange|…). The select string in `fetchBetaVideosByUser` was requesting `routes!beta_videos_route_id_fkey(name, gyms(name))` which caused PostgREST to return `{"code": "42703", "message": "column routes_1.name does not exist"}`. The `gyms(name)` part is correct — `gyms.name` is a valid text column.
+
+**Fix**:
+
+**Change 1 — select string (`beta-video-service.ts` line 243)**
+
+Old: `routes!beta_videos_route_id_fkey(name, gyms(name))`
+New: `routes!beta_videos_route_id_fkey(grade, color_tag, gyms(name))`
+
+**Change 2 — flatten map (`beta-video-service.ts` line ~265)**
+
+Old: `route_name: (row.routes as any)?.name ?? null`
+New: derive `route_name` from `grade` + `color_tag` using the same display convention as `RouteDetailScreen.formatRouteName` and `RouteColorBadge` — grade followed by capitalized color tag (e.g. `"V5 Blue"`). Since this is a service function without i18n access, the color is capitalized with `.charAt(0).toUpperCase() + .slice(1)` rather than a translation key.
+
+**Self-check results**: `npm run lint` (tsc --noEmit): **0 errors**. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/beta-video-service.ts` — select string and flatten map in `fetchBetaVideosByUser`
+
+**ACs addressed**:
+- **AC-162**: `fetchBetaVideosByUser` now resolves correctly; route_name is populated as `"{grade} {Color}"` (e.g. `"V5 Blue"`) matching app display conventions
+
+---
+
 **Status**: Convention fix — 2026-10-04 (fetchBetaVideosForRoute: add console.error before throw per project logging convention)
 
 ### Convention fix — console.error before throw in fetchBetaVideosForRoute — 2026-10-04

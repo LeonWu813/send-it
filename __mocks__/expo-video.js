@@ -4,17 +4,20 @@
  * Provides minimal stubs for VideoView component and useVideoPlayer hook so
  * that tests rendering components that import expo-video do not require native
  * modules.
+ *
+ * Note: the loading overlay is now cleared via useEventListener(player,
+ * 'statusChange', ...) rather than onFirstFrameRender. Tests that need to
+ * simulate the overlay clearing should call the statusChange listener registered
+ * via player.addListener, or use the statusChangeListeners helper exposed by the
+ * mock player. The VideoView mock no longer needs to carry onFirstFrameRender.
  */
 const React = require('react');
 const { View } = require('react-native');
 
 function VideoView(props) {
-  // Expose onFirstFrameRender so tests can call it to simulate the video being
-  // ready for display (Bug 3 fix — clears the isVideoLoading overlay).
   return React.createElement(View, {
     testID: props.testID,
     accessibilityLabel: 'video-player',
-    onFirstFrameRender: props.onFirstFrameRender,
   });
 }
 

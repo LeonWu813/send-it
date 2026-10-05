@@ -659,9 +659,11 @@ describe('BetaVideoReelViewer', () => {
   // ── Bug 3: video loading overlay on swipe ─────────────────────────────────
 
   it('Bug 3: loading overlay is shown while new video buffers after swiping', async () => {
-    // After swipe, currentIndex changes which sets isVideoLoading=true, causing
-    // the black overlay (testID="beta-video-reel-video-loading") to appear.
-    // The overlay clears when onFirstFrameRender fires on the VideoView.
+    // After swipe commit, setIsVideoLoading(true) is called immediately (Root cause 1 fix),
+    // causing the black overlay (testID="beta-video-reel-video-loading") to appear.
+    // The overlay is rendered outside the dragY-animated view (Root cause 3 fix).
+    // The overlay clears when the player fires statusChange=readyToPlay via
+    // useEventListener (Root cause 2 fix — replaces the unreliable onFirstFrameRender).
     render(
       <BetaVideoReelViewer {...BASE_PROPS} initialIndex={0} />,
       renderOptions(),
