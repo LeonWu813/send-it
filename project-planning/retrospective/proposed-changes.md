@@ -1,8 +1,8 @@
 # Retrospective: Proposed Changes
 
 **Date:** 2026-09-21 (updated 2026-09-22, 2026-10-01, 2026-10-04)
-**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion; MOD-003 cross-module integration gap; MOD-005 human QA session — AC-169 mock-fidelity gap. **2026-10-04 addition:** Beta video pipeline wrong-layer diagnosis (AC-031 HDR overexposure, three PM/Doc-Sync/Engineer/QA cycles burned on picker layer when player layer was the cause); dead-code upload path (AC-166 dialog implemented in `BetaVideoUploader`, never executed because `RouteDetailScreen` always mounts `BetaVideoSection` in AC-130 mode); ProfileScreen `useFocusEffect` crash (mock hid NavigationContainer incompatibility in keep-alive screen, crash invisible in CI, caught only by human QA on device).
-**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership; human QA preparation for MOD-003 revealed `RouteNavigator` was never wired into `GymDetailScreen` (MOD-002); human QA on MOD-005 revealed AC-169 size guard silently never fired due to a mock that hid option-gated API behavior. **2026-10-04:** Two additional human-QA-only device failures after 88 green CI tests (AC-166 dead-code path; AC-031 wrong-layer HDR fix); one device crash after QA-pass (ProfileScreen useFocusEffect in keep-alive mount).
+**Scope:** Post-MOD-001 through MOD-004 — human simulator QA + workflow discussion; MOD-003 cross-module integration gap; MOD-005 human QA session — AC-169 mock-fidelity gap. **2026-10-04 addition:** Beta video pipeline wrong-layer diagnosis (AC-031 HDR overexposure, three PM/Doc-Sync/Engineer/QA cycles burned on picker layer when player layer was the cause); dead-code upload path (AC-166 dialog implemented in `BetaVideoUploader`, never executed because `RouteDetailScreen` always mounts `BetaVideoSection` in AC-130 mode); ProfileScreen `useFocusEffect` crash (mock hid NavigationContainer incompatibility in keep-alive screen, crash invisible in CI, caught only by human QA on device); `fetchBetaVideosByUser` PostgREST runtime failure (nested FK-hinted embed rejected by PostgREST at runtime, invisible to TypeScript and fully-mocked unit tests, function completely non-functional on device).
+**Trigger:** iPhone 17 Pro simulator QA revealed top-bar hidden under Dynamic Island on all screens; workflow discussion clarified `production.md` ownership; human QA preparation for MOD-003 revealed `RouteNavigator` was never wired into `GymDetailScreen` (MOD-002); human QA on MOD-005 revealed AC-169 size guard silently never fired due to a mock that hid option-gated API behavior. **2026-10-04:** Two additional human-QA-only device failures after 88 green CI tests (AC-166 dead-code path; AC-031 wrong-layer HDR fix); one device crash after QA-pass (ProfileScreen useFocusEffect in keep-alive mount); `fetchBetaVideosByUser` completely non-functional on device due to PostgREST-rejected embed string invisible to the test suite.
 
 ---
 
@@ -58,7 +58,19 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 5. Add Safe Area Insets Judgment Item to Engineer Checklist
+### 5. PostgREST Embed Verification Gate — Make Join-String Verification a Required, Auditable Engineer Step
+
+**Target files:**
+- `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section (Change 1: embed verification gate with required status.md evidence record)
+- `~/.claude/skills/qa-checklist/references/common-failure-patterns.md` — append as pattern 10 (Change 2: Supabase embed string failure pattern)
+
+**Rationale:** `fetchBetaVideosByUser` in `beta-video-service.ts` used the nested FK-hinted embed `routes!beta_videos_route_id_fkey(name, gyms(name))`, which PostgREST rejected at runtime on device. The function threw "Failed to load beta videos. Please try again." on every call — completely non-functional. It passed Engineer self-verification, QA code review, and all unit tests because the Supabase client is fully mocked: the mock returns canned data without ever sending the query string to PostgREST. The bug only surfaced at human QA on device. The Tech Lead Review 2026-10-04 and Skill Recommendation both identify this as a recurring un-typed, un-mockable failure surface. The `production.md` Shared Conventions (Convention A: log-before-throw; Convention B: PostgREST verification) are advisory — this proposal converts them into a required, self-verification checklist gate with a mandatory written artifact (SQL snippet or PostgREST URL in status.md Engineering Progress) so the check is auditable. Applies to all future modules querying related tables via PostgREST embeds.
+
+**Draft:** `project-planning/retrospective/drafts/postgrest-embed-verification-gate.proposal.md`
+
+---
+
+### 6. Add Safe Area Insets Judgment Item to Engineer Checklist
 
 **Target file:** `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section
 
@@ -68,7 +80,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 6. Add Safe Area Insets to QA Common Failure Patterns
+### 7. Add Safe Area Insets to QA Common Failure Patterns
 
 **Target file:** `~/.claude/skills/qa-checklist/references/common-failure-patterns.md` — append as next numbered pattern
 
@@ -78,7 +90,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 7. Mock-Fidelity Gap — Option-Gated API Return Fields (Engineer + QA + Cross-Project)
+### 8. Mock-Fidelity Gap — Option-Gated API Return Fields (Engineer + QA + Cross-Project)
 
 **Target files:**
 - `~/.claude/skills/engineer-checklist/SKILL.md` — `<judgment_items>` section (Change 1: mock-fidelity rule)
@@ -91,7 +103,7 @@ Ordered by estimated impact (highest first).
 
 ---
 
-### 8. Document production.md Ownership and Mid-Project Escalation Path
+### 9. Document production.md Ownership and Mid-Project Escalation Path
 
 **Target file:** New project-level skill — suggested `~/.claude/skills/agent-workflow/SKILL.md` (create via create-agent-skills skill)
 
@@ -107,4 +119,4 @@ For each approved proposal, tell Claude Code:
 
 > "Use the create-agent-skills skill to create a project-level skill based on `project-planning/retrospective/drafts/<proposal-file>.md`"
 
-For proposals targeting existing skill files (proposals 2, 3, 4, 5, 6, and 7 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
+For proposals targeting existing skill files (proposals 2, 3, 4, 5, 6, 7, and 8 above), instruct Claude Code to apply the exact change described in the "Proposed Change" section of the draft to the target file. Review the diff before committing.
