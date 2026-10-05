@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-beta-video
-mode: bugfix
-module: mod-beta-video
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: 4ba5ab4f3de83b7821e0c95acd6baa5b89497a21
+commit: 9ebbf29e3702c87223a0a7641fc94c182ed740b8
 timestamp: 2026-10-05T00:00:00Z
 ```
 
@@ -297,6 +297,46 @@ timestamp: 2026-10-05T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-05 (follow-up #2) — blocker (MOD-005 BetaVideoReelViewer: residual previous-video flash persists after the first overlay fix)
+
+**Context**: Advisory follow-up requested by the coordinator. The first fix (this review, entry below dated 2026-10-05) was applied in full by `engineer-mod-beta-video` — all three recommended changes landed (early `setIsVideoLoading(true)` on swipe commit; `useEventListener(player,'statusChange')` clearing the overlay on `readyToPlay` and routing `error` → `urlError`; the black overlay moved *outside* the `dragY` `Animated.View` so it covers the full screen during the slide). Human QA re-tested on device: the overlay is improved but a **brief flash of the previous video still appears** before the next video starts. **Advisory only — no source files edited.** The fix routes through `engineer-mod-beta-video`.
+
+**Verification performed** (read-only, grounding the finding — real API/platform evidence, not restated hypothesis):
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` read in full at current state (the three prior fixes are present: early overlay set at lines 518 & 535; `statusChange` listener at lines 357–363; overlay as sibling of the `Animated.View` at lines 875–879, style `videoLoadingOverlay` opaque `#000000` at lines 988–997).
+- **Platform confirmed iOS-only**: `app.json` → `expo.platforms: ["ios"]`, `expo.ios: true`, `expo.android: false`. This is decisive for ruling the fix (see below).
+- expo-video re-inspected at installed `expo-video@57.0.5`:
+  - `node_modules/expo-video/build/VideoView.types.d.ts` lines 136–143: `useExoShutter` (the native shutter that "covers the `VideoView` before the first video frame is rendered") is **`@platform android` only, `@default false`**. There is **no equivalent shutter prop on iOS** — the iOS `VideoView` is backed by `AVPlayerLayer`, which holds the *last decoded frame of the previous source* on screen until the new source composites its first frame. Nothing in the expo-video iOS surface hides that frame automatically.
+  - `VideoPlayer.types.d.ts` lines 290–295: `readyToPlay` = *"loaded enough data to start playing **or to continue playback**"* — a buffer/data-availability state, explicitly **not** a "first frame of the new source has been composited to the layer" guarantee.
+
+**Confirmed root cause of the *residual* flash — the overlay is cleared on `readyToPlay`, which precedes the first composited frame of the new source; and the `VideoView` (iOS `AVPlayerLayer`) stays composited the whole time holding the previous frame.** Mapping to the three hypotheses in the task brief:
+
+- **Hypothesis C — CONFIRMED as the governing cause on this iOS-only target.** The `VideoView` is never hidden or unmounted across the source swap; the single `AVPlayerLayer` is continuously composited and displays the previous source's last frame. When the overlay is cleared (step below), that layer is what's underneath, still showing the old frame for the brief window until the new frame draws. On iOS there is no `useExoShutter` to mask this (Android-only). The overlay fix reduced the window but cannot eliminate it while the `VideoView` remains visible and the clear signal fires before the new frame.
+- **Hypothesis B — CONFIRMED as the trigger for *when* the old frame leaks.** The overlay clears on `statusChange === 'readyToPlay'`. Per the documented semantics above, `readyToPlay` means "enough data buffered," which on iOS fires *before* the first frame of the new source is drawn to the `AVPlayerLayer`. So clearing at `readyToPlay` lifts the black cover during the exact gap where the layer still shows the previous frame — producing the residual flash. This is the specific ordering defect left after fix #1.
+- **Hypothesis A — NOT the primary cause here, and largely already mitigated.** React state-batching latency between `setIsVideoLoading(true)` and the paint of the overlay is real in general, but fix #1 already sets the flag on swipe commit (before the 250 ms slide) and the overlay is now a fixed sibling that covers the screen during the slide, so the *entry* side is covered. The residual flash is reported on the *new-video-start* side, which is the B+C window, not the A entry window. A is not driving the symptom QA still sees.
+
+**Why fix #1 helped but did not finish the job**: it closed the *entry* window (old frame sliding out with no cover) by raising the overlay early and fixing its z-order. It did not close the *exit* window — the overlay comes **down** one step too early (`readyToPlay`, Hypothesis B) onto a `VideoView` that is still showing the previous frame (Hypothesis C). Both remaining halves must be addressed for the flash to disappear entirely.
+
+**Recommended approach** (for `engineer-mod-beta-video`; all APIs verified present in `expo-video@57.0.5`; pick the combination, in priority order):
+
+1. **Hide the `VideoView` while loading (addresses Hypothesis C — the guaranteed fix).** While `isVideoLoading` is true, render the `VideoView` with `opacity: 0` (preferred over `display:'none'` so the native view and its player attachment are not torn down/re-created on each swap — opacity keeps it mounted and composited-but-invisible). Restore `opacity: 1` only when loading clears. With the `VideoView` invisible, no previous-frame compositing can bleed through *regardless of async timing*, which is exactly the property the task brief calls out as guaranteed. This is the single most robust change and should be done first. (Alternative to opacity: keep the opaque black overlay above the `VideoView` and only clear it on the correct signal per #2 — but opacity-0 on the `VideoView` itself is the belt that makes the outcome timing-independent.)
+
+2. **Delay clearing the overlay past the first *composited* frame, not just `readyToPlay` (addresses Hypothesis B).** Two acceptable options, Engineer's choice:
+   - **(a) Preferred — gate the clear on `onFirstFrameRender` for the frame-paint signal, while keeping `statusChange` only for the `error` → `urlError` path and as a *loading=true* (re-arm) signal.** `onFirstFrameRender` (`VideoView.types.d.ts` lines 131–135) is documented precisely as *"used to hide any cover images that conceal the initial loading of the player"* — it is the paint-time signal, whereas `readyToPlay` is the buffer-time signal. Its documented caveat (may also fire on mid-playback track/quality changes) is harmless here: an extra fire only re-clears an already-clear overlay. Net: clear `isVideoLoading` on `onFirstFrameRender`, not on `readyToPlay`.
+   - **(b) If staying on `statusChange`**: after `readyToPlay`, defer the clear by one or two `requestAnimationFrame` ticks (schedule `requestAnimationFrame(() => requestAnimationFrame(() => setIsVideoLoading(false)))`) so the new frame has a compositing pass to land before the cover lifts. This is a timing hack; prefer (a). Either way, keep the `statusChange === 'error'` → `urlError` branch so the overlay yields to the error view (do not let it hang).
+
+3. **Keep the overlay fully opaque and fixed (already done — verify only).** `videoLoadingOverlay` is opaque `#000000` and now sits outside the `dragY` `Animated.View` (lines 875–879, 988–997). No change needed; just confirm #1's opacity change doesn't reintroduce any transparent layer between the overlay and the `VideoView`.
+
+**Expected outcome / trade-off**: combining #1 (invisible `VideoView` during load) with #2a (clear on first composited frame) eliminates the flash deterministically — there is no window in which a visible `VideoView` shows an old frame with the cover down. The accepted cost, noted in the task brief, is a marginally longer *perceived* black-cover duration on each swap (cover stays up until the new frame actually paints rather than until data is merely buffered). That is the correct trade for zero bleed-through.
+
+**Not a PRD-level change.** Still a behavioral-fidelity fix to AC-039/AC-133 (swipe navigation + persistent loading cover), not a new requirement — no PRD/spec edit. Route directly to `engineer-mod-beta-video` with this diagnosis; no PM tag required.
+
+**Shared Convention — now proposing for adoption (recurrence threshold met).** The prior review (below) flagged this as "flagging only, not routing unless it recurs." It has now recurred within the same component across two fix cycles, and the iOS-specific half (no shutter; `AVPlayerLayer` holds the previous frame) generalizes to any reused-`VideoView` source swap. Proposed Shared Convention for Doc-Sync to carry into `production.md`:
+> **Reused `expo-video` `VideoView` source swaps (iOS):** when a single persistent `VideoView`/`VideoPlayer` swaps sources via `replaceAsync` rather than remounting, (1) drive the load *cover* down on `onFirstFrameRender` (first composited frame), not on `statusChange: readyToPlay` (buffer-only, fires before the frame paints), and (2) render the `VideoView` at `opacity: 0` while loading so the previously-decoded frame held by `AVPlayerLayer` cannot bleed through — iOS has no `useExoShutter` equivalent (that prop is Android-only). Keep the `statusChange: error` path wired to the error UI so the cover never hangs.
+
+Routing note for the coordinator: this is a **Proposed Shared Convention**, which is not a single hop — invoke `pm` to log it as a [TRIVIAL] PRD/convention change, then `doc-sync` to sync it into `production.md`. It is independent of the source fix above, which routes straight to `engineer-mod-beta-video` now.
+
+---
 
 ### Review — 2026-10-05 — blocker (MOD-005 BetaVideoReelViewer: previous video still visible on swipe before the black loading overlay appears)
 
