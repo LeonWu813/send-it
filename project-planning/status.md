@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: 1ea878e277770ff5752275fb5d5c04ba4477b064
-timestamp: 2026-10-05T16:47:53Z
+commit: 4e046c117216a923504547e3d41256e0dbdc8c5b
+timestamp: 2026-10-05T17:00:00Z
 ```
 
 
@@ -1922,6 +1922,29 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-05 — Trivial Passthrough ([TRIVIAL])
+
+**Trigger**: PM [TRIVIAL] tag (2026-10-05) — Reused `expo-video` `VideoView` source-swap Shared Convention (iOS), PRD Revision 31. Source: Tech Lead review dated 2026-10-05 (follow-up #2), recurrence threshold met within `BetaVideoReelViewer` across two fix cycles. Convention routes into `production.md` Shared Conventions only; no module spec change required per PM Update.
+
+**Files modified:**
+
+- `project-planning/production.md` — New `### Reused iOS VideoView Source-Swap` section added to Shared Conventions, inserted adjacent to the other MOD-005/video-playback conventions (after `### Thumbnail Grids Never Mount Video Players Per Cell`, before `### Client-Side Aggregation Over Already-Fetched Arrays`). Convention text copied verbatim from PM Updates entry (commit 8ea0ec9), which sourced it verbatim from the 2026-10-05 follow-up #2 Tech Lead review Proposed Shared Convention.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — not modified (PM already recorded §10 bullet; Doc-Sync write scope excludes prd.md).
+- All module specs — not in scope per PM Update (project-wide convention lives in `production.md`).
+- All agent wrappers — not in scope (no new module, no dependency change).
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** skipped — [TRIVIAL] passthrough per skill routing rules.
 
 ### 2026-10-04 — Trivial Passthrough ([TRIVIAL])
 

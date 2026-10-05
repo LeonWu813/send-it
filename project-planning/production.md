@@ -287,6 +287,10 @@ Phase 1 is globally portrait-locked via `app.json` `"orientation": "portrait"`; 
 
 A grid or list of videos renders `<Image>`/placeholder cells (with an affordance icon), never one `VideoView` per cell; instantiate at most one active video player at a time (in the opened viewer). This protects the cold-start / scroll-performance NFRs and battery.
 
+### Reused iOS VideoView Source-Swap
+
+Reused `expo-video` `VideoView` source swaps (iOS) — when a single persistent `VideoView`/`VideoPlayer` swaps sources via `replaceAsync` rather than remounting, (1) drive the load *cover* down on `onFirstFrameRender` (first composited frame), not on `statusChange: readyToPlay` (buffer-only, fires before the frame paints), and (2) render the `VideoView` at `opacity: 0` while loading so the previously-decoded frame held by `AVPlayerLayer` cannot bleed through — iOS has no `useExoShutter` equivalent (that prop is Android-only). Keep the `statusChange: error` path wired to the error UI so the cover never hangs.
+
 ### Client-Side Aggregation Over Already-Fetched Arrays
 
 When a screen needs both a raw per-item list and a summary of the same single-owner/single-parent set (e.g. "my sends on this route" + "my send count / attempt sum on this route"), fetch the raw set once via the owning module's existing public service and derive the summary client-side (a pure helper in the owning module owns the domain reduction rule). Do not add a server-side aggregate RPC for a single-parent slice — it risks the aggregate disagreeing with the list and adds a redundant round-trip. Reserve batched service functions (`fetch...(ids[])`) for genuine N-across-items reads where a per-item fetch would be N+1.
