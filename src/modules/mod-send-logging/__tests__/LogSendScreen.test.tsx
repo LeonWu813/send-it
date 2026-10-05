@@ -121,6 +121,28 @@ describe('LogSendScreen', () => {
     expect(DEFAULT_PROPS.onSuccess).not.toHaveBeenCalled();
   });
 
+  it('clamps attempts to 1 immediately when user types 0 (Bug E fix)', async () => {
+    render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    // The attempts input is accessible by its label
+    const attemptsInput = screen.getByDisplayValue('1');
+    // Simulate user typing '0'
+    fireEvent.changeText(attemptsInput, '0');
+    // Should be immediately clamped back to '1' — never shows '0'
+    expect(screen.queryByDisplayValue('0')).toBeNull();
+    expect(screen.getByDisplayValue('1')).toBeTruthy();
+  });
+
+  it('clamps attempts to 1 when user clears the field (Bug E fix)', async () => {
+    render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    const attemptsInput = screen.getByDisplayValue('1');
+    // Simulate user clearing the field
+    fireEvent.changeText(attemptsInput, '');
+    // Should be clamped back to '1'
+    expect(screen.getByDisplayValue('1')).toBeTruthy();
+  });
+
   it('locks attempts to 1 when flash style is selected', async () => {
     render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
 

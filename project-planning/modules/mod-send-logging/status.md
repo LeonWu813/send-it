@@ -2,6 +2,69 @@
 
 ## Engineering Progress
 
+### Bugfix — Bug E (attempts clamping) + Bug G (delete button in send history) (2026-10-04)
+
+**Mode:** bugfix (two human QA bugs)
+**Date:** 2026-10-04
+**Engineer:** engineer-mod-send-logging
+
+#### Bug E — Attempts field allows displaying 0
+
+**Root cause:** `handleAttemptsChange` in `LogSendScreen.tsx` called `setAttemptsRaw(value)` unconditionally for any digit string. Since '0' passes `/^\d*$/`, typing '0' stored '0' in state and displayed it in the input, even though `resolvedAttempts` clamped to 1 at submit time.
+
+**Fix:** In `handleAttemptsChange`, replaced the raw `setAttemptsRaw(value)` call with an immediate clamp:
+```ts
+const parsed = parseInt(value, 10);
+if (value === '' || isNaN(parsed)) {
+  setAttemptsRaw('1');
+} else {
+  setAttemptsRaw(String(Math.max(1, parsed)));
+}
+```
+Now '0', '', or any NaN input immediately shows '1' — the input is always honest. No separate error message added (silent clamp per spec direction).
+
+#### Bug G — Delete button not visible in ascent history
+
+**Root cause:** `AscentList.tsx` (which has a trash-icon delete button) is never mounted in the current navigation flow. `RouteDetailScreen.tsx` uses `fetchMyAscentsForRoute` + `summarizeAscents` for the AC-127 summary cards; tapping those cards opens `SendHistoryDetailScreen` (AC-129). `SendHistoryDetailScreen` renders ascent rows inline without any delete button — so no delete affordance was visible to the user.
+
+**Fix:** Added delete functionality directly to `SendHistoryDetailScreen.tsx` (owned by `mod-route-catalog` but consuming `deleteAscent` from `mod-send-logging`'s public barrel):
+- Imported `Alert` from `react-native`
+- Imported `deleteAscent` from `../../mod-send-logging` (public barrel)
+- Added `handleDeleteAscent` callback: Alert confirmation dialog → optimistic `setAscents` filter → `deleteAscent(id)` call → re-fetch fallback on failure
+- Added trash-outline `Ionicons` delete button on every ascent row header (all rows on this screen are the current user's own ascents — `fetchMyAscentsForRoute` is already own-user-scoped)
+- Added `ascentRowHeaderRight`, `deleteButton` styles
+
+#### Files Modified
+
+- `src/modules/mod-send-logging/screens/LogSendScreen.tsx` — `handleAttemptsChange` clamps to min 1 on every keystroke
+- `src/modules/mod-send-logging/__tests__/LogSendScreen.test.tsx` — 2 new tests: "clamps attempts to 1 immediately when user types 0 (Bug E fix)", "clamps attempts to 1 when user clears the field (Bug E fix)"
+- `src/modules/mod-route-catalog/screens/SendHistoryDetailScreen.tsx` — added `Alert`, `deleteAscent` imports; `handleDeleteAscent` callback; trash-icon Pressable on each ascent row; `ascentRowHeaderRight` + `deleteButton` styles
+- `src/modules/mod-route-catalog/__tests__/SendHistoryDetailScreen.test.tsx` — added `deleteAscent` to mock; `mockDeleteAscent` typed helper; 3 new tests: "shows a delete button on each ascent row (Bug G fix)", "shows Alert confirmation dialog when delete button is tapped", "calls deleteAscent and removes the row optimistically when user confirms"
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Tests (npx jest --watchAll=false) | PASS | 454/454 tests pass, 32 suites — 0 regressions; 5 new tests added (2 LogSendScreen, 3 SendHistoryDetailScreen) |
+| Git scope | NOTE | SendHistoryDetailScreen.tsx is in mod-route-catalog — cross-boundary write required to fix Bug G because the delete button must appear in the screen that renders the ascent history rows. The public `deleteAscent` service is already exported from mod-send-logging's public barrel (index.ts), so the fix stays within proper cross-module import rules. |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| Bug E: '0' immediately replaced with '1' on input | PASS — handleAttemptsChange clamps before setAttemptsRaw |
+| Bug E: empty string immediately replaced with '1' | PASS — isNaN branch handles empty/NaN |
+| Bug E: no separate error message added | PASS — silent clamp per spec direction |
+| Bug G: delete button visible on every row in SendHistoryDetailScreen | PASS — Pressable + Ionicons trash-outline on each ascent row |
+| Bug G: Alert confirmation before delete | PASS — Alert.alert with cancel + destructive buttons |
+| Bug G: optimistic remove + re-fetch fallback on failure | PASS — setAscents filter then deleteAscent().catch(fetchAscents) |
+| Bug G: deleteAscent imported from public barrel only | PASS — import from ../../mod-send-logging (barrel), not internal file |
+| No hardcoded colors in new styles | PASS — theme.colors.textSecondary for icon, theme.spacing tokens for layout |
+| No new dependencies | PASS — Ionicons already in mod-route-catalog (RouteDetailScreen uses it) |
+| Tests cover both bugs | PASS — 2 new LogSendScreen tests + 3 new SendHistoryDetailScreen tests |
+
+---
+
 ### Rev 15 — Remove grade display and always-private (AC-131, AC-132) (2026-09-28)
 
 **Mode:** feature (presentational removal + hardcoded is_private)

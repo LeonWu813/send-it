@@ -88,9 +88,12 @@ export default function LogSendScreen({
   }
 
   function handleAttemptsChange(value: string): void {
-    // Allow only numeric input; permit empty string while typing.
-    if (/^\d*$/.test(value)) {
-      setAttemptsRaw(value);
+    // Clamp immediately so '0' or empty never displays — min 1 at all times.
+    const parsed = parseInt(value, 10);
+    if (value === '' || isNaN(parsed)) {
+      setAttemptsRaw('1');
+    } else {
+      setAttemptsRaw(String(Math.max(1, parsed)));
     }
   }
 

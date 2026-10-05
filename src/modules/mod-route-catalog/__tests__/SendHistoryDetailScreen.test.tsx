@@ -14,18 +14,21 @@ jest.mock('../../../lib/supabase', () => ({
 
 jest.mock('../../mod-send-logging', () => ({
   fetchMyAscentsForRoute: jest.fn(),
+  deleteAscent: jest.fn(),
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { fetchMyAscentsForRoute } from '../../mod-send-logging';
+import { Alert } from 'react-native';
+import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import SendHistoryDetailScreen from '../screens/SendHistoryDetailScreen';
 import { renderOptions } from '../test-utils';
 import type { AscentWithProfile } from '../../mod-send-logging';
 
 const mockFetchMyAscentsForRoute = fetchMyAscentsForRoute as jest.MockedFunction<typeof fetchMyAscentsForRoute>;
+const mockDeleteAscent = deleteAscent as jest.MockedFunction<typeof deleteAscent>;
 
 const MOCK_SESSION = {
   user: { id: 'user-001' },
@@ -224,6 +227,76 @@ describe('SendHistoryDetailScreen', () => {
       const topBadges = screen.queryAllByText(/^Top$/i).concat(screen.queryAllByText(/完攀/));
       expect(flashBadges.length).toBeGreaterThan(0);
       expect(topBadges.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('shows a delete button on each ascent row (Bug G fix)', async () => {
+    mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT, MOCK_ASCENT_WITH_NOTE]);
+
+    render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // All rows belong to the current user — each should have a delete button
+      const deleteButtons = screen.queryAllByRole('button').filter(
+        (el) =>
+          el.props.accessibilityLabel === 'Delete' ||
+          el.props.accessibilityLabel === '刪除',
+      );
+      expect(deleteButtons).toHaveLength(2);
+    });
+  });
+
+  it('shows Alert confirmation dialog when delete button is tapped', async () => {
+    mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT]);
+    const alertSpy = jest.spyOn(Alert, 'alert');
+
+    render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      const deleteButtons = screen.queryAllByRole('button').filter(
+        (el) =>
+          el.props.accessibilityLabel === 'Delete' ||
+          el.props.accessibilityLabel === '刪除',
+      );
+      expect(deleteButtons).toHaveLength(1);
+      fireEvent.press(deleteButtons[0]);
+    });
+
+    expect(alertSpy).toHaveBeenCalledTimes(1);
+    alertSpy.mockRestore();
+  });
+
+  it('calls deleteAscent and removes the row optimistically when user confirms', async () => {
+    mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT, MOCK_ASCENT_WITH_NOTE]);
+    mockDeleteAscent.mockResolvedValueOnce(undefined);
+
+    // Intercept Alert.alert and immediately invoke the destructive "Delete" handler
+    jest.spyOn(Alert, 'alert').mockImplementationOnce((_title, _message, buttons) => {
+      const deleteButton = buttons?.find((b) => b.style === 'destructive');
+      deleteButton?.onPress?.();
+    });
+
+    render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    // Wait for ascents to load — MOCK_ASCENT has style 'flash'
+    await waitFor(() => {
+      const flashBadges = screen.queryAllByText(/Flash/i).concat(screen.queryAllByText(/閃攀/));
+      expect(flashBadges.length).toBeGreaterThan(0);
+    });
+
+    const deleteButtons = screen.queryAllByRole('button').filter(
+      (el) =>
+        el.props.accessibilityLabel === 'Delete' ||
+        el.props.accessibilityLabel === '刪除',
+    );
+    // Press the first delete button (MOCK_ASCENT — 'flash')
+    fireEvent.press(deleteButtons[0]);
+
+    await waitFor(() => {
+      expect(mockDeleteAscent).toHaveBeenCalledWith('a-001');
+      // After optimistic removal only MOCK_ASCENT_WITH_NOTE remains (Top badge)
+      const flashBadges = screen.queryAllByText(/^Flash$/i).concat(screen.queryAllByText(/^閃攀$/));
+      expect(flashBadges).toHaveLength(0);
     });
   });
 });

@@ -24,6 +24,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -33,7 +34,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useTheme } from '../../../lib/theme';
-import { fetchMyAscentsForRoute } from '../../mod-send-logging';
+import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import type { AscentStyle, AscentWithProfile } from '../../mod-send-logging';
 
 /** Gold color for flash badge — matches the flash achievement icon. */
@@ -84,6 +85,38 @@ export default function SendHistoryDetailScreen({
       setIsLoading(false);
     }
   }, [routeId, t]);
+
+  /**
+   * Optimistically remove the ascent from local state, then call deleteAscent.
+   * On failure, re-fetch the list to restore accurate state.
+   */
+  const handleDeleteAscent = useCallback(
+    (ascentId: string): void => {
+      Alert.alert(
+        t('sendLogging.delete.confirm'),
+        undefined,
+        [
+          {
+            text: t('sendLogging.delete.cancel'),
+            style: 'cancel',
+          },
+          {
+            text: t('sendLogging.delete.delete'),
+            style: 'destructive',
+            onPress: () => {
+              // Optimistic remove
+              setAscents((prev) => prev.filter((a) => a.id !== ascentId));
+              void deleteAscent(ascentId).catch(() => {
+                // Revert on failure by re-fetching
+                void loadAscents();
+              });
+            },
+          },
+        ],
+      );
+    },
+    [t, loadAscents],
+  );
 
   useEffect(() => {
     void loadAscents();
@@ -141,7 +174,23 @@ export default function SendHistoryDetailScreen({
                         {t(`sends.styles.${ascent.style}`)}
                       </Text>
                     </View>
-                    <Text style={styles.dateText}>{displayDate}</Text>
+                    <View style={styles.ascentRowHeaderRight}>
+                      <Text style={styles.dateText}>{displayDate}</Text>
+                      {/* Delete button — all rows in this screen are the current user's own ascents */}
+                      <Pressable
+                        onPress={() => { handleDeleteAscent(ascent.id); }}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('sendLogging.delete.delete')}
+                        style={styles.deleteButton}
+                        hitSlop={8}
+                      >
+                        <Ionicons
+                          name="trash-outline"
+                          size={16}
+                          color={theme.colors.textSecondary}
+                        />
+                      </Pressable>
+                    </View>
                   </View>
                   <View style={styles.ascentMeta}>
                     <Text style={styles.attemptsText}>
@@ -244,6 +293,14 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       alignItems: 'center',
       justifyContent: 'space-between',
       marginBottom: theme.spacing.xs,
+    },
+    ascentRowHeaderRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+    },
+    deleteButton: {
+      padding: theme.spacing.xs,
     },
     styleBadge: {
       alignSelf: 'flex-start',
