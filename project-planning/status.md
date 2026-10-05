@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-beta-video
-mode: bugfix
-module: mod-beta-video
+agent: doc-sync
+mode: trivial
+module: n/a
 result: success
-commit: abee206
+commit: c9101f2079aa7e0f01ab9fc5ea359eeb5d4f01d4
 timestamp: 2026-10-04T00:00:00Z
 ```
 
@@ -2382,6 +2382,30 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 - none
 
 **verify-sync.sh:** 4/6 — same two pre-existing script bugs as Rev 18, Rev 20, Rev 22, and Rev 23 (Check 4 grep pattern does not match the `**US-NNN**:` format used in spec Related User Stories sections; Check 6 finds no Phase Plan section). Checks 1, 2, 3, 5 pass. No new structural issues introduced by this delta.
+
+### Sync Report — Trivial Passthrough — 2026-10-04
+
+**Sync type:** trivial
+**PRD Revision:** 30
+**PM Update reference:** 2026-10-04 [TRIVIAL] — Two data-access Shared Conventions from the `fetchBetaVideosByUser` runtime failure (log-before-throw in service functions; manual PostgREST verification for new/modified embedded join strings)
+
+**Files modified:**
+- `project-planning/production.md` — Added two new Shared Conventions to the data-access area: (1) "Log Raw Supabase Error Before Throwing a User-Facing String" (Convention A, inserted after `### RLS-First Data Access`, before `### Migration Conventions`); (2) "Manually Verify Every New or Modified PostgREST Embed/Join String" (Convention B, inserted immediately after `### User-Owned Tables That Participate in PostgREST Joins Reference public.users`, before `### Beta-Video Visibility Has One Canonical Exclusion Predicate`). Text copied verbatim from PM Updates entry (2026-10-04 [TRIVIAL], lines 18–26), which itself quotes the Tech Lead review Proposed Shared Conventions verbatim.
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files created:**
+- none
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** not run (trivial passthrough — per workflow rules, verify-sync.sh is skipped for [TRIVIAL] syncs).
 
 ## Skill Recommendations
 

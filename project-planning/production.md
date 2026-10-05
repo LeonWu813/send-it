@@ -112,6 +112,20 @@ One singleton exported from `src/lib/supabase.ts`. Never construct `createClient
 
 The client never sends `service_role`-authenticated requests. Every table has RLS enabled from the migration that creates it. Feed and other multi-table reads that must compose Follow, Block, and privacy filters are exposed via Postgres RPC (`SECURITY INVOKER`), not raw table selects.
 
+
+### Log Raw Supabase Error Before Throwing a User-Facing String
+
+Any Supabase data-access function (service files, RPC wrappers, storage helpers) that catches a Supabase `error` and throws a user-facing `Error` MUST first call `console.error('[functionName] error:', error)` so the raw Supabase/PostgREST diagnostic is visible in device/Metro logs. The user-facing string stays generic; the raw error goes to the console, never to the user. Canonical form:
+
+```ts
+if (error) {
+  console.error('[fetchBetaVideosByUser] error:', error);
+  throw new Error('Failed to load beta videos. Please try again.');
+}
+```
+
+Applies to every module's service files. Reference implementations: `mod-beta-video/beta-video-service.ts` `uploadBetaVideo` (storage-error, insert-error, and outer-catch sites) and `fetchBetaVideosByUser`. Known existing gap to sweep when this lands: `fetchBetaVideosForRoute` in the same file throws without logging first (follow-up for the owning Engineer, plus a grep for other `throw new Error` sites inside Supabase service functions project-wide).
+
 ### Migration Conventions
 
 All schema changes ship as Supabase CLI migrations in `supabase/migrations/`. Never edit tables via Studio in production without a corresponding migration file.
@@ -284,6 +298,11 @@ When an AC relocates an action entry point (e.g. moving log-send and upload-beta
 ### User-Owned Tables That Participate in PostgREST Joins Reference public.users
 
 User-owned `public` tables that participate in PostgREST embedded joins or feed/profile joins must reference `public.users(id)`, not `auth.users(id)`. PostgREST can only embed a related resource (`select('*, users(...)')`) when the FK targets a table in the exposed `public` schema. `public.users.id` mirrors `auth.users.id` (same UUID), so referencing `public.users(id)` is equivalent for integrity and additionally enables embedded joins. New user-owned tables should reference `public.users(id)`; when an existing table (e.g. `beta_videos`) needs an embedded user join, repoint its FK (value-preserving, no data migration).
+
+
+### Manually Verify Every New or Modified PostgREST Embed/Join String
+
+Whenever an engineer adds or modifies an embedded join in a `.select()` string — especially a nested embed, and most especially an FK-hinted embed nested inside another embed (e.g. `routes!beta_videos_route_id_fkey(name, gyms(name))`) — they MUST exercise the string against the live or local Supabase instance before marking the AC done: either run the equivalent query in the Studio SQL Editor, or hit the raw PostgREST endpoint directly. A `.select()` embed string is an untyped query DSL that neither TypeScript nor a mocked Supabase client can validate — mocked unit tests short-circuit before the string is ever parsed by PostgREST and therefore CANNOT substitute for this step. This is the data-access corollary of the existing "tests must not mock away a production incompatibility" convention. Nested FK-hinted embeds (more than one level of `!fk_name`) should be avoided in favour of a single disambiguated outer hint or a server-side RPC. Recommended (advisory): note the verification — the equivalent SQL or the PostgREST URL hit — in the module `status.md` Engineering Progress entry so the check is auditable.
 
 ### Beta-Video Visibility Has One Canonical Exclusion Predicate
 
