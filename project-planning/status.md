@@ -3,14 +3,20 @@
 ## Last Action
 
 ```
-agent: engineer-mod-beta-video
-mode: bugfix
-module: mod-beta-video
+agent: pm
+mode: change
+module: n/a
 result: success
-commit: 19004c368d39a058e64f422c70652d055403a681
-timestamp: 2026-10-05T00:00:00Z
+commit: 1ea878e277770ff5752275fb5d5c04ba4477b064
+timestamp: 2026-10-05T16:47:53Z
 ```
 
+
+- **2026-10-05 [TRIVIAL]** — Reused `expo-video` `VideoView` source-swap Shared Convention (iOS) recorded in `prd.md` §10 (PRD Revision 31). Leon (via coordinator) approved the exact change set verbatim — new §10 bullet, Revision 30 → 31, this PM Updates entry, Last Action update — and directed the [TRIVIAL] tag. Source: Tech Lead review dated 2026-10-05 (follow-up #2) under `## Tech Lead Reviews` → `Review — 2026-10-05 (follow-up #2) — blocker (MOD-005 BetaVideoReelViewer: residual previous-video flash persists after the first overlay fix)`, which proposed this Shared Convention for adoption (recurrence threshold met: the pattern recurred within `BetaVideoReelViewer` across two fix cycles). PRD Status line `[TRIVIAL] — Revision 31`; `**Revision**` bumped 30 → 31; Date 2026-10-05. The new §10 bullet is the verbatim Proposed Shared Convention from that review.
+  - **Why [TRIVIAL]**: no new/changed AC, no new AC ID, no new module, no new dependency, no DB migration, no module-boundary change, no phase-plan change, no user-facing behavior change. This is an engineering convention governing *how* a reused `expo-video` `VideoView` swaps sources on iOS — it codifies the fix direction for the AC-039/AC-133 swipe-navigation loading-cover behavior, not a new requirement. The primary artifact is `production.md` (Shared Conventions); the `prd.md` §10 bullet is a minimal cross-reference note, consistent with the prior data-access convention entries (2026-10-04).
+  - **The convention (verbatim, as recorded in §10)**: Reused `expo-video` `VideoView` source swaps (iOS) — when a single persistent `VideoView`/`VideoPlayer` swaps sources via `replaceAsync` rather than remounting, (1) drive the load *cover* down on `onFirstFrameRender` (first composited frame), not on `statusChange: readyToPlay` (buffer-only, fires before the frame paints), and (2) render the `VideoView` at `opacity: 0` while loading so the previously-decoded frame held by `AVPlayerLayer` cannot bleed through — iOS has no `useExoShutter` equivalent (that prop is Android-only). Keep the `statusChange: error` path wired to the error UI so the cover never hangs.
+  - **For Doc-Sync**: add this convention to the `production.md` Shared Conventions section (adjacent to the other MOD-005/video-playback engineering conventions). It is the verbatim Proposed Shared Convention from the 2026-10-05 follow-up #2 Tech Lead review. PM edited only `prd.md` §10 (the minimal note) + this PM Updates tag + Last Action; PM did not edit `production.md` or any module spec. No module spec changes required (project-wide conventions live in `production.md`). **Note**: the source fix for the residual flash routes separately and directly to `engineer-mod-beta-video` per that review (invisible `VideoView` during load + clear on first composited frame); this PM entry covers only the project-wide convention.
+  - **Run `claude --agent doc-sync`.** Doc-Sync NOT invoked here.
 
 - **2026-10-04 [TRIVIAL]** — Two data-access Shared Conventions from the `fetchBetaVideosByUser` runtime failure (log-before-throw in service functions; manual PostgREST verification for new/modified embedded join strings). Leon (via coordinator) requested and approved logging the two Proposed Shared Conventions from the Tech Lead review dated 2026-10-04 (see `## Tech Lead Reviews` → `Review — 2026-10-04 — change (two data-access conventions from the `fetchBetaVideosByUser` runtime failure ...)`), and directed the [TRIVIAL] tag. Root cause context: `fetchBetaVideosByUser` threw a generic user-facing string on device because its `.select()` nested an FK-hinted embed inside another embed (`routes!beta_videos_route_id_fkey(name, gyms(name))`), a shape PostgREST rejects at runtime; the fully-mocked unit test never validated the string against PostgREST, and the function swallowed the raw error. The source fix already routed through `engineer-mod-beta-video` (Tech Lead confirms commit `cf77912`); this PM entry covers only the two project-wide conventions. Unlike the prior production.md-only convention entries, this one records a minimal note of both conventions in `prd.md` §10 (Non-Functional Requirements), alongside the existing engineering-convention bullets (native dependency installation, native build gate, file upload) — so the PRD revision is bumped: Status line `[TRIVIAL] — Revision 30`; `**Revision**` 29 → 30; Date 2026-10-04.
   - **Why [TRIVIAL]**: no new/changed AC, no new module, no new dependency, no DB migration, no module-boundary change, no phase-plan change. These are observability/data-access process rules that govern *how* queries are written and verified, not *what* a query returns — no user-facing behavior change. The primary affected artifact is `production.md` (Shared Conventions); the `prd.md` §10 bullets are a minimal cross-reference note.

@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 30
-**Date**: 2026-10-04
-**Revision**: 30
+**Status**: [TRIVIAL] — Revision 31
+**Date**: 2026-10-05
+**Revision**: 31
 
 ---
 
@@ -991,6 +991,7 @@ Block  (App Store Guideline 1.2 requirement)
 - **File upload to Supabase Storage**: all uploads of local device files (photos, videos, any binary asset) must use `expo-file-system`'s `File.bytes()` to obtain a `Uint8Array` and pass it directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`. The `fetch(uri) + response.blob()` pattern is prohibited: in React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes. Reference implementations: `mod-beta-video/beta-video-service.ts` (video) and `mod-route-catalog/route-service.ts` (photo).
 - **Log the raw Supabase error before throwing (service functions)**: any Supabase data-access function (service files, RPC wrappers, storage helpers) that catches a Supabase `error` and throws a user-facing `Error` must first call `console.error('[functionName] error:', error)` so the raw Supabase/PostgREST diagnostic is visible in device/Metro logs. The user-facing string stays generic; the raw error goes to the console only, never to the user. Reference: `mod-beta-video/beta-video-service.ts` (`uploadBetaVideo`, `fetchBetaVideosByUser`).
 - **Manual PostgREST verification for new/modified embedded joins**: whenever an engineer adds or modifies an embedded join in a `.select()` string — especially a nested embed, and most especially an FK-hinted embed nested inside another embed — they must exercise the string against the live or local Supabase instance (Studio SQL Editor or a raw PostgREST request) before marking the AC done. A `.select()` embed string is an untyped query DSL that neither TypeScript nor a mocked Supabase client can validate — mocked unit tests short-circuit before PostgREST parses the string and cannot substitute for this step. Prefer a single disambiguated outer FK hint or a server-side RPC over more than one level of nested FK-hinted embed.
+- **Reused `expo-video` `VideoView` source swaps (iOS)**: when a single persistent `VideoView`/`VideoPlayer` swaps sources via `replaceAsync` rather than remounting, (1) drive the load *cover* down on `onFirstFrameRender` (first composited frame), not on `statusChange: readyToPlay` (buffer-only, fires before the frame paints), and (2) render the `VideoView` at `opacity: 0` while loading so the previously-decoded frame held by `AVPlayerLayer` cannot bleed through — iOS has no `useExoShutter` equivalent (that prop is Android-only). Keep the `statusChange: error` path wired to the error UI so the cover never hangs.
 - **Soft-launch timeframe**: No date target set. Phase 1 ships when Phase 1 acceptance criteria pass and the App Store submission is approved.
 
 ---
