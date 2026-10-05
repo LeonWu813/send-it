@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: trivial
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: c9101f2079aa7e0f01ab9fc5ea359eeb5d4f01d4
-timestamp: 2026-10-04T00:00:00Z
+commit: 4efd2b3e977252fe722b665fa7afb6d779f25751
+timestamp: 2026-10-05T00:00:00Z
 ```
 
 
@@ -297,6 +297,44 @@ timestamp: 2026-10-04T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-05 — blocker (MOD-005 BetaVideoReelViewer: previous video still visible on swipe before the black loading overlay appears)
+
+**Context**: Advisory review requested by the coordinator. Human QA confirmed on device: when the user swipes to the next/previous video in `BetaVideoReelViewer`, the *previous* video's frame remains visible for a moment before the black loading overlay (`isVideoLoading`) covers it and the new video loads. The intended behavior is for the black overlay + spinner to appear *immediately* on swipe and stay up until the new video's first frame renders. **Advisory only — no source files edited.** The fix routes through `engineer-mod-beta-video`.
+
+**Verification performed** (read-only, grounding the finding):
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` read in full.
+- expo-video API surface inspected directly in `node_modules/expo-video/build/` (installed version confirmed `expo-video@57.0.5`, `expo@~57.0.24` — this is the SDK 57 line, matching the constraint). The proposed fix uses only APIs present in this installed version; verified below.
+
+**Confirmed root cause — a single `VideoView` + single `player` instance is reused across index changes; the overlay clears one render too early because `onFirstFrameRender` is unreliable as the "new video is ready" signal.**
+
+There are two compounding problems, both rooted in the same architecture (one persistent `player` from `useVideoPlayer`, one persistent `VideoView` that is never remounted between videos — only the player's *source* is swapped via `replaceAsync`):
+
+1. **`onFirstFrameRender` is not a reliable per-source "ready" signal, and its docs say so.** In this installed version, `node_modules/expo-video/build/VideoView.types.d.ts` lines 131–135 document `onFirstFrameRender` as *"A callback to call after the mounted `VideoPlayer` has rendered the first frame into the `VideoView`"* with the explicit note: *"This event may also be called during playback when the current video track changes (for example when the player switches video quality)."* Two consequences:
+   - It is tied to the **mounted** player/view, which never remounts here — so there is no contractual guarantee it re-fires cleanly for each `replaceAsync` source swap. The current code assumes one fire per source change; the API does not promise that.
+   - Because the same `VideoView` keeps rendering the AVPlayer's current output, the *last frame of the previous video* stays on screen through the gap between swipe → `currentIndex` change → signed-URL fetch → `replaceAsync` → new first frame. The black overlay is the only thing meant to hide that gap.
+
+2. **The overlay is painted, but the window where the old frame leaks is the swipe-out animation itself — and during part of that window the overlay is not yet up.** Trace the swipe-up path (lines 490–500): on release, `Animated.timing(dragY → -screenHeight)` runs for **250 ms** showing the *current* (old) video sliding off, and only in that animation's completion callback does `setCurrentIndex(prev + 1)` fire. The `useEffect([currentIndex])` that sets `isVideoLoading = true` (lines 302–304) therefore runs **after** the 250 ms slide completes, not at the moment of release. So: the entire slide-out animation plays the old video with no overlay, `dragY` resets to 0 (snapping the old frame back to center), *then* the overlay appears. The visible artifact — "previous video still showing for a moment" — is exactly this ordering. The overlay z-order itself is fine (it is a sibling rendered after `VideoView` inside the same `absoluteFill` stack, lines 623–659, so it does paint above the video); the bug is **timing**, not z-index. Hypothesis #2 in the task brief (z-index) is ruled out; hypothesis #3 (state-reset timing) is confirmed and is the primary cause; hypothesis #1 (reused `VideoView`/stale frame) is the underlying enabler that makes the timing gap visible.
+
+A secondary contributor: even once `isVideoLoading` is set true, it is cleared by `onFirstFrameRender` (line 630), whose per-source re-fire is not guaranteed (problem 1). If it ever fails to re-fire, the overlay would get stuck *on* instead of *off* — the opposite failure, but the same root unreliability. The fix should not depend on `onFirstFrameRender` as the sole clear signal.
+
+**Recommended approach** (for `engineer-mod-beta-video`; all APIs verified present in `expo-video@57.0.5`):
+
+1. **Set `isVideoLoading = true` at the moment of swipe commit, not after the animation.** Call `setIsVideoLoading(true)` inside the `onPanResponderRelease` branch *before* starting the `Animated.timing` slide-out, for both the swipe-up (line ~493) and swipe-down-to-previous (line ~508) paths — i.e. the moment it is decided that the index will change. Keep the existing `useEffect([currentIndex])` as a backstop. This closes the 250 ms window where the old frame plays with no cover. (Note: this only matters once the overlay actually covers the frame during the slide — see step 2.)
+
+2. **Make the overlay opaque and keep it mounted for the whole transition.** Confirm the `videoLoadingOverlay` style (lines 958–967) is a fully opaque `#000000` fill above the `VideoView` — it is. The remaining gap is that during the slide-out the overlay slides *with* the content (it is inside the same `Animated.View`), so the off-sliding old frame is still momentarily exposed at the edges. Two acceptable options, Engineer's choice:
+   - **(a) Simplest, recommended:** drop the 250 ms slide-out content animation on index change and rely on the overlay as the transition — set `isVideoLoading` true on release, change the index immediately (no `Animated.timing` deferral), reset `dragY` to 0 at once. The black overlay + spinner *is* the transition. This removes the window entirely and is the least code.
+   - **(b) If the slide-out animation is desired for feel:** render the black loading overlay *outside* the `dragY`-transformed `Animated.View` (as a sibling of it, directly under the `styles.fullscreen` `View` at line 612), so it stays fixed and fully covers the screen while the content slides beneath it. The overlay must sit above the `Animated.View` in paint order.
+
+3. **Do not rely solely on `onFirstFrameRender` to clear the overlay.** Replace/supplement it with the player's `statusChange` event, which *is* a per-source lifecycle signal in this version. Verified present: `node_modules/expo-video/build/VideoPlayerEvents.types.d.ts` line 9 (`statusChange(payload: StatusChangeEventPayload)`), payload `{ status, oldStatus?, error? }` (lines 73–86), and `VideoPlayerStatus = 'idle' | 'loading' | 'readyToPlay' | 'error'` (`VideoPlayer.types.d.ts` line 295). Subscribe via expo's `useEvent`/`useEventListener` (verified exported: `node_modules/expo/build/Expo.d.ts` line 17 `export { useEvent, useEventListener }`) and clear `isVideoLoading` when `status === 'readyToPlay'`; set `isVideoLoading = true` when `status === 'loading'`. This is tied to the actual source-load lifecycle rather than the mounted-view first-frame event, so it re-fires reliably on every `replaceAsync`. Keep `onFirstFrameRender` as an additional (not sole) clear for the very first frame paint if desired. The `sourceLoad` event (`VideoPlayerEvents.types.d.ts` line 62, "finished loading metadata … does not mean enough data buffered to start playback") is explicitly *not* the right clear signal — use `readyToPlay`.
+
+4. **Guard against a stuck overlay.** Because `urlError` already short-circuits the overlay (`isVideoLoading && !urlError`, line 655), ensure the `statusChange === 'error'` case also sets `urlError` so the overlay yields to the error view rather than hanging.
+
+**Not a PRD-level change.** This is a behavioral-fidelity fix to AC-039/AC-133 (swipe navigation + persistent controls), not a new requirement — no PRD/spec edit needed. The loading-overlay behavior is already the documented intent. Route directly to `engineer-mod-beta-video` with this diagnosis; no PM tag required.
+
+**Possible Shared Convention (optional, Engineer/PM discretion — not proposed for adoption here):** "When a single reused `expo-video` `VideoView`/`player` swaps sources via `replaceAsync`, drive load-state UI from the player `statusChange` (`loading`/`readyToPlay`) lifecycle, not from `onFirstFrameRender`, whose docs scope it to the mounted view and allow mid-playback re-fires." Flagging only — I am not routing this as a Proposed Shared Convention unless the same pattern recurs in another module.
+
+---
 
 ### Review — 2026-10-04 — change (two data-access conventions from the `fetchBetaVideosByUser` runtime failure: log-before-throw in service functions; manual PostgREST verification for new/modified Supabase join strings)
 
