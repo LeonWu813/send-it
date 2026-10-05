@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-beta-video
-mode: bugfix
-module: mod-beta-video
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: cf77912d2a25616df80c23b87d958cbe65fdfcae
+commit: f430c6024fbb4adda384ad12b266cea2db72e800
 timestamp: 2026-10-04T00:00:00Z
 ```
 
@@ -283,6 +283,44 @@ timestamp: 2026-10-04T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-04 — change (two data-access conventions from the `fetchBetaVideosByUser` runtime failure: log-before-throw in service functions; manual PostgREST verification for new/modified Supabase join strings)
+
+**Context**: Advisory review requested by the coordinator. `fetchBetaVideosByUser` (`src/modules/mod-beta-video/beta-video-service.ts`) threw the user-facing string "Failed to load beta videos. Please try again." on device. Root cause: the `.select()` nested an FK-hinted embed inside an already-nested embed — `routes!beta_videos_route_id_fkey(name, gyms(name))` sitting alongside `users!beta_videos_user_id_fkey(...)` — and PostgREST rejected that query shape at runtime. The unit test passed because the Supabase client is fully mocked, so the query string is never validated against a real PostgREST API; the mock returns canned data regardless of whether the string is syntactically acceptable to PostgREST. Two structural gaps made this slow to catch and diagnose, and both generalize beyond MOD-005. **Advisory only — no source, spec, or PRD files edited. The source fix already routed through `engineer-mod-beta-video` (Last Action commit `cf77912`); this review records the root cause and proposes two Shared Conventions to route PM → Doc-Sync into `production.md`.**
+
+**Verification performed** (grounding the finding, read-only):
+- `beta-video-service.ts` read in full. Confirmed `fetchBetaVideosByUser` now logs the raw error before throwing (line 251: `console.error('[fetchBetaVideosByUser] error:', error)`), as does `uploadBetaVideo` (lines 127, 162, 174). **Drift found**: `fetchBetaVideosForRoute` (lines 54–56) still throws its user-facing string with **no** `console.error` first — the raw PostgREST message is invisible in Metro for that path. This is the exact pattern Convention A exists to prevent, present in the same file, so A is not hypothetical.
+- `production.md` §Shared Conventions reviewed. The existing "User-Owned Tables That Participate in PostgREST Joins Reference public.users" convention already governs *which schema an FK targets* so an embed is *possible*; neither it nor any other convention requires that a *new or modified* embed string actually be *exercised against PostgREST* before shipping — the gap Convention B fills. The 2026-10-03 "tests must not mock away a production incompatibility" convention (referenced in the prior review, line 317) is the closest relative; Convention B is its data-access-specific corollary.
+
+**Confirmed root cause**:
+A PostgREST `.select()` embed string is effectively an untyped query DSL. TypeScript cannot validate it, and a mocked Supabase client cannot either — the mock short-circuits before any string is parsed. The only thing that validates an embed string is PostgREST itself (live or local). So a join string that is accepted by the compiler and by every unit test can still fail at runtime on device, and when it does, the service swallows the raw PostgREST diagnostic behind a generic user-facing string unless it logged first.
+
+**Fix already applied** (by the owning Engineer, confirmed via read — advisory confirmation only, not my work):
+- `fetchBetaVideosByUser` reworked to a PostgREST-valid embed shape and now logs the raw error before throwing. Last Action records `engineer-mod-beta-video` bugfix at commit `cf77912`.
+
+**Concerns** (must address before this is considered resolved):
+- **C1 — Both conventions are the right scope but trivial in risk; neither changes user-facing behavior, so both are `production.md`-only (no PRD/AC change).** They are testing/observability/data-access process rules, correctly tagged [TRIVIAL] for PM to log and Doc-Sync to sync. If either were allowed to drift into "change what the query returns," that would be a PRD-level change — it is not; these only govern *how* queries are written and verified.
+- **C2 — Convention A has an existing in-file violation to sweep.** `fetchBetaVideosForRoute` throws without logging (lines 54–56). Once A is codified, the owning Engineer should bring that function (and a quick grep of every other `throw new Error(...)` inside a Supabase service file across all modules) into line. This is a follow-up for `engineer-mod-*`, not part of this advisory.
+
+**Recommendations** (suggested improvements):
+- **R1 — Prefer the flat/separate-query shape over deeply-nested FK-hinted embeds where practical.** A single level of embed (`users!fk(...)`) is well-trodden here; a second level nested *inside* it (`routes!fk(name, gyms(name))`) is the shape that broke. Where a listing needs route+gym labels, consider either composing them server-side in a `SECURITY INVOKER` RPC (as MOD-006's feed already does) or doing a second scoped fetch, rather than stacking embeds. Advisory only — the current fix is acceptable; this is guidance for the next such query.
+- **R2 — Make Convention B's verification leave a trace.** A join string verified only in someone's head is indistinguishable from one never verified. Suggest the Engineer paste the equivalent SQL (or the raw PostgREST URL they hit) into the module `status.md` Engineering Progress entry for any AC that adds/modifies an embed, so QA and Tech Lead can see the check actually happened. Routes through the owning Engineer's handoff note — advisory.
+- **R3 — Longer term, consider generating Supabase types and/or a lightweight integration test tier that runs a handful of real `.select()` strings against a local `supabase start` instance in CI.** This is the only thing that structurally closes the "mock can't validate the DSL" gap; a prose rule (B) depends on discipline. Flagging as a Phase-2 build-infra investment, not a Phase-1 ask. (Routes through build config / owning Engineer — advisory.)
+
+**Approved** (what is solid and should be kept):
+- The applied fix and its log-before-throw at line 251 are correct and already embody Convention A.
+- `uploadBetaVideo`'s existing log-before-throw at every throw site (storage error, insert error, outer catch) is the exact pattern Convention A generalizes — it is a good in-repo reference.
+
+**Proposed Shared Conventions** (for PM → Doc-Sync to carry into production.md §Shared Conventions, both [TRIVIAL], `production.md`-only, no PRD revision bump):
+- **Convention A — Log the raw Supabase error before throwing a user-facing string.** Any Supabase data-access function (service files, RPCs-wrappers, storage helpers) that catches a Supabase `error` and throws a user-facing `Error` MUST first call `console.error('[functionName] error:', error)` so the raw Supabase/PostgREST diagnostic is visible in device/Metro logs. The user-facing string stays generic; the raw error goes to the console, never to the user. Canonical form:
+  ```ts
+  if (error) {
+    console.error('[fetchBetaVideosByUser] error:', error);
+    throw new Error('Failed to load beta videos. Please try again.');
+  }
+  ```
+  Applies to every module's service files. Reference implementations: `mod-beta-video/beta-video-service.ts` `uploadBetaVideo` (storage-error, insert-error, and outer-catch sites) and `fetchBetaVideosByUser`. Known existing gap to sweep when this lands: `fetchBetaVideosForRoute` in the same file throws without logging first (follow-up for the owning Engineer, plus a grep for other `throw new Error` sites inside Supabase service functions project-wide).
+- **Convention B — Manually verify every new or modified PostgREST embed/join string against a real PostgREST instance before shipping.** Whenever an engineer adds or modifies an embedded join in a `.select()` string — especially a nested embed, and most especially an FK-hinted embed nested inside another embed (e.g. `routes!beta_videos_route_id_fkey(name, gyms(name))`) — they MUST exercise the string against the live or local Supabase instance before marking the AC done: either run the equivalent query in the Studio SQL Editor, or hit the raw PostgREST endpoint directly. A `.select()` embed string is an untyped query DSL that neither TypeScript nor a mocked Supabase client can validate — mocked unit tests short-circuit before the string is ever parsed by PostgREST and therefore CANNOT substitute for this step. This is the data-access corollary of the existing "tests must not mock away a production incompatibility" convention. Record this in `production.md`'s Supabase/data-access conventions area, adjacent to the "User-Owned Tables … Reference public.users" convention. Recommended (advisory, R2): note the verification — the equivalent SQL or the PostgREST URL hit — in the module `status.md` Engineering Progress entry so the check is auditable.
 
 ### Review — 2026-10-04 — correction (the 2026-10-04 "Keep-Alive Screen Focus Pattern" Shared Convention exemption is wrong: `RouteDetailScreen` + `UserProfileScreen` crashed the same way — the WHOLE app has no NavigationContainer)
 
@@ -2335,4 +2373,8 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 
 Pattern: A full test suite (88 tests, 0 failures) green-lit two bugs that failed on device. Root causes: (1) AC-166/AC-169 tests rendered `BetaVideoUploader` in isolation, but the app only ever mounts `BetaVideoSection` with `onRegisterUploadLauncher` set, which runs a duplicate upload path that never had the dialog — the tested component was dead code on the live path; (2) a device-only behavior (iOS picker output / `expo-video` HDR rendering) was asserted as settled in an AC without a device test, while Jest mocked the picker and cannot render video playback at all.
 Why: This "green-but-broken" failure mode recurs whenever (a) a feature has two implementations and tests cover the one the app doesn't use, or (b) an AC depends on native/OS/player runtime behavior the harness mocks away. A skill codifying "integration-test the production wiring, not the leaf component" + "device-verification gate for un-mockable ACs (picker, Alert timing, file I/O, upload, video rendering)" + "verify third-party/OS runtime assumptions on-device before writing them into an AC" would prevent repeat occurrences. Complements the existing Native Build Gate convention.
+Agent: tech-lead
+
+Pattern: A unit test passed on a `fetchBetaVideosByUser` whose PostgREST `.select()` embed string (a nested FK-hinted embed, `routes!..fk(name, gyms(name))` inside a `users!..fk(...)` embed) was rejected by PostgREST at runtime on device. The mocked Supabase client returned canned data without ever parsing the embed string — the untyped query DSL was validated by neither TypeScript nor the test.
+Why: PostgREST embed strings are a recurring un-typed, un-mockable failure surface in this codebase (same class as the device-only mock gap above, but for data access rather than native APIs). A skill codifying "any new/modified `.select()` embed must be exercised against a real/local PostgREST before the AC is marked done; prefer a single embed level or server-side RPC composition over nested FK-hinted embeds; log the raw Supabase error before throwing a user-facing string so the diagnostic survives to Metro" would close the gap structurally. Complements the existing "User-Owned Tables … Reference public.users" and "tests must not mock away a production incompatibility" conventions.
 Agent: tech-lead
