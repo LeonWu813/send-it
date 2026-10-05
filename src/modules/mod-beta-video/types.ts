@@ -31,6 +31,19 @@ export interface BetaVideo {
    * without the join will not have this field.
    */
   beta_video_privacy?: 'public' | 'followers_only';
+  /**
+   * Route name, joined from the routes table via fetchBetaVideosByUser (Bug 2 fix).
+   * Populated in profile-context fetches so BetaVideoReelViewer can show Row 2
+   * (route · gym) without requiring routeName/gymName props from the host screen.
+   * Optional because route-context fetches (fetchBetaVideosForRoute) do not include
+   * this join — the host provides routeName/gymName props directly in that context.
+   */
+  route_name?: string | null;
+  /**
+   * Gym name, joined transitively through routes → gyms via fetchBetaVideosByUser
+   * (Bug 2 fix). Same optionality rationale as route_name above.
+   */
+  gym_name?: string | null;
 }
 
 /** Input payload for uploading a new beta video. */

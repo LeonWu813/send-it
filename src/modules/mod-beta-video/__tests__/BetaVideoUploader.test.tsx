@@ -683,6 +683,41 @@ describe('BetaVideoUploader', () => {
 
       alertSpy.mockRestore();
     });
+
+    it('Bug 1 fix: shows replace dialog on second upload attempt within the same session', async () => {
+      // Scenario: mount-time check returns false (no existing video yet).
+      // After a successful first upload, hasExistingVideo should be set to true
+      // so a second upload attempt in the same session shows the confirmation dialog.
+      mockCheckExistingBetaVideo.mockResolvedValue(false);
+      mockLaunchImageLibrary.mockResolvedValue(validAsset());
+      mockUploadBetaVideo.mockResolvedValue(MOCK_VIDEO);
+
+      render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => expect(mockCheckExistingBetaVideo).toHaveBeenCalled());
+
+      const addButton = () =>
+        screen.queryAllByRole('button').find(
+          (el) =>
+            el.props.accessibilityLabel === 'Add Beta Video' ||
+            el.props.accessibilityLabel === '新增 Beta 影片',
+        );
+
+      // First upload — no dialog expected (hasExistingVideo starts false).
+      const alertSpy = jest.spyOn(Alert, 'alert');
+      fireEvent.press(addButton()!);
+      await waitFor(() => expect(DEFAULT_PROPS.onUploadSuccess).toHaveBeenCalledTimes(1));
+      expect(alertSpy).not.toHaveBeenCalled();
+
+      // Second upload attempt — hasExistingVideo should now be true → dialog shown.
+      alertSpy.mockClear();
+      fireEvent.press(addButton()!);
+      await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+
+      const [title] = alertSpy.mock.calls[0];
+      expect(title).toMatch(/Replace Beta Video|替換 Beta 影片/);
+
+      alertSpy.mockRestore();
+    });
   });
 
   describe('Fix 2 (suppressInlineError)', () => {

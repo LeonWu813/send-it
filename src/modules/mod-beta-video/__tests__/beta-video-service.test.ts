@@ -395,6 +395,7 @@ describe('fetchBetaVideosByUser', () => {
       is_reported: false,
       report_dismissed: false,
       users: { display_name: 'Test Climber', avatar_url: 'https://example.com/avatar.jpg' },
+      routes: { name: 'V5 Red', gyms: { name: 'Sender Gym' } },
     };
     const selectChain = {
       select: jest.fn().mockReturnThis(),
@@ -412,9 +413,42 @@ describe('fetchBetaVideosByUser', () => {
     // Bug 4: display_name and avatar_url must be flattened from the users join.
     expect(result[0].display_name).toBe('Test Climber');
     expect(result[0].avatar_url).toBe('https://example.com/avatar.jpg');
+    // Bug 2 fix: route_name and gym_name must be flattened from the routes/gyms join.
+    expect(result[0].route_name).toBe('V5 Red');
+    expect(result[0].gym_name).toBe('Sender Gym');
     expect(selectChain.eq).toHaveBeenCalledWith('user_id', 'user-001');
     expect(selectChain.or).toHaveBeenCalledWith('is_reported.eq.false,report_dismissed.eq.true');
     expect(selectChain.order).toHaveBeenCalledWith('created_at', { ascending: false });
+  });
+
+  it('Bug 2: route_name and gym_name are null when routes join returns null', async () => {
+    // When the route join is missing (orphaned video), route_name and gym_name
+    // should be null rather than throwing, so the viewer falls back gracefully.
+    const rawRow = {
+      id: 'vid-orphan',
+      route_id: 'route-deleted',
+      user_id: 'user-001',
+      video_url: 'user-001/vid.mp4',
+      thumbnail_url: 'user-001/vid.mp4',
+      duration_seconds: 30,
+      caption: null,
+      created_at: '2026-09-30T10:00:00Z',
+      is_reported: false,
+      report_dismissed: false,
+      users: { display_name: 'Test Climber', avatar_url: null },
+      routes: null, // route deleted
+    };
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [rawRow], error: null }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    const result = await fetchBetaVideosByUser('user-001');
+    expect(result[0].route_name).toBeNull();
+    expect(result[0].gym_name).toBeNull();
   });
 
   it('AC-162: returns empty array when user has no videos', async () => {

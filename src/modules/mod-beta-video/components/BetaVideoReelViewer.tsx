@@ -286,10 +286,22 @@ export default function BetaVideoReelViewer({
   // ── Index state ───────────────────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
 
-  // ── Swipe animation (Bug 3) ───────────────────────────────────────────────
+  // ── Swipe animation ───────────────────────────────────────────────────────
   // Tracks the finger's vertical offset during a swipe gesture.
   // Applied as `translateY` on the entire content Animated.View.
   const dragY = useRef(new Animated.Value(0)).current;
+
+  // ── Video loading overlay (Bug 3 fix) ─────────────────────────────────────
+  // True from the moment currentIndex changes until VideoView fires
+  // onFirstFrameRender (the expo-video equivalent of RN Video's onReadyForDisplay).
+  // While true, a black overlay with a centered ActivityIndicator is rendered above
+  // the VideoView so the previous video's last frame is not visible during buffering.
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
+
+  // Reset isVideoLoading whenever the active index changes.
+  useEffect(() => {
+    setIsVideoLoading(true);
+  }, [currentIndex]);
 
   // Reset to initialIndex whenever the viewer opens; also reset dragY.
   useEffect(() => {
@@ -566,6 +578,16 @@ export default function BetaVideoReelViewer({
   const isReported = currentVideo ? reportedIds.has(currentVideo.id) : false;
   const isReporting = currentVideo ? reportingId === currentVideo.id : false;
 
+  // ── Bug 2 fix: per-video route/gym display values ─────────────────────────
+  // In route-detail context, routeName/gymName props are provided by the host
+  // (BetaVideoSection) and apply to all videos (they are all for the same route).
+  // In profile context, those props are not provided; instead each BetaVideo row
+  // carries route_name/gym_name joined by fetchBetaVideosByUser. Fall back to the
+  // per-video fields when the props are absent so Row 2 is populated in both
+  // contexts while remaining backward-compatible with route-detail callers.
+  const displayRouteName = routeName ?? currentVideo?.route_name ?? null;
+  const displayGymName = gymName ?? currentVideo?.gym_name ?? null;
+
   // ── Bottom overlay layout widths ──────────────────────────────────────────
   // Left info column width = full width minus sidebar minus some padding.
   // 16 (left pad) + [INFO_WIDTH] + 8 (gap) + SIDEBAR_WIDTH + 8 (right pad) = screenWidth
@@ -605,6 +627,7 @@ export default function BetaVideoReelViewer({
               style={StyleSheet.absoluteFill}
               contentFit="contain"
               nativeControls={false}
+              onFirstFrameRender={() => { setIsVideoLoading(false); }}
               testID="beta-video-reel-video-view"
             />
           ) : null}
@@ -617,6 +640,21 @@ export default function BetaVideoReelViewer({
                 color={theme.colors.textInverse}
                 testID="beta-video-reel-loading"
               />
+            </View>
+          ) : null}
+
+          {/*
+           * Bug 3 fix: black loading overlay while the next video buffers.
+           * Shown from the moment currentIndex changes until the VideoView fires
+           * onFirstFrameRender. Prevents the previous video's last frame from
+           * being visible while the new video loads. Rendered above VideoView and
+           * below the interactive overlay layers so it does not block gestures.
+           * Hidden once the first frame is ready, or if there is a URL error
+           * (the error state view is shown instead).
+           */}
+          {isVideoLoading && !urlError ? (
+            <View style={styles.videoLoadingOverlay} testID="beta-video-reel-video-loading">
+              <ActivityIndicator size="large" color="#fff" />
             </View>
           ) : null}
 
@@ -716,12 +754,14 @@ export default function BetaVideoReelViewer({
 
                   {/*
                    * AC-134 / AC-136: Row 2 — "{routeName} · {gymName}".
-                   * Only rendered when at least one of routeName or gymName is provided.
+                   * Bug 2 fix: uses displayRouteName/displayGymName which fall back
+                   * to per-video route_name/gym_name when host props are absent,
+                   * enabling Row 2 in profile context (fetchBetaVideosByUser joins).
                    * Wrapped in a Pressable; tapping navigates to the route detail
                    * screen (AC-136). onNavigateToRoute is undefined when the user is
                    * already on the route detail screen — tap is a no-op in that case.
                    */}
-                  {(routeName != null || gymName != null) ? (
+                  {(displayRouteName != null || displayGymName != null) ? (
                     <Pressable
                       onPress={() => {
                         if (onNavigateToRoute && currentVideo.route_id) {
@@ -732,7 +772,7 @@ export default function BetaVideoReelViewer({
                       testID="reel-route-gym-label"
                     >
                       <MarqueeText
-                        text={[routeName, gymName].filter(Boolean).join(' · ')}
+                        text={[displayRouteName, displayGymName].filter(Boolean).join(' · ')}
                         containerWidth={INFO_COLUMN_WIDTH}
                         style={styles.captionText}
                         testID="reel-route-gym-text"
@@ -913,6 +953,17 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     overlayPadding: {
       paddingTop: 50,
       paddingBottom: 50,
+    },
+    /** Bug 3 fix: black overlay + centered spinner while the next video buffers. */
+    videoLoadingOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: VIDEO_VIEWER_BG,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
   });
 }

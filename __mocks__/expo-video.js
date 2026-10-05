@@ -9,9 +9,12 @@ const React = require('react');
 const { View } = require('react-native');
 
 function VideoView(props) {
+  // Expose onFirstFrameRender so tests can call it to simulate the video being
+  // ready for display (Bug 3 fix — clears the isVideoLoading overlay).
   return React.createElement(View, {
     testID: props.testID,
     accessibilityLabel: 'video-player',
+    onFirstFrameRender: props.onFirstFrameRender,
   });
 }
 

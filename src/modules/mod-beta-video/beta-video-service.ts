@@ -238,7 +238,9 @@ export async function fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]
     .select(
       // AC-162: include poster identity so BetaVideoReelViewer (AC-134) can render
       // the poster row (avatar + display_name) when opened from a profile screen.
-      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url)',
+      // Bug 2 fix: also join routes and gyms so BetaVideoReelViewer can show Row 2
+      // (route · gym label) in profile context without requiring host-supplied props.
+      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url), routes!beta_videos_route_id_fkey(name, gyms!routes_gym_id_fkey(name))',
     )
     .eq('user_id', userId)
     // AC-142 / AC-143: canonical exclusion predicate — same as fetchBetaVideosForRoute.
@@ -249,13 +251,17 @@ export async function fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]
     throw new Error('Failed to load beta videos. Please try again.');
   }
 
-  // Flatten the embedded `users` object to top-level fields so the viewer
-  // (AC-134) reads `video.display_name` / `video.avatar_url` directly.
+  // Flatten the embedded `users`, `routes`, and `gyms` objects to top-level fields
+  // so the viewer (AC-134) reads video.display_name / video.avatar_url directly,
+  // and BetaVideoReelViewer can show route_name / gym_name in Row 2 without
+  // requiring routeName/gymName props from the profile-screen host (Bug 2 fix).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
     ...row,
     display_name: (row.users as any)?.display_name ?? null,
     avatar_url: (row.users as any)?.avatar_url ?? null,
+    route_name: (row.routes as any)?.name ?? null,
+    gym_name: (row.routes as any)?.gyms?.name ?? null,
   })) as BetaVideo[];
 }
 

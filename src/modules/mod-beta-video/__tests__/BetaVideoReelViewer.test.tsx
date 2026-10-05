@@ -576,4 +576,110 @@ describe('BetaVideoReelViewer', () => {
       expect(screen.getByTestId('reel-report-button')).toBeTruthy();
     });
   });
+
+  // ── Bug 2: per-video route/gym name in profile context ────────────────────
+
+  it('Bug 2: Row 2 shows per-video route_name and gym_name when host props are not provided', async () => {
+    // Profile context: no routeName/gymName props, but the video has per-video fields
+    // populated by fetchBetaVideosByUser (routes + gyms join).
+    const videoWithRoute = makeVideo('vid-with-route', 1, {
+      route_name: 'V4 Yellow',
+      gym_name: 'Climb Lab',
+    } as Partial<BetaVideo>);
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[videoWithRoute]}
+        initialIndex={0}
+        // No routeName or gymName props — profile context
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-route-gym-label')).toBeTruthy();
+    });
+
+    const textEl = screen.getByTestId('reel-route-gym-text');
+    expect(textEl.props.children).toBe('V4 Yellow · Climb Lab');
+  });
+
+  it('Bug 2: routeName/gymName props take precedence over per-video fields (route-detail context backward-compat)', async () => {
+    // Route-detail context: host passes routeName/gymName props; they must take
+    // precedence over any per-video route_name/gym_name on the BetaVideo row.
+    const videoWithRoute = makeVideo('vid-with-route-override', 1, {
+      route_name: 'V4 Yellow (per-video)',
+      gym_name: 'Climb Lab (per-video)',
+    } as Partial<BetaVideo>);
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[videoWithRoute]}
+        initialIndex={0}
+        routeName="5.11a Blue (prop)"
+        gymName="Sender Gym (prop)"
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-route-gym-label')).toBeTruthy();
+    });
+
+    const textEl = screen.getByTestId('reel-route-gym-text');
+    expect(textEl.props.children).toBe('5.11a Blue (prop) · Sender Gym (prop)');
+  });
+
+  it('Bug 2: Row 2 is hidden when no route info is available (profile context, no join)', async () => {
+    // When neither host props nor per-video route_name/gym_name are available,
+    // Row 2 must not render (no empty label shown).
+    const videoNoRoute = makeVideo('vid-no-route', 1, {
+      route_name: null,
+      gym_name: null,
+    } as Partial<BetaVideo>);
+
+    render(
+      <BetaVideoReelViewer
+        {...BASE_PROPS}
+        videos={[videoNoRoute]}
+        initialIndex={0}
+        // No routeName or gymName props, no per-video fields
+      />,
+      renderOptions(),
+    );
+
+    // Row 2 label must not be rendered.
+    await waitFor(() => {
+      expect(screen.queryByTestId('reel-route-gym-label')).toBeNull();
+    });
+  });
+
+  // ── Bug 3: video loading overlay on swipe ─────────────────────────────────
+
+  it('Bug 3: loading overlay is shown while new video buffers after swiping', async () => {
+    // After swipe, currentIndex changes which sets isVideoLoading=true, causing
+    // the black overlay (testID="beta-video-reel-video-loading") to appear.
+    // The overlay clears when onFirstFrameRender fires on the VideoView.
+    render(
+      <BetaVideoReelViewer {...BASE_PROPS} initialIndex={0} />,
+      renderOptions(),
+    );
+
+    // Wait for the initial URL load to complete so the video is ready.
+    await waitFor(() => {
+      expect(screen.getByText('1 / 3')).toBeTruthy();
+    });
+
+    // Swipe up to advance to the next video — triggers isVideoLoading=true.
+    await act(async () => {
+      simulateSwipe(-80);
+    });
+
+    // Loading overlay must be present while the new video buffers.
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-video-reel-video-loading')).toBeTruthy();
+    });
+  });
 });

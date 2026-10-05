@@ -273,8 +273,11 @@ export default function BetaVideoUploader({
           setProgress({ percent: prog.percent, phase: prog.phase });
         },
       );
-      // After a successful replace, the "has existing video" state remains true
-      // (there is still a video for this route — just a new one). No reset needed.
+      // Bug 1 fix (AC-166): after a first successful upload within the same
+      // session, hasExistingVideo is still false (the mount-time check ran before
+      // the video existed). Set it to true here so subsequent upload attempts in
+      // this session correctly show the replace-confirmation dialog.
+      setHasExistingVideo(true);
       onUploadSuccess(video);
     } catch (err) {
       const msg = err instanceof Error ? err.message : t('betaVideo.errors.uploadFailed');

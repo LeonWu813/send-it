@@ -2,6 +2,71 @@
 
 ## Engineering Progress
 
+**Status**: Bug fixes — 2026-10-04 (QA Bug 1: AC-166 replace dialog missing in same-session re-upload; QA Bug 2: route/gym name missing in profile reel viewer; QA Bug 3: prior video visible while next video buffers on swipe)
+
+### Bug Fixes — QA Bug 1 (AC-166 same-session), Bug 2 (profile reel Row 2), Bug 3 (swipe loading overlay) — 2026-10-04
+
+**What changed**:
+
+**Bug 1 — AC-166 replace dialog never shows after uploading in the same session (`BetaVideoUploader.tsx`)**
+
+Root cause: `hasExistingVideo` is set once on mount via `checkExistingBetaVideo`. After a first successful upload in the same session, `hasExistingVideo` remained `false` (the mount-time check ran before the video existed), so a second upload attempt saw `hasExistingVideo === false` and skipped the confirmation dialog.
+
+Fix: added `setHasExistingVideo(true)` immediately before `onUploadSuccess(video)` in `handleSelectVideo`. Subsequent upload attempts within the same session now correctly show the replace-confirmation dialog.
+
+Self-check items:
+- `setHasExistingVideo(true)` called before `onUploadSuccess` — PASS
+- New test "Bug 1 fix: shows replace dialog on second upload attempt within the same session" added — PASS
+- No AC text changed, no new dependencies — PASS
+
+**Bug 2 — Route name not shown in profile reel viewer (3 files)**
+
+Root cause: `fetchBetaVideosByUser` did not join `routes` or `gyms`, so `BetaVideo` objects returned in profile context had no `route_name`/`gym_name`. `BetaVideoReelViewer` only rendered Row 2 when `routeName`/`gymName` props were passed (which profile-context callers do not pass — all their videos belong to different routes).
+
+Fix (3 files):
+1. `types.ts` — added `route_name?: string | null` and `gym_name?: string | null` to `BetaVideo` interface.
+2. `beta-video-service.ts` — updated `fetchBetaVideosByUser` select query to join `routes!beta_videos_route_id_fkey(name, gyms!routes_gym_id_fkey(name))` and flatten `route_name`/`gym_name` in the map.
+3. `BetaVideoReelViewer.tsx` — computed `displayRouteName = routeName ?? currentVideo?.route_name ?? null` and `displayGymName = gymName ?? currentVideo?.gym_name ?? null` before render; Row 2 condition and `MarqueeText` text now use these derived values, keeping backward compatibility with route-detail context.
+
+Self-check items:
+- `routeName`/`gymName` props take precedence (route-detail backward compat) — PASS
+- Profile context: per-video `route_name`/`gym_name` shown in Row 2 — PASS
+- `null`/missing routes gracefully yield `null` (no render of empty Row 2) — PASS
+- New tests added for all three cases — PASS
+
+**Bug 3 — Previous video keeps playing while new video loads on swipe (`BetaVideoReelViewer.tsx`)**
+
+Root cause: when `currentIndex` changed on swipe, the `VideoView` continued to show (and play) the previous video's last frame while the signed URL for the new video was fetched and the player buffered.
+
+Fix: added `isVideoLoading` state (`useState(false)`). A `useEffect([currentIndex])` sets it to `true` on every index change. The `VideoView` receives an `onFirstFrameRender` prop that sets it to `false` once the new video's first frame is ready. While `isVideoLoading && !urlError`, a `videoLoadingOverlay` (`position: absolute`, `backgroundColor: VIDEO_VIEWER_BG` = `#000000`, centered `ActivityIndicator color="#fff" size="large"`) is rendered above the `VideoView` layer. The overlay uses the existing `VIDEO_VIEWER_BG` constant (no new hex literal). Updated `__mocks__/expo-video.js` to pass `onFirstFrameRender` through the mock `VideoView` so tests can verify the overlay appears.
+
+Self-check items:
+- Overlay shown after swipe (isVideoLoading = true) — PASS
+- Overlay cleared by `onFirstFrameRender` — PASS
+- Overlay uses `VIDEO_VIEWER_BG` named constant (no inline hex) — PASS
+- No new libraries (pure RN `ActivityIndicator` + `StyleSheet`) — PASS
+- New test "Bug 3: loading overlay is shown while new video buffers after swiping" added — PASS
+
+**Self-check results**:
+- `npx tsc --noEmit`: **0 errors**. PASS.
+- `npx jest src/modules/mod-beta-video --watchAll=false`: **101 passing, 0 failures, 5 suites**. PASS.
+- Git scope check: all changed files within `src/modules/mod-beta-video/` boundary plus `__mocks__/expo-video.js` (shared test infrastructure, additive change). PASS.
+- Judgment-based: all three fixes are minimum-footprint; no new dependencies; no spec requirements changed; all ACs remain satisfied; backward compatibility preserved. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoUploader.tsx` — Bug 1: `setHasExistingVideo(true)` before `onUploadSuccess`
+- `src/modules/mod-beta-video/types.ts` — Bug 2: `route_name?` and `gym_name?` fields on `BetaVideo`
+- `src/modules/mod-beta-video/beta-video-service.ts` — Bug 2: `fetchBetaVideosByUser` routes+gyms join and flatten
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — Bug 2: `displayRouteName`/`displayGymName` derived values + Row 2 uses them; Bug 3: `isVideoLoading` state, `onFirstFrameRender`, overlay
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — Bug 1 test
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — Bug 2 tests (route_name/gym_name in join; null route fallback)
+- `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — Bug 2 and Bug 3 tests
+- `__mocks__/expo-video.js` — pass-through `onFirstFrameRender` in mock VideoView
+
+**ACs addressed**: AC-166 (Bug 1); AC-134/Row 2 in profile context (Bug 2); AC-039 swipe loading UX (Bug 3)
+
+---
+
 **Status**: TypeScript fixes — 2026-10-04 (Fix TS-1: `Alert.AlertButton` namespace in BetaVideoUploader.test.tsx; Fix TS-2: `beta_video_privacy` missing on BetaVideo type; Fix TS-3: expo-file-system mock `size` property and `__setMockFileSize` helper)
 
 ### TypeScript fixes — TS-1 (Alert namespace), TS-2 (beta_video_privacy type), TS-3 (expo-file-system mock) — 2026-10-04
