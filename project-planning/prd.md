@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 29
-**Date**: 2026-10-03
-**Revision**: 29
+**Status**: [TRIVIAL] — Revision 30
+**Date**: 2026-10-04
+**Revision**: 30
 
 ---
 
@@ -989,6 +989,8 @@ Block  (App Store Guideline 1.2 requirement)
 - **Native dependency installation**: All Expo native dependencies shall be installed via `npx expo install <package>`, never `npm install <package>`. Expo resolves the SDK-compatible version automatically; a plain `npm install` can silently install an SDK-incompatible version that passes the Jest suite (via mocks) but fails the native iOS/Android build. Hand-pinning a native module's version string in `package.json` is prohibited.
 - **Native build gate before QA handoff**: When a module adds or changes a native dependency (a package with iOS/Android native code), the module's engineer shall run the native build (`npx expo run:ios`, or the platform equivalent) and confirm it compiles before marking the module QA-ready. Passing unit tests alone are insufficient evidence that a native dependency compiles, because Jest mocks native modules.
 - **File upload to Supabase Storage**: all uploads of local device files (photos, videos, any binary asset) must use `expo-file-system`'s `File.bytes()` to obtain a `Uint8Array` and pass it directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`. The `fetch(uri) + response.blob()` pattern is prohibited: in React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes. Reference implementations: `mod-beta-video/beta-video-service.ts` (video) and `mod-route-catalog/route-service.ts` (photo).
+- **Log the raw Supabase error before throwing (service functions)**: any Supabase data-access function (service files, RPC wrappers, storage helpers) that catches a Supabase `error` and throws a user-facing `Error` must first call `console.error('[functionName] error:', error)` so the raw Supabase/PostgREST diagnostic is visible in device/Metro logs. The user-facing string stays generic; the raw error goes to the console only, never to the user. Reference: `mod-beta-video/beta-video-service.ts` (`uploadBetaVideo`, `fetchBetaVideosByUser`).
+- **Manual PostgREST verification for new/modified embedded joins**: whenever an engineer adds or modifies an embedded join in a `.select()` string — especially a nested embed, and most especially an FK-hinted embed nested inside another embed — they must exercise the string against the live or local Supabase instance (Studio SQL Editor or a raw PostgREST request) before marking the AC done. A `.select()` embed string is an untyped query DSL that neither TypeScript nor a mocked Supabase client can validate — mocked unit tests short-circuit before PostgREST parses the string and cannot substitute for this step. Prefer a single disambiguated outer FK hint or a server-side RPC over more than one level of nested FK-hinted embed.
 - **Soft-launch timeframe**: No date target set. Phase 1 ships when Phase 1 acceptance criteria pass and the App Store submission is approved.
 
 ---
