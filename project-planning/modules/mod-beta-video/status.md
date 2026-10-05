@@ -2,7 +2,27 @@
 
 ## Engineering Progress
 
-**Status**: Behavioral fix — 2026-10-05 (AC-039/AC-133 overlay timing: early overlay on swipe commit, statusChange replaces onFirstFrameRender, overlay moved outside dragY-animated view)
+**Status**: Behavioral fix — 2026-10-05 (AC-039/AC-133 previous-video flash: VideoView opacity-hidden during source swap; overlay cleared on onFirstFrameRender instead of readyToPlay)
+
+### Behavioral Fix — AC-039/AC-133 residual previous-video flash (Cause B + Cause C) — 2026-10-05
+
+**Cause C — VideoView never hidden during source swap (fixed)**: On iOS, `AVPlayerLayer` holds the previous source's last decoded frame until the new source composites its first frame. The single `VideoView` was always visible (no `useExoShutter` equivalent on iOS), so the old frame was always visible through it during source swap regardless of the black overlay above. Fix: `VideoView` is now always mounted (no conditional render — preserving player lifecycle) but rendered at `opacity: 0` while `isVideoLoading` is `true` and `opacity: 1` once loading completes. This hides the `AVPlayerLayer` frame hold behind the VideoView's own opacity.
+
+**Cause B — overlay cleared on `readyToPlay` (too early) (fixed)**: `readyToPlay` fires when enough data has buffered to start playback, but that is before the new source's first frame is composited to screen — AVPlayerLayer still shows the old frame at that instant. Fix: `setIsVideoLoading(false)` is moved from the `statusChange === 'readyToPlay'` branch of `useEventListener` into `onFirstFrameRender` on the `VideoView`. `onFirstFrameRender` fires after the first frame of the new source has been painted, which is the correct moment to reveal the video. The `statusChange` listener is narrowed to only handle `status === 'error'`.
+
+**Cause 1 and Root cause 3 (previous fix, still in place)**: `setIsVideoLoading(true)` called immediately on swipe commit before `Animated.timing`; overlay rendered outside the `dragY`-animated `Animated.View`. Both remain unchanged.
+
+**Self-check results**:
+- `npm run lint` (tsc --noEmit): **0 errors**. PASS.
+- `npx jest src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx --watchAll=false`: **27 passing, 0 failures**. PASS.
+- Judgment-based: `onFirstFrameRender` confirmed available on `VideoView` in `expo-video@57.0.5`; no new native dependency; `VideoView` always mounted (no teardown/remount); `statusChange` listener narrowed to error only; `useEffect([currentIndex])` still re-arms `isVideoLoading=true` on index change (Change 3 verified present); no new hex literals; conditional `testID` preserves existing test behavior for `getByTestId('beta-video-reel-video-view')`. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` — VideoView always mounted with `opacity: isVideoLoading ? 0 : 1`; `onFirstFrameRender={() => setIsVideoLoading(false)}` added; `statusChange` listener narrowed to `error` only
+
+**ACs addressed**: AC-039, AC-133 (previous-video flash: VideoView opacity-hidden during source swap; overlay cleared on first-frame paint not readyToPlay)
+
+---
 
 ### Behavioral Fix — AC-039/AC-133 loading overlay timing (three root causes) — 2026-10-05
 

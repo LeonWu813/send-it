@@ -347,15 +347,16 @@ export default function BetaVideoReelViewer({
   });
 
   /**
-   * AC-039 / AC-133 fix (Root cause 2):
-   * Use the player's `statusChange` event to clear the loading overlay.
-   * `onFirstFrameRender` on VideoView is scoped to the mounted view and can
-   * re-fire mid-playback — it is not a reliable per-source signal.
-   * `statusChange` fires with `readyToPlay` when the new source has buffered
-   * enough to play, which is the correct signal to clear the black overlay.
+   * AC-039 / AC-133 fix (Cause B — revised):
+   * Only handle the `error` status here. Clearing the overlay on `readyToPlay`
+   * is too early on iOS: `readyToPlay` fires when enough data has buffered to
+   * start playback, but AVPlayerLayer still holds the previous source's last
+   * decoded frame at that moment — the new frame has not yet been composited.
+   * The overlay is now cleared in `onFirstFrameRender` on VideoView instead
+   * (see below), which fires after the first frame of the new source has been
+   * painted to screen — exactly the right moment to reveal the video.
    */
   useEventListener(player, 'statusChange', ({ status }) => {
-    if (status === 'readyToPlay') setIsVideoLoading(false);
     if (status === 'error') {
       setIsVideoLoading(false);
       setUrlError(true);
@@ -648,16 +649,33 @@ export default function BetaVideoReelViewer({
           style={[StyleSheet.absoluteFill, { transform: [{ translateY: dragY }] }]}
         >
 
-          {/* Layer 1 — VideoView (Bug 1: now a sibling of the gesture layer, not a child) */}
-          {signedUrl && !urlError ? (
-            <VideoView
-              player={player}
-              style={StyleSheet.absoluteFill}
-              contentFit="contain"
-              nativeControls={false}
-              testID="beta-video-reel-video-view"
-            />
-          ) : null}
+          {/*
+           * Layer 1 — VideoView (Bug 1: now a sibling of the gesture layer, not a child).
+           *
+           * AC-039 / AC-133 fix (Cause C): VideoView is always mounted — never
+           * conditionally rendered — so the player lifecycle is never disrupted by
+           * teardown/remount. On iOS, AVPlayerLayer holds the previous source's last
+           * decoded frame until the new source composites its first frame. Hiding the
+           * VideoView via opacity:0 during loading covers that residual frame.
+           * When isVideoLoading is true the VideoView is invisible; when false it is
+           * visible. The signedUrl/urlError guards that previously conditionally
+           * rendered this element are replaced: the error state view (rendered above
+           * the VideoView) covers it when urlError is true; the VideoView player source
+           * starts as null and is loaded by the useEffect on currentIndex/visible change.
+           *
+           * AC-039 / AC-133 fix (Cause B): onFirstFrameRender fires after the first
+           * frame of the new source has been composited to screen — the correct moment
+           * to reveal the video. This replaces the former readyToPlay listener, which
+           * fired before the new frame painted (too early on iOS/AVPlayerLayer).
+           */}
+          <VideoView
+            player={player}
+            style={[StyleSheet.absoluteFill, { opacity: isVideoLoading ? 0 : 1 }]}
+            contentFit="contain"
+            nativeControls={false}
+            onFirstFrameRender={() => setIsVideoLoading(false)}
+            testID={signedUrl && !urlError ? 'beta-video-reel-video-view' : undefined}
+          />
 
           {/* Loading spinner (absolute, sits above VideoView) */}
           {urlLoading ? (
