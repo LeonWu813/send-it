@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 6e76b76e480911938563823e66049ad87f926c92
+commit: dce471d60c9768ddb0b1324a89125fb25222c0c2
 timestamp: 2026-10-07T00:00:00Z
 ```
 
@@ -1930,6 +1930,27 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-07 — Delta Sync (Revision 32, [SUBSTANTIVE])
+
+**Sync type:** delta
+**PRD Revision:** 32
+**PM Update reference:** 2026-10-07 [SUBSTANTIVE] — MOD-007 Notifications: four user-confirmed decisions closing gaps in the in-app notification inbox (PRD Revision 32).
+**Files modified:**
+- `project-planning/modules/mod-notifications/spec.md` — Last Synced from PRD Revision 5 → 32. Purpose updated to match PRD §6 MOD-007 Rev 32 Purpose (verbatim). AC-058 replaced with revised Rev 32 text (navigate to actor's UserProfileScreen via `actor_user_id`; supersedes route-detail-screen target; no MOD-003/MOD-005 changes). AC-171 (new) added (bell icon in MOD-001 ProfileScreen header; tapping pushes NotificationInboxScreen owned by MOD-007). AC-172 (new) added (batch mark-read on NotificationInboxScreen mount; single batch update; individual row tap does not separately mark read). AC-173 (new) added (bell icon unread-count badge; badge clears on inbox open after AC-172 fires). Integration Points section updated from `none` to two populated entries: (a) AC-171 MOD-001 ↔ MOD-007 bell icon entry point; (b) AC-058 MOD-007 → MOD-006 inbox-tap navigation target. Input/Output Contract updated: in-app inbox outputs updated to reflect AC-172 batch mark-read; bell icon badge inputs/outputs added (AC-173). Key Implementation Notes updated: AC-058 navigation contract note revised for Rev 32 (`actor_user_id`, no `fetchRouteForBetaVideo`); AC-172 batch mark-read note added; AC-173 unread-count badge note added.
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+**Files created:**
+- none
+**Module removals noted:**
+- none
+**AMBIGUITY markers added:**
+- none
+**AMBIGUITY markers resolved:**
+- none (prior AC-058 navigation-contract implementation note in Key Implementation Notes is superseded by Rev 32 text; no AMBIGUITY marker was present to resolve)
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as all prior delta syncs since Rev 18. Check 4 FAIL (script bug): awk range pattern does not match the bold US-NNN format used in spec Related User Stories sections; all specs have correct headings and US-IDs in the right place. Check 6 FAIL (script bug): script over-matches non-phase-plan PRD content (gym seed data, milestone lines, etc.) as "phase names"; Phase Plan section in status.md is correctly written with Phase 1/2/3 content. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
 
 ### 2026-10-05 — Trivial Passthrough ([TRIVIAL])
 
