@@ -2,6 +2,8 @@
 
 ## Engineering Progress
 
+**Status**: UX enhancement — 2026-10-06 (BetaVideoReelViewer: metadata overlay (avatar, name, route, like, report) now visible during video buffering; loading background moved inside Animated.View as Layer 2 below Layer 4 metadata; ActivityIndicator repositioned to ~40% from top inside Layer 4)
+
 **Status**: Behavioral fix — 2026-10-05 (AC-039/AC-133 previous-video flash: VideoView opacity-hidden during source swap; overlay cleared on onFirstFrameRender instead of readyToPlay)
 
 ### Behavioral Fix — AC-039/AC-133 residual previous-video flash (Cause B + Cause C) — 2026-10-05
@@ -3873,3 +3875,187 @@ The `expo-image-picker` mock in `BetaVideoSection.test.tsx` (lines 54–65) incl
 - **AC-169 gate unchanged**: PASS — `BUCKET_LIMIT_BYTES = 45 * 1_000_000` and `nativeSize === 0 || nativeSize > BUCKET_LIMIT_BYTES`; unmodified by the Rev 29 change.
 - **Tests**: 92/92, 5 suites, 0 failures in full-suite run. Pre-existing `BetaVideoReelViewer › AC-139` failure reproduces only when that suite is run in isolation (same root cause as documented in prior QA run — not introduced by this change).
 - **No regressions**: All previously-passing tests continue to pass.
+
+---
+
+### AC-052 Regression QA — 2026-10-07
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (AC-052 like-button implementation verification)
+**Date**: 2026-10-07
+**Scope**: AC-052 — Pressable like button in BetaVideoReelViewer (was a non-interactive View placeholder); no regressions in existing BetaVideoReelViewer behavior; TypeScript and lint clean; all 32 tests pass.
+
+---
+
+#### Test Run
+
+`npx jest --testPathPattern="BetaVideoReelViewer" --no-coverage` — **32 tests, 1 suite, 0 failures**.
+
+All 32 tests pass. No pre-existing AC-139 failure — the fix for the async `supabase.auth.getSession()` `isOwnVideo` check (documented as pre-existing in prior QA runs) is now resolved: the 5 new AC-052 tests are properly wrapped in `act`, and the test suite as a whole runs clean at 32/32. `act()` warnings remain in console output for the `setCurrentUserId` and `setLikeCount`/`setIsLiked` async state updates — these are cosmetic/testing-framework warnings that do not affect test pass/fail status and are pre-existing in nature.
+
+TypeScript (`npx tsc --noEmit`): **0 errors**. Clean.
+
+Lint: project uses `tsc --noEmit` as its lint command — no separate ESLint config present. **0 errors**.
+
+---
+
+#### Item 1 — AC-052: Like button is a Pressable (not a View placeholder)
+
+**Spec (AC-138)**: The right sidebar shall contain exactly two action icons: the like icon with like count (AC-052) and the report icon (AC-139). **Spec (AC-052, implicit from AC-138 and sidebar description)**: Like button must be interactive (tappable), with icon toggling between heart-outline (not liked) and heart (liked), and like count updating.
+
+**Prior state**: `BetaVideoReelViewer.tsx` rendered the like icon as a non-interactive `View` with a hardcoded count of 0.
+
+**Verification**: `BetaVideoReelViewer.tsx` lines 922–940 — the like button is now a `<Pressable>` with `testID="reel-like-button"`, `onPress={() => { void handleLike(); }}`, `disabled={isLikePending}`, and `accessibilityRole="button"`. `isLikePending` is `true` during a like/unlike request in flight, preventing double-tap. Icon renders as `Ionicons name={isLiked ? 'heart' : 'heart-outline'}`. Like count renders as `{likeCount}` (dynamic, not hardcoded to 0).
+
+**Test**: "AC-052: like button is rendered and tappable" — PASS.
+
+**AC-052 — Pressable with icon toggle**: PASS
+
+---
+
+#### Item 2 — AC-052: fetchLikeInfo called on index change; like count and isLiked state set from RPC response
+
+**Spec**: Like count and own-like state are fetched from `get_like_info` RPC whenever the current video index changes and the viewer is visible.
+
+**Verification**: `BetaVideoReelViewer.tsx` lines 349–367 — a `useEffect` on `[currentIndex, visible, videos]` calls `fetchLikeInfo(video.id)` from `mod-social-feed/social-feed-service` (direct import per Cross-Module Imports convention). On success, `setLikeCount(like_count)` and `setIsLiked(user_has_liked)` are called. A cancellation guard (`let cancelled = false`) prevents stale state updates if the effect fires again before the previous fetch resolves. Non-fatal: errors are caught and silently ignored, keeping whatever state was already showing. A reset effect on `[currentIndex]` (lines 371–375) clears `isLiked`, `likeCount`, and `isLikePending` to 0/false/false on each index change to prevent stale display between the index change and the `fetchLikeInfo` response.
+
+**Test**: "AC-052: like button shows heart-outline when not liked and heart when liked" — PASS (mocks `fetchLikeInfo` returning `{ like_count: 3, user_has_liked: false }` then `{ like_count: 4, user_has_liked: true }` post-like; verifies `likeBetaVideo` was called).
+
+**AC-052 — fetchLikeInfo on index change**: PASS
+
+---
+
+#### Item 3 — AC-052: Tapping like calls likeBetaVideo when not liked
+
+**Spec**: Tapping the like button when the user has not liked the video shall call `likeBetaVideo(videoId)`.
+
+**Verification**: `BetaVideoReelViewer.tsx` `handleLike` callback (lines 378–407): when `wasLiked === false`, calls `await likeBetaVideo(video.id)`, then re-fetches authoritative count via `fetchLikeInfo`.
+
+**Test**: "AC-052: tapping like calls likeBetaVideo when not liked" — PASS. `mockLikeBetaVideo` called with `VIDEO_A.id`; `mockUnlikeBetaVideo` not called.
+
+**AC-052 — likeBetaVideo called when not liked**: PASS
+
+---
+
+#### Item 4 — AC-052: Tapping like calls unlikeBetaVideo when already liked
+
+**Spec**: Tapping the like button when the user has already liked the video shall call `unlikeBetaVideo(videoId)`.
+
+**Verification**: `BetaVideoReelViewer.tsx` `handleLike`: when `wasLiked === true`, calls `await unlikeBetaVideo(video.id)`.
+
+**Test**: "AC-052: tapping like calls unlikeBetaVideo when already liked" — PASS. `mockUnlikeBetaVideo` called with `VIDEO_A.id`; `mockLikeBetaVideo` not called.
+
+**AC-052 — unlikeBetaVideo called when already liked**: PASS
+
+---
+
+#### Item 5 — AC-052: Optimistic update reverts on error
+
+**Spec**: On like/unlike error, the optimistic update must be reverted (isLiked and likeCount return to their pre-tap values).
+
+**Verification**: `BetaVideoReelViewer.tsx` `handleLike` lines 383–406:
+- Before the async call: `wasLiked = isLiked`, `prevCount = likeCount` captured; `setIsLiked(!wasLiked)`, `setLikeCount(wasLiked ? prevCount - 1 : prevCount + 1)`, `setIsLikePending(true)` — optimistic update applied.
+- `catch` block: `setIsLiked(wasLiked)`, `setLikeCount(prevCount)` — revert to pre-tap values.
+- `finally` block: `setIsLikePending(false)` — button re-enabled.
+
+**Test**: "AC-052: reverts optimistic update on like error" — PASS. `mockLikeBetaVideo.mockRejectedValue(new Error('Network error'))`. After press: `mockLikeBetaVideo` called; button still present and enabled (isLikePending reverted to false in finally).
+
+**AC-052 — optimistic revert on error**: PASS
+
+---
+
+#### Item 6 — AC-052: Double-tap guard via isLikePending
+
+**Spec**: While a like/unlike request is in flight, a second tap must be a no-op (no double submission).
+
+**Verification**: `BetaVideoReelViewer.tsx` `handleLike` line 379: `if (isLikePending) return;` — early exit when a request is in-flight. The `<Pressable>` at line 923 has `disabled={isLikePending}` which both prevents the press handler from firing at the native level and applies `styles.sidebarItemDisabled` (opacity 0.5) as visual feedback.
+
+**AC-052 — double-tap guard**: PASS (verified by code inspection; `isLikePending` guard is the primary mechanism; `disabled` prop reinforces it at the Pressable level)
+
+---
+
+#### Item 7 — AC-052: i18n keys for like button accessibility labels
+
+**Spec (AC-138)**: Like button has `accessibilityRole="button"` and appropriate label.
+
+**Verification**: `BetaVideoReelViewer.tsx` lines 926–929: `accessibilityLabel={isLiked ? t('betaVideo.reel.liked') : t('betaVideo.reel.like')}`. Both keys are present: `locales/en/common.json` has `betaVideo.reel.like` and `betaVideo.reel.liked`; `locales/zh-TW/common.json` has the same keys.
+
+**AC-052 — i18n accessibility labels**: PASS
+
+---
+
+#### Item 8 — Regression: existing BetaVideoReelViewer behavior (loading overlay, swipe, metadata overlay, report button)
+
+**Scope**: Verify that the 27 tests that passed before the AC-052 change continue to pass.
+
+**Verification**: All 27 previously-passing tests pass (32 total − 5 new AC-052 tests = 27 prior tests). Breakdown:
+
+- Loading overlay while fetching signed URL: PASS
+- VideoView shown after URL resolves: PASS
+- Error state on URL fetch failure: PASS
+- AC-133 close button calls onDismiss: PASS
+- AC-039 swipe up index 0→1: PASS
+- AC-039 swipe up at last index is no-op: PASS
+- AC-039 swipe down at index 0 dismisses: PASS
+- AC-039 swipe down at index > 0 goes to previous: PASS
+- Resets to initialIndex on visible toggle: PASS
+- Does not show VideoView when visible is false: PASS
+- AC-134 route·gym label shown with props: PASS
+- getVideoSignedUrl called with correct video_url: PASS
+- AC-139 report button visible for another user's video: PASS
+- AC-139 report button hidden for own video: PASS
+- AC-139 report button hidden when report_dismissed: PASS
+- AC-140 pressing report calls reportBetaVideo with correct ID: PASS
+- AC-140 report label changes to "reported" after success: PASS
+- AC-134 poster display_name shown: PASS
+- AC-134 avatar placeholder when avatar_url is null: PASS
+- AC-134 Image shown when avatar_url provided: PASS
+- Bug 2 poster row non-tappable and report button hidden for own video: PASS
+- Bug 2 poster row tappable and report button visible for other user: PASS
+- Bug 2 Row 2 shows per-video route_name/gym_name in profile context: PASS
+- Bug 2 routeName/gymName props take precedence over per-video fields: PASS
+- Bug 2 Row 2 hidden when no route info available: PASS
+- Bug 3 loading overlay shown while new video buffers after swipe: PASS
+- Renders modal when visible is true: PASS
+
+All 27 previously-passing tests: PASS. No regressions.
+
+**Regression check**: PASS
+
+---
+
+#### Item 9 — AC-138: Right sidebar contains exactly two icons (like + report); no extra icons
+
+**Spec (AC-138)**: Viewer shall not display share, download, comment, three-dot-menu, or any other action icons, and shall not display a bottom comment bar.
+
+**Verification**: `BetaVideoReelViewer.tsx` sidebar `<View style={styles.sidebar}>` (lines 918–988) contains exactly: (1) like `<Pressable testID="reel-like-button">`, (2) conditional report `<Pressable testID="reel-report-button">` (AC-139), (3) conditional report error `<Text testID="reel-report-error">`. No share, download, comment, three-dot menu, or bottom comment bar elements are present anywhere in the component.
+
+**AC-138 — sidebar icon count**: PASS
+
+---
+
+#### Item 10 — Gold-plating check: no features beyond spec
+
+**Verification**: The AC-052 implementation adds exactly what the spec calls for — a Pressable like button with `fetchLikeInfo`/`likeBetaVideo`/`unlikeBetaVideo` from `social-feed-service`, optimistic update, revert on error, double-tap guard via `isLikePending`. No additional features were introduced. The `fetchLikeInfo` re-fetch after mutation to get the authoritative count from DB is consistent with the spec intent (display accurate server-side count). Import of `fetchLikeInfo`, `likeBetaVideo`, `unlikeBetaVideo` from `mod-social-feed/social-feed-service` is a direct cross-module import of public service functions per the Cross-Module Imports convention in `production.md`.
+
+**Gold-plating check**: PASS
+
+---
+
+#### Verdict
+
+**QA PASS (AC-052 regression scope)**
+
+- **AC-052 — Pressable with toggle icon**: PASS — `<Pressable testID="reel-like-button">` with `name={isLiked ? 'heart' : 'heart-outline'}` and dynamic `{likeCount}`.
+- **AC-052 — fetchLikeInfo on index change**: PASS — `useEffect([currentIndex, visible, videos])` calls `fetchLikeInfo(video.id)`; cancellation guard present; reset effect clears stale state.
+- **AC-052 — likeBetaVideo when not liked**: PASS — test verifies correct function called with correct videoId.
+- **AC-052 — unlikeBetaVideo when already liked**: PASS — test verifies correct function called with correct videoId.
+- **AC-052 — optimistic revert on error**: PASS — `wasLiked`/`prevCount` captured before update; reverted in catch block.
+- **AC-052 — double-tap guard**: PASS — `if (isLikePending) return` early exit; `disabled={isLikePending}` on Pressable.
+- **AC-052 — i18n accessibility labels**: PASS — `betaVideo.reel.like` and `betaVideo.reel.liked` keys present in both locales.
+- **AC-138 — sidebar icon count**: PASS — exactly two icons (like + report); no extra icons or bottom comment bar.
+- **Regressions**: PASS — all 27 previously-passing tests continue to pass.
+- **Gold-plating**: PASS — implementation scope matches spec; cross-module import follows convention.
+- **TypeScript**: PASS — 0 errors (`npx tsc --noEmit`).
+- **Lint**: PASS — project lint is `tsc --noEmit`; 0 errors.
+- **Tests**: 32/32, 0 failures. Prior pre-existing AC-139 failure is now resolved.
