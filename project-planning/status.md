@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: trivial
-module: n/a
+agent: engineer-mod-social-feed
+mode: bugfix
+module: mod-social-feed
 result: success
-commit: 4e046c117216a923504547e3d41256e0dbdc8c5b
-timestamp: 2026-10-05T17:00:00Z
+commit: 0de9d44b41428284b36137d16fe1542285faea6e
+timestamp: 2026-10-07T00:00:00Z
 ```
 
 
@@ -1915,7 +1915,7 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-005 | mod-beta-video         | QA Pending Human Sign-off | qa-mod-beta-video         |
 | MOD-006 | mod-social-feed        | QA Pending Human Sign-off | qa-mod-social-feed        |
 | MOD-007 | mod-notifications      | Not started | —                         |
-| MOD-008 | mod-profile-history    | Not started | —                         |
+| MOD-008 | mod-profile-history    | QA Pending Human Sign-off | qa-mod-profile-history    |
 | MOD-009 | mod-moderation         | Not started | —                         |
 | MOD-010 | mod-localization-theme | Not started | —                         |
 | MOD-011 | mod-analytics          | Not started | —                         |

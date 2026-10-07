@@ -50,6 +50,12 @@ jest.mock('../beta-video-service', () => ({
   reportBetaVideo: jest.fn(),
 }));
 
+jest.mock('../../mod-social-feed/social-feed-service', () => ({
+  fetchLikeInfo: jest.fn(),
+  likeBetaVideo: jest.fn(),
+  unlikeBetaVideo: jest.fn(),
+}));
+
 // ── PanResponder capture ──────────────────────────────────────────────────────
 // We intercept PanResponder.create to capture the latest config so tests can
 // call onPanResponderRelease directly with a synthetic gestureState.
@@ -74,9 +80,13 @@ import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import BetaVideoReelViewer from '../components/BetaVideoReelViewer';
 import { renderOptions } from '../test-utils';
 import type { BetaVideo } from '../types';
+import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed/social-feed-service';
 
 const mockGetVideoSignedUrl = getVideoSignedUrl as jest.MockedFunction<typeof getVideoSignedUrl>;
 const mockReportBetaVideo = reportBetaVideo as jest.MockedFunction<typeof reportBetaVideo>;
+const mockFetchLikeInfo = fetchLikeInfo as jest.MockedFunction<typeof fetchLikeInfo>;
+const mockLikeBetaVideo = likeBetaVideo as jest.MockedFunction<typeof likeBetaVideo>;
+const mockUnlikeBetaVideo = unlikeBetaVideo as jest.MockedFunction<typeof unlikeBetaVideo>;
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -148,6 +158,10 @@ describe('BetaVideoReelViewer', () => {
     capturedPanConfig = null;
     mockGetVideoSignedUrl.mockResolvedValue('https://signed.example.com/video.mp4?token=abc');
     mockReportBetaVideo.mockResolvedValue(undefined);
+    // Default like state: not liked, count 0.
+    mockFetchLikeInfo.mockResolvedValue({ like_count: 0, user_has_liked: false });
+    mockLikeBetaVideo.mockResolvedValue(undefined);
+    mockUnlikeBetaVideo.mockResolvedValue(undefined);
   });
 
   it('renders the modal when visible is true', async () => {
@@ -682,6 +696,107 @@ describe('BetaVideoReelViewer', () => {
     // Loading overlay must be present while the new video buffers.
     await waitFor(() => {
       expect(screen.getByTestId('beta-video-reel-video-loading')).toBeTruthy();
+    });
+  });
+
+  // ── AC-052: Like button ───────────────────────────────────────────────────
+
+  it('AC-052: like button is rendered and tappable', async () => {
+    render(<BetaVideoReelViewer {...BASE_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-like-button')).toBeTruthy();
+    });
+  });
+
+  it('AC-052: like button shows heart-outline when not liked and heart when liked', async () => {
+    mockFetchLikeInfo.mockResolvedValue({ like_count: 3, user_has_liked: false });
+
+    render(<BetaVideoReelViewer {...BASE_PROPS} />, renderOptions());
+
+    // After fetchLikeInfo resolves, count should be 3 and icon heart-outline.
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-like-button')).toBeTruthy();
+    });
+
+    // Now mock fetchLikeInfo to return liked state for the post-like call.
+    mockFetchLikeInfo.mockResolvedValue({ like_count: 4, user_has_liked: true });
+    mockLikeBetaVideo.mockResolvedValue(undefined);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('reel-like-button'));
+    });
+
+    await waitFor(() => {
+      expect(mockLikeBetaVideo).toHaveBeenCalledWith(VIDEO_A.id);
+    });
+  });
+
+  it('AC-052: tapping like calls likeBetaVideo when not liked', async () => {
+    mockFetchLikeInfo.mockResolvedValue({ like_count: 0, user_has_liked: false });
+    mockLikeBetaVideo.mockResolvedValue(undefined);
+
+    render(<BetaVideoReelViewer {...BASE_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-like-button')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('reel-like-button'));
+    });
+
+    await waitFor(() => {
+      expect(mockLikeBetaVideo).toHaveBeenCalledWith(VIDEO_A.id);
+    });
+    expect(mockUnlikeBetaVideo).not.toHaveBeenCalled();
+  });
+
+  it('AC-052: tapping like calls unlikeBetaVideo when already liked', async () => {
+    mockFetchLikeInfo.mockResolvedValue({ like_count: 1, user_has_liked: true });
+    mockUnlikeBetaVideo.mockResolvedValue(undefined);
+
+    render(<BetaVideoReelViewer {...BASE_PROPS} />, renderOptions());
+
+    // Wait for the liked state to be applied from fetchLikeInfo.
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-like-button')).toBeTruthy();
+    });
+    // Allow the fetchLikeInfo effect to resolve.
+    await act(async () => { await Promise.resolve(); });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('reel-like-button'));
+    });
+
+    await waitFor(() => {
+      expect(mockUnlikeBetaVideo).toHaveBeenCalledWith(VIDEO_A.id);
+    });
+    expect(mockLikeBetaVideo).not.toHaveBeenCalled();
+  });
+
+  it('AC-052: reverts optimistic update on like error', async () => {
+    mockFetchLikeInfo.mockResolvedValue({ like_count: 0, user_has_liked: false });
+    mockLikeBetaVideo.mockRejectedValue(new Error('Network error'));
+
+    render(<BetaVideoReelViewer {...BASE_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByTestId('reel-like-button')).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('reel-like-button'));
+    });
+
+    // After error, the like state should revert to not-liked.
+    await waitFor(() => {
+      expect(mockLikeBetaVideo).toHaveBeenCalledWith(VIDEO_A.id);
+    });
+    // isLikePending should be false after error (button re-enabled).
+    await waitFor(() => {
+      const btn = screen.getByTestId('reel-like-button');
+      expect(btn).toBeTruthy();
     });
   });
 });

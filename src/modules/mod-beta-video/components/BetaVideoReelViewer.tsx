@@ -20,11 +20,14 @@
  * 4. No `enterFullscreen()` — VideoView fills the modal.
  * 5. PanResponder (vertical-only). Explicit close button as accessible fallback.
  * 6. Thumbnails: placeholder only — no VideoView per grid cell.
- * Rev 16 (updated): three-layer sibling architecture inside the animated content wrapper:
- *   Layer 1 — VideoView (absoluteFill)
- *   Layer 2 — PanResponder gesture capture (absoluteFill, no children)
- *   Layer 3 — interactive overlay UI (absoluteFill, pointerEvents box-none,
- *              rendered last so its Pressable children win touch delivery)
+ * Rev 16 (updated): four-layer sibling architecture inside the animated content wrapper:
+ *   Layer 1 — VideoView (absoluteFill, opacity:0 while loading)
+ *   Layer 2 — black loading background (absoluteFill, only when isVideoLoading && !urlError;
+ *              covers opacity-0 VideoView; sits below metadata so metadata always visible)
+ *   Layer 3 — PanResponder gesture capture (absoluteFill, no children)
+ *   Layer 4 — interactive overlay UI (absoluteFill, pointerEvents box-none,
+ *              rendered last so its Pressable children win touch delivery;
+ *              always rendered so metadata is visible during buffering)
  *
  * Gesture architecture:
  * - Layer 3 (`{...panHandlers}`) intercepts swipe gestures but has NO children,
@@ -69,6 +72,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
+import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed/social-feed-service';
 import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import type { BetaVideo } from '../types';
 
@@ -332,6 +336,75 @@ export default function BetaVideoReelViewer({
       setCurrentUserId(data.session?.user.id ?? null);
     });
   }, []);
+
+  // ── Like state (AC-052) ───────────────────────────────────────────────────
+  // Per-video like state. Fetched from the `get_like_info` RPC whenever the
+  // currentIndex changes and the viewer is visible.
+  const [isLiked, setIsLiked] = useState<boolean>(false);
+  const [likeCount, setLikeCount] = useState<number>(0);
+  // True while a like/unlike request is in flight — prevents double-tap.
+  const [isLikePending, setIsLikePending] = useState<boolean>(false);
+
+  // Fetch like info whenever the active video changes.
+  useEffect(() => {
+    if (!visible || videos.length === 0) return;
+    const video = videos[currentIndex];
+    if (!video) return;
+
+    let cancelled = false;
+    fetchLikeInfo(video.id)
+      .then(({ like_count, user_has_liked }) => {
+        if (cancelled) return;
+        setLikeCount(like_count);
+        setIsLiked(user_has_liked);
+      })
+      .catch(() => {
+        // Non-fatal: keep whatever state was already showing.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentIndex, visible, videos]);
+
+  // Reset like UI state when index changes so there is no stale display between
+  // the index change and the fetchLikeInfo response.
+  useEffect(() => {
+    setIsLiked(false);
+    setLikeCount(0);
+    setIsLikePending(false);
+  }, [currentIndex]);
+
+  // ── Like handler (AC-052) ────────────────────────────────────────────────
+  const handleLike = useCallback(async (): Promise<void> => {
+    if (isLikePending) return;
+    const video = videos[currentIndex];
+    if (!video) return;
+
+    // Optimistic update.
+    const wasLiked = isLiked;
+    const prevCount = likeCount;
+    setIsLiked(!wasLiked);
+    setLikeCount(wasLiked ? prevCount - 1 : prevCount + 1);
+    setIsLikePending(true);
+
+    try {
+      if (wasLiked) {
+        await unlikeBetaVideo(video.id);
+      } else {
+        await likeBetaVideo(video.id);
+      }
+      // Re-fetch authoritative count from DB after mutation.
+      const { like_count, user_has_liked } = await fetchLikeInfo(video.id);
+      setLikeCount(like_count);
+      setIsLiked(user_has_liked);
+    } catch {
+      // Revert optimistic update on error.
+      setIsLiked(wasLiked);
+      setLikeCount(prevCount);
+    } finally {
+      setIsLikePending(false);
+    }
+  }, [isLikePending, isLiked, likeCount, currentIndex, videos]);
 
   // ── Report state ─────────────────────────────────────────────────────────
   // Set of video IDs that have been successfully reported in this session.
@@ -698,21 +771,52 @@ export default function BetaVideoReelViewer({
           ) : null}
 
           {/*
-           * Layer 2 — PanResponder gesture capture (Bug 1 fix).
+           * Layer 2 — black loading background (UX enhancement).
+           * Covers the VideoView (which is opacity:0 during load) so the user sees
+           * a black canvas instead of transparency. Rendered BELOW Layer 3 so the
+           * metadata overlay (close button, poster identity, sidebar) always paints
+           * on top regardless of isVideoLoading. Moved here from the former external
+           * sibling position (Root cause 3 fix) — the VideoView opacity:0 already
+           * hides the AVPlayerLayer frame hold, so the overlay no longer needs to
+           * cover the full screen from outside the Animated.View.
+           * Hidden immediately when isVideoLoading becomes false or when there is a
+           * URL error (the error view inside this Animated.View is shown instead).
+           */}
+          {isVideoLoading && !urlError ? (
+            <View style={styles.videoLoadingBackground} />
+          ) : null}
+
+          {/*
+           * Layer 3 — PanResponder gesture capture (Bug 1 fix).
            * This View has NO children — it purely intercepts swipe gestures.
            * Without onStartShouldSetPanResponderCapture, it no longer steals
-           * tap events from sibling Pressables in Layer 3.
+           * tap events from sibling Pressables in Layer 4.
            */}
           <View style={StyleSheet.absoluteFill} {...panRef.current.panHandlers} />
 
           {/*
-           * Layer 3 — Interactive overlay UI (Bug 1 fix).
+           * Layer 4 — Interactive overlay UI (Bug 1 fix).
            * Rendered LAST (highest z-order) so its Pressable children receive
-           * touches before the gesture layer below. pointerEvents="box-none"
+           * touches before the gesture layers below. pointerEvents="box-none"
            * means the container itself passes through non-interactive touches
-           * to Layer 2, while Pressable children still capture their own taps.
+           * to Layer 3, while Pressable children still capture their own taps.
+           * This layer is always rendered — not gated on isVideoLoading — so
+           * metadata (poster identity, route/gym, like, report) remains visible
+           * during video buffering (UX enhancement).
            */}
           <View style={[StyleSheet.absoluteFill, styles.overlayPadding]} pointerEvents="box-none">
+
+            {/* ── Loading spinner — video area center, above metadata row ──── */}
+            {/*
+             * UX enhancement: ActivityIndicator is positioned at ~40% from the top
+             * so it sits in the video frame area without overlapping the bottom
+             * metadata/action bar. Only shown when isVideoLoading && !urlError.
+             */}
+            {isVideoLoading && !urlError ? (
+              <View style={styles.videoAreaSpinner} testID="beta-video-reel-video-loading">
+                <ActivityIndicator size="large" color="#fff" />
+              </View>
+            ) : null}
 
             {/* ── Close button (AC-133) — top-left, always visible ─────────── */}
             <Pressable
@@ -814,16 +918,26 @@ export default function BetaVideoReelViewer({
                 {/* Right sidebar: like placeholder + report button (AC-138) */}
                 <View style={styles.sidebar}>
 
-                  {/* Like icon — placeholder count 0, not tappable in Phase 1 (AC-135) */}
-                  <View style={styles.sidebarItem} testID="reel-like-button">
+                  {/* Like button (AC-052) */}
+                  <Pressable
+                    style={[styles.sidebarItem, isLikePending && styles.sidebarItemDisabled]}
+                    onPress={() => { void handleLike(); }}
+                    disabled={isLikePending}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      isLiked
+                        ? t('betaVideo.reel.liked')
+                        : t('betaVideo.reel.like')
+                    }
+                    testID="reel-like-button"
+                  >
                     <Ionicons
-                      name="heart-outline"
+                      name={isLiked ? 'heart' : 'heart-outline'}
                       size={28}
                       color={theme.colors.textInverse}
-                      accessibilityLabel={t('betaVideo.reel.like')}
                     />
-                    <Text style={styles.sidebarCount}>0</Text>
-                  </View>
+                    <Text style={styles.sidebarCount}>{likeCount}</Text>
+                  </Pressable>
 
                   {/* Report button (AC-139/AC-140) */}
                   {showReportButton ? (
@@ -878,23 +992,6 @@ export default function BetaVideoReelViewer({
 
         </Animated.View>
 
-        {/*
-         * AC-039 / AC-133 fix (Root cause 3): black loading overlay rendered as a
-         * sibling of the dragY-transformed Animated.View, NOT inside it.
-         * Placing the overlay inside the Animated.View caused it to slide off-screen
-         * together with the outgoing video during the 250 ms swipe animation,
-         * exposing the previous video's last frame. As a sibling, the overlay covers
-         * the full screen regardless of where dragY translates the content beneath it.
-         * Shown from the moment of swipe commit (setIsVideoLoading called before
-         * Animated.timing starts — Root cause 1 fix) until the statusChange event
-         * fires readyToPlay (Root cause 2 fix). Hidden when there is a URL error
-         * (the error state view inside the Animated.View is shown instead).
-         */}
-        {isVideoLoading && !urlError ? (
-          <View style={styles.videoLoadingOverlay} testID="beta-video-reel-video-loading">
-            <ActivityIndicator size="large" color="#fff" />
-          </View>
-        ) : null}
       </View>
     </Modal>
   );
@@ -1002,16 +1099,31 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       paddingTop: 50,
       paddingBottom: 50,
     },
-    /** Bug 3 fix: black overlay + centered spinner while the next video buffers. */
-    videoLoadingOverlay: {
+    /**
+     * UX enhancement: black loading background rendered inside Animated.View,
+     * below Layer 4 (metadata overlay) in z-order. Covers the opacity-0 VideoView
+     * so the user sees a black canvas. Does NOT cover metadata — the interactive
+     * overlay (Layer 4) is rendered after this in JSX and therefore on top of it.
+     */
+    videoLoadingBackground: {
       position: 'absolute',
       top: 0,
       left: 0,
       right: 0,
       bottom: 0,
       backgroundColor: VIDEO_VIEWER_BG,
+    },
+    /**
+     * UX enhancement: spinner positioned at ~40% from the top of the screen,
+     * centered horizontally, so it sits in the video frame area without
+     * overlapping the bottom metadata/action bar.
+     */
+    videoAreaSpinner: {
+      position: 'absolute',
+      top: '40%',
+      left: 0,
+      right: 0,
       alignItems: 'center',
-      justifyContent: 'center',
     },
   });
 }

@@ -2,7 +2,7 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, 422/422 tests pass.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
@@ -10,7 +10,32 @@
 **follow() bug-fix commit**: pending — `fix(mod-social-feed): include follower_id in follow() insert payload`
 **Human QA UI changes commit**: pending — `fix(mod-social-feed): simplify follower/following cards; add stats section to UserProfileScreen`
 **AC-150/151/152/153 commit**: pending — `feat(mod-social-feed): AC-150/151(UI)/152/153 — three-dots sheet, block/report, blocked state`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153)
+**AC-052 like button commit**: `0de9d44` — `feat(mod-social-feed): AC-052 — tappable like button in BetaVideoReelViewer`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052)
+
+### AC-052 — Tappable Like Button in BetaVideoReelViewer (2026-10-07)
+
+**AC-052 DONE**: Replaced the placeholder non-tappable `View` like icon in `BetaVideoReelViewer` (lines 851–860) with a functional `Pressable` that calls `likeBetaVideo`/`unlikeBetaVideo` from `social-feed-service.ts`. Existing service functions (`likeBetaVideo`, `unlikeBetaVideo`, `fetchLikeInfo`) were already present and required no changes.
+
+**Implementation**:
+- Added import of `fetchLikeInfo`, `likeBetaVideo`, `unlikeBetaVideo` from `../../mod-social-feed/social-feed-service` (cross-module public service import — permitted per production.md Cross-Module Imports convention).
+- Added `isLiked: boolean`, `likeCount: number`, `isLikePending: boolean` state variables.
+- `useEffect([currentIndex, visible, videos])` — fetches `fetchLikeInfo(video.id)` whenever the active video changes; resets state to `false`/`0`/`false` immediately on index change so no stale display shows during the fetch.
+- `handleLike` callback — optimistic update (flip `isLiked`, increment/decrement count), calls `likeBetaVideo` or `unlikeBetaVideo`, re-fetches authoritative count via `fetchLikeInfo` after mutation, reverts on error, sets `isLikePending` for double-tap guard.
+- Like button: `Pressable` with `disabled={isLikePending}`, `accessibilityLabel` toggling between `t('betaVideo.reel.like')` and `t('betaVideo.reel.liked')`, icon toggling `heart` (filled, liked) / `heart-outline` (not liked), count derived from `likeCount` state.
+- Added `betaVideo.reel.liked` i18n key to both `locales/en/common.json` ("Liked") and `locales/zh-TW/common.json` ("已按讚").
+
+**Self-check (AC-052)**:
+- PASS — `npx tsc --noEmit` — 0 errors
+- PASS — `npm run lint` — 0 errors
+- PASS — `npx jest --testPathPattern="BetaVideoReelViewer"` — 32/32 pass (5 new AC-052 tests)
+- PASS — No new npm dependencies introduced
+- PASS — No hardcoded hex colors; all styles use existing `theme.*` tokens
+- PASS — Cross-module import `fetchLikeInfo, likeBetaVideo, unlikeBetaVideo` from `../../mod-social-feed/social-feed-service` (public service layer, permitted per production.md)
+- PASS — i18n key `betaVideo.reel.liked` added to both locale files; existing `betaVideo.reel.like` key unchanged
+- PASS — Optimistic update with revert-on-error pattern implemented
+- PASS — `isLikePending` guard prevents double-tap
+- NOTE — `beta-video-service.test.ts` has 1 pre-existing failure (fetchBetaVideosByUser route_name expectation, from unrelated uncommitted changes to `beta-video-service.ts` — not caused by this AC)
 
 ### AC-150 / AC-151 (UI) / AC-152 / AC-153 Implementation (2026-09-30)
 

@@ -295,6 +295,7 @@
     "reel": {
       "close": "Close",
       "like": "Like",
+      "liked": "Liked",
       "report": "Report",
       "reported": "Reported",
       "reportError": "Could not report. Try again.",

@@ -295,6 +295,7 @@
     "reel": {
       "close": "關閉",
       "like": "按讚",
+      "liked": "已按讚",
       "report": "檢舉",
       "reported": "已回報",
       "reportError": "回報失敗，請再試一次",
