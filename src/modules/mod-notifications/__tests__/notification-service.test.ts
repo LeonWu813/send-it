@@ -35,7 +35,7 @@ const mockRpc = supabase.rpc as jest.MockedFunction<typeof supabase.rpc>;
 /**
  * Builds a chainable query builder that resolves to `result` when awaited.
  *
- * Supports chaining: select, eq, order, limit, not, maybeSingle.
+ * Supports chaining: select, eq, in, order, limit, not, maybeSingle, single.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
 function makeQueryBuilder(result: { data: unknown; error: unknown }): any {
@@ -47,6 +47,7 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }): any {
     update: jest.fn().mockReturnThis(),
     delete: jest.fn().mockReturnThis(),
     eq: jest.fn().mockReturnThis(),
+    in: jest.fn().mockReturnThis(),
     not: jest.fn().mockReturnThis(),
     order: jest.fn().mockReturnThis(),
     limit: jest.fn().mockReturnThis(),
@@ -114,8 +115,9 @@ describe('registerDeviceToken', () => {
 describe('fetchNotifications', () => {
   beforeEach(() => jest.resetAllMocks());
 
-  it('returns a flat list of Notification rows with actor info', async () => {
-    const mockData = [
+  it('returns a flat list of Notification rows with actor info (two-query approach)', async () => {
+    // Step 1: notifications query
+    const mockNotifData = [
       {
         id: 'notif-001',
         recipient_user_id: 'user-001',
@@ -125,11 +127,17 @@ describe('fetchNotifications', () => {
         target_id: 'video-001',
         is_read: false,
         created_at: '2026-09-24T10:00:00Z',
-        users: { display_name: 'Alice', avatar_url: null },
       },
     ];
-    const qb = makeQueryBuilder({ data: mockData, error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+    const notifQb = makeQueryBuilder({ data: mockNotifData, error: null });
+
+    // Step 2: users batch query for actor info
+    const mockActorData = [{ id: 'user-002', display_name: 'Alice', avatar_url: null }];
+    const usersQb = makeQueryBuilder({ data: mockActorData, error: null });
+
+    mockFrom
+      .mockReturnValueOnce(notifQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>);
 
     const result = await fetchNotifications();
 
@@ -142,20 +150,34 @@ describe('fetchNotifications', () => {
       is_read: false,
     });
     expect(mockFrom).toHaveBeenCalledWith('notifications');
-    expect(qb.order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(mockFrom).toHaveBeenCalledWith('users');
+    expect(notifQb.order).toHaveBeenCalledWith('created_at', { ascending: false });
   });
 
-  it('returns an empty array when data is null', async () => {
+  it('returns an empty array when notification data is null', async () => {
     const qb = makeQueryBuilder({ data: null, error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
     const result = await fetchNotifications();
 
     expect(result).toEqual([]);
+    // Users query should NOT be called when notifications returns null (no data)
+    expect(mockFrom).toHaveBeenCalledTimes(1);
   });
 
-  it('handles rows where actor user is null', async () => {
-    const mockData = [
+  it('returns an empty array when data is an empty array', async () => {
+    const qb = makeQueryBuilder({ data: [], error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchNotifications();
+
+    expect(result).toEqual([]);
+    // Users query not called for empty notifications list
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles missing actor info gracefully (actor_user_id not in users response)', async () => {
+    const mockNotifData = [
       {
         id: 'notif-002',
         recipient_user_id: 'user-001',
@@ -165,14 +187,47 @@ describe('fetchNotifications', () => {
         target_id: 'video-002',
         is_read: true,
         created_at: '2026-09-24T09:00:00Z',
-        users: null,
       },
     ];
-    const qb = makeQueryBuilder({ data: mockData, error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+    const notifQb = makeQueryBuilder({ data: mockNotifData, error: null });
+    // Users query returns empty (actor not found / deleted)
+    const usersQb = makeQueryBuilder({ data: [], error: null });
+
+    mockFrom
+      .mockReturnValueOnce(notifQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>);
 
     const result = await fetchNotifications();
 
+    expect(result).toHaveLength(1);
+    expect(result[0].actor_display_name).toBeUndefined();
+    expect(result[0].actor_avatar_url).toBeNull();
+  });
+
+  it('handles actor fetch error gracefully (non-fatal — rows still returned)', async () => {
+    const mockNotifData = [
+      {
+        id: 'notif-003',
+        recipient_user_id: 'user-001',
+        actor_user_id: 'user-004',
+        type: 'beta_video_like',
+        target_type: 'beta_video',
+        target_id: 'video-003',
+        is_read: false,
+        created_at: '2026-09-24T08:00:00Z',
+      },
+    ];
+    const notifQb = makeQueryBuilder({ data: mockNotifData, error: null });
+    // Users query fails — should be non-fatal, rows still returned without actor info
+    const usersQb = makeQueryBuilder({ data: null, error: { code: 'PGRST500' } });
+
+    mockFrom
+      .mockReturnValueOnce(notifQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchNotifications();
+
+    // Rows returned even when actor fetch fails
     expect(result).toHaveLength(1);
     expect(result[0].actor_display_name).toBeUndefined();
     expect(result[0].actor_avatar_url).toBeNull();
@@ -187,7 +242,7 @@ describe('fetchNotifications', () => {
     expect(qb.limit).toHaveBeenCalledWith(10);
   });
 
-  it('throws a user-friendly error on query failure', async () => {
+  it('throws a user-friendly error on notifications query failure', async () => {
     const qb = makeQueryBuilder({ data: null, error: { code: 'PGRST500' } });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 

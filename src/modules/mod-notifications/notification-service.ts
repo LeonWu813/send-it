@@ -75,24 +75,13 @@ export async function registerDeviceToken(
  * @throws {Error} with a user-facing message on failure.
  */
 export async function fetchNotifications(limit: number = 50): Promise<Notification[]> {
+  // Step 1: Fetch notification rows (RLS scopes to recipient = current user).
+  // Using a simple select without an embedded join avoids PostgREST FK-hint
+  // schema-cache issues that can arise when there are multiple FK references
+  // from notifications to the same users table.
   const { data, error } = await supabase
     .from('notifications')
-    .select(
-      `
-      id,
-      recipient_user_id,
-      actor_user_id,
-      type,
-      target_type,
-      target_id,
-      is_read,
-      created_at,
-      users!notifications_actor_user_id_fkey (
-        display_name,
-        avatar_url
-      )
-      `.trim(),
-    )
+    .select('id, recipient_user_id, actor_user_id, type, target_type, target_id, is_read, created_at')
     .order('created_at', { ascending: false })
     .limit(limit);
 
@@ -101,11 +90,33 @@ export async function fetchNotifications(limit: number = 50): Promise<Notificati
     throw new Error('Failed to load notifications. Please try again.');
   }
 
-  if (!data) return [];
+  if (!data || data.length === 0) return [];
 
-  // Flatten the joined actor user record.
-  // The Supabase client types the joined relation as a nested object; we cast through
-  // unknown to extract the flat shape we need.
+  // Step 2: Batch-fetch actor profiles for all unique actor_user_ids.
+  // This replaces the embedded PostgREST join, guaranteeing correct results
+  // regardless of PostgREST schema cache state.
+  const actorIds = [...new Set(data.map((row) => row.actor_user_id as string))];
+
+  type ActorRow = { id: string; display_name: string; avatar_url: string | null };
+  let actorMap: Record<string, ActorRow> = {};
+
+  if (actorIds.length > 0) {
+    const { data: actorData, error: actorError } = await supabase
+      .from('users')
+      .select('id, display_name, avatar_url')
+      .in('id', actorIds);
+
+    if (actorError) {
+      // Non-fatal: actor info is display-only. Log and continue with empty names.
+      console.error('[fetchNotifications] actor fetch error:', actorError);
+    } else if (actorData) {
+      actorMap = Object.fromEntries(
+        (actorData as ActorRow[]).map((u) => [u.id, u]),
+      );
+    }
+  }
+
+  // Step 3: Merge notification rows with actor profile data.
   const results: Notification[] = [];
   for (const rawRow of data) {
     const row = rawRow as unknown as {
@@ -117,15 +128,15 @@ export async function fetchNotifications(limit: number = 50): Promise<Notificati
       target_id: string;
       is_read: boolean;
       created_at: string;
-      users: { display_name: string; avatar_url: string | null } | null;
     };
 
+    const actor = actorMap[row.actor_user_id];
     results.push({
       id: row.id,
       recipient_user_id: row.recipient_user_id,
       actor_user_id: row.actor_user_id,
-      actor_display_name: row.users?.display_name,
-      actor_avatar_url: row.users?.avatar_url ?? null,
+      actor_display_name: actor?.display_name,
+      actor_avatar_url: actor?.avatar_url ?? null,
       type: row.type as 'beta_video_like',
       target_type: row.target_type,
       target_id: row.target_id,

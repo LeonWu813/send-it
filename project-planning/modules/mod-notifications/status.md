@@ -2,6 +2,39 @@
 
 ## Engineering Progress
 
+**Bugfix (BUG-1 APNs entitlement + BUG-2 bell position + BUG-3 inbox): complete — 2026-10-07**
+
+Three user-confirmed on-device bugs fixed.
+
+### Bugfix Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npm test -- --watchAll=false` | PASS | 474 tests pass (2 net new test cases added for fetchNotifications two-query approach); 1 pre-existing failure in mod-beta-video unrelated to MOD-007 |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| BUG-1 — APNs entitlement error silently swallowed | PASS | Wrapped `getExpoPushTokenAsync()` in its own inner try/catch inside the outer try/catch. If it throws (including the `aps-environment` entitlement error), the inner catch logs at `console.log` level (not `console.error`) and returns early — the outer catch only fires for unexpected errors from `requestPermissionsAsync()` or `registerDeviceToken()`. No user-facing error shown. `registerDeviceToken` wiring is preserved. |
+| BUG-2 — Bell icon moved to top-LEFT, settings to top-RIGHT | PASS | `notificationsButton` style: `right: theme.spacing.md` → `left: theme.spacing.md`. `settingsButton` style: `right: theme.spacing.md + 40 + theme.spacing.sm` → `right: theme.spacing.md`. Both icons now non-overlapping and each on their intended side. |
+| BUG-3 — Inbox investigation complete | PASS | Migration exists (20260924000007_mod_007_notifications.sql). RLS policies correct. Navigation wiring correct. Root cause of potential PostgREST failure: the embedded join `users!notifications_actor_user_id_fkey(...)` is subject to PostgREST schema cache issues when multiple FK references exist between the same two tables. Fix: replaced single-query embedded join with a robust two-query approach — (1) fetch notification rows without join, (2) batch-fetch actor profiles from `users` by `actor_user_id` values. Actor fetch errors are non-fatal (rows still returned with undefined actor info). |
+| `fetchNotifications` tests updated | PASS | 5 test cases (replacing 3 old cases) exercise the two-query flow: success with actor info, null notifications, empty notifications, missing actor, actor fetch error (non-fatal). |
+| No new dependencies | PASS | All within existing tech stack. |
+| Coding conventions | PASS | `console.error` before throws; `console.log` for expected non-errors (APNs deferral, permission denied). |
+
+### Files Modified (Bugfix)
+
+- `src/modules/mod-auth-profile/hooks/useSession.ts` — BUG-1: inner try/catch around `getExpoPushTokenAsync()` so APNs entitlement errors are silently swallowed (console.log, not console.error); outer catch retained for unexpected errors from other calls
+- `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` — BUG-2: `notificationsButton` style changed from `right: theme.spacing.md` to `left: theme.spacing.md`; `settingsButton` style changed from `right: theme.spacing.md + 40 + theme.spacing.sm` to `right: theme.spacing.md`
+- `src/modules/mod-notifications/notification-service.ts` — BUG-3: `fetchNotifications` refactored from single PostgREST embedded join to two-query approach (notifications + users batch); actor fetch errors non-fatal
+- `src/modules/mod-notifications/__tests__/notification-service.test.ts` — updated `fetchNotifications` tests for two-query implementation; added `in` to mock query builder; 5 test cases covering success, empty, missing actor, actor error
+
+---
+
 **Regression fix (AC-054 + AC-171): complete — 2026-10-07**
 
 Two QA failures from QA Run 3 fixed.

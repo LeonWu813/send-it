@@ -83,14 +83,30 @@ export function useSession(): SessionState {
                 console.log('[useSession] Push notification permission denied — skipping device token registration.');
                 return;
               }
-              const { data: expoPushToken } = await Notifications.getExpoPushTokenAsync();
+              // APNs physical delivery is deferred until the Apple Developer account
+              // is active (no .p8 key, no aps-environment entitlement configured).
+              // getExpoPushTokenAsync() throws with an aps-environment error in this
+              // state — swallow it silently so it never surfaces to the user or
+              // blocks sign-in. The rest of MOD-007 (inbox, preference toggle) works
+              // without a registered push token.
+              let expoPushToken: string;
+              try {
+                const result = await Notifications.getExpoPushTokenAsync();
+                expoPushToken = result.data;
+              } catch (pushTokenErr) {
+                // Expected on a physical device without APNs entitlement configured.
+                // Log at debug level only — this is not an error in the current
+                // project state.
+                console.log('[useSession] getExpoPushTokenAsync skipped (APNs not yet configured):', pushTokenErr);
+                return;
+              }
               // The expo push token itself serves as the device token for the
               // Expo Push service. The RPC also accepts a raw APNs device_token
               // but Expo Push Token is sufficient for the Expo-managed push path.
               await registerDeviceToken(expoPushToken, expoPushToken);
             } catch (err) {
-              // Non-blocking: log the failure and continue. The user is signed in
-              // regardless of whether device token registration succeeds.
+              // Non-blocking: log unexpected failures and continue. The user is
+              // signed in regardless of whether device token registration succeeds.
               console.error('[useSession] Device token registration failed (non-blocking):', err);
             }
           })();

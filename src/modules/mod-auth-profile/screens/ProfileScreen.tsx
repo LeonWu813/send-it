@@ -332,14 +332,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.md,
     },
-    // AC-171: bell icon positioned in the top-right of the ProfileScreen header.
-    // The settings gear sits to the left of the bell so both are on the right
-    // side and do not overlap. Layout (right-to-left from screen edge):
-    //   [screen right edge] — spacing.md — [bell 40px] — spacing.sm — [settings 40px]
+    // AC-171: bell icon positioned in the top-LEFT of the ProfileScreen header.
+    // Settings gear stays top-right. This is the user's original intended layout:
+    //   [screen left edge] — spacing.md — [bell 40px]  ...  [settings 40px] — spacing.md — [screen right edge]
     notificationsButton: {
       position: 'absolute',
       top: topInset + theme.spacing.md,
-      right: theme.spacing.md,
+      left: theme.spacing.md,
       width: 40,
       height: 40,
       alignItems: 'center',
@@ -370,13 +369,11 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textInverse,
       lineHeight: 14,
     },
-    // Settings gear is offset to the left of the bell icon so both sit on the
-    // right side without overlapping.
-    // right offset = spacing.md (bell right margin) + 40 (bell width) + spacing.sm (gutter)
+    // Settings gear is at the top-right — the user's original intended position.
     settingsButton: {
       position: 'absolute',
       top: topInset + theme.spacing.md,
-      right: theme.spacing.md + 40 + theme.spacing.sm,
+      right: theme.spacing.md,
       width: 40,
       height: 40,
       alignItems: 'center',
