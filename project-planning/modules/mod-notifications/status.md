@@ -2,6 +2,42 @@
 
 ## Engineering Progress
 
+**Regression fix (AC-054 + AC-171): complete — 2026-10-07**
+
+Two QA failures from QA Run 3 fixed.
+
+### Regression Fix Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npm test -- --watchAll=false` | PASS | 472 tests pass (3 new AC-054 tests in useSession.test.ts); 1 pre-existing failure in mod-beta-video unrelated to MOD-007 |
+| Git scope | NOTE | Changes include mod-auth-profile files (useSession.ts, ProfileScreen.tsx, useSession.test.ts) and package.json/package-lock.json/ios xcodeproj (from npx expo install expo-notifications). The auth integration point is assigned to MOD-007 by the spec (same as Rev 32 implementation). The ios xcodeproj change is from expo-notifications native module registration — expected for a native package install. |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| AC-054 FAIL — `registerDeviceToken` now called on SIGNED_IN | PASS | `useSession.ts` imports `expo-notifications` and `registerDeviceToken`; on `SIGNED_IN` event fires `requestPermissionsAsync()` → `getExpoPushTokenAsync()` → `registerDeviceToken(token, token)` as fire-and-forget void IIFE. Permission denied logs and returns without throwing. All errors caught and logged, never block sign-in. |
+| AC-171 FAIL — bell icon now top-right | PASS | `ProfileScreen.tsx` `notificationsButton` style changed from `left: theme.spacing.md` to `right: theme.spacing.md`. Settings gear offset to `right: theme.spacing.md + 40 + theme.spacing.sm` so both icons sit on the right without overlapping. |
+| `expo-notifications` installed correctly | PASS | `npx expo install expo-notifications` used (not `npm install`), per production.md Native Dependency Installation convention. Package resolves to SDK-compatible version. |
+| `expo-notifications` mock added | PASS | `__mocks__/expo-notifications.js` added with `requestPermissionsAsync` and `getExpoPushTokenAsync` stubs; prevents native module crash in Jest. |
+| 3 new tests for AC-054 in useSession.test.ts | PASS | Tests: (1) registerDeviceToken called on SIGNED_IN with expected token; (2) skips registration when permissions denied; (3) does not call registerDeviceToken on non-SIGNED_IN events. |
+| No new dependencies outside tech stack | PASS | `expo-notifications` is part of the Expo SDK (production.md: "Expo SDK 51+") and was specified in the QA failure prompt as already part of mod-notifications setup. |
+| Coding conventions | PASS | fire-and-forget via void IIFE; console.log for denied permissions (non-error); console.error for unexpected errors; no inline strings. |
+
+### Files Modified (Regression Fix)
+
+- `src/modules/mod-auth-profile/hooks/useSession.ts` — added `expo-notifications` import and `registerDeviceToken` import; added AC-054 SIGNED_IN device token registration (fire-and-forget)
+- `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` — AC-171 fix: `notificationsButton` `left` → `right: theme.spacing.md`; `settingsButton` `right: theme.spacing.md` → `right: theme.spacing.md + 40 + theme.spacing.sm`
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — added mocks for `expo-notifications` and `registerDeviceToken`; added 3 AC-054 tests
+- `__mocks__/expo-notifications.js` — created Jest mock for expo-notifications
+- `package.json` / `package-lock.json` / `ios/SendIt.xcodeproj/project.pbxproj` — from `npx expo install expo-notifications`
+
+---
+
 **Rev 32 implementation: complete — 2026-10-07**
 
 ### Rev 32 Self-Check (AC-058 Rev 32 + AC-171 + AC-172 + AC-173)

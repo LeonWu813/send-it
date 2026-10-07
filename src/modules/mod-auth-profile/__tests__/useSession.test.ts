@@ -21,10 +21,24 @@ jest.mock('../auth-service', () => ({
   loadProfile: jest.fn(),
 }));
 
+// AC-054: expo-notifications mock — permissions granted, token available.
+jest.mock('expo-notifications', () => ({
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted', granted: true }),
+  getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'ExponentPushToken[test]' }),
+}));
+
+// AC-054: registerDeviceToken mock — prevents real Supabase calls in tests.
+jest.mock('../../mod-notifications/notification-service', () => ({
+  registerDeviceToken: jest.fn().mockResolvedValue(undefined),
+}));
+
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { act, renderHook, waitFor } from '@testing-library/react-native';
+import * as Notifications from 'expo-notifications';
+import { PermissionStatus } from 'expo-modules-core';
 import { supabase } from '../../../lib/supabase';
 import { loadProfile } from '../auth-service';
+import { registerDeviceToken } from '../../mod-notifications/notification-service';
 import { useSession } from '../hooks/useSession';
 
 // ── Typed mocks ───────────────────────────────────────────────────────────────
@@ -36,6 +50,13 @@ const mockOnAuthStateChange = supabase.auth
   typeof supabase.auth.onAuthStateChange
 >;
 const mockLoadProfile = loadProfile as jest.MockedFunction<typeof loadProfile>;
+const mockRequestPermissions = Notifications.requestPermissionsAsync as jest.MockedFunction<
+  typeof Notifications.requestPermissionsAsync
+>;
+const mockGetExpoPushToken = Notifications.getExpoPushTokenAsync as jest.MockedFunction<
+  typeof Notifications.getExpoPushTokenAsync
+>;
+const mockRegisterDeviceToken = registerDeviceToken as jest.MockedFunction<typeof registerDeviceToken>;
 
 function makeSubscription() {
   // ReturnType is Subscription — cast via any for test mock
@@ -57,6 +78,10 @@ describe('useSession', () => {
     });
     mockOnAuthStateChange.mockReturnValue(makeSubscription());
     mockLoadProfile.mockResolvedValue(null);
+    // Default AC-054 mocks: permissions granted, token available.
+    mockRequestPermissions.mockResolvedValue({ status: PermissionStatus.GRANTED, granted: true, expires: 'never', canAskAgain: true });
+    mockGetExpoPushToken.mockResolvedValue({ data: 'ExponentPushToken[test]', type: 'expo' });
+    mockRegisterDeviceToken.mockResolvedValue(undefined);
   });
 
   it('returns isLoading: true before the session resolves', () => {
@@ -132,5 +157,94 @@ describe('useSession', () => {
 
     await waitFor(() => expect(result.current.session).toBeNull());
     expect(result.current.profile).toBeNull();
+  });
+
+  // AC-054: device token registration on SIGNED_IN event
+  it('calls registerDeviceToken with expo push token on SIGNED_IN (AC-054)', async () => {
+    type AuthChangeCallback = Parameters<typeof supabase.auth.onAuthStateChange>[0];
+    let capturedCallback: AuthChangeCallback = async () => { /* placeholder */ };
+
+    mockOnAuthStateChange.mockImplementation((cb: AuthChangeCallback) => {
+      capturedCallback = cb;
+      return makeSubscription();
+    });
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
+
+    renderHook(() => useSession());
+
+    const fakeSession = {
+      user: { id: 'user-abc' },
+      access_token: 'tok',
+    } as unknown as import('@supabase/supabase-js').Session;
+
+    // Fire the SIGNED_IN auth state change event
+    act(() => {
+      capturedCallback('SIGNED_IN', fakeSession);
+    });
+
+    // Wait for the async fire-and-forget registration to complete
+    await waitFor(() => expect(mockRegisterDeviceToken).toHaveBeenCalledTimes(1));
+    expect(mockRequestPermissions).toHaveBeenCalledTimes(1);
+    expect(mockGetExpoPushToken).toHaveBeenCalledTimes(1);
+    expect(mockRegisterDeviceToken).toHaveBeenCalledWith(
+      'ExponentPushToken[test]',
+      'ExponentPushToken[test]',
+    );
+  });
+
+  it('skips device token registration when permissions are denied (AC-054)', async () => {
+    type AuthChangeCallback = Parameters<typeof supabase.auth.onAuthStateChange>[0];
+    let capturedCallback: AuthChangeCallback = async () => { /* placeholder */ };
+
+    mockOnAuthStateChange.mockImplementation((cb: AuthChangeCallback) => {
+      capturedCallback = cb;
+      return makeSubscription();
+    });
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
+    mockRequestPermissions.mockResolvedValue({ status: PermissionStatus.DENIED, granted: false, expires: 'never', canAskAgain: false });
+
+    renderHook(() => useSession());
+
+    const fakeSession = {
+      user: { id: 'user-abc' },
+      access_token: 'tok',
+    } as unknown as import('@supabase/supabase-js').Session;
+
+    act(() => {
+      capturedCallback('SIGNED_IN', fakeSession);
+    });
+
+    // Give the async path time to run
+    await waitFor(() => expect(mockRequestPermissions).toHaveBeenCalledTimes(1));
+    // Token fetch and registration must not be called when permission is denied
+    expect(mockGetExpoPushToken).not.toHaveBeenCalled();
+    expect(mockRegisterDeviceToken).not.toHaveBeenCalled();
+  });
+
+  it('does not call registerDeviceToken on non-SIGNED_IN events (AC-054)', async () => {
+    type AuthChangeCallback = Parameters<typeof supabase.auth.onAuthStateChange>[0];
+    let capturedCallback: AuthChangeCallback = async () => { /* placeholder */ };
+
+    mockOnAuthStateChange.mockImplementation((cb: AuthChangeCallback) => {
+      capturedCallback = cb;
+      return makeSubscription();
+    });
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null });
+
+    renderHook(() => useSession());
+
+    const fakeSession = {
+      user: { id: 'user-abc' },
+      access_token: 'tok',
+    } as unknown as import('@supabase/supabase-js').Session;
+
+    // TOKEN_REFRESHED is not SIGNED_IN — should not trigger registration
+    act(() => {
+      capturedCallback('TOKEN_REFRESHED', fakeSession);
+    });
+
+    // Allow any micro-task ticks to run
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(mockRegisterDeviceToken).not.toHaveBeenCalled();
   });
 });
