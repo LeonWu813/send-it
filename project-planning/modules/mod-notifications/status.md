@@ -534,3 +534,114 @@ No features beyond spec requirements. `fetchRouteForBetaVideo` is kept in the se
 FAIL AC-054: `registerDeviceToken` in `src/modules/mod-notifications/notification-service.ts` is defined and tested but never called from any sign-in path. The sign-in flow (`src/modules/mod-auth-profile/screens/SignInScreen.tsx` → `signInWithEmail`/`signInWithApple`/`signInWithGoogle`; `src/modules/mod-auth-profile/hooks/useSession.ts` `onAuthStateChange`) has no call to `registerDeviceToken`. Fix: call `registerDeviceToken(deviceToken, expoPushToken?)` from the appropriate sign-in hook (e.g., inside `useSession.ts` `onAuthStateChange` when event is `SIGNED_IN` and a device token is available from the Expo Push SDK, or from `SignInScreen` after successful sign-in). The Expo Push SDK token retrieval step must also be present.
 
 FAIL AC-171: `ProfileScreen.tsx` positions the notifications bell button at `left: theme.spacing.md` (top-left of the header). The spec requires the bell to be in the top-right. Fix: change `notificationsButton` style from `left: theme.spacing.md` to `right: theme.spacing.md` (or swap positions with the settings gear so bell is right and settings is left, per the spec's "top-right" requirement for the bell). File: `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`, `makeStyles` function, `notificationsButton` style.
+
+---
+
+**QA Run 4 — Regression (AC-054 + AC-171 fixes) — 2026-10-07 — workflow: regression-test**
+
+Re-verifying the two bugs reported in QA Run 3: AC-054 (`registerDeviceToken` never called in sign-in flow) and AC-171 (bell icon at top-left instead of top-right). Engineer fix applied: `registerDeviceToken` now wired into `useSession.ts` on `SIGNED_IN` event; `notificationsButton` style changed from `left` to `right`.
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npm test -- --watchAll=false` | PASS | 473 tests run; 472 passed, 1 failed. The 1 failure is the pre-existing failure in `mod-beta-video/__tests__/beta-video-service.test.ts` (`AC-162: route_name returns null instead of 'V5 Red'`) — identical to the pre-existing failure in all prior QA runs, unrelated to MOD-007. All 7 `useSession.test.ts` tests pass (including the 3 new AC-054 tests). All 4 `ProfileScreen.test.tsx` tests pass. All 43 mod-notifications tests pass. |
+
+Note: total test count rose from 470 (QA Run 3) to 473 — the net +3 are the new AC-054 tests in `useSession.test.ts` added by the Engineer as part of the regression fix.
+
+### AC-054 Regression Verification
+
+**REGRESSION PASS AC-054.**
+
+Original failure: `registerDeviceToken` was defined in `notification-service.ts` and tested in isolation, but was never called from any sign-in code path — no `DeviceToken` row would ever be created at runtime.
+
+Verified fixed:
+
+1. **`getExpoPushTokenAsync` called after permission grant** — `useSession.ts` lines 81–86: `requestPermissionsAsync()` is awaited first; `getExpoPushTokenAsync()` is called only when `granted` is truthy. If `granted` is false, the function logs and returns — `getExpoPushTokenAsync` is never called. Confirmed by test: "skips device token registration when permissions are denied (AC-054)" — `mockGetExpoPushToken` has zero calls when `requestPermissionsAsync` returns `granted: false`. PASS.
+
+2. **`registerDeviceToken` called with the token** — `useSession.ts` line 90: `await registerDeviceToken(expoPushToken, expoPushToken)` — the Expo push token is passed as both `device_token` and `expo_push_token` arguments. Confirmed by test: "calls registerDeviceToken with expo push token on SIGNED_IN (AC-054)" — `mockRegisterDeviceToken` called exactly once with `('ExponentPushToken[test]', 'ExponentPushToken[test]')`. PASS.
+
+3. **Sign-in not blocked if permissions are denied** — the entire AC-054 block is inside a `void (async () => { ... })()` fire-and-forget IIFE (lines 79–96). When `granted` is false, the IIFE logs via `console.log` and returns — it does not throw and does not affect the sign-in session state. When an unexpected error occurs, `catch (err)` logs via `console.error` and swallows the error — the session state update (`setSession`, `loadProfile`) that precedes the IIFE on lines 65–73 has already executed unconditionally. Confirmed by test: "skips device token registration when permissions are denied (AC-054)" — `mockRegisterDeviceToken` not called, no uncaught error. PASS.
+
+4. **3 new tests in `useSession.test.ts` pass** — running `npx jest src/modules/mod-auth-profile/__tests__/useSession.test.ts --watchAll=false` shows all 7 tests pass (4 pre-existing + 3 new):
+   - "calls registerDeviceToken with expo push token on SIGNED_IN (AC-054)" — PASS
+   - "skips device token registration when permissions are denied (AC-054)" — PASS
+   - "does not call registerDeviceToken on non-SIGNED_IN events (AC-054)" — PASS
+
+5. **`expo-notifications` installed correctly** — `__mocks__/expo-notifications.js` exists at the project root with `requestPermissionsAsync` and `getExpoPushTokenAsync` stubs. The mock correctly provides a `PermissionStatus` constant object to satisfy the `expo-modules-core` `PermissionStatus` type used in the test file. PASS.
+
+### AC-171 Regression Verification
+
+**REGRESSION PASS AC-171.**
+
+Original failure: `notificationsButton` style in `ProfileScreen.tsx` had `left: theme.spacing.md`, placing the bell at the top-left. The settings gear was at `right: theme.spacing.md` (top-right).
+
+Verified fixed — `ProfileScreen.tsx` `makeStyles` function, `notificationsButton` style (lines 339–349):
+
+```
+notificationsButton: {
+  position: 'absolute',
+  top: topInset + theme.spacing.md,
+  right: theme.spacing.md,          ← was: left: theme.spacing.md
+  width: 40,
+  height: 40,
+  ...
+}
+```
+
+And `settingsButton` style (lines 376–387):
+
+```
+settingsButton: {
+  position: 'absolute',
+  top: topInset + theme.spacing.md,
+  right: theme.spacing.md + 40 + theme.spacing.sm,   ← offset left of bell
+  width: 40,
+  height: 40,
+  ...
+}
+```
+
+**Both icons on right side** — bell is at `right: theme.spacing.md` (rightmost); settings gear is at `right: theme.spacing.md + 40 + theme.spacing.sm` (40px bell width + spacing.sm gutter to its left). Layout from screen right edge: `[right edge] — spacing.md — [bell 40px] — spacing.sm — [settings gear 40px]`. Both icons are on the right side of the header. PASS.
+
+**Non-overlapping** — the right-edge distance for the settings gear (`theme.spacing.md + 40 + theme.spacing.sm`) is strictly greater than the right-edge distance for the bell (`theme.spacing.md`) by `40 + theme.spacing.sm` — the full bell width plus a gutter. No overlap. PASS.
+
+Comment in the source (line 335–338) also explicitly documents the layout: "Layout (right-to-left from screen edge): [screen right edge] — spacing.md — [bell 40px] — spacing.sm — [settings 40px]". PASS.
+
+### Previously Passing ACs — Re-verification
+
+| AC | Result | Notes |
+|----|--------|-------|
+| AC-055 | PASS | No changes to Edge Function, trigger, notification fetch. All mod-notifications tests pass (43 total). |
+| AC-056 | PASS | No changes to push fan-out path. Deferred per spec as before. |
+| AC-057 | PASS | No changes to `NotificationPreferenceScreen` or preference RPC. All 8 preference tests still pass. |
+| AC-058 (Rev 32) | PASS | No changes to `NotificationInboxScreen` tap handler or `actor_user_id` path. All inbox tests pass. |
+| AC-172 | PASS | No changes to batch mark-read path. Existing tests verify `markNotificationsRead` called on load. |
+| AC-173 | PASS | Bell badge logic unchanged. Badge now correctly positioned on top-right bell (AC-171 fix). `fetchUnreadNotificationCount` tests pass. |
+| AC-171 (integration) | PASS | `ProfileScreen.test.tsx` "renders the bell icon button when onNavigateNotifications is provided (AC-171)" — PASS. |
+
+### Regression Checks for Adjacent Code
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| Pre-existing tests in `useSession.test.ts` (4 tests) | PASS | All 4 pre-existing tests still pass after adding the AC-054 SIGNED_IN block. |
+| `expo-notifications` mock does not break other test suites | PASS | `__mocks__/expo-notifications.js` is a root-level `__mocks__` directory mock — auto-applied only when the module is imported. No unintended side effects on suites that don't import `expo-notifications`. |
+| `ProfileScreen.test.tsx` (4 tests) | PASS | All 4 tests pass. The bell-icon position change is a style property — not tested by unit tests — but the rendering and press behavior tests are unaffected. |
+| Total test count vs prior run | PASS | Run 3: 469 pass / 470 run. Run 4: 472 pass / 473 run. Net +3 tests all pass (the new AC-054 tests). The pre-existing mod-beta-video failure is still the only failure — not introduced by these changes. |
+
+### Overall Result
+
+**QA PASS — regression test.**
+
+| AC | QA Verdict |
+|----|-----------|
+| AC-054 | REGRESSION PASS — original failure resolved: `registerDeviceToken` wired into `useSession.ts` on `SIGNED_IN` event; `getExpoPushTokenAsync` called after permission grant; registration skipped (not blocking) when permissions denied; 3 new tests all pass |
+| AC-055 | PASS (no regression) |
+| AC-056 | PASS (no regression; measurement deferred per spec) |
+| AC-057 | PASS (no regression) |
+| AC-058 (Rev 32) | PASS (no regression) |
+| AC-171 | REGRESSION PASS — original failure resolved: `notificationsButton` style changed from `left: theme.spacing.md` to `right: theme.spacing.md`; settings gear offset to `right: theme.spacing.md + 40 + theme.spacing.sm`; both icons on right side, non-overlapping |
+| AC-172 | PASS (no regression) |
+| AC-173 | PASS (no regression) |
+
+472 of 473 tests pass (1 pre-existing failure in mod-beta-video unrelated to MOD-007). TypeScript 0 errors. Both regression fixes independently verified via source inspection and test execution. No new regressions introduced.
