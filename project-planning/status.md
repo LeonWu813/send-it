@@ -3,15 +3,16 @@
 ## Last Action
 
 ```
-agent: qa-mod-notifications
-mode: regression
-module: mod-notifications
+agent: pm
+mode: change
+module: n/a
 result: success
-commit: 0d0a62f796b8a03bd3f197f32edf629e76971a6c
-timestamp: 2026-10-07T15:00:00Z
+commit: 69eebd7326da3c5cf81fdbe9b8c97167ac6aea1f
+timestamp: 2026-10-07T16:00:00Z
 ```
 
 
+- **2026-10-07 [TRIVIAL]** — AC-171 bell-icon position correction (PRD Revision 33). Leon (via coordinator) approved the exact change verbatim and directed the [TRIVIAL] tag. Change: in §8 MOD-007 AC-171 the bell icon's position in the `ProfileScreen` header was corrected from "top-right" to "top-left" (bell on the left; the settings gear remains on the right). The AC marker was updated from `(new, Rev 32)` to `(revised, Rev 33)` to reflect the in-place revision. PRD Status line `[TRIVIAL] — Revision 33`; `**Revision**` bumped 32 → 33; Date 2026-10-07. **Wording-only — no behavioral change beyond the icon's horizontal position.** No new AC ID, no new module, no new dependency, no DB migration, no module-boundary change, no phase-plan change. The prior Rev 32 [SUBSTANTIVE] entry's decision-1 note recorded "top-right" as the original (now-corrected) placement — this entry supersedes that positional detail only. **Doc-Sync not invoked for this change** — the engineer is already fixing the code directly; the MOD-007/MOD-001 specs may carry the corrected AC-171 position on the next routine sync pass.
 - **2026-10-07 [SUBSTANTIVE]** — MOD-007 Notifications: four user-confirmed decisions closing gaps in the in-app notification inbox (PRD Revision 32). Leon (via coordinator) approved the exact change set verbatim and directed the [SUBSTANTIVE] tag. PRD Status line `[SUBSTANTIVE] — Revision 32`; `**Revision**` bumped 31 → 32; Date 2026-10-07. **No DB migration required** — the `Notification` table already carries `recipient_user_id`, `actor_user_id`, `target_id`, `target_type`, and `is_read` (PRD §9 Data Model). **Four decisions**:
   1. **Inbox location (AC-171, new)** — the in-app notification inbox is reached via a bell icon in the top-right of MOD-001's `ProfileScreen` header; tapping the bell pushes a new `NotificationInboxScreen` owned by MOD-007. The prior spec named an in-app inbox in MOD-007's Purpose but never specified where it lives.
   2. **AC-058 navigation contract (AC-058, revised)** — tapping a beta-video-like entry in the inbox now navigates to the **actor's `UserProfileScreen`** (MOD-006), resolved directly from the notification's existing `actor_user_id` column (no extra query). This supersedes the prior AC-058 behavior of navigating to the liked video's route detail screen. **No changes to MOD-003 or MOD-005 are required.**

@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 32
+**Status**: [TRIVIAL] — Revision 33
 **Date**: 2026-10-07
-**Revision**: 32
+**Revision**: 33
 
 ---
 
@@ -704,7 +704,7 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-058** (revised, Rev 32): The system shall navigate a user from a beta-video-like entry in the in-app notification inbox to the **UserProfileScreen of the actor** (the user who liked the video) when the user taps the entry, resolving the notification's existing `actor_user_id` column directly — no additional query is required, as `actor_user_id` is already present on the `Notification` row (see §9 Data Model). The destination is MOD-006's `UserProfileScreen` (the other-user profile overlay, AC-064), subject to the actor's privacy setting (AC-063). This supersedes the prior AC-058 behavior of navigating to the liked video's route detail screen. No changes to MOD-003 or MOD-005 are required.
 
-**AC-171** (new, Rev 32): The system shall present a bell icon in the top-right of the `ProfileScreen` header (the MOD-001 Profile tab surface). Tapping the bell shall push a new `NotificationInboxScreen` (owned by MOD-007) that lists the current user's in-app notifications, most recent first. The `NotificationInboxScreen` and its contents are owned by MOD-007; the bell entry point is placed in MOD-001's ProfileScreen header and wired to navigate to MOD-007's inbox screen.
+**AC-171** (revised, Rev 33): The system shall present a bell icon in the top-left of the `ProfileScreen` header (the MOD-001 Profile tab surface). Tapping the bell shall push a new `NotificationInboxScreen` (owned by MOD-007) that lists the current user's in-app notifications, most recent first. The `NotificationInboxScreen` and its contents are owned by MOD-007; the bell entry point is placed in MOD-001's ProfileScreen header and wired to navigate to MOD-007's inbox screen.
 
 **AC-172** (new, Rev 32): When `NotificationInboxScreen` mounts, the system shall mark all of the current user's unread notifications as read in a single batch update — all `Notification` rows where `recipient_user_id` equals the current user and `is_read = false` are set to `is_read = true`. Tapping an individual notification row shall not separately change that row's read state; the batch mark-read on inbox mount is the sole read-state transition in Phase 1.
 
