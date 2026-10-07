@@ -43,6 +43,7 @@ import {
   fetchBetaVideosByUser,
 } from '../../mod-beta-video';
 import type { BetaVideo } from '../../mod-beta-video';
+import { fetchUnreadNotificationCount } from '../../mod-notifications/notification-service';
 import { SendHistoryProfile } from '../../mod-profile-history';
 import { fetchFollowerCounts } from '../../mod-social-feed/social-feed-service';
 import { useSession } from '../hooks/useSession';
@@ -93,6 +94,10 @@ export default function ProfileScreen({
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
 
+  // AC-173: unread notification count for the bell icon badge.
+  // 0 means no badge. Clears after the user opens the inbox (AC-172 batch mark-read).
+  const [unreadCount, setUnreadCount] = useState(0);
+
   // AC-164: beta video grid state.
   const [betaVideos, setBetaVideos] = useState<BetaVideo[]>([]);
   const [reelStartIndex, setReelStartIndex] = useState(0);
@@ -111,18 +116,22 @@ export default function ProfileScreen({
   // on subsequent focus events without resetting counts/videos to empty.
   const hasLoadedOnce = useRef(false);
 
-  // AC-145 + AC-164: Memoised fetch — does NOT reset state before fetching so
-  // existing data stays visible during a silent background refresh (no flash).
+  // AC-145 + AC-164 + AC-173: Memoised fetch — does NOT reset state before
+  // fetching so existing data stays visible during a silent background refresh
+  // (no flash). fetchUnreadNotificationCount silently returns 0 on error so the
+  // badge is non-blocking (AC-173).
   const loadData = useCallback(async (): Promise<void> => {
     if (!profile?.id) return;
     const userId = profile.id;
-    const [counts, videos] = await Promise.all([
+    const [counts, videos, unread] = await Promise.all([
       fetchFollowerCounts(userId),
       fetchBetaVideosByUser(userId),
+      fetchUnreadNotificationCount(),
     ]);
     setFollowerCount(counts.follower_count);
     setFollowingCount(counts.following_count);
     setBetaVideos(videos);
+    setUnreadCount(unread);
     hasLoadedOnce.current = true;
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -139,23 +148,39 @@ export default function ProfileScreen({
     if (isActive && hasLoadedOnce.current) void loadData();
   }, [isActive, loadData]);
 
-  // ── Profile header (AC-116 + AC-117 + AC-145) ───────────────────────────────
+  // ── Profile header (AC-116 + AC-117 + AC-145 + AC-171 + AC-173) ────────────
   // Passed as listHeaderComponent to SendHistoryProfile so it scrolls with
   // the FlatList rather than requiring a wrapping ScrollView.
   const profileHeader = (
     <View style={styles.headerContainer}>
-      {/* Notifications bell icon (top-left, AC-058) */}
+      {/* Notifications bell icon with unread badge (AC-171, AC-173) */}
       {onNavigateNotifications ? (
         <Pressable
           style={({ pressed }) => [
             styles.notificationsButton,
             pressed && styles.notificationsButtonPressed,
           ]}
-          onPress={onNavigateNotifications}
+          onPress={() => {
+            // Optimistically clear the badge when the inbox is opened.
+            // The actual is_read update happens server-side via AC-172 on
+            // NotificationInboxScreen mount. A refetch on tab re-focus will
+            // re-sync the count if the inbox was dismissed before the RPC
+            // completed.
+            setUnreadCount(0);
+            onNavigateNotifications();
+          }}
           accessibilityRole="button"
           accessibilityLabel={t('notifications.title')}
         >
           <Ionicons name="notifications-outline" size={24} color={theme.colors.textSecondary} />
+          {/* Unread badge (AC-173) — shown when count > 0 */}
+          {unreadCount > 0 ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>
+                {unreadCount > 99 ? '99+' : String(unreadCount)}
+              </Text>
+            </View>
+          ) : null}
         </Pressable>
       ) : null}
 
@@ -320,6 +345,26 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     notificationsButtonPressed: {
       backgroundColor: theme.colors.surface,
+    },
+    // AC-173: unread notification count badge on the bell icon.
+    // Positioned in the top-right corner of the bell button.
+    unreadBadge: {
+      position: 'absolute',
+      top: 0,
+      right: 0,
+      minWidth: 16,
+      height: 16,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.error,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: 3,
+    },
+    unreadBadgeText: {
+      fontSize: 10,
+      fontWeight: theme.fontWeight.bold,
+      color: theme.colors.textInverse,
+      lineHeight: 14,
     },
     settingsButton: {
       position: 'absolute',

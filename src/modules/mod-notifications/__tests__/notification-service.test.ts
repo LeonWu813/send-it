@@ -22,6 +22,7 @@ import {
   fetchNotificationPreference,
   fetchNotifications,
   fetchRouteForBetaVideo,
+  fetchUnreadNotificationCount,
   markNotificationsRead,
   registerDeviceToken,
   updateNotificationPreference,
@@ -372,5 +373,60 @@ describe('updateNotificationPreference', () => {
     await expect(updateNotificationPreference(true)).rejects.toThrow(
       'Failed to update notification preferences. Please try again.',
     );
+  });
+});
+
+// ── fetchUnreadNotificationCount (AC-173) ─────────────────────────────────────
+
+describe('fetchUnreadNotificationCount', () => {
+  beforeEach(() => jest.resetAllMocks());
+
+  it('returns the count of unread notifications', async () => {
+    // Supabase count query returns { count: N, error: null } with head: true.
+    const qb = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      // Resolves as { count: 3, error: null } when awaited
+      then: Promise.resolve({ count: 3, error: null }).then.bind(
+        Promise.resolve({ count: 3, error: null }),
+      ),
+    };
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchUnreadNotificationCount();
+
+    expect(result).toBe(3);
+    expect(mockFrom).toHaveBeenCalledWith('notifications');
+    expect(qb.eq).toHaveBeenCalledWith('is_read', false);
+  });
+
+  it('returns 0 when count is null', async () => {
+    const qb = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      then: Promise.resolve({ count: null, error: null }).then.bind(
+        Promise.resolve({ count: null, error: null }),
+      ),
+    };
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchUnreadNotificationCount();
+
+    expect(result).toBe(0);
+  });
+
+  it('returns 0 on query error (non-blocking badge)', async () => {
+    const qb = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      then: Promise.resolve({ count: null, error: { code: 'PGRST500' } }).then.bind(
+        Promise.resolve({ count: null, error: { code: 'PGRST500' } }),
+      ),
+    };
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    const result = await fetchUnreadNotificationCount();
+
+    expect(result).toBe(0);
   });
 });

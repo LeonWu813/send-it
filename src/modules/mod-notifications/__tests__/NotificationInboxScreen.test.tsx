@@ -3,6 +3,11 @@
  *
  * AC-055: displays Notification rows for the current user (beta-video-like only).
  * AC-057: inbox shows notifications even when push preference is off.
+ * AC-058 (Rev 32): tapping a notification navigates to the actor's
+ *   UserProfileScreen via onNavigateToUser(actor_user_id) — no additional
+ *   query to MOD-003 or MOD-005.
+ * AC-172: on mount, markNotificationsRead() is called to batch-mark all unread
+ *   rows as read.
  *
  * notification-service is mocked; no real network activity.
  */
@@ -13,7 +18,6 @@ jest.mock('../../../lib/supabase', () => ({
 
 jest.mock('../notification-service', () => ({
   fetchNotifications: jest.fn(),
-  fetchRouteForBetaVideo: jest.fn(),
   markNotificationsRead: jest.fn(),
 }));
 
@@ -23,7 +27,6 @@ import React from 'react';
 
 import {
   fetchNotifications,
-  fetchRouteForBetaVideo,
   markNotificationsRead,
 } from '../notification-service';
 import NotificationInboxScreen from '../screens/NotificationInboxScreen';
@@ -32,9 +35,6 @@ import type { Notification } from '../types';
 
 const mockFetchNotifications = fetchNotifications as jest.MockedFunction<
   typeof fetchNotifications
->;
-const mockFetchRouteForBetaVideo = fetchRouteForBetaVideo as jest.MockedFunction<
-  typeof fetchRouteForBetaVideo
 >;
 const mockMarkNotificationsRead = markNotificationsRead as jest.MockedFunction<
   typeof markNotificationsRead
@@ -104,7 +104,7 @@ describe('NotificationInboxScreen', () => {
     });
   });
 
-  it('calls markNotificationsRead when inbox loads', async () => {
+  it('calls markNotificationsRead when inbox loads (AC-172)', async () => {
     mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
 
     render(
@@ -180,18 +180,20 @@ describe('NotificationInboxScreen', () => {
     expect(mockFetchNotifications).not.toHaveBeenCalled();
   });
 
-  it('calls onNavigateToRoute with routeId and gymId when tapping a beta_video_like notification', async () => {
+  /**
+   * AC-058 (Rev 32): tapping a beta_video_like notification navigates to the
+   * actor's UserProfileScreen via onNavigateToUser(actor_user_id). The
+   * actor_user_id is read directly from the Notification row — no additional
+   * query to MOD-003 or MOD-005 is required.
+   */
+  it('calls onNavigateToUser with actor_user_id when tapping a beta_video_like notification (AC-058 Rev 32)', async () => {
     mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
-    mockFetchRouteForBetaVideo.mockResolvedValueOnce({
-      routeId: 'route-001',
-      gymId: 'gym-001',
-    });
-    const mockOnNavigateToRoute = jest.fn();
+    const mockOnNavigateToUser = jest.fn();
 
     render(
       <NotificationInboxScreen
         session={MOCK_SESSION}
-        onNavigateToRoute={mockOnNavigateToRoute}
+        onNavigateToUser={mockOnNavigateToUser}
       />,
       renderOptions(),
     );
@@ -201,24 +203,25 @@ describe('NotificationInboxScreen', () => {
       expect(screen.getByText('Alice')).toBeTruthy();
     });
 
-    // Tap the notification row (first Pressable with accessibilityRole="button")
+    // Tap the notification row
     fireEvent.press(screen.getAllByRole('button')[0]);
 
-    await waitFor(() => {
-      expect(mockFetchRouteForBetaVideo).toHaveBeenCalledWith('video-001');
-      expect(mockOnNavigateToRoute).toHaveBeenCalledWith('route-001', 'gym-001');
-    });
+    // onNavigateToUser called with actor_user_id — no fetchRouteForBetaVideo needed
+    expect(mockOnNavigateToUser).toHaveBeenCalledWith('user-002');
   });
 
-  it('does not call onNavigateToRoute when fetchRouteForBetaVideo returns null', async () => {
-    mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
-    mockFetchRouteForBetaVideo.mockResolvedValueOnce(null);
-    const mockOnNavigateToRoute = jest.fn();
+  it('does not call onNavigateToUser when actor_user_id is missing', async () => {
+    const noActorNotification: Notification = {
+      ...MOCK_NOTIFICATION,
+      actor_user_id: '',
+    };
+    mockFetchNotifications.mockResolvedValueOnce([noActorNotification]);
+    const mockOnNavigateToUser = jest.fn();
 
     render(
       <NotificationInboxScreen
         session={MOCK_SESSION}
-        onNavigateToRoute={mockOnNavigateToRoute}
+        onNavigateToUser={mockOnNavigateToUser}
       />,
       renderOptions(),
     );
@@ -229,9 +232,6 @@ describe('NotificationInboxScreen', () => {
 
     fireEvent.press(screen.getAllByRole('button')[0]);
 
-    await waitFor(() => {
-      expect(mockFetchRouteForBetaVideo).toHaveBeenCalledWith('video-001');
-    });
-    expect(mockOnNavigateToRoute).not.toHaveBeenCalled();
+    expect(mockOnNavigateToUser).not.toHaveBeenCalled();
   });
 });

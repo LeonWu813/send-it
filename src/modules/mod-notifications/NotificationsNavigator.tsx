@@ -34,10 +34,11 @@ interface NotificationsNavigatorProps {
   onBack?: () => void;
   /**
    * Callback invoked when the user taps a notification row to navigate to the
-   * liked beta video's route detail screen (AC-058). Threaded from AppShell
-   * via handleNavigateToRoute — switches to the Gyms tab and opens the route.
+   * actor's UserProfileScreen (AC-058, Rev 32). The actor_user_id is resolved
+   * directly from the Notification row. Threaded from AppShell via
+   * handleSelectClimber — opens MOD-006's UserProfileScreen overlay.
    */
-  onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  onNavigateToUser?: (userId: string) => void;
 }
 
 // ── Navigator ─────────────────────────────────────────────────────────────────
@@ -47,7 +48,7 @@ export default function NotificationsNavigator({
   initialView = 'inbox',
   isActive = true,
   onBack,
-  onNavigateToRoute,
+  onNavigateToUser,
 }: NotificationsNavigatorProps): React.JSX.Element {
   const [view, setView] = useState<NotificationsView>(initialView);
 
@@ -68,7 +69,7 @@ export default function NotificationsNavigator({
           session={session}
           isActive={isActive}
           onBack={onBack}
-          onNavigateToRoute={onNavigateToRoute}
+          onNavigateToUser={onNavigateToUser}
         />
       );
   }

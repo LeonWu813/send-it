@@ -5,13 +5,17 @@
  *          in Phase 1), most-recent first.
  * AC-057: shows the notification even when push is disabled (Notification row
  *          is always inserted; push is the optional layer on top).
- * AC-058: tap-through from a notification to the liked beta video is a Phase 1+
- *          code gap (requires cross-module navigation contract with MOD-003/MOD-005
- *          to resolve target_id → route_id). Tapping an entry is a no-op in Phase 1
- *          (navigation contract flagged as a blocker; see status.md).
+ * AC-058 (Rev 32): tapping a beta-video-like notification navigates to the
+ *          actor's UserProfileScreen (MOD-006). The actor_user_id is resolved
+ *          directly from the Notification row — no additional query needed.
+ *          onNavigateToUser(actor_user_id) is called; AppShell opens the profile
+ *          overlay. This supersedes the prior route-detail tap-through.
+ * AC-172: on mount, all unread Notification rows for the current user are set
+ *          to is_read = true in a single batch update via mark_notifications_read.
  *
- * When the screen mounts, it marks all notifications as read.
- * Uses pull-to-refresh for manual refresh.
+ * Uses plain useEffect for data loading (conditionally-mounted screen, no
+ * NavigationContainer ancestor — do not use useFocusEffect or any
+ * @react-navigation/native hook).
  *
  * Safe area: useSafeAreaInsets() + makeStyles(theme, topInset) pattern.
  * i18n: all user-facing strings use useTranslation('common') hook.
@@ -36,7 +40,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../lib/theme';
 import {
   fetchNotifications,
-  fetchRouteForBetaVideo,
   markNotificationsRead,
 } from '../notification-service';
 import type { Notification } from '../types';
@@ -53,10 +56,11 @@ interface NotificationInboxScreenProps {
   onBack?: () => void;
   /**
    * Callback invoked when the user taps a beta-video-like notification entry.
-   * Resolves the notification's target_id to the route and gym, then delegates
-   * to AppShell.handleNavigateToRoute to open the route detail screen (AC-058).
+   * Receives the actor's user_id (resolved directly from Notification.actor_user_id —
+   * no additional query needed). Delegates to AppShell which opens MOD-006's
+   * UserProfileScreen overlay for the actor (AC-058, Rev 32).
    */
-  onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  onNavigateToUser?: (userId: string) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -65,7 +69,7 @@ export default function NotificationInboxScreen({
   session: _session,
   isActive = true,
   onBack,
-  onNavigateToRoute,
+  onNavigateToUser,
 }: NotificationInboxScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -104,24 +108,26 @@ export default function NotificationInboxScreen({
     await loadNotifications().finally(() => setRefreshing(false));
   }, [loadNotifications]);
 
-  // ── Tap-through handler (AC-058) ────────────────────────────────────────────
+  // ── Tap-through handler (AC-058, Rev 32) ────────────────────────────────────
 
   /**
    * Handle tap on a notification row.
-   * For beta_video_like notifications: resolve target_id (BetaVideo.id) to
-   * route_id + gym_id via fetchRouteForBetaVideo, then invoke onNavigateToRoute
-   * so AppShell switches to the Gyms tab and opens the route detail screen.
+   *
+   * For beta_video_like notifications: navigate to the actor's UserProfileScreen
+   * (MOD-006) by calling onNavigateToUser with the notification's actor_user_id.
+   * The actor_user_id is already present on the Notification row — no additional
+   * query to MOD-003 or MOD-005 is required (AC-058, Rev 32).
+   *
+   * AppShell receives the userId and opens the UserProfileScreen overlay, subject
+   * to the actor's privacy setting (AC-063).
    */
   const handleNotificationPress = useCallback(
-    async (notification: Notification): Promise<void> => {
-      if (notification.type === 'beta_video_like' && notification.target_id) {
-        const result = await fetchRouteForBetaVideo(notification.target_id);
-        if (result) {
-          onNavigateToRoute?.(result.routeId, result.gymId);
-        }
+    (notification: Notification): void => {
+      if (notification.type === 'beta_video_like' && notification.actor_user_id) {
+        onNavigateToUser?.(notification.actor_user_id);
       }
     },
-    [onNavigateToRoute],
+    [onNavigateToUser],
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -212,16 +218,16 @@ export default function NotificationInboxScreen({
 /**
  * Renders one notification inbox entry.
  *
- * AC-058: tapping a beta_video_like entry resolves target_id (BetaVideo.id)
- * to route_id + gym_id via fetchRouteForBetaVideo, then calls onPress so
- * AppShell can switch to the Gyms tab and open the route detail screen.
+ * AC-058 (Rev 32): tapping a beta_video_like entry navigates to the actor's
+ * UserProfileScreen via onPress(notification). The actor_user_id is read
+ * directly from the Notification row — no additional query required.
  */
 interface NotificationRowProps {
   item: Notification;
   styles: ReturnType<typeof makeStyles>;
   theme: ReturnType<typeof useTheme>['theme'];
   t: (key: string) => string;
-  onPress: (notification: Notification) => Promise<void>;
+  onPress: (notification: Notification) => void;
 }
 
 function NotificationRow({
@@ -236,7 +242,7 @@ function NotificationRow({
   return (
     <Pressable
       style={[styles.notificationRow, !item.is_read && styles.notificationRowUnread]}
-      onPress={() => void onPress(item)}
+      onPress={() => onPress(item)}
       accessibilityRole="button"
       accessibilityLabel={t('notifications.betaVideoLikeA11y')}
     >

@@ -98,7 +98,7 @@ export default function ProfileNavigator({
         session={session}
         isActive={isActive}
         onBack={() => setView('profile')}
-        onNavigateToRoute={onNavigateToRoute}
+        onNavigateToUser={onNavigateToUser}
       />
     );
   }

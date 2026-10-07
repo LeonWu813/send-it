@@ -7,13 +7,16 @@
  *   fetchNotifications()
  *       — fetch the in-app inbox for the current user, most-recent first
  *   markNotificationsRead()
- *       — mark all unread notifications as read (called when inbox opens)
+ *       — mark all unread notifications as read (called when inbox opens, AC-172)
+ *   fetchUnreadNotificationCount()
+ *       — count of unread notifications for the bell icon badge (AC-173)
  *   fetchNotificationPreference()
  *       — load the user's beta_video_like preference (AC-057)
  *   updateNotificationPreference(betaVideoLike)
  *       — update the beta_video_like toggle (AC-057)
  *   fetchRouteForBetaVideo(betaVideoId)
- *       — resolve a beta video's route and gym context for inbox tap-through (AC-058)
+ *       — (legacy) resolve a beta video's route and gym context; superseded by
+ *       Rev 32 which resolves actor_user_id directly from the Notification row
  *
  * Rules:
  * - Uses the shared Supabase singleton from src/lib/supabase.ts.
@@ -52,6 +55,7 @@ export async function registerDeviceToken(
   });
 
   if (error) {
+    console.error('[registerDeviceToken] error:', error);
     throw new Error('Failed to register device token. Please try again.');
   }
 }
@@ -93,6 +97,7 @@ export async function fetchNotifications(limit: number = 50): Promise<Notificati
     .limit(limit);
 
   if (error) {
+    console.error('[fetchNotifications] error:', error);
     throw new Error('Failed to load notifications. Please try again.');
   }
 
@@ -145,8 +150,36 @@ export async function markNotificationsRead(): Promise<void> {
   const { error } = await supabase.rpc('mark_notifications_read');
 
   if (error) {
+    console.error('[markNotificationsRead] error:', error);
     throw new Error('Failed to mark notifications as read. Please try again.');
   }
+}
+
+// ── Unread notification count (AC-173) ────────────────────────────────────────
+
+/**
+ * Count the current user's unread notifications for the bell icon badge.
+ *
+ * Returns the number of Notification rows where recipient_user_id = current user
+ * and is_read = false. RLS ensures only own rows are counted.
+ *
+ * Returns 0 on any error (badge is non-critical — failure is silent).
+ *
+ * AC-173: the badge value equals this count; it clears to 0 after the batch
+ * mark-read fires on inbox mount (AC-172).
+ */
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('is_read', false);
+
+  if (error) {
+    console.error('[fetchUnreadNotificationCount] error:', error);
+    return 0;
+  }
+
+  return count ?? 0;
 }
 
 // ── Route Resolution for Tap-Through (AC-058) ─────────────────────────────────
@@ -200,6 +233,7 @@ export async function fetchNotificationPreference(): Promise<NotificationPrefere
     .maybeSingle();
 
   if (error) {
+    console.error('[fetchNotificationPreference] error:', error);
     throw new Error('Failed to load notification preferences. Please try again.');
   }
 
@@ -228,6 +262,7 @@ export async function updateNotificationPreference(betaVideoLike: boolean): Prom
   });
 
   if (error) {
+    console.error('[updateNotificationPreference] error:', error);
     throw new Error('Failed to update notification preferences. Please try again.');
   }
 }

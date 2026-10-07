@@ -2,6 +2,53 @@
 
 ## Engineering Progress
 
+**Rev 32 implementation: complete — 2026-10-07**
+
+### Rev 32 Self-Check (AC-058 Rev 32 + AC-171 + AC-172 + AC-173)
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npm test -- --passWithNoTests` | PASS | 469 tests pass (47 mod-notifications tests + 4 ProfileScreen tests); 1 pre-existing failure in mod-beta-video unrelated to MOD-007 |
+| Git scope | NOTE | Changes include mod-auth-profile files (ProfileScreen, ProfileNavigator, ProfileScreen.test.tsx) — these are the AC-171 integration point declared in the MOD-007 spec: "MOD-007 owns the NotificationInboxScreen. MOD-001's engineer places the bell icon in the top-right of ProfileScreen's header and wires it to navigate to MOD-007's inbox screen." This cross-module wiring is assigned to MOD-007 by the spec. |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| AC-058 (Rev 32) — navigate to actor's UserProfileScreen | PASS | `handleNotificationPress` in `NotificationInboxScreen` now calls `onNavigateToUser(notification.actor_user_id)` directly — no additional query. `fetchRouteForBetaVideo` no longer used in tap handler (kept in service for backwards compatibility). |
+| AC-171 — bell icon in ProfileScreen header | PASS | Bell icon already present in ProfileScreen; now includes unread count badge. Entry point wired via `onNavigateNotifications` → ProfileNavigator `'notifications'` view → NotificationsNavigator. |
+| AC-172 — batch mark-read on inbox mount | PASS | `markNotificationsRead()` called in `loadNotifications` after `fetchNotifications` succeeds. Existing tests verify this. |
+| AC-173 — unread count badge on bell | PASS | `fetchUnreadNotificationCount()` added to service; `ProfileScreen` fetches it in `loadData` alongside follower counts; badge rendered on bell icon when count > 0; optimistically cleared to 0 when user taps bell. |
+| `console.error` before all throws | PASS | All service functions now log raw Supabase error via `console.error('[functionName] error:', error)` before throwing user-facing message (production.md Shared Conventions). |
+| No new dependencies | PASS | All within existing tech stack. |
+| i18n keys complete | PASS | All notification keys (AC-171/172/173 relevant) already present in both `en/common.json` and `zh-TW/common.json` from prior implementation. |
+| No hardcoded values | PASS | Unread count badge capped at '99+' as a UX limit; threshold is a UI constant, not a configurable value. |
+
+### AC Coverage (Rev 32 additions)
+
+| AC | Status | Notes |
+|----|--------|-------|
+| AC-058 (Rev 32) | PASS | Tap → `onNavigateToUser(actor_user_id)` — actor_user_id already on Notification row, no extra query |
+| AC-171 | PASS | Bell icon in ProfileScreen header; taps open NotificationInboxScreen via ProfileNavigator state machine |
+| AC-172 | PASS | Batch mark-read on inbox mount via `mark_notifications_read` SECURITY DEFINER RPC (already implemented) |
+| AC-173 | PASS | Unread badge on bell: count from `fetchUnreadNotificationCount()`; optimistic clear on tap; re-syncs on tab re-focus |
+
+### Files Modified for Rev 32
+
+- `src/modules/mod-notifications/notification-service.ts` — added `fetchUnreadNotificationCount()`; added `console.error` before all throws
+- `src/modules/mod-notifications/screens/NotificationInboxScreen.tsx` — AC-058 Rev 32: `onNavigateToRoute` → `onNavigateToUser`; tap handler uses `actor_user_id` directly, no `fetchRouteForBetaVideo` call
+- `src/modules/mod-notifications/NotificationsNavigator.tsx` — prop `onNavigateToRoute` → `onNavigateToUser`
+- `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` — AC-173: unread badge on bell icon; fetches `fetchUnreadNotificationCount()` in `loadData`; optimistic clear on bell tap
+- `src/modules/mod-auth-profile/ProfileNavigator.tsx` — threads `onNavigateToUser` to `NotificationsNavigator` (was `onNavigateToRoute`)
+- `src/modules/mod-notifications/__tests__/NotificationInboxScreen.test.tsx` — updated AC-058 tests for Rev 32 (actor profile nav, no fetchRouteForBetaVideo)
+- `src/modules/mod-notifications/__tests__/notification-service.test.ts` — added 3 tests for `fetchUnreadNotificationCount`
+- `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx` — added mock for `fetchUnreadNotificationCount`; added AC-171 and AC-173 tests
+
+---
+
 **AC-058 bugfix: complete — 2026-09-29**
 
 ### AC-058 Fix Self-Check
