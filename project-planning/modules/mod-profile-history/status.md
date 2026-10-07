@@ -5,6 +5,14 @@
 **Status**: Complete — ready for QA.
 **Completed**: 2026-09-29
 
+### Patch — 2026-10-05: Fix sends_by_grade inflation (MOD-008 v5)
+
+**Migration**: `supabase/migrations/20261005000001_mod_008_fix_sends_by_grade.sql`
+
+**Problem**: The `grade_counts` CTE in `get_profile_stats` (v4) used `COUNT(*)` over `send_rows`. Because `send_rows` selects one row per ascent, a route logged multiple times produces duplicate `(route_id, grade)` pairs. This inflated the per-grade bucket in `sends_by_grade` (e.g. 3 logs on one V4 route counted as 3 V4 sends). The same route was already being de-duplicated correctly in `total_sends` via `COUNT(DISTINCT route_id)`, but `grade_counts` did not apply the same logic.
+
+**Fix**: Changed `COUNT(*)` to `COUNT(DISTINCT route_id)` in the `grade_counts` CTE. All other function logic is identical to v4 (`20261004000001_mod_008_fix_total_sends_count.sql`). The fix ensures `sends_by_grade` counts distinct routes per grade, consistent with the `total_sends` definition.
+
 ### Deliverables
 
 **Migration**

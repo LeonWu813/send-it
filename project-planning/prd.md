@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 31
-**Date**: 2026-10-05
-**Revision**: 31
+**Status**: [SUBSTANTIVE] — Revision 32
+**Date**: 2026-10-07
+**Revision**: 32
 
 ---
 
@@ -151,7 +151,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to receive a push notification when someone likes my video, subject to my notification preferences,
 **so that** I get feedback on my contributions.
 
-**Acceptance Criteria**: AC-054, AC-055, AC-056, AC-058
+**Acceptance Criteria**: AC-054, AC-055, AC-056, AC-058, AC-171, AC-172, AC-173
 
 ---
 
@@ -386,7 +386,7 @@ The data flow for the two most important loops:
 
 ### MOD-007: Notifications
 
-**Purpose**: Own the device token registration, notification preference toggles, the Edge Function that fans out beta-video-like events to APNs push, and the in-app notification inbox.
+**Purpose**: Own the device token registration, notification preference toggles, the Edge Function that fans out beta-video-like events to APNs push, and the in-app notification inbox. Own the `NotificationInboxScreen` (a list of the current user's in-app notifications, most recent first), reached via a bell icon placed in MOD-001's ProfileScreen header (AC-171). On inbox mount, batch-mark all of the current user's unread notifications as read in a single update (AC-172). Own the unread-count badge rendered on that bell icon, which reflects the current user's unread-notification count and clears when the inbox is opened (AC-173). Tapping a beta-video-like entry in the inbox navigates to the actor's UserProfileScreen (MOD-006), resolved from the notification's existing `actor_user_id` column (AC-058, revised).
 
 **User Stories**: US-009, US-010
 
@@ -702,7 +702,13 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-057**: The system shall expose a Settings screen toggle for beta-video-like push notifications; when the toggle is off, no push is enqueued for that user for that event type, but the in-app `Notification` row is still created.
 
-**AC-058** (new): The system shall navigate a user from a beta-video-like entry in the in-app notification inbox to the liked beta video (on its route detail screen) when the user taps the entry, resolving the notification's `target_id` to the target beta video.
+**AC-058** (revised, Rev 32): The system shall navigate a user from a beta-video-like entry in the in-app notification inbox to the **UserProfileScreen of the actor** (the user who liked the video) when the user taps the entry, resolving the notification's existing `actor_user_id` column directly — no additional query is required, as `actor_user_id` is already present on the `Notification` row (see §9 Data Model). The destination is MOD-006's `UserProfileScreen` (the other-user profile overlay, AC-064), subject to the actor's privacy setting (AC-063). This supersedes the prior AC-058 behavior of navigating to the liked video's route detail screen. No changes to MOD-003 or MOD-005 are required.
+
+**AC-171** (new, Rev 32): The system shall present a bell icon in the top-right of the `ProfileScreen` header (the MOD-001 Profile tab surface). Tapping the bell shall push a new `NotificationInboxScreen` (owned by MOD-007) that lists the current user's in-app notifications, most recent first. The `NotificationInboxScreen` and its contents are owned by MOD-007; the bell entry point is placed in MOD-001's ProfileScreen header and wired to navigate to MOD-007's inbox screen.
+
+**AC-172** (new, Rev 32): When `NotificationInboxScreen` mounts, the system shall mark all of the current user's unread notifications as read in a single batch update — all `Notification` rows where `recipient_user_id` equals the current user and `is_read = false` are set to `is_read = true`. Tapping an individual notification row shall not separately change that row's read state; the batch mark-read on inbox mount is the sole read-state transition in Phase 1.
+
+**AC-173** (new, Rev 32): The bell icon in the ProfileScreen header (AC-171) shall display an unread-count badge when the current user has one or more unread notifications (`Notification` rows where `recipient_user_id` equals the current user and `is_read = false`). The badge value shall equal the number of unread rows. The badge shall disappear when the inbox is opened and the batch mark-read (AC-172) completes.
 
 > **Implementation note (MOD-007 push idempotency)**: The notification/push fan-out Edge Function must be invoked by a Postgres trigger on `Reaction` INSERT (via `pg_net`/webhook), never triggered from the client. The function must be idempotent: a unique constraint on `Notification(recipient_user_id, actor_user_id, type, target_id)` guarantees a second trigger fire (double-tap / client retry) cannot create a duplicate notification row or a duplicate push. This is a requirement for the MOD-007 spec.
 
