@@ -353,3 +353,148 @@ The key null-safety question: what happens if `fetchRouteForBetaVideo` returns n
 | AC-058 | REGRESSION PASS — original scope blocker resolved; tap-through implemented with full null safety |
 
 All 412 tests pass. TypeScript 0 errors. No new regressions introduced by the AC-058 fix. The notification bell is accessible from ProfileScreen (top-left, rendered when `onNavigateNotifications` is provided). Prop chain from AppShell through ProfileNavigator → NotificationsNavigator → NotificationInboxScreen is complete and verified.
+
+---
+
+**QA Run 3 — Functional Test (Rev 32 implementation) — 2026-10-07 — workflow: functional-test**
+
+Verifying Rev 32 implementation at commit 8180350. All seven ACs (AC-054, AC-055, AC-056, AC-057, AC-058 Rev 32, AC-171, AC-172, AC-173) verified against spec.md synced from PRD Rev 32.
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npm test -- --watchAll=false` | PASS | 470 tests run; 469 passed, 1 failed. The 1 failure is in `mod-beta-video/__tests__/beta-video-service.test.ts` (pre-existing failure unrelated to MOD-007 — confirmed present before this implementation). All 43 mod-notifications tests pass. All mod-auth-profile tests pass (19 total). |
+| No `@react-navigation/native` hooks in MOD-007 code | PASS | grep for `useFocusEffect`, `useNavigation`, `useRoute` in `src/modules/mod-notifications/` returns zero code matches (only a comment in `NotificationInboxScreen.tsx` explaining the prohibition). |
+| No `@react-navigation/native` hooks in ProfileScreen/ProfileNavigator | PASS | grep returns zero matches in `ProfileScreen.tsx` and `ProfileNavigator.tsx`. |
+| Edge Function reads `SERVICE_ROLE_KEY` | PASS | `supabase/functions/notify-beta-video-like/index.ts` line 43: `Deno.env.get('SERVICE_ROLE_KEY')`. Zero matches for `Deno.env.get.*SUPABASE_SERVICE_ROLE_KEY` in Edge Function code. |
+| `console.error` before every throw in `notification-service.ts` | PASS | 6 `console.error` calls present, each immediately before a `throw new Error(...)`. Functions covered: `registerDeviceToken`, `fetchNotifications`, `markNotificationsRead`, `fetchUnreadNotificationCount`, `fetchNotificationPreference`, `updateNotificationPreference`. `fetchUnreadNotificationCount` returns 0 on error (no throw) — consistent with spec (badge is non-critical). |
+
+### AC-by-AC Verification
+
+**AC-054 — DeviceToken registration on sign-in: upsert with ON CONFLICT, last_seen_at updated**
+
+FAIL. Two issues found:
+
+1. **`registerDeviceToken` is never called in the sign-in flow.** The function is defined in `notification-service.ts` and tested in isolation, but it is not invoked anywhere in application code outside of tests. Verified by grep across all `.ts`/`.tsx` files in `src/` excluding `__tests__` directories: `registerDeviceToken` appears only in `notification-service.ts` (definition) and `notification-service.test.ts` (tests). The sign-in code paths (`SignInScreen.tsx` → `signInWithEmail`/`signInWithApple`/`signInWithGoogle`; `useSession.ts` `onAuthStateChange`) do not call `registerDeviceToken`.
+   - Input: user completes sign-in via any of the three providers.
+   - Expected per spec: device token is registered (upserted into `DeviceToken`) on first successful sign-in.
+   - Actual: `registerDeviceToken` is never called; no `DeviceToken` row is ever created.
+
+2. **The upsert RPC uses `ON CONFLICT DO UPDATE` (not `DO NOTHING`).** The `upsert_device_token` RPC in the migration uses `ON CONFLICT (user_id, device_token) DO UPDATE SET expo_push_token = EXCLUDED.expo_push_token, is_active = TRUE, last_seen_at = NOW()`. This is the correct implementation — updating `last_seen_at` on each sign-in matches the spec requirement. The task description's mention of "ON CONFLICT DO NOTHING" is inaccurate relative to the spec text; the DO UPDATE approach is correct and should not be changed. This is noted only for completeness — not a bug.
+
+FAIL classification for issue 1: implementation bug — `registerDeviceToken` is implemented but not wired into the auth flow. Route to Engineer.
+
+**AC-055 — Postgres trigger on Reaction INSERT → Edge Function fan-out → inserts Notification row + enqueues APNs push; unique constraint for idempotency**
+
+PASS. Verified:
+- Migration: Postgres trigger `reactions_notify_beta_video_like` fires AFTER INSERT on `reactions` FOR EACH ROW. Trigger function calls `net.http_post` to the Edge Function URL stored in `app_settings`.
+- Edge Function `notify-beta-video-like/index.ts`: resolves recipient from `beta_videos.user_id` server-side; inserts into `notifications` table; treats error code `23505` (unique_violation) as idempotent success. No client-triggering path exists in `notification-service.ts`.
+- `notifications` table: `UNIQUE (recipient_user_id, actor_user_id, type, target_id)` constraint in migration line 132.
+- `NotificationPreference.beta_video_like` gate: preference checked before enqueuing APNs push; notification row inserted unconditionally before the preference check.
+- Self-like guard: `if (recipientId === actor_id)` returns 200 with no notification inserted.
+- Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`): confirmed at line 43.
+
+**AC-056 — 30-second SLA: documented/acknowledged as deferred**
+
+PASS (structural implementation verified; APNs delivery deferred per spec). The spec explicitly states: "APNs physical-device end-to-end testing is blocked on Apple Developer account enrollment and `.p8` auth key upload. These are deferred with no fixed timeline." The 30-second SLA is documented as a post-launch measurement target (spec §Key Implementation Notes: "30-second SLA (AC-056): This is a measurable target, not a hard guarantee"). The Expo Push API call structure in the Edge Function is correct; APNs physical delivery awaits Apple Developer account activation. This AC is correctly treated as deferred by the Engineer's self-check and prior QA runs.
+
+**AC-057 — Settings toggle for beta_video_like push; when off: no push enqueued but Notification row still created**
+
+PASS. Verified:
+- `NotificationPreferenceScreen.tsx`: Switch component bound to `betaVideoLike` state; `onValueChange` → `updateNotificationPreference(value)` via `upsert_notification_preference` SECURITY DEFINER RPC. Optimistic update with revert on failure.
+- Edge Function: notification row inserted (Step 2) unconditionally before preference check (Step 3). When `pushEnabled = false`, returns `'Push skipped (preference off)'` after the notification row is already inserted. Confirmed by reading `index.ts` lines 123–155.
+- Default opt-in: `preference?.beta_video_like !== false` evaluates `true` when no preference row exists.
+- Tests: 8 tests in `NotificationPreferenceScreen.test.tsx` all pass.
+
+**AC-058 (Rev 32) — Tapping inbox entry navigates to actor's UserProfileScreen using actor_user_id directly; no MOD-003 or MOD-005 changes**
+
+PASS. Verified:
+- `NotificationInboxScreen.tsx` `handleNotificationPress`: `if (notification.type === 'beta_video_like' && notification.actor_user_id)` → `onNavigateToUser?.(notification.actor_user_id)`. No call to `fetchRouteForBetaVideo`. `actor_user_id` is read directly from the `Notification` row — no additional query.
+- `NotificationsNavigator.tsx`: accepts `onNavigateToUser?: (userId: string) => void` and threads it to `NotificationInboxScreen`.
+- `ProfileNavigator.tsx`: `'notifications'` view branch passes `onNavigateToUser` to `NotificationsNavigator`.
+- No imports of MOD-003 or MOD-005 in any changed file. Grep for `mod-route-catalog` and `mod-beta-video` in `mod-notifications/` returns zero matches in non-test files.
+- Tests: `NotificationInboxScreen.test.tsx` has updated tests for Rev 32 actor profile nav — all pass.
+
+**AC-171 — Bell icon in ProfileScreen header (top-right) pushes NotificationInboxScreen**
+
+FAIL. The bell icon is positioned at `left: theme.spacing.md` (top-left) rather than top-right as required by the spec.
+
+- Spec AC-171: "The system shall present a bell icon in the **top-right** of the `ProfileScreen` header."
+- Spec Integration Points: "MOD-001's engineer places the bell icon in the **top-right** of `ProfileScreen`'s header."
+- Implementation: `ProfileScreen.tsx` `notificationsButton` style has `position: 'absolute', top: topInset + theme.spacing.md, left: theme.spacing.md` — this positions the bell at the top-left. The settings gear icon is at `right: theme.spacing.md` (top-right).
+- The `onNavigateNotifications` prop wiring, the bell rendering, and the tab navigation are all correctly implemented. Only the horizontal position is wrong.
+- Input: user views their ProfileScreen.
+- Expected per spec: bell icon visible at top-right of the header.
+- Actual: bell icon visible at top-left of the header; settings gear is at top-right.
+
+FAIL classification: implementation bug. Route to Engineer.
+
+**AC-172 — On NotificationInboxScreen mount, batch mark-all-read; individual tap does NOT separately mark read**
+
+PASS. Verified:
+- `NotificationInboxScreen.tsx` `loadNotifications`: calls `await markNotificationsRead()` after `fetchNotifications()` succeeds, within the same `useCallback`. Fires on every mount via `useEffect([isActive, loadNotifications])` when `isActive` is true.
+- `markNotificationsRead()` in `notification-service.ts`: calls `mark_notifications_read` SECURITY DEFINER RPC which runs `UPDATE notifications SET is_read = TRUE WHERE recipient_user_id = auth.uid() AND is_read = FALSE` — a single batch update.
+- `handleNotificationPress` tap handler: calls only `onNavigateToUser?.(notification.actor_user_id)` — no read-state mutation on individual tap.
+- The screen is conditionally-mounted (not keep-alive), so `useEffect` fires on every mount — equivalent to a focus handler without the navigation context crash.
+- Tests verify `markNotificationsRead` is called on load.
+
+**AC-173 — Bell icon shows unread count badge; badge clears when inbox opens**
+
+PASS (with the caveat that the bell is at top-left per the AC-171 failure above — the badge logic itself is correct).
+- `fetchUnreadNotificationCount()` in `notification-service.ts`: queries `notifications` table with `{ count: 'exact', head: true }` and `is_read = false` filter. Returns `count ?? 0`; returns 0 silently on error (badge is non-critical).
+- `ProfileScreen.tsx`: fetches `fetchUnreadNotificationCount()` in `loadData` alongside follower counts. Sets `unreadCount` state.
+- Badge rendered: `{unreadCount > 0 ? <View><Text>{unreadCount > 99 ? '99+' : String(unreadCount)}</Text></View> : null}`.
+- Optimistic clear: `setUnreadCount(0)` called in the bell `onPress` handler before `onNavigateNotifications()`. Re-syncs on next `loadData` call (tab re-focus).
+- Tests: 3 tests for `fetchUnreadNotificationCount` in `notification-service.test.ts` — all pass.
+
+### Architecture Constraints Verification
+
+| Constraint | Result | Evidence |
+|-----------|--------|---------|
+| No `@react-navigation/native` hooks in MOD-007 code | PASS | Zero matches for `useFocusEffect`, `useNavigation`, `useRoute` in `src/modules/mod-notifications/` source files. |
+| `NotificationInboxScreen` uses plain `useEffect` (not `useFocusEffect`) | PASS | `NotificationInboxScreen.tsx` uses `useEffect([isActive, loadNotifications])`. File comment explicitly states: "Uses plain useEffect for data loading (conditionally-mounted screen, no NavigationContainer ancestor — do not use useFocusEffect)." |
+| Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`) | PASS | `Deno.env.get('SERVICE_ROLE_KEY')` at line 43. The string `SUPABASE_SERVICE_ROLE_KEY` appears only in explanatory comments. |
+| `console.error` before every throw in `notification-service.ts` | PASS | All 5 throwing functions have `console.error('[functionName] error:', error)` immediately before `throw new Error(...)`. `fetchUnreadNotificationCount` returns 0 instead of throwing — the `console.error` before `return 0` is correctly present. |
+
+### Integration / Shared Conventions Verification
+
+| Convention | Result | Notes |
+|------------|--------|-------|
+| No `@react-navigation/native` imports in ProfileScreen/ProfileNavigator | PASS | grep returns zero matches in both files. |
+| Supabase singleton — no stray `createClient` | PASS | `notification-service.ts` imports from `../../lib/supabase`. Zero `createClient` calls in any client-side MOD-007 file. |
+| RLS enabled on all tables | PASS | `device_tokens`, `notification_preferences`, `notifications` all have `ENABLE ROW LEVEL SECURITY` in migration. |
+| SECURITY DEFINER RPCs: no `user_id` param, `search_path = public`, EXECUTE to `authenticated` only | PASS | All three RPCs verified in migration: `upsert_device_token`, `mark_notifications_read`, `upsert_notification_preference`. |
+| Notification pattern: trigger → Edge Function, never client-triggered | PASS | No Edge Function invocation in any client-side file. `notification-service.ts` contains no direct Edge Function call. |
+| Cross-module import rule: MOD-007 imported via public navigator only | PASS | `ProfileNavigator` imports `NotificationsNavigator` from `'../mod-notifications/NotificationsNavigator'` — the public entry-point component. Zero imports from `mod-notifications/screens/` in any non-test file. |
+| i18n: no inline strings in screens | PASS | `NotificationInboxScreen` and `NotificationPreferenceScreen` use `useTranslation('common')` exclusively. |
+| Safe area: `useSafeAreaInsets()` + `makeStyles(theme, topInset)` | PASS | `NotificationInboxScreen`: `useSafeAreaInsets()` called; `makeStyles(theme, insets.top)` applied; `navBar.paddingTop: topInset + theme.spacing.md`. |
+| No Phase 2 columns or Android logic | PASS | `notification_preferences` table has only `user_id`, `beta_video_like`, `updated_at`. `platform` constrained to `'ios'` only. No Android-path code. |
+| `.env` in `.gitignore` | PASS | `grep '^\.env$' .gitignore` returns `.env`. |
+
+### Gold-Plating Check
+
+No features beyond spec requirements. `fetchRouteForBetaVideo` is kept in the service file for backwards compatibility (documented in JSDoc as "legacy") but is no longer called in production paths — this is not gold-plating, it is dead code retained to avoid breaking the existing regression tests. This should be cleaned up but is not a spec violation.
+
+### Overall Result
+
+**QA FAIL — 2 bugs found.**
+
+| AC | QA Verdict |
+|----|-----------|
+| AC-054 | FAIL — `registerDeviceToken` implemented but never called in the sign-in flow; no device token is ever registered at runtime |
+| AC-055 | PASS |
+| AC-056 | PASS (structural implementation verified; APNs delivery deferred per spec) |
+| AC-057 | PASS |
+| AC-058 (Rev 32) | PASS |
+| AC-171 | FAIL — bell icon positioned at top-left (`left: theme.spacing.md`); spec requires top-right |
+| AC-172 | PASS |
+| AC-173 | PASS (badge logic correct; position inherits AC-171 failure) |
+
+469 of 470 tests pass (1 pre-existing failure in mod-beta-video unrelated to MOD-007). TypeScript 0 errors. Architecture constraints verified. Two implementation bugs found — route to Engineer.
+
+**Failure details for Engineer:**
+
+FAIL AC-054: `registerDeviceToken` in `src/modules/mod-notifications/notification-service.ts` is defined and tested but never called from any sign-in path. The sign-in flow (`src/modules/mod-auth-profile/screens/SignInScreen.tsx` → `signInWithEmail`/`signInWithApple`/`signInWithGoogle`; `src/modules/mod-auth-profile/hooks/useSession.ts` `onAuthStateChange`) has no call to `registerDeviceToken`. Fix: call `registerDeviceToken(deviceToken, expoPushToken?)` from the appropriate sign-in hook (e.g., inside `useSession.ts` `onAuthStateChange` when event is `SIGNED_IN` and a device token is available from the Expo Push SDK, or from `SignInScreen` after successful sign-in). The Expo Push SDK token retrieval step must also be present.
+
+FAIL AC-171: `ProfileScreen.tsx` positions the notifications bell button at `left: theme.spacing.md` (top-left of the header). The spec requires the bell to be in the top-right. Fix: change `notificationsButton` style from `left: theme.spacing.md` to `right: theme.spacing.md` (or swap positions with the settings gear so bell is right and settings is left, per the spec's "top-right" requirement for the bell). File: `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`, `makeStyles` function, `notificationsButton` style.
