@@ -4,7 +4,7 @@
 **Module Name**: Notifications
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-006
-**Last Synced from PRD Revision**: 32
+**Last Synced from PRD Revision**: 33
 
 ---
 
@@ -45,7 +45,7 @@ Beta video uploaders need timely feedback when someone likes their video. The no
 
 **AC-058** (revised, Rev 32): The system shall navigate a user from a beta-video-like entry in the in-app notification inbox to the **UserProfileScreen of the actor** (the user who liked the video) when the user taps the entry, resolving the notification's existing `actor_user_id` column directly — no additional query is required, as `actor_user_id` is already present on the `Notification` row (see §9 Data Model). The destination is MOD-006's `UserProfileScreen` (the other-user profile overlay, AC-064), subject to the actor's privacy setting (AC-063). This supersedes the prior AC-058 behavior of navigating to the liked video's route detail screen. No changes to MOD-003 or MOD-005 are required.
 
-**AC-171** (new, Rev 32): The system shall present a bell icon in the top-right of the `ProfileScreen` header (the MOD-001 Profile tab surface). Tapping the bell shall push a new `NotificationInboxScreen` (owned by MOD-007) that lists the current user's in-app notifications, most recent first. The `NotificationInboxScreen` and its contents are owned by MOD-007; the bell entry point is placed in MOD-001's ProfileScreen header and wired to navigate to MOD-007's inbox screen.
+**AC-171** (revised, Rev 33): The system shall present a bell icon in the top-left of the `ProfileScreen` header (the MOD-001 Profile tab surface). Tapping the bell shall push a new `NotificationInboxScreen` (owned by MOD-007) that lists the current user's in-app notifications, most recent first. The `NotificationInboxScreen` and its contents are owned by MOD-007; the bell entry point is placed in MOD-001's ProfileScreen header and wired to navigate to MOD-007's inbox screen.
 
 **AC-172** (new, Rev 32): When `NotificationInboxScreen` mounts, the system shall mark all of the current user's unread notifications as read in a single batch update — all `Notification` rows where `recipient_user_id` equals the current user and `is_read = false` are set to `is_read = true`. Tapping an individual notification row shall not separately change that row's read state; the batch mark-read on inbox mount is the sole read-state transition in Phase 1.
 
@@ -57,7 +57,7 @@ Beta video uploaders need timely feedback when someone likes their video. The no
 
 ## Integration Points
 
-**AC-171 — Bell icon entry point (MOD-001 ↔ MOD-007)**: MOD-007 owns the `NotificationInboxScreen`. MOD-001's engineer places the bell icon in the top-right of `ProfileScreen`'s header and wires it to navigate to MOD-007's `NotificationInboxScreen`. The bell icon and unread-count badge (AC-173) are rendered in MOD-001's `ProfileScreen` header; the inbox screen itself is owned by MOD-007.
+**AC-171 — Bell icon entry point (MOD-001 ↔ MOD-007)**: MOD-007 owns the `NotificationInboxScreen`. MOD-001's engineer places the bell icon in the top-left of `ProfileScreen`'s header and wires it to navigate to MOD-007's `NotificationInboxScreen`. The bell icon and unread-count badge (AC-173) are rendered in MOD-001's `ProfileScreen` header; the inbox screen itself is owned by MOD-007.
 
 **AC-058 — Inbox tap navigation target (MOD-007 → MOD-006)**: Tapping a beta-video-like entry in MOD-007's `NotificationInboxScreen` navigates to MOD-006's `UserProfileScreen` (the other-user profile overlay, AC-064). The actor's `user_id` is resolved directly from the `actor_user_id` column already present on the `Notification` row — no additional query to MOD-003 or MOD-005 is required. Navigation is subject to the actor's privacy setting (AC-063).
 

@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: qa-mod-notifications
-mode: regression
-module: mod-notifications
+agent: doc-sync
+mode: trivial
+module: n/a
 result: success
-commit: e5c908656dee27a2e8267324f410ee72273d4175
-timestamp: 2026-10-07T18:30:00Z
+commit: 98f11d2e60ee490a0a3cccc7f5cf5eb88715f722
+timestamp: 2026-10-07T19:00:00Z
 ```
 
 
@@ -2528,6 +2528,30 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 
 **Files modified:**
 - `project-planning/production.md` — Added two new Shared Conventions to the data-access area: (1) "Log Raw Supabase Error Before Throwing a User-Facing String" (Convention A, inserted after `### RLS-First Data Access`, before `### Migration Conventions`); (2) "Manually Verify Every New or Modified PostgREST Embed/Join String" (Convention B, inserted immediately after `### User-Owned Tables That Participate in PostgREST Joins Reference public.users`, before `### Beta-Video Visibility Has One Canonical Exclusion Predicate`). Text copied verbatim from PM Updates entry (2026-10-04 [TRIVIAL], lines 18–26), which itself quotes the Tech Lead review Proposed Shared Conventions verbatim.
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files created:**
+- none
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** not run (trivial passthrough — per workflow rules, verify-sync.sh is skipped for [TRIVIAL] syncs).
+
+### Sync Report — Trivial Passthrough — 2026-10-07
+
+**Sync type:** trivial
+**PRD Revision:** 33
+**PM Update reference:** 2026-10-07 [TRIVIAL] — AC-171 bell-icon position correction (PRD Revision 33); "top-right" corrected to "top-left" in MOD-007 AC-171; wording-only, no structural change.
+
+**Files modified:**
+- `project-planning/modules/mod-notifications/spec.md` — AC-171 text updated in two locations (Acceptance Criteria section and Integration Points section): "top-right" → "top-left". AC-171 marker updated from "(new, Rev 32)" to "(revised, Rev 33)" to match PRD. Last Synced from PRD Revision bumped 32 → 33.
 - `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
 
 **Files created:**
