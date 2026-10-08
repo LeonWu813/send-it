@@ -12,17 +12,6 @@
  * mocked; no real network activity.
  */
 
-// useFocusEffect is mocked to immediately invoke the callback, replicating the
-// behaviour of a component mounted inside a NavigationContainer with an active
-// focus state. This lets existing tests work without a real navigation context.
-jest.mock('@react-navigation/native', () => ({
-  useFocusEffect: (cb: () => void) => {
-    // eslint-disable-next-line react-hooks/rules-of-hooks, @typescript-eslint/no-var-requires
-    const { useEffect } = require('react');
-    useEffect(cb, []);
-  },
-}));
-
 jest.mock('../../mod-beta-video', () => ({
   fetchBetaVideosByUser: jest.fn(),
   BetaVideoGrid: () => null,

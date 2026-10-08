@@ -241,7 +241,7 @@ export async function fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]
       // the poster row (avatar + display_name) when opened from a profile screen.
       // Bug 2 fix: also join routes and gyms so BetaVideoReelViewer can show Row 2
       // (route · gym label) in profile context without requiring host-supplied props.
-      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url), routes!beta_videos_route_id_fkey(name, gyms(name))',
+      'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url), routes!beta_videos_route_id_fkey(grade, color_tag, gyms(name))',
     )
     .eq('user_id', userId)
     // AC-142 / AC-143: canonical exclusion predicate — same as fetchBetaVideosForRoute.
@@ -262,7 +262,9 @@ export async function fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]
     ...row,
     display_name: (row.users as any)?.display_name ?? null,
     avatar_url: (row.users as any)?.avatar_url ?? null,
-    route_name: (row.routes as any)?.name ?? null,
+    route_name: (row.routes as any)?.grade != null
+      ? `${(row.routes as any).grade} ${((row.routes as any).color_tag as string).charAt(0).toUpperCase()}${((row.routes as any).color_tag as string).slice(1)}`
+      : null,
     gym_name: (row.routes as any)?.gyms?.name ?? null,
   })) as BetaVideo[];
 }

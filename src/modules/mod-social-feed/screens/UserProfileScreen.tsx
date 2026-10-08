@@ -24,8 +24,7 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useRef, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -192,21 +191,19 @@ export default function UserProfileScreen({
     }
   }, [targetUserId, isOwnProfile, t, session.user.id]);
 
-  useFocusEffect(
-    useCallback(() => {
-      // Only show the full-screen loading spinner on the very first load.
-      // On subsequent focus refetches (e.g. returning from a sub-screen or pressing
-      // the back button), data is refreshed silently — the existing profile content
-      // and video list remain visible while new data loads in the background.
-      if (!hasLoadedOnce.current) {
-        setLoading(true);
-      }
-      void loadProfile().finally(() => {
-        hasLoadedOnce.current = true;
-        setLoading(false);
-      });
-    }, [loadProfile]),
-  );
+  // The screen is mounted as a conditional overlay (AppShell renders it only when
+  // targetUserId is non-null). Each open is a fresh mount, so a plain useEffect
+  // fires on every open — identical to the "every focus" behaviour useFocusEffect
+  // was intended to provide, without requiring a NavigationContainer ancestor.
+  useEffect(() => {
+    if (!hasLoadedOnce.current) {
+      setLoading(true);
+    }
+    void loadProfile().finally(() => {
+      hasLoadedOnce.current = true;
+      setLoading(false);
+    });
+  }, [loadProfile]);
 
   // ── Follow / Unfollow ───────────────────────────────────────────────────────
 
