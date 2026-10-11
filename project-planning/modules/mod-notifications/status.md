@@ -2,6 +2,99 @@
 
 ## Engineering Progress
 
+**Cleanup migration (service_role table grants): complete — 2026-10-10**
+
+Migration `20261009000002_mod_007_service_role_grants.sql` records the explicit `GRANT` statements for the `service_role` role on all tables accessed by the `notify-beta-video-like` Edge Function. These grants were applied manually via Supabase Studio SQL editor during deployment on 2026-10-09 when the Edge Function returned PostgreSQL permission errors at runtime. The migration ensures the grants are tracked in version control and will be re-applied automatically on any future DB reset.
+
+### Why the grants are needed
+
+The Edge Function runs as `service_role` (not `authenticated`). PostgreSQL enforces table-level `GRANT` privileges even when RLS is bypassed, so `service_role` needs its own explicit grants even though the same tables already have `SELECT`/`INSERT` grants for the `authenticated` role.
+
+| Table | Grants |
+|---|---|
+| `public.beta_videos` | `SELECT` — resolve recipient (video uploader) |
+| `public.notifications` | `SELECT, INSERT` — insert notification row; SELECT for ON CONFLICT idempotency |
+| `public.notification_preferences` | `SELECT` — read recipient push preference before enqueuing APNs push |
+| `public.users` | `SELECT` — read actor / recipient display names for push payload |
+| `public.device_tokens` | `SELECT` — fan out APNs push to all active tokens for recipient |
+
+### Manual Step Required — Mark Migration as Already Applied
+
+The grants are already present on the remote DB (applied manually 2026-10-09). After pulling, mark this migration as applied so Supabase does not attempt to re-run it:
+
+```
+npx supabase migration repair --status applied 20261009000002
+```
+
+### Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| Grants match what was applied manually | PASS | All five `GRANT` statements from the manual Studio SQL run are reproduced verbatim. |
+| No grants beyond what the Edge Function needs | PASS | Only `SELECT` or `SELECT, INSERT` — no `UPDATE`, `DELETE`, or `TRUNCATE`. |
+| Comment explains why | PASS | Header explains service_role vs authenticated distinction and the RLS-bypass / table-grant interaction. |
+| No source code changes | PASS | Pure SQL migration; no TypeScript files modified. |
+| `npx tsc --noEmit` clean | PASS | 0 errors — SQL file has no effect on TypeScript compilation. |
+
+### Files Created
+
+- `supabase/migrations/20261009000002_mod_007_service_role_grants.sql` — records explicit `service_role` table grants for the `notify-beta-video-like` Edge Function
+
+---
+
+**Bugfix (trigger 401 / Authorization header): complete — 2026-10-10**
+
+Migration `20261009000001_mod_007_trigger_auth_header.sql` replaces the body of `trigger_notify_beta_video_like()` to read the service-role JWT from Supabase Vault and attach it as an `Authorization: Bearer <key>` header on the `net.http_post` call. The Edge Function has `verify_jwt: true`; without this header the gateway was returning 401 before the function body ran, so no `Notification` rows were ever created.
+
+### Manual Step Required — Add Vault Secret
+
+Before this migration fix takes effect, a project admin must add the service-role JWT to Vault:
+
+1. Open the Supabase Dashboard for this project.
+2. In the left sidebar, under "Database", click "Vault".
+3. Click "Add new secret".
+4. Set:
+   - **Name**: `notify_trigger_service_role_key`
+   - **Value**: paste the `service_role` JWT from Dashboard → Settings → API → "Project API keys" → `service_role` (labelled "secret").
+5. Save.
+
+Once the secret is in Vault, newly inserted `Reaction` rows will trigger the Edge Function with the correct Authorization header, and `Notification` rows will be created as designed.
+
+If the Vault secret is not yet added, the trigger is a graceful no-op (same as the original unconfigured-URL behavior) — no 401 errors are emitted to the user and no data is corrupted.
+
+### Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| Vault read from SECURITY DEFINER function | PASS | `vault.decrypted_secrets` is only accessible from SECURITY DEFINER functions. The trigger function is already SECURITY DEFINER — no privilege change needed. |
+| Gate on both URL and key non-empty | PASS | `IF v_edge_function_url IS NOT NULL AND v_edge_function_url <> '' AND v_service_role_key IS NOT NULL AND v_service_role_key <> ''` — both must be populated before `net.http_post` is called. |
+| No hardcoded key value | PASS | Key is read from `vault.decrypted_secrets WHERE name = 'notify_trigger_service_role_key'`; no literal JWT in the migration. |
+| Trigger unchanged | PASS | `CREATE OR REPLACE FUNCTION` replaces the function body in place. The existing `reactions_notify_beta_video_like` trigger already points to this function — no DROP/CREATE TRIGGER needed. |
+| Edge Function code unchanged | PASS | Only the trigger function was modified. `supabase/functions/notify-beta-video-like/index.ts` is untouched. |
+| No new dependencies | PASS | Uses existing `vault` extension (built into Supabase) and existing `pg_net`. |
+
+### Files Created (trigger auth header fix)
+
+- `supabase/migrations/20261009000001_mod_007_trigger_auth_header.sql` — replaces `trigger_notify_beta_video_like()` body to read Vault secret and send Authorization header
+
+---
+
 **Bugfix (BUG-1 APNs entitlement + BUG-2 bell position + BUG-3 inbox): complete — 2026-10-07**
 
 Three user-confirmed on-device bugs fixed.
