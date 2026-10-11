@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: trivial
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: 98f11d2e60ee490a0a3cccc7f5cf5eb88715f722
-timestamp: 2026-10-07T19:00:00Z
+commit: a4bd7389c034daa324bfa93c57de586a3c03b164
+timestamp: 2026-10-11T00:30:00Z
 ```
 
 
@@ -312,6 +312,46 @@ timestamp: 2026-10-07T19:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-11 — blocker (MOD-007 notification pipeline produces no Notification rows even though likes/pg_net now work)
+
+**Context**: Advisory review requested by the coordinator. pg_net is now enabled (which fixed likes reverting); the Edge Function `notify-beta-video-like` is deployed to project `hxvzjpynhdexhtoccmmh`; but a beta-video like produces no `Notification` row. Four suspected gaps were raised: (1) `app_settings.notify_edge_function_url` possibly empty, (2) `SERVICE_ROLE_KEY` secret possibly unset, (3) whether the function is invoked at all, (4) pg_net errors. Advisory only — no source files edited. Any fix routes through `engineer-mod-notifications` (or PM if the trigger-payload change is treated as a spec change).
+
+**Evidence I could gather directly (non-secret):**
+- `supabase functions list` → `notify-beta-video-like` is ACTIVE, version 2, and crucially **`verify_jwt: true`**.
+- `supabase secrets list` (digests only, not plaintext) → `SERVICE_ROLE_KEY` **EXISTS**, updated 2026-10-11T00:08:36Z (most recently set). `EXPO_ACCESS_TOKEN`, `SUPABASE_URL`, `SUPABASE_ANON_KEY` etc. all present. So the Edge Function's `Deno.env.get('SERVICE_ROLE_KEY')` and `Deno.env.get('SUPABASE_URL')` will both resolve.
+- `supabase/config.toml` → **no** `[functions.notify-beta-video-like]` block, so there is no `verify_jwt = false` override; the deployed default (`true`) stands.
+- The trigger body (`supabase/migrations/20260924000007_mod_007_notifications.sql` lines 315-319) sends `net.http_post` with **only** `headers := jsonb_build_object('Content-Type','application/json')` — **no Authorization header at all.**
+
+**Evidence I could NOT gather (requires DB password or Dashboard — human must produce):**
+- The current value of `app_settings.notify_edge_function_url` (needs an authenticated SQL query; I will not fish for the DB password).
+- Edge Function invocation logs (Dashboard → Functions → logs).
+- `net._http_response` / `net.http_request_queue` rows (needs SQL).
+
+**Concerns** (must address before proceeding):
+
+- **PRIMARY ROOT CAUSE — `verify_jwt: true` + trigger sends no Authorization header (guaranteed 401 at the gateway).** This is the highest-confidence finding and it is independent of the `app_settings` URL. Even if the URL is set correctly and `SERVICE_ROLE_KEY` is present, the Supabase Edge gateway rejects any request to a `verify_jwt: true` function that has no valid JWT in the `Authorization` header **before the function body runs**. The trigger's `net.http_post` sends only `Content-Type`. Result: pg_net records an HTTP response (a 401), the function's own logs show **zero invocations** (the body never executes), no `Notification` row, no push. This exactly matches the reported symptom (likes work, pg_net fires, but nothing downstream happens). Two mutually-exclusive fixes — the human/PM should choose one:
+  - **Option A (recommended): make the trigger send the service-role JWT as a Bearer token.** Add an `Authorization: Bearer <service_role_key>` header to the `net.http_post` call. The trigger function is already `SECURITY DEFINER`; read the key from `app_settings` (same pattern as the URL) or Vault — do NOT hardcode it in the migration and do NOT commit it. This keeps `verify_jwt: true` (defense in depth) and is the posture the spec implies ("the function reads SERVICE_ROLE_KEY from Supabase secrets" presumes the caller authenticates). Note the function body today does NOT itself validate the caller's JWT — it relies entirely on the gateway — so leaving `verify_jwt: true` and authenticating the trigger is the correct secure combination.
+  - **Option B: deploy the function with `verify_jwt = false`** (add a `[functions.notify-beta-video-like]` block to `config.toml` and redeploy, or `supabase functions deploy notify-beta-video-like --no-verify-jwt`). This makes the function publicly invokable by anyone who learns the URL, with no auth check in the body — a meaningful attack surface (a spoofed POST could insert arbitrary notification rows via the service-role client). **Not recommended** unless the function body is simultaneously hardened to verify a shared secret in the payload/header. Flagging because it is the quickest unblock and the team may reach for it — do so only with eyes open.
+
+- **SECONDARY GAP — `app_settings.notify_edge_function_url` value is unverified and is the other necessary condition.** The trigger guard (`IF v_edge_function_url IS NOT NULL AND v_edge_function_url <> ''`) silently no-ops when the seeded value is still `''`. I cannot read the value without the DB password. **The human must confirm it** via Studio SQL: `SELECT key, value FROM public.app_settings WHERE key = 'notify_edge_function_url';` — it must equal exactly `https://hxvzjpynhdexhtoccmmh.supabase.co/functions/v1/notify-beta-video-like`. If it is empty, pg_net never fires and `net._http_response` will have **no** rows for this URL — that distinguishes "URL unset" (empty queue) from "URL set but 401" (401 rows present). This is the single fastest diagnostic to run first.
+
+**Recommendations** (suggested improvements):
+
+- **Run this diagnostic ladder in order (each step tells you which gap is live):**
+  1. `SELECT value FROM public.app_settings WHERE key='notify_edge_function_url';` — empty ⇒ fix the URL first (secondary gap). Non-empty ⇒ go to step 2.
+  2. `SELECT id, status_code, error_msg, created FROM net._http_response ORDER BY created DESC LIMIT 10;` — a `401` row ⇒ confirms the PRIMARY root cause (auth header). A `200` row but still no Notification row ⇒ the problem is inside the function body (go to step 3). No rows at all ⇒ the trigger guard short-circuited (URL empty) or the trigger didn't fire.
+  3. Dashboard → Functions → `notify-beta-video-like` → Logs. **Zero invocations** despite a like ⇒ gateway rejected (401, auth header) — consistent with step 2. Invocations present with an error ⇒ read the logged `console.error` to see which downstream query failed (recipient resolve, notification insert, token fetch).
+- **After the fix, verify end-to-end with a non-self like**: the function has a self-like guard (`recipientId === actor_id` → skipped). Test with user B liking user A's video, then `SELECT * FROM public.notifications ORDER BY created_at DESC LIMIT 5;`. A self-like will correctly produce nothing and must not be mistaken for a failure.
+- **Confirm pg_net is not only enabled but the `net` schema is reachable by the trigger's `SECURITY DEFINER` search_path.** The trigger sets `search_path = public` but calls `net.http_post` fully-qualified, so this is fine as written — noting it only so it isn't re-investigated.
+
+**Approved** (confirmed not the cause):
+
+- `SERVICE_ROLE_KEY` secret is set (digest present, most-recently updated) — gap #2 is closed; rule it out. The Edge Function will authenticate to the DB correctly **once its body actually runs**.
+- The Edge Function source (`supabase/functions/notify-beta-video-like/index.ts`) logic is sound: idempotent insert with `23505` treated as success, self-like guard, preference gate (AC-057), active-token fan-out, and it correctly reads `SERVICE_ROLE_KEY` (not the reserved `SUPABASE_` prefix) per the spec's §Key Implementation Notes. No code defect in the function body itself.
+- The idempotency unique constraint and RLS posture in the migration match the MOD-007 spec requirements.
+
+**Architectural note (not a blocker, for the human/PM to weigh):** The current design depends on an operator setting two pieces of out-of-band runtime config (the `app_settings` URL and the deploy-time `verify_jwt` posture) that are invisible to CI and to the migration. This is exactly why the pipeline silently did nothing. Consider, in a follow-up, (a) storing the service-role token for the trigger in Vault and reading it in the trigger, and (b) pinning `verify_jwt` in `config.toml` so the deployed posture is version-controlled rather than whatever was last pushed from someone's shell. Both are hardening items for `engineer-mod-notifications`, not required to unblock today.
 
 ### Review — 2026-10-05 (follow-up #2) — blocker (MOD-005 BetaVideoReelViewer: residual previous-video flash persists after the first overlay fix)
 
