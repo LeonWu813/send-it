@@ -7,8 +7,8 @@ agent: tech-lead
 mode: review
 module: n/a
 result: success
-commit: a4bd7389c034daa324bfa93c57de586a3c03b164
-timestamp: 2026-10-11T00:30:00Z
+commit: b2ea3234bde073a4b55c1cb9966c574075ee32c2
+timestamp: 2026-10-11T01:15:00Z
 ```
 
 
@@ -312,6 +312,72 @@ timestamp: 2026-10-11T00:30:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-11 — audit (pre-build completeness check for MOD-009 / MOD-010 / MOD-011 — how much is already implemented from earlier cross-module work?)
+
+**Context**: Advisory audit requested by the coordinator before formally building MOD-009 (Moderation), MOD-010 (Localization & Theming), and MOD-011 (Analytics). The coordinator suspected some ACs may already have been implemented as a side effect of earlier cross-module work. Each module's spec was audited against the actual codebase (source, migrations, Edge Functions, locale catalogs, package.json). Advisory only — no files edited. This is not a phase-end Integration & Optimization Review; it is a build-readiness audit.
+
+**Headline finding**: MOD-009 and MOD-010 are effectively fully built and already wired into their consuming modules (MOD-005, MOD-006, MOD-001). MOD-011 (Analytics / PostHog) is **100% not started** — zero code exists. The PM/coordinator should treat MOD-009 and MOD-010 as "verify + QA" work, not "build" work, and treat MOD-011 as the only genuinely greenfield module of the three.
+
+---
+
+#### MOD-009 — Moderation (Report & Block)
+
+Files present: `src/modules/mod-moderation/{types.ts, moderation-service.ts}`, `components/{ModerationActions.tsx, ReportSheet.tsx}`, `screens/OtherUserProfileScreen.tsx`. Migrations present: `20260929000004_mod_009_moderation.sql`, `..._005_mod_009_block_feed_filter.sql`, `..._006_mod_009_fix_follows_block.sql`. Edge Function present: `supabase/functions/report-digest/index.ts`.
+
+- **AC-080** (reportUser RPC, user-profile report) — **DONE.** `reportUser(targetUserId, category, note?)` inserts into `reports` with `status='open'` (moderation-service.ts L40–63). `reports` table + RLS (`reports_insert_own`, service-role-only SELECT) created in migration 004. Reached from both MOD-006's `UserProfileScreen` three-dots sheet and the MOD-009 `ReportSheet`.
+- **AC-081** (reporter confirmation state) — **DONE.** `ReportSheet.tsx` renders a confirmation view after a successful submit (L109–123).
+- **AC-082** (blockUser, hide blocked user's content) — **DONE.** `blockUser` inserts into `blocks` (idempotent on 23505); `get_activity_feed` filters blocked users from both `ascent_items` and `video_items` (migration 005).
+- **AC-083** (blocked user cannot follow blocker) — **DONE.** `follows_insert_own` policy recreated with a symmetric block check, plus the `trg_remove_follows_on_block` AFTER-INSERT trigger that deletes existing follows in both directions (migration 006). This was a QA-found bug that is already fixed.
+- **AC-084** (symmetric content hiding) — **DONE.** `get_activity_feed` checks both block directions in `qualifying_followees` and again (defense-in-depth) in both item CTEs (migration 005). `fetchBlockedUserIds()` returns both directions (moderation-service.ts L141–165).
+- **AC-151** (report action also calls blockUser sequentially) — **DONE.** Implemented in MOD-006's `UserProfileScreen.tsx` three-dots "Report" handler: `await reportUser(targetUserId, 'inappropriate')` then `await blockUser(targetUserId)` (L254–255), defaulting category to `'inappropriate'` with no note, exactly per Rev 20. Covered by `UserProfileScreen.test.tsx` (AC-151 test).
+- **AC-152** (unblockUser) — **DONE.** `unblockUser(blockedUserId)` deletes the block row (moderation-service.ts L112–128); consumed by both `ModerationActions` and MOD-010's `BlockedAccountsScreen`.
+- **AC-153** (UserProfileScreen block-status check — MOD-006 integration) — **DONE.** MOD-006's `UserProfileScreen` imports `blockUser/reportUser/unblockUser` and tracks `isBlockedByMe` state (L114, L173), driving the three-dots sheet. Covered by `UserProfileScreen.test.tsx`.
+- **AC-154** (beta-video list filters blocked users client-side — MOD-005 integration) — **DONE.** `mod-beta-video/components/BetaVideoSection.tsx` imports and calls `fetchBlockedUserIds()` (L51, L143) with graceful-degradation on failure; covered by `BetaVideoSection.test.tsx` AC-154 test.
+- **AC-155** (Blocked Accounts screen — MOD-010 integration point) — **DONE on both sides.** The MOD-009 service half (`fetchMyBlockedUsers()`, moderation-service.ts L201–228) and the MOD-010 UI half (`BlockedAccountsScreen.tsx`) both exist and are wired. See MOD-010 below.
+- **AC-085** (6-hourly Edge Function email digest) — **PARTIAL.** The function exists (`report-digest/index.ts`): it queries `reports WHERE status='open' AND created_at < now()-12h`, builds a correct digest body, and reads `SERVICE_ROLE_KEY` (not the reserved `SUPABASE_` prefix) per spec. **What is missing / unverified:** (1) it does **not actually send email** — the "send" path only does a GET to `/auth/v1/admin/users` to probe reachability and then `console.log`s the body; real delivery (Resend/SMTP via pg_net) is a documented TODO. The spec's AC-085 wording ("emails the admin") is therefore not literally satisfied — only logged. (2) The 6-hour **cron schedule registration is not verifiable from the repo** — it must be registered in the Supabase dashboard or via `functions deploy --schedule`; no evidence it is scheduled. (3) Deployment status to the live project is unverified. These three are operational/delivery gaps, not code-structure gaps.
+
+**MOD-009 verdict**: All app-facing ACs (080–084, 151–155) are implemented and cross-wired. The only real gap is **AC-085 actual email delivery + cron registration**, which is an Edge-Function delivery/ops concern, not core moderation logic.
+
+---
+
+#### MOD-010 — Localization & Theming
+
+Files present: `src/lib/{i18n.ts, theme.ts}` + `src/lib/__tests__/i18n.test.ts`; `locales/en/common.json`, `locales/zh-TW/common.json`; `src/modules/mod-localization-theme/{settings-storage.ts}`, `screens/{SettingsScreen.tsx, BlockedAccountsScreen.tsx}`.
+
+- **AC-090** (device locale detection on first launch, zh-TW fallback) — **DONE.** `i18n.ts` `detectDeviceLanguage()` uses `expo-localization getLocales()`, returns `en` only for `en*` tags, zh-TW for everything else (L27–39), with `fallbackLng: 'zh-TW'`. Has a dedicated unit test.
+- **AC-091** (language toggle in Settings, immediate) — **DONE.** `SettingsScreen` Language section calls `i18n.changeLanguage()` + persists to AsyncStorage via `saveLanguage` (L134–138); applied immediately, no restart.
+- **AC-092** (Light/Dark + 3-state System/Light/Dark override, immediate) — **DONE.** `theme.ts` `ThemeProvider` resolves OS scheme via `Appearance` + listener; `SettingsScreen` Appearance section offers System/Light/Dark, calls `setOverride()` immediately, persists via `saveThemeOverride` (L140–144).
+- **AC-155** (Blocked Accounts screen in Settings) — **DONE.** `BlockedAccountsScreen.tsx` fully implemented (list, avatar, display name, Unblock with optimistic removal + re-fetch on error, empty state, loading, error+retry). `SettingsScreen` renders the "Blocked Accounts" row and manages the `'settings' | 'blockedAccounts'` sub-view state exactly per spec (L66–67, L186–188, L296–312). Consumes MOD-009's `fetchMyBlockedUsers` / `unblockUser`.
+- **AC-157** (Beta Video Privacy toggle — calls MOD-001 service) — **DONE.** `SettingsScreen` fetches `users.beta_video_privacy` on mount and the toggle calls MOD-001's `updateBetaVideoPrivacy()` (imported from `mod-auth-profile/auth-service`, L53, L147–158). MOD-010 does not write the column directly, per spec.
+- **AC-168** (Logout button at bottom of SettingsScreen) — **DONE.** Logout button at the very bottom, error-color outlined styling, `signOut()` from MOD-001, error handling (L161–172, L314–334), matching the relocation-from-ProfileScreen intent (AC-167).
+
+**One note worth flagging (not a defect for this audit, but relevant before sign-off):** the spec's Key Implementation Notes require a **CI completeness gate** that fails on any English key lacking a zh-TW counterpart (AC-090/i18n notes). I did not find evidence of that CI check in this audit (only `src/lib/__tests__/i18n.test.ts`). The PM/coordinator should confirm whether the zh-TW-key-parity CI gate exists; if not, it is an outstanding MOD-010 deliverable even though all six audited ACs are DONE.
+
+**MOD-010 verdict**: All six audited ACs (090, 091, 092, 155, 157, 168) are fully implemented and wired. The only possible outstanding item is the i18n key-parity CI gate, which is a convention/tooling deliverable rather than one of the listed ACs.
+
+---
+
+#### MOD-011 — Analytics
+
+- **AC-100** (PostHog events: signup, home gym set, first send, first beta video upload, beta video liked, session start) — **NOT STARTED.** There is no `src/modules/mod-analytics/` directory (it does not exist), no `posthog` dependency in `package.json`, no `posthog` import anywhere in `src/`, and none of the event-name constants (`signup_completed`, `home_gym_set`, `first_send_logged`, `first_beta_video_uploaded`, `beta_video_liked`, `session_start`) appear anywhere in the codebase.
+- **AC-101** (no PII beyond user_id) — **NOT STARTED (vacuously — no analytics code exists to evaluate).**
+
+**MOD-011 verdict**: Entirely greenfield. This is the one module of the three that is genuinely a "build from scratch" effort: install the PostHog client SDK, add the client init + event-name constants (MOD-011 owns these), then wire the six instrumentation call sites into their owning modules (signup → MOD-001, home gym set → MOD-001/MOD-012, first send → MOD-004, first beta video → MOD-005, like → MOD-005/MOD-006, session_start → app root). Note the cross-module wiring: although MOD-011 lists "Integration Points: none", in practice every event except `session_start` fires from a *different* module's action site, so building MOD-011 touches several modules' code. The engineer-mod-analytics agent will need those modules' cooperation (or the coordinator must route each call-site insertion to the owning engineer).
+
+---
+
+**Concerns** (must address before proceeding):
+- **AC-085 is not fully met** despite the Edge Function existing: no real email is sent (only logged), and the 6-hour cron schedule is not registered/verifiable from the repo. Decide whether AC-085 can be marked PASS on "logged digest + Studio review" as a Phase 1 fallback (the function's own comments claim this is acceptable), or whether real Resend/SMTP delivery + a registered cron schedule are required before sign-off. This is a PM/human decision, not a Tech Lead decision.
+
+**Recommendations** (suggested improvements):
+- Reclassify MOD-009 and MOD-010 from "to build" to "to verify + QA" in whatever phase tracking the coordinator maintains. Running the normal QA pass per AC is still warranted (especially the 4-way dark×zh-TW matrix for MOD-010 screens and the symmetric-block behavior for MOD-009), but no greenfield engineering is expected.
+- For MOD-011, decide up front how the cross-module instrumentation is routed: a single engineer-mod-analytics owning the client + constants, with each call-site insertion delegated to the owning module's engineer, keeps module ownership clean and avoids one agent editing six modules' source.
+- Confirm whether the i18n zh-TW key-parity CI gate (an explicit MOD-010 Key Implementation Note) exists; if not, log it as an outstanding MOD-010 deliverable.
+
+**Approved** (looks solid as-is):
+- MOD-009 block symmetry is implemented with defense-in-depth (both the `qualifying_followees` filter and per-CTE block checks in `get_activity_feed`), and the AC-083 follow-prevention bug was already caught and fixed with both an RLS check and a server-side trigger. This is a robust implementation.
+- MOD-010 cleanly respects module ownership: it reads/writes `beta_video_privacy` only through MOD-001's public service and consumes MOD-009's block services by direct import, exactly as the specs' Cross-Module Imports convention requires.
 
 ### Review — 2026-10-11 — blocker (MOD-007 notification pipeline produces no Notification rows even though likes/pg_net now work)
 
