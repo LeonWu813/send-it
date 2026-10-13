@@ -2,6 +2,44 @@
 
 ## Engineering Progress
 
+### Bugfix — 2026-10-13 (QA Run 1 — three failures)
+
+**Bug 1 — AC-157 label mismatch (short state labels)**
+
+Spec requires: `public` displayed as "所有人"/"All Users"; `followers_only` displayed as "僅限追蹤者"/"Followers Only".
+Prior implementation displayed sentence-form subtext ("All users can see your beta videos" / "Only followers can see your beta videos") instead of short per-state labels.
+
+- [pass] `locales/en/common.json` — added `settings.betaVideoPrivacyPublic` ("All Users") and `settings.betaVideoPrivacyFollowersOnly` ("Followers Only")
+- [pass] `locales/zh-TW/common.json` — added `settings.betaVideoPrivacyPublic` ("所有人") and `settings.betaVideoPrivacyFollowersOnly` ("僅限追蹤者")
+- [pass] `SettingsScreen.tsx` — `settingRowSubtext` now renders `t('settings.betaVideoPrivacyFollowersOnly')` when `followers_only` and `t('settings.betaVideoPrivacyPublic')` when `public` (short labels, not sentence-form subtexts)
+
+**Bug 2 — AC-157 row order (Blocked Accounts before Beta Video Privacy)**
+
+Spec Key Implementation Notes: row order is "Blocked Accounts" (AC-155) → "Beta Video Privacy" (AC-157) → Logout (AC-168).
+Prior implementation rendered AC-157 section before AC-155 section.
+
+- [pass] `SettingsScreen.tsx` — swapped the two JSX sections: Blocked Accounts row (AC-155) now renders before Beta Video Privacy toggle (AC-157), both above Logout (AC-168)
+
+**Bug 3 — REQ-CI: i18n completeness check wired into CI**
+
+Spec: "A CI check must fail if any English key lacks a zh-TW counterpart."
+Prior state: `scripts/check-i18n-completeness.js` existed and was correct but no `.github/workflows/` directory existed.
+
+- [pass] `.github/workflows/i18n-check.yml` created — triggers on `push` and `pull_request` to `main`; uses `actions/checkout@v4` and `actions/setup-node@v4` (Node 20); runs `node scripts/check-i18n-completeness.js`
+
+**Self-check**
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] `npm run check:i18n` — "i18n completeness OK" (exit 0); new keys `betaVideoPrivacyPublic` and `betaVideoPrivacyFollowersOnly` present in both EN and zh-TW; old subtext keys still present (no keys removed)
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced (dynamic t() keys)
+- [pass] Row order after fix: Language → Appearance → Blocked Accounts (AC-155) → Beta Video Privacy (AC-157) → Logout (AC-168) — matches spec
+
+**Files modified / created**
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+- `.github/workflows/i18n-check.yml` (new)
+
 ### Bugfix — 2026-09-30 (i18n text corrections + initial-load disabled state)
 
 **Bug 1 — Beta Video Privacy i18n text corrections**
@@ -513,3 +551,129 @@ Note: This was classified PARTIAL PASS in QA Run 1 (2026-09-29) with a spec-leve
 2. FAIL AC-157 (row order): `src/modules/mod-localization-theme/screens/SettingsScreen.tsx` lines 273–312 — Beta Video Privacy toggle (AC-157) appears before Blocked Accounts row (AC-155) in the JSX render order. Spec Key Implementation Notes state: row order from top to bottom is "Blocked Accounts" (AC-155) → "Beta Video Privacy" (AC-157) → Logout (AC-168). Input=SettingsScreen renders; Actual=AC-157 section at lines 273–294, AC-155 section at lines 296–312 (AC-157 above AC-155); Expected per spec=AC-155 above AC-157. Route: Engineer.
 
 3. FAIL REQ-CI (CI gate): No `.github/workflows/` directory exists. `scripts/check-i18n-completeness.js` is implemented correctly and passes manually, but is not wired into any automated CI pipeline. Input=engineer pushes a commit with a missing zh-TW key; Actual=no automated check runs; Expected per spec="A CI check must fail if any English key lacks a zh-TW counterpart." Route: Engineer.
+
+---
+
+### QA Run 2 — Regression — 2026-10-13
+
+**Workflow**: regression-test (re-verification after engineer bugfix — three failures from Verification 2026-10-13)
+
+**Bugs being re-verified**:
+1. AC-157 (label): subtext sentences shown instead of short per-state labels
+2. AC-157 (row order): Beta Video Privacy section rendered before Blocked Accounts section
+3. REQ-CI: no `.github/workflows/` directory existed
+
+**Automated test run**
+- `npx tsc --noEmit` — exit 0. 0 TypeScript errors.
+- `npm run check:i18n` — "i18n completeness OK". Exit 0.
+- `npm test -- --watchAll=false` — 475 total, 474 passed, 1 failed. Exit 1. The 1 failure is `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` AC-162 `fetchBetaVideosByUser` route_name field — same pre-existing failure present across all prior QA runs; confirmed committed state, not introduced by this fix. Out of scope for MOD-010.
+
+---
+
+**REGRESSION PASS — Bug 1: AC-157 label mismatch resolved**
+
+Re-verification method: code inspection of `locales/en/common.json`, `locales/zh-TW/common.json`, and `SettingsScreen.tsx`.
+
+New i18n keys confirmed present in both catalogs:
+- `locales/en/common.json` line 66: `"betaVideoPrivacyPublic": "All Users"` — correct short label
+- `locales/en/common.json` line 67: `"betaVideoPrivacyFollowersOnly": "Followers Only"` — correct short label
+- `locales/zh-TW/common.json` line 66: `"betaVideoPrivacyPublic": "所有人"` — correct short label
+- `locales/zh-TW/common.json` line 67: `"betaVideoPrivacyFollowersOnly": "僅限追蹤者"` — correct short label
+
+`SettingsScreen.tsx` lines 297–300 (Privacy section, `settingRowSubtext`):
+```
+{betaVideoPrivacy === 'followers_only'
+  ? t('settings.betaVideoPrivacyFollowersOnly')
+  : t('settings.betaVideoPrivacyPublic')}
+```
+
+Input=SettingsScreen renders with `betaVideoPrivacy === 'public'`; Expected per spec=short label "All Users" (EN) / "所有人" (zh-TW) displayed; Actual=`t('settings.betaVideoPrivacyPublic')` resolves to "All Users" / "所有人" — correct short label, not a sentence. REGRESSION PASS.
+
+Input=SettingsScreen renders with `betaVideoPrivacy === 'followers_only'`; Expected per spec=short label "Followers Only" (EN) / "僅限追蹤者" (zh-TW) displayed; Actual=`t('settings.betaVideoPrivacyFollowersOnly')` resolves to "Followers Only" / "僅限追蹤者" — correct short label. REGRESSION PASS.
+
+Old sentence-form keys (`settings.betaVideoPrivacySubtextPublic`, `settings.betaVideoPrivacySubtextFollowersOnly`) remain in both catalogs but are no longer referenced in `SettingsScreen.tsx` — they are dead keys, not a correctness issue (no missing key in either direction; `npm run check:i18n` exits 0).
+
+---
+
+**REGRESSION PASS — Bug 2: AC-157 row order resolved**
+
+Re-verification method: code inspection of `SettingsScreen.tsx` JSX render order (lines 190–335).
+
+Render order within `<ScrollView>` (lines 208–335):
+1. Language section (AC-091) — lines 213–241
+2. Appearance section (AC-092) — lines 243–271
+3. Account section — Blocked Accounts row (AC-155) — lines 273–289
+4. Privacy section — Beta Video Privacy toggle (AC-157) — lines 291–312
+5. Logout button (AC-168) — lines 314–334
+
+Spec required order: (existing sections) → Blocked Accounts (AC-155) → Beta Video Privacy (AC-157) → Logout (AC-168).
+
+Actual order matches spec exactly. Blocked Accounts (AC-155) at lines 273–289 renders before Beta Video Privacy (AC-157) at lines 291–312. Logout (AC-168) at lines 314–334 is last. REGRESSION PASS.
+
+---
+
+**REGRESSION PASS — Bug 3: REQ-CI workflow resolved**
+
+Re-verification: `.github/workflows/i18n-check.yml` exists at `/Users/tsan/Desktop/MacBookPro/send-it/.github/workflows/i18n-check.yml`.
+
+File content verified:
+- `on: push: branches: [main]` and `on: pull_request: branches: [main]` — triggers on push and pull_request to main.
+- `runs-on: ubuntu-latest`
+- `actions/checkout@v4` and `actions/setup-node@v4` (Node 20) steps present.
+- Run step: `node scripts/check-i18n-completeness.js` — correct script invocation.
+
+Input=engineer pushes a commit with a missing zh-TW key to main; Expected per spec=CI check runs automatically and fails; Actual=`.github/workflows/i18n-check.yml` triggers on push/pull_request to main and runs `node scripts/check-i18n-completeness.js`, which exits 1 on any missing key. REGRESSION PASS.
+
+---
+
+**Re-verification of all previously passing ACs**
+
+**AC-090** — PASS. `src/lib/i18n.ts` unchanged. `detectDeviceLanguage()` logic unchanged. PASS carries forward.
+
+**AC-091** — PASS. `SettingsScreen.tsx` language section (lines 213–241) unchanged. `handleLanguageSelect` calls `i18n.changeLanguage(lang)` then `saveLanguage(lang)`. PASS carries forward.
+
+**AC-092** — PASS. `SettingsScreen.tsx` appearance section (lines 243–271) unchanged. `handleOverrideSelect` calls `setOverride(newOverride)` then `saveThemeOverride(newOverride)`. `src/lib/theme.ts` unchanged. PASS carries forward.
+
+**AC-155** — PASS. `SettingsScreen.tsx` early return (line 186–188) unchanged — `view === 'blockedAccounts'` renders `<BlockedAccountsScreen>`. Blocked Accounts row (lines 276–288) unchanged — `onPress={() => { setView('blockedAccounts'); }}`. `BlockedAccountsScreen.tsx` unchanged. PASS carries forward.
+
+**AC-157 — partial aspects that were passing** — PASS. Toggle still calls `updateBetaVideoPrivacy(newValue)` from `mod-auth-profile/auth-service` (line 151). MOD-010 still does not write directly to `users.beta_video_privacy` — only a SELECT read on mount. `disabled={!privacyFetched || privacyLoading}` still guards premature interaction. No regression on any of these sub-items.
+
+**AC-168** — PASS. `handleLogout()` (lines 161–172) calls `signOut()` from `mod-auth-profile/auth-service`. Error handling and `ActivityIndicator` during sign-out unchanged. Logout button at very bottom of `ScrollView`, below all other rows. Styling `borderColor: theme.colors.error` + `color: theme.colors.error` unchanged. PASS carries forward.
+
+**All strings via i18n hook** — PASS. No inline string literals in `SettingsScreen.tsx` or `BlockedAccountsScreen.tsx`. All user-visible strings via `t(...)`. The two new i18n keys added by the fix use the correct `t('settings.betaVideoPrivacyPublic')` / `t('settings.betaVideoPrivacyFollowersOnly')` pattern. No regression.
+
+**No hardcoded hex colors** — PASS. No hex color literals introduced in the fix. All colors remain `theme.colors.*` tokens. No regression.
+
+**Safe area insets** — PASS. `useSafeAreaInsets()` + `makeStyles(theme, insets.top)` pattern unchanged in both `SettingsScreen.tsx` and `BlockedAccountsScreen.tsx`. No regression.
+
+**i18n catalog completeness** — PASS. `npm run check:i18n` exits 0. Both EN and zh-TW catalogs symmetric. New keys `betaVideoPrivacyPublic` and `betaVideoPrivacyFollowersOnly` present in both; old sentence-form keys still present in both (symmetric, not a gap). No regression.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0. No regression.
+
+**No gold-plating** — PASS. Fix adds exactly two new i18n keys per locale and one `.github/workflows/` file. No extra features introduced. No regression.
+
+---
+
+**Summary**
+
+| AC / Requirement | Result | Notes |
+|---|---|---|
+| AC-090: Device locale detection on first launch | PASS | Unchanged; no regression |
+| AC-091: Language toggle in Settings, immediate effect | PASS | Unchanged; no regression |
+| AC-092: Three-state theme override, immediate effect | PASS | Unchanged; no regression |
+| AC-155: Blocked Accounts screen — list, Unblock, empty state | PASS | Unchanged; no regression |
+| AC-157: Beta Video Privacy toggle — state labels "所有人"/"All Users", "僅限追蹤者"/"Followers Only" | REGRESSION PASS | Short labels now rendered via betaVideoPrivacyPublic / betaVideoPrivacyFollowersOnly keys |
+| AC-157: SettingsScreen row order — AC-155 before AC-157 | REGRESSION PASS | Blocked Accounts (AC-155) now renders before Beta Video Privacy (AC-157) |
+| AC-157: Beta Video Privacy toggle — MOD-001 write, no direct DB write | PASS | Unchanged; no regression |
+| AC-168: Logout button at very bottom, error color outlined, signOut from MOD-001 | PASS | Unchanged; no regression |
+| REQ-CI: zh-TW key-parity CI gate wired into automated pipeline | REGRESSION PASS | .github/workflows/i18n-check.yml exists; triggers on push/pull_request to main |
+| All strings via i18n hook | PASS | No inline literals; new keys use t() pattern correctly |
+| No hardcoded hex colors | PASS | All colors from theme.colors.* tokens |
+| Safe area insets | PASS | useSafeAreaInsets + makeStyles(theme, topInset) unchanged |
+| i18n catalog completeness | PASS | npm run check:i18n exits 0; all keys symmetric |
+| TypeScript strict mode | PASS | npx tsc --noEmit exits 0 |
+| No gold-plating | PASS | Fix scoped exactly to the three reported failures |
+
+**Overall verdict: QA PASS**
+
+All three bugs from QA Run 1 (Verification 2026-10-13) are resolved. All five ACs (AC-090, AC-091, AC-092, AC-155, AC-157, AC-168) pass. No regressions introduced. Module is ready for human sign-off.
