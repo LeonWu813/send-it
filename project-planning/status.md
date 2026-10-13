@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: trivial
 module: n/a
 result: success
-commit: f248d92902a9c656766ce86a5adabf8c7fe1293d
+commit: 141e6ad48a19a570aba5e78de417acc51a1240cb
 timestamp: 2026-10-13T00:00:00Z
 ```
 
@@ -2038,6 +2038,27 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-13 — Trivial Passthrough ([TRIVIAL])
+
+**Trigger**: PM [TRIVIAL] tag (2026-10-13) — AC-085 Phase 1 deferral note, PRD Revision 34. Real email delivery (Resend/SMTP) and cron registration deferred post-launch; `report-digest` Edge Function exists and queries the `Report` table correctly but only `console.log`s in Phase 1; operator reviews open reports manually in Supabase Studio.
+
+**Files modified:**
+- `project-planning/modules/mod-moderation/spec.md` — Last Synced from PRD Revision 21 → 34. AC-085 entry in Acceptance Criteria Covered updated to `(revised, Rev 34)` with Phase 1 deferral note appended (email delivery + cron deferred post-launch; Edge Function exists and queries correctly but console.logs only in Phase 1; operator reviews Studio manually). Input/Output Contract "Outputs (scheduled report digest)" updated with Phase 1 deferral note. Key Implementation Notes AC-085 note updated with Phase 1 deferral note.
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/production.md` — not in scope (no convention change).
+- All other module specs — not in scope (wording change is MOD-009 / AC-085 only).
+- Agent wrappers — not in scope (no new module, no dependency change).
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** skipped — [TRIVIAL] passthrough per skill routing rules.
 
 ### 2026-10-07 — Delta Sync (Revision 32, [SUBSTANTIVE])
 

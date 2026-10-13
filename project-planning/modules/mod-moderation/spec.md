@@ -4,7 +4,7 @@
 **Module Name**: Moderation (Report & Block)
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-005, MOD-006
-**Last Synced from PRD Revision**: 21
+**Last Synced from PRD Revision**: 34
 **Last Updated**: 2026-09-30
 
 ---
@@ -57,7 +57,7 @@ App Store Guideline 1.2 requires that apps with user-generated content provide (
 
 **AC-084**: The system shall apply block hiding symmetrically — the blocker's beta videos, sends, and profile shall also be hidden from the blocked user's feed and route pages, in addition to hiding the blocked user's content from the blocker (App Store Guideline 1.2 requirement).
 
-**AC-085**: The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window. This digest covers the `Report` table only (user-profile and beta-video content reports filed via AC-080); it does not include the `VideoReport` table (beta-video reports filed via AC-140), which the admin reviews manually in Supabase Studio.
+**AC-085** (revised, Rev 34): The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window. This digest covers the `Report` table only (user-profile and beta-video content reports filed via AC-080); it does not include the `VideoReport` table (beta-video reports filed via AC-140), which the admin reviews manually in Supabase Studio. **Phase 1 deferral (accepted, not a bug)**: real email delivery (Resend/SMTP) and cron registration are deferred post-launch; the `report-digest` Edge Function exists and queries the `Report` table correctly but only `console.log`s the digest in Phase 1. The operator (wu.tsan@northeastern.edu) reviews open reports manually in Supabase Studio. Real email delivery and a registered cron schedule are revisited post-launch when report volume warrants automation.
 
 **AC-151** (new): Selecting "Report" in the three-dots sheet (AC-150) shall, in a single user action, both notify the admin and block the reported user: the system shall call `reportUser` (persisting a report record to the `Report` table for admin review per AC-080) and `blockUser` (AC-082) sequentially for the target user. This report-and-block behavior replaces the prior report-only profile action. The user shall see a confirmation, and the profile shall immediately show the blocked state (AC-153).
 
@@ -154,6 +154,7 @@ All tables guarded by Supabase Row-Level Security policies. `Report` rows are in
 - Email sent to wu.tsan@northeastern.edu listing all `Report` rows where `status = open` AND `created_at < now() - interval '12 hours'`
 - Covers the `Report` table only; does not include `VideoReport` rows (AC-085)
 - Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`)
+- **Phase 1 deferral**: real email delivery (Resend/SMTP) and cron registration are deferred post-launch; the `report-digest` Edge Function exists and queries the `Report` table correctly but only `console.log`s the digest in Phase 1; the operator reviews open reports manually in Supabase Studio
 
 ---
 
@@ -163,7 +164,7 @@ All tables guarded by Supabase Row-Level Security policies. `Report` rows are in
 - **Follow prevention (AC-083)**: The follow action in MOD-006 must check the `Block` table in both directions before allowing a Follow INSERT. If any block exists between the two users, the follow must be prevented.
 - **Report confirmation (AC-081)**: The reporter sees a confirmation state immediately after submission; they do not wait for admin review. Admin review happens asynchronously in Supabase Studio.
 - **`reportUser` and `blockUser` called sequentially, not as a single combined RPC (AC-151)**: In the `UserProfileScreen` three-dots sheet "Report" handler (MOD-006), the UI calls `reportUser` then `blockUser` sequentially. These are two separate service calls. No new migration is required for Rev 20 — the `Report` and `Block` tables and their existing write paths are reused. The sequential call pattern is consistent with the existing separation between report and block concerns.
-- **Report alerting Edge Function (AC-085)**: A scheduled Edge Function runs every 6 hours. It queries `Report` rows with `status = open` AND `created_at < now() - interval '12 hours'` and sends an email digest to wu.tsan@northeastern.edu. The Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`). The email body should list: report ID, target type, target ID, category, reporter user ID, created_at for each qualifying report. This digest covers the `Report` table only — the `VideoReport` table (beta-video one-tap reports, AC-140) is reviewed manually by the admin in Supabase Studio and is not included in the digest.
+- **Report alerting Edge Function (AC-085)**: A scheduled Edge Function runs every 6 hours. It queries `Report` rows with `status = open` AND `created_at < now() - interval '12 hours'` and sends an email digest to wu.tsan@northeastern.edu. The Edge Function reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`). The email body should list: report ID, target type, target ID, category, reporter user ID, created_at for each qualifying report. This digest covers the `Report` table only — the `VideoReport` table (beta-video one-tap reports, AC-140) is reviewed manually by the admin in Supabase Studio and is not included in the digest. **Phase 1 deferral (accepted, not a bug)**: real email delivery (Resend/SMTP) and cron registration are deferred post-launch; the `report-digest` Edge Function exists and queries the `Report` table correctly but only `console.log`s the digest in Phase 1; the operator (wu.tsan@northeastern.edu) reviews open reports manually in Supabase Studio. Real email delivery and a registered cron schedule are revisited post-launch when report volume warrants automation.
 - **Admin review in Supabase Studio**: Report status transitions (`open → reviewed | actioned | dismissed`) and user bans are performed by the admin via Supabase Studio. No in-app admin UI in Phase 1.
 - **Category enum (user-profile reports)**: `{inappropriate, spam, harassment, other}` — no free-text category. A free-text note field is optional. In the three-dots-sheet flow (AC-151), the category defaults to `'inappropriate'` and no note is collected.
 - **Target type (user-profile reports)**: Reports filed via this module are always `target_type = user`. The `Report` table schema retains the `target_type` column for schema forward-compatibility, but in Phase 1 all reports through this module's flow are user-profile reports.
