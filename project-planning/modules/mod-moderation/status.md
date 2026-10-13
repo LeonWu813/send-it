@@ -2,6 +2,23 @@
 
 ## Engineering Progress
 
+### Bug Fix (2026-10-13) — QA Run 3 convention violation
+
+**Production.md convention: "Log Raw Supabase Error Before Throwing a User-Facing String"**
+
+All 5 Supabase error-catch sites in `moderation-service.ts` were missing a `console.error` call before throwing a user-facing string. Raw Supabase/PostgREST diagnostic information was being silently discarded. Fixed by adding `console.error('[functionName] error:', error)` immediately before the `throw` at each site:
+
+1. `reportUser()` — `console.error('[reportUser] error:', error)` added before `throw new Error('Failed to submit report...')`
+2. `blockUser()` — `console.error('[blockUser] error:', error)` added before `throw new Error('Action failed...')` (after the idempotent `23505` early-return branch, not before it)
+3. `unblockUser()` — `console.error('[unblockUser] error:', error)` added before `throw new Error('Action failed...')`
+4. `fetchBlockedUserIds()` — `console.error('[fetchBlockedUserIds] error:', error)` added before `throw new Error('Failed to load block list...')`
+5. `fetchMyBlockedUsers()` — `console.error('[fetchMyBlockedUsers] error:', error)` added before `throw new Error('Failed to load blocked accounts...')`
+
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- No other changes; all 11 ACs remain unaffected.
+
+**Date**: 2026-10-13
+
 ### AC-155 — 2026-09-30
 
 **fetchMyBlockedUsers() added to moderation-service.ts**
@@ -272,3 +289,87 @@ Route: **Engineer** (add `console.error('[functionName] error:', error)` immedia
 1. **Convention violation (implementation bug)**: `moderation-service.ts` — all 5 Supabase error-catch sites throw user-facing strings without first calling `console.error('[functionName] error:', error)`. Violates the production.md "Log Raw Supabase Error Before Throwing a User-Facing String" shared convention. Affected functions: `reportUser`, `blockUser`, `unblockUser`, `fetchBlockedUserIds`, `fetchMyBlockedUsers`. Route to Engineer.
 
 **All 8 acceptance criteria (AC-080, AC-081, AC-082, AC-083, AC-084, AC-085, AC-151, AC-152, AC-153, AC-154, AC-155) verified as PASS.** AC-085 Phase 1 deferral confirmed accepted per spec Rev 34.
+
+---
+
+## QA Run 4 — Regression — 2026-10-13
+
+**QA agent**: qa-mod-moderation
+**Mode**: regression-test (re-verification after Engineer fix for QA Run 3 convention violation)
+**Bug being re-verified**: Convention violation — all 5 Supabase error-catch sites in `moderation-service.ts` missing `console.error('[functionName] error:', error)` before `throw`
+**Automated test run**: `npm test -- --watchAll=false` — 474 passed, 1 failed (`mod-beta-video` `fetchBetaVideosByUser` AC-162 route_name flattening — pre-existing, not in mod-moderation scope), 32 suites, exit 1 (failure is outside mod-moderation scope; same pre-existing failure as QA Run 3)
+**TypeScript check**: `npx tsc --noEmit` — 0 errors, exit 0
+**No mod-moderation-specific test files exist** (same as all prior runs)
+
+---
+
+### Convention Violation Fix — Regression Verification
+
+**REGRESSION PASS (convention fix)**: All 5 sites verified by direct inspection of `src/modules/mod-moderation/moderation-service.ts`. Each site now calls `console.error('[functionName] error:', error)` on the line immediately before the corresponding `throw new Error(...)`. Exact verified state:
+
+1. **`reportUser()` L61–62**: `console.error('[reportUser] error:', error);` on L61 immediately before `throw new Error('Failed to submit report. Please try again.');` on L62. PASS.
+
+2. **`blockUser()` L100–101**: Inside `if (error)` block — the idempotent `23505` early-return branch (`if (error.code === '23505') { return; }`) on L97–99 is correctly left without a `console.error` (it is a success path, not an error throw). `console.error('[blockUser] error:', error);` on L100 immediately before `throw new Error('Action failed. Please try again.');` on L101 covers the only path that throws. PASS.
+
+3. **`unblockUser()` L128–129**: `console.error('[unblockUser] error:', error);` on L128 immediately before `throw new Error('Action failed. Please try again.');` on L129. PASS.
+
+4. **`fetchBlockedUserIds()` L154–155**: `console.error('[fetchBlockedUserIds] error:', error);` on L154 immediately before `throw new Error('Failed to load block list. Please try again.');` on L155. PASS.
+
+5. **`fetchMyBlockedUsers()` L217–218**: `console.error('[fetchMyBlockedUsers] error:', error);` on L217 immediately before `throw new Error('Failed to load blocked accounts. Please try again.');` on L218. PASS.
+
+All 5 original failure scenarios (Input=[Supabase returns an error object], Expected=[`console.error` called with raw error before throw]) now produce the expected behavior. No site throws without first logging the raw error to the console.
+
+---
+
+### Re-verification of All 11 Acceptance Criteria
+
+The only file changed by the Engineer fix is `moderation-service.ts` — specifically, 5 `console.error` lines were inserted at the catch sites. No other source files, migrations, components, or Edge Functions were modified. All 11 ACs verified as unchanged from QA Run 3:
+
+**PASS AC-080** (re-verified): `reportUser()` logic unchanged — insert payload, `target_type: 'user'`, `status: 'open'`, category, note all intact. The `console.error` addition is inside the error branch only; the success path is unaffected. No regressions.
+
+**PASS AC-081** (re-verified): `ReportSheet.tsx` untouched. Confirmation state logic unchanged. No regressions.
+
+**PASS AC-082** (re-verified): `blockUser()` block-insert logic unchanged. Idempotent `23505` early-return branch intact and unaffected by the `console.error` placement (error log is only before the throw path, not the return path). `unblockUser()` delete logic unchanged. Feed RPC migrations untouched. No regressions.
+
+**PASS AC-083** (re-verified): Migration `20260929000006` untouched. `follows_insert_own` policy and `trg_remove_follows_on_block` trigger unchanged. No regressions.
+
+**PASS AC-084** (re-verified): `get_activity_feed` migration untouched. `fetchBlockedUserIds()` both-direction logic unchanged. No regressions.
+
+**PASS AC-085** (Phase 1 deferral — accepted per spec Rev 34, re-verified): Edge Function `supabase/functions/report-digest/index.ts` untouched. `SERVICE_ROLE_KEY` reading, RLS-bypass, query, fail-safe, and Phase 1 console.log fallback all intact. No regressions.
+
+**PASS AC-151** (re-verified): `UserProfileScreen.tsx` `handleReport()` sequential `reportUser` + `blockUser` call unchanged. Confirmation and blocked-state update unchanged. No regressions.
+
+**PASS AC-152** (re-verified): `handleBlockToggle()` block/unblock toggle logic unchanged. `unblockUser()` delete path unchanged. No regressions.
+
+**PASS AC-153** (re-verified): `loadProfile()` `fetchBlockedUserIds()` call and `isProfileBlocked` state logic unchanged. Profile-unavailable rendering guard unchanged. No regressions.
+
+**PASS AC-154** (re-verified): `BetaVideoSection.tsx` `fetchBlockedUserIds()` call and client-side filter unchanged. Non-fatal error fallback unchanged. No regressions.
+
+**PASS AC-155** (re-verified): `fetchMyBlockedUsers()` query, join, mapping, and empty-set fallback unchanged. The `console.error` addition is in the error branch only; the success-path mapping is unaffected. No regressions.
+
+---
+
+### Shared Convention Re-checks (adjacent code)
+
+The fix adds exactly 5 `console.error` lines — one per catch site. No new imports, no new logic branches, no new files. Verified:
+- All 5 `console.error` calls use the canonical form `'[functionName] error:'` matching the production.md convention exactly.
+- `blockUser()` idempotent branch (`23505` → `return`) is correctly NOT preceded by a `console.error` — that branch is a success path, not an error throw. The production.md convention applies only to throw sites.
+- No new source files, migrations, components, or Edge Functions introduced.
+- No gold-plating: only the minimum required change (5 `console.error` insertions) was applied.
+- Test suite: 474 passed, 1 failed (`mod-beta-video` AC-162 — pre-existing, out of scope). Failure count and identity unchanged from QA Run 3. No new failures introduced by the fix.
+
+---
+
+### Summary — QA Run 4
+
+**Result**: QA PASS — MOD-009 ready for human sign-off
+
+1. **REGRESSION PASS (convention fix)**: All 5 Supabase error-catch sites in `moderation-service.ts` now call `console.error('[functionName] error:', error)` immediately before their respective `throw new Error(...)`. Original QA Run 3 failure fully resolved. No site throws without first logging the raw diagnostic.
+
+2. **AC-080, AC-081, AC-082, AC-083, AC-084, AC-085, AC-151, AC-152, AC-153, AC-154, AC-155**: All 11 acceptance criteria re-verified PASS. No regressions introduced by the fix.
+
+3. **TypeScript**: `npx tsc --noEmit` exit 0.
+
+4. **Test suite**: 474 passed, 1 failed (pre-existing `mod-beta-video` AC-162 failure — not in mod-moderation scope, unchanged from QA Run 3). No new failures.
+
+**MOD-009 (Moderation — Report & Block) is QA PASS. All 11 ACs verified across 4 QA runs. Module is ready for human sign-off.**

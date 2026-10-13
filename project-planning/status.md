@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-localization-theme
-mode: verify
-module: mod-localization-theme
-result: bugs-found
-commit: 77909ddc12329a3c607586509304fe8fc94e8e67
+agent: qa-mod-moderation
+mode: regression
+module: mod-moderation
+result: success
+commit: 3693c85d0e67b53f19e165519986eb6dd56084bd
 timestamp: 2026-10-13T00:00:00Z
 ```
 
