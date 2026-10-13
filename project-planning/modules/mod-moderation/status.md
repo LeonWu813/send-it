@@ -193,3 +193,82 @@ Migration `20260929000006` is the only changed artifact besides the `blockUser()
 1. **REGRESSION PASS AC-083**: Follow INSERT policy now rejects inserts when a block exists in either direction. Trigger `trg_remove_follows_on_block` exists and fires AFTER INSERT on `blocks`, removing existing follows in both directions server-side. Original failure scenario resolved.
 2. **REGRESSION PASS setup.md**: `SUPABASE_SERVICE_ROLE_KEY` entirely removed from `setup.md`; correct `SERVICE_ROLE_KEY` used at line 140.
 3. **AC-080, AC-081, AC-082, AC-084, AC-085**: All re-verified. No regressions introduced by the fix migration or doc-comment update.
+
+---
+
+## QA Run 3 — Functional Test (Tech Lead audit verification) — 2026-10-13
+
+**QA agent**: qa-mod-moderation
+**Mode**: functional-test (Tech Lead audit confirmed all MOD-009 ACs implemented from earlier cross-module work; verifying each AC per spec Rev 34)
+**Automated test run**: 474 passed, 1 failed (mod-beta-video route_name flattening — not in mod-moderation scope), 32 suites, exit 1
+**TypeScript check**: 0 errors (`npx tsc --noEmit` exit 0)
+**No mod-moderation-specific test files exist** (same as prior runs)
+
+---
+
+### Acceptance Criteria Results
+
+**PASS AC-080**: `reportUser()` in `src/modules/mod-moderation/moderation-service.ts` L40–63 inserts into `reports` with `target_type: 'user'`, caller-supplied `category`, `note: note ?? null`, and `status: 'open'`. RLS policy `reports_insert_own` (migration `20260929000004`) restricts INSERT to `reporter_user_id = auth.uid()`; no SELECT for authenticated users (admin-only via service role). `report_category` enum has 4 values (`inappropriate`, `spam`, `harassment`, `other`). Schema columns match spec: `id`, `reporter_user_id`, `target_type`, `target_id`, `category`, `note`, `status`, `created_at`, `reviewed_at`. `ReportSheet.tsx` exposes all 4 categories via the `CATEGORIES` constant, enforces `maxLength={280}` on the note input.
+
+**PASS AC-081**: `ReportSheet.tsx` sets `confirmed = true` immediately on successful `reportUser()` call (before any admin action). When `confirmed === true` the component renders a confirmation message and a "Done" dismiss button. No polling or admin dependency. The `UserProfileScreen` three-dots "Report" path (`handleReport()`) calls `reportUser` then `blockUser` and sets state immediately — confirmation is handled by the sheet close + blocked-state update rather than a separate confirmation modal (consistent with AC-151's "both in a single action" flow).
+
+**PASS AC-082**: `blocks` table created in migration `20260929000004` with composite PK `(blocker_user_id, blocked_user_id)`, `created_at`, FKs to `public.users(id)`, RLS enabled. `blocks_insert_own` policy checks `blocker_user_id = auth.uid()`; `blocks_delete_own` checks same; `blocks_select_participant` allows either party. `blockUser()` inserts `(blocker_user_id = auth.uid(), blocked_user_id)` and treats `23505` unique-violation as idempotent success. `unblockUser()` deletes the row. `get_activity_feed` (migration `20260929000005`) excludes blocked users' content from the feed via `qualifying_followees` CTE and defense-in-depth NOT EXISTS on both `ascent_items` and `video_items`.
+
+**PASS AC-083** (regression from QA Run 2): `follows_insert_own` policy (migration `20260929000006`) rejects follow INSERT when any block exists in either direction — verified in QA Run 2. `trg_remove_follows_on_block` trigger fires AFTER INSERT on `blocks` and deletes follows in both directions. No regressions introduced by subsequent commits.
+
+**PASS AC-084**: `get_activity_feed` (migration `20260929000005`) checks BOTH directions in `qualifying_followees`: first NOT EXISTS on `(blocker_user_id = auth.uid(), blocked_user_id = followee_id)` and second NOT EXISTS on `(blocker_user_id = followee_id, blocked_user_id = auth.uid())`. Defense-in-depth symmetric NOT EXISTS filter also applied on both `ascent_items` and `video_items` CTEs independently. `fetchBlockedUserIds()` returns both directions for client-side surfaces.
+
+**PASS AC-085** (Phase 1 deferral — accepted per spec Rev 34): Edge Function `supabase/functions/report-digest/index.ts` reads `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`). Creates a service-role client (bypasses RLS). Queries `reports WHERE status = 'open' AND created_at < now() - 12 hours`. Email body includes: report ID, target type, target ID, category, reporter user ID, created_at. Returns HTTP 200 with no body when no qualifying reports. Fails safe with HTTP 500 on missing `SERVICE_ROLE_KEY` or `SUPABASE_URL`. Digest covers `reports` table only; footer explicitly states beta-video reports are reviewed separately in Studio. Phase 1 fallback: `console.log`s the digest body; real email delivery (Resend/SMTP) and cron registration are deferred post-launch per spec Rev 34 accepted deferral. PASS — deferral noted, not a bug.
+
+**PASS AC-151**: `UserProfileScreen.tsx` `handleReport()` (L249–267) calls `await reportUser(targetUserId, 'inappropriate')` then `await blockUser(targetUserId)` sequentially in a single user action. On success: sheet is closed, `isProfileBlocked` set to `true`, `isBlockedByMe` set to `true`. The profile immediately shows the blocked state (driven by `isProfileBlocked` guard at render time). `category` defaults to `'inappropriate'`; no note is collected in this path. Both service calls are sequential (not a combined RPC). Matches spec AC-151 exactly.
+
+**PASS AC-152**: `handleBlockToggle()` in `UserProfileScreen.tsx` (L269–295): when `isBlockedByMe` is true, calls `unblockUser(targetUserId)` and resets `isProfileBlocked` and `isBlockedByMe` to false, then reloads the profile. When `isBlockedByMe` is false, calls `blockUser(targetUserId)` and sets both flags to true. `unblockUser()` in `moderation-service.ts` deletes the `blocks` row with `blocker_user_id = auth.uid()`. Content filtering returns to normal (both feed RPC and `fetchBlockedUserIds()` re-evaluated on next load). `ModerationActions.tsx` independently surfaces block/unblock via the `isBlocked()` service function for the `OtherUserProfileScreen` flow.
+
+**PASS AC-153**: `loadProfile()` in `UserProfileScreen.tsx` includes `fetchBlockedUserIds()` in the `Promise.all` (L141–155). `isProfileBlocked` is set to `blocked.has(targetUserId)` — true in either direction. A secondary query on the `blocks` table determines `isBlockedByMe` (whether the viewer is the blocker) to decide whether to show the Unblock option in the three-dots sheet. When `isProfileBlocked` is true, the component renders the "profileUnavailable" message instead of the profile content (L313–365). Three-dots icon is shown in blocked state only when `isBlockedByMe` is true (unblock affordance). State set immediately to `true` after `handleReport()` and `handleBlockToggle()` block calls.
+
+**PASS AC-154**: `BetaVideoSection.tsx` L134–150 calls `fetchBlockedUserIds()` and `fetchBetaVideosForRoute(routeId)` in `Promise.all`. Applies `rows.filter((v) => !blockedIds.has(v.user_id))` to exclude videos from blocked users in either direction before rendering. `fetchBlockedUserIds()` returns a `Set<string>` covering both directions. If `fetchBlockedUserIds()` fails, the error is caught with `console.error` and the filter defaults to an empty set (non-fatal fallback, not a silent corruption).
+
+**PASS AC-155**: `fetchMyBlockedUsers()` in `moderation-service.ts` L201–228 queries `blocks` joined with `users!blocks_blocked_user_id_fkey(id, display_name, avatar_url)` where `blocker_user_id = currentUserId`, ordered `created_at DESC`. Returns `Array<{ userId, displayName, avatarUrl }>` matching the spec contract. Returns `[]` on unauthenticated call. `unblockUser()` is also available as the Unblock action consumed by MOD-010.
+
+---
+
+### Convention Violation — Shared Convention Failure
+
+**FAIL (implementation bug — shared convention)**: `moderation-service.ts` has 5 Supabase error-catch sites that throw user-facing strings without first calling `console.error('[functionName] error:', error)`. This violates the production.md "Log Raw Supabase Error Before Throwing a User-Facing String" shared convention, which is mandatory for every service function that catches a Supabase error.
+
+Failing sites (Input=[Supabase returns an error object], Expected=[`console.error` called with raw error before throw], Actual=[throw with user-facing string only; raw Supabase/PostgREST diagnostic is silently discarded]):
+
+1. `reportUser()` L60–62: `if (error) { throw new Error('Failed to submit report. Please try again.'); }` — no preceding `console.error('[reportUser] error:', error)`.
+2. `blockUser()` L94–100: `if (error) { if (error.code === '23505') { return; } throw new Error('Action failed. Please try again.'); }` — no `console.error` before either branch that throws.
+3. `unblockUser()` L124–127: `if (error) { throw new Error('Action failed. Please try again.'); }` — no preceding `console.error('[unblockUser] error:', error)`.
+4. `fetchBlockedUserIds()` L149–152: `if (error) { throw new Error('Failed to load block list. Please try again.'); }` — no preceding `console.error('[fetchBlockedUserIds] error:', error)`.
+5. `fetchMyBlockedUsers()` L211–213: `if (error) { throw new Error('Failed to load blocked accounts. Please try again.'); }` — no preceding `console.error('[fetchMyBlockedUsers] error:', error)`.
+
+Route: **Engineer** (add `console.error('[functionName] error:', error)` immediately before each `throw new Error(...)` at all 5 sites, per the canonical form in production.md).
+
+---
+
+### Shared Convention Checks
+
+- No hardcoded hex colors — all colors reference `theme.colors.*`. PASS.
+- No inline user-facing string literals in components — all strings routed through `useTranslation('common')`. PASS.
+- Supabase singleton imported correctly; `createClient()` not called at any moderation call site. PASS.
+- Supabase singleton (`src/lib/supabase.ts`) imported correctly in `moderation-service.ts` and all components. PASS.
+- i18n catalogs: `moderation` key blocks present in `en` and `zh-TW` (verified in prior QA run). PASS.
+- Safe area insets: `UserProfileScreen.tsx` calls `useSafeAreaInsets()`, passes `insets.top` to `makeStyles(theme, topInset)`, uses `paddingTop: topInset + theme.spacing.md`. PASS. `ReportSheet.tsx` uses `insets.bottom` for the modal sheet. PASS.
+- No `@react-navigation/native` hooks in any moderation screen or component. PASS.
+- `ModerationActions` returns `null` when `targetUserId === currentUserId`. PASS.
+- No gold-plating: all deliverables match Engineering Progress list. PASS.
+- Block-status public service (`isBlocked`, `fetchBlockedUserIds`, `fetchMyBlockedUsers`) exported from `moderation-service.ts` and consumed by MOD-006 (`UserProfileScreen`) and MOD-005 (`BetaVideoSection`) per Cross-Module Imports convention (public service functions only). PASS.
+- `fetchBlockedUserIds()` in `BetaVideoSection.tsx` failure is non-fatal with `console.error` logging — correct per production.md (best-effort filtering, not load-blocking). PASS.
+- Test suite: 1 failure in `mod-beta-video` (`fetchBetaVideosByUser` route_name flattening) — not in mod-moderation scope, not a regression introduced by this module. PASS (scope exclusion noted).
+
+---
+
+### Summary — QA Run 3
+
+**Result**: BUGS FOUND — 1 failure
+
+1. **Convention violation (implementation bug)**: `moderation-service.ts` — all 5 Supabase error-catch sites throw user-facing strings without first calling `console.error('[functionName] error:', error)`. Violates the production.md "Log Raw Supabase Error Before Throwing a User-Facing String" shared convention. Affected functions: `reportUser`, `blockUser`, `unblockUser`, `fetchBlockedUserIds`, `fetchMyBlockedUsers`. Route to Engineer.
+
+**All 8 acceptance criteria (AC-080, AC-081, AC-082, AC-083, AC-084, AC-085, AC-151, AC-152, AC-153, AC-154, AC-155) verified as PASS.** AC-085 Phase 1 deferral confirmed accepted per spec Rev 34.

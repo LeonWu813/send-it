@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: trivial
-module: n/a
-result: success
-commit: 141e6ad48a19a570aba5e78de417acc51a1240cb
+agent: qa-mod-moderation
+mode: functional-test
+module: mod-moderation
+result: bugs-found
+commit: e9f58c7a2fce2c0a89de538ba8b998120a160c62
 timestamp: 2026-10-13T00:00:00Z
 ```
 
