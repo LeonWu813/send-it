@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: b5d182380c87e3720280f21954da0005a0579d68
+commit: 0dd4a06897e112a3c9757a3b77ae7f997f084632
 timestamp: 2026-10-14T00:00:00Z
 ```
 
@@ -319,6 +319,118 @@ timestamp: 2026-10-14T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-14 — change (Rev 37: route uniqueness redesign — drop the active-only unique index, remove the `submit_route` uniqueness pre-check, specify the AC-187 soft-warning count)
+
+**Context**: Architecture review of the three Rev 37 items flagged for Tech Lead sign-off before Doc-Sync/Engineering: (Item 1) the migration to drop `routes_active_unique_idx`; (Item 2) the `submit_route` RPC change; (Item 3) the AC-187 soft-warning count-query approach. Advisory only — no source, migration, or spec files edited. The human and PM decide what to adopt; after that, Doc-Sync carries the spec/convention changes in and `engineer-mod-route-catalog` writes the migration, RPC, and client changes. All findings below are grounded in the **actual** schema and source, not the planning-doc description.
+
+**Grounding — what the real schema and code do today** (verified, not assumed):
+- The routes table has **exactly two** uniqueness artifacts, both of which Rev 37 targets:
+  1. `routes_active_unique_idx` — `CREATE UNIQUE INDEX ... ON public.routes (gym_id, grade, color_tag) WHERE status = 'active'` (migration `20260920000003`, lines 60-62).
+  2. `routes_pending_unique_per_submitter` — `CREATE UNIQUE INDEX ... ON public.routes (gym_id, grade, color_tag, submitted_by_user_id) WHERE status = 'pending'` (migration `20260923000002`, lines 148-150). **This per-submitter pending index DOES exist in the real schema** (the question asked whether it does — it does, and AC-029-revised explicitly calls for it to go).
+- **Confirmed: there is NO `match_key` column anywhere** in the migrations or source. `grep` across `supabase/migrations/` and `src/` returns zero hits. The PRD/production.md "match_key" language was never backed by schema. No column to drop.
+- `submit_route` (SECURITY DEFINER RPC, migration `20260923000002`, lines 84-142) performs **one** uniqueness-related guard: the "one pending per (gym, grade, color) per submitter" `EXISTS` pre-check (lines 112-122), which `RAISE EXCEPTION 'You already have a pending submission for this route combination'`. It does **not** pre-check active duplicates — the active-only unique index (`routes_active_unique_idx`) is what rejects an active duplicate, surfacing as Postgres error `23505` to the client.
+- The client (`route-service.ts → submitRoute`, lines 140-166) maps **both** failure paths to user-facing strings: `error.code === '23505'` → "An active route with this grade and color already exists…"; `error.message?.includes('pending submission')` → the pending-dup string. **Both branches become dead code after Rev 37** and must be removed, or the client will surface stale errors that can no longer occur.
+- `findMatchingActiveRoutes` (lines 53-73) is a leftover from the old match-before-create flow. It is **no longer called by any screen** (grep: only the service file itself and its own unit test reference it). The submit flow (`RouteSubmitScreen`) is already single-page with no match-check. This function is a candidate to delete or repurpose for the AC-187 count (see Item 3).
+- `listRoutes` (lines 263-291) is the RouteListScreen fetch: `SELECT ... WHERE gym_id = ? AND status = 'active'` with optional `.eq('grade')` / `.eq('color_tag')` filters, ordered by grade then created_at. This is the fetch the submit screen's parent already has in hand before the user taps "Add Route" — directly relevant to Item 3.
+
+---
+
+**Item 1 — Migration to drop `routes_active_unique_idx` (and the pending per-submitter index)**
+
+**Decision: SAFE to drop both indexes. Drop BOTH `routes_active_unique_idx` and `routes_pending_unique_per_submitter`. Replace them with a single non-unique index on `(gym_id, grade, color_tag) WHERE status = 'active'` to back the AC-187 count.**
+
+**Rationale — nothing depends on either index implicitly:**
+- **RLS policies**: none reference the unique indexes. The current policies are `routes_select_v2` (status + submitter check), `routes_update_admin` (`is_admin()`), and `routes_delete_own_pending` (submitter + pending). None read or depend on uniqueness. Dropping the indexes does not touch RLS. (Verified against migration `20260923000002` lines 44-75.)
+- **Triggers**: there are no triggers on `public.routes` in any migration. Nothing fires on insert/update that assumes uniqueness.
+- **RPCs**: only `submit_route` touches routes on write. Its sole uniqueness dependency is the *pending* pre-check (Item 2), which is being removed anyway. It does **not** depend on `routes_active_unique_idx` existing — the active index was a pure DB-level backstop that surfaced as `23505`. Removing it removes the backstop; that is the intent (duplicates allowed by design, AC-020).
+- `routes_with_new_beta` RPC (migration `20261013000002`) reads routes by id list; no uniqueness dependency.
+- **Foreign keys**: `saved_routes`, `user_route_visits`, `beta_videos`, and `ascents` all FK to `routes(id)` (the PK), never to the `(gym_id, grade, color_tag)` tuple. Dropping the composite unique indexes does not affect any FK.
+
+**The per-submitter pending index (`routes_pending_unique_per_submitter`) must also be dropped** — AC-029-revised explicitly removes the "no two pending submissions for the same combo" restriction. Leaving the index in place would silently re-impose the restriction the PRD just removed (a second pending submission would fail with `23505`), contradicting AC-029. Drop it together with the active index in the same migration.
+
+**Replacement index (recommended, backs Item 3):** replace the dropped UNIQUE index with a **non-unique partial** index on the same columns and predicate, so the AC-187 count query stays index-backed without re-imposing uniqueness. The `routes_gym_id_status_idx` on `(gym_id, status)` already exists and would technically serve the count, but a `(gym_id, grade, color_tag) WHERE status='active'` index is a tighter match for the exact AC-187 predicate (equality on all three + status) and keeps the count cheap as route volume grows. Low cost, clear benefit.
+
+**Exact migration the engineer should write** (new file, e.g. `supabase/migrations/20261014000001_mod_003_route_drop_uniqueness.sql`):
+```sql
+-- Rev 37: duplicates allowed by design. Drop both uniqueness artifacts on routes.
+DROP INDEX IF EXISTS public.routes_active_unique_idx;
+DROP INDEX IF EXISTS public.routes_pending_unique_per_submitter;
+
+-- Replace with a non-unique partial index to back the AC-187 soft-warning count
+-- (equality on gym_id + grade + color_tag over active routes). NOT unique.
+CREATE INDEX IF NOT EXISTS routes_active_grade_color_idx
+  ON public.routes (gym_id, grade, color_tag)
+  WHERE status = 'active';
+```
+`DROP INDEX` on a plain index takes a brief `ACCESS EXCLUSIVE` lock; at Phase 1 table size this is instant. If the engineer prefers zero-lock on a larger table later, `DROP INDEX CONCURRENTLY` / `CREATE INDEX CONCURRENTLY` are options, but they **cannot run inside a transaction block** — and Supabase migrations run each file in a transaction by default. For Phase 1 volumes, plain `DROP`/`CREATE` is correct and simplest. Do not over-engineer this.
+
+---
+
+**Item 2 — `submit_route` RPC change**
+
+**Decision: Remove the pending-dup `EXISTS` pre-check entirely (lines 112-122). Keep everything else. The RPC's post-change behavior on what was formerly a "duplicate" is simply: insert and return the new row normally — no special-casing, no uniqueness failure path.**
+
+**What to remove** — delete this block from `submit_route` (migration `20260923000002`, lines 112-122):
+```sql
+  -- Guard: one pending per (gym, grade, color) per submitter
+  IF EXISTS (
+    SELECT 1 FROM public.routes
+    WHERE gym_id = p_gym_id
+      AND grade = p_grade
+      AND color_tag = p_color_tag
+      AND submitted_by_user_id = v_user_id
+      AND status = 'pending'
+  ) THEN
+    RAISE EXCEPTION 'You already have a pending submission for this route combination';
+  END IF;
+```
+
+**What to KEEP (unchanged):**
+- The `auth.uid()` identity derivation and the "Not authenticated" guard (lines 97, 102-105) — unrelated to uniqueness, still required.
+- The **photo-required guard** (lines 107-110) — AC-021-revised explicitly keeps server-side photo enforcement. Do NOT remove this.
+- The auto-approve read + status derivation (lines 124-129) and the INSERT…RETURNING (lines 131-136) — unchanged.
+- The GRANT/REVOKE block (lines 140-142) — unchanged.
+
+**Implementation mechanics:** the RPC must be re-declared with `CREATE OR REPLACE FUNCTION public.submit_route(...)` using the **identical signature** `(UUID, route_grade, route_color, TEXT, TEXT)` so the existing `GRANT EXECUTE` and the client's `supabase.rpc('submit_route', {...})` call (route-service.ts lines 141-147) keep working with zero client-signature change. Put the `CREATE OR REPLACE` in the same new migration as the index drop, or a sibling migration — order does not matter since neither depends on the other.
+
+**After the change, the RPC can no longer raise `23505` or the "pending submission" message.** Therefore the client must be cleaned up (this is Engineer work in `route-service.ts`, flagged here so it is not missed):
+- In `submitRoute` (lines 149-162), **remove both dead error branches**: the `error.code === '23505'` branch (lines 151-155) and the `error.message?.includes('pending submission')` branch (lines 157-161). Keep the generic fallback `throw new Error('Failed to submit route. Please try again.')`. Leaving them is harmless at runtime but is dead code that misrepresents the new contract and will confuse the next reader.
+
+---
+
+**Item 3 — AC-187 soft-warning count query**
+
+**Decision: Reuse already-fetched route-list data on the client to derive the count. Do NOT add a dedicated count RPC. No new RPC is needed. The non-unique index from Item 1 backs the one place a DB query still happens (the normal `listRoutes` fetch), which is sufficient.**
+
+**Rationale:**
+- **The data is already in hand.** Per US-003 and AC-020, the user reaches the submit screen *by filtering the RouteListScreen to a grade + color and finding no match* — RouteListScreen has already run `listRoutes(gymId, {grade, colorTag})` and holds the result set. The submit screen is opened with `initialGrade` / `initialColorTag` pre-filled from exactly that filter state (RouteSubmitScreen props, lines 63-64; AC-043). So for the common path, the count of same-grade/same-color active routes is **already derivable from data the parent fetched** — zero extra round-trips.
+- **But AC-187 requires the warning to update as the user changes the grade/color chips on the submit screen** ("The notice shall update as the grade/color selection changes"). Once the user edits a chip away from the pre-filled value, the parent's filtered list no longer answers the question for the *new* selection. Two clean options, both avoiding a new RPC:
+  - **Option A (recommended): pass the gym's full active-route set (or just its `(grade, color_tag)` pairs) into the submit screen once, and count client-side on every chip change.** `listRoutes(gymId, {grade: null, colorTag: null})` returns all active routes for the gym in one query (already an existing function, already index-backed by `routes_gym_id_status_idx`). The submit screen then computes `count = routes.filter(r => r.grade === selectedGrade && r.color_tag === selectedColor).length` reactively as chips change — no network call per chip tap, correct for every selection, and consistent with the existing house pattern of "fetch the set once, test membership client-side" already used for `fetchSavedRouteIds` (route-service.ts lines 308-318). A gym's active-route count is small (tens, not thousands) in Phase 1, so shipping the set to the client is cheap.
+  - **Option B: a lightweight count call per chip change** — `supabase.from('routes').select('id', { count: 'exact', head: true }).eq('gym_id',…).eq('grade',…).eq('color_tag',…).eq('status','active')`. This is a `HEAD` request returning only the count, backed by the new `routes_active_grade_color_idx` index. Correct and cheap, but it adds a round-trip on every chip change and is strictly more work than Option A for no benefit at Phase 1 gym sizes.
+
+  **Recommend Option A.** It matches the existing "fetch-once, derive-client-side" convention, needs no new RPC and no new service function signature beyond reusing `listRoutes(gymId, {grade:null, colorTag:null})`, and makes the "update as selection changes" requirement trivial (pure client-side filter). The new non-unique index still earns its place because the ordinary `listRoutes` grade+color-filtered fetch (the one RouteListScreen runs constantly) benefits from it.
+
+- **RLS is a non-issue for the count.** `routes_select_v2` already lets every authenticated user read all `active` routes. The count sees exactly the `active` rows AC-187 specifies (it must count `active` only — pending/retired/rejected are excluded, which the `status = 'active'` predicate and RLS both enforce). No SECURITY DEFINER needed; a plain client read is correct and already permitted.
+- **Latency**: Option A = the gym's active-route fetch already happening on the RouteListScreen path; the submit screen can be handed that array via navigation params, or re-fetch once on mount (one query). Either way it is one query, not N. The warning recompute on chip change is pure in-memory filtering — sub-millisecond.
+- **Race condition**: AC-187 already accepts that two concurrent submitters of the same grade+color both succeed (advisory-only check, duplicates allowed). Nothing to enforce server-side. Correct.
+
+**Exact client change for the engineer** (in `RouteSubmitScreen` + `route-service.ts`):
+- Hand the submit screen the gym's active routes (preferred: pass `routes: RouteSummary[]` as a prop from RouteListScreen, which already has them from its unfiltered-or-filtered fetch; or fetch once on mount via `listRoutes(gymId, { grade: null, colorTag: null })`).
+- Compute the match count reactively: `const dupCount = routes.filter(r => r.grade === selectedGrade && r.color_tag === selectedColor).length;` — guard on both chips being selected.
+- Render the AC-187 inline notice near the Add Route button when `dupCount >= 1`, interpolating `{grade}` and `{Color}` into the `routes.duplicateWarning.title` / body i18n keys. The notice must **never** gate the button (the existing `disabled` logic stays `!photoUri || isSubmitting` — do not add the dup count to it).
+
+**No new RPC. No new migration beyond Item 1's index.** `findMatchingActiveRoutes` (route-service.ts lines 53-73) is now fully unused dead code — the engineer may delete it (and its unit test) as part of this change, or repurpose its query body if they prefer Option B. Recommend deletion; it belonged to the removed match-before-create flow.
+
+---
+
+**AMBIGUITY flagged for human / PM — none blocking, one worth a decision:**
+- **`findMatchingActiveRoutes` disposition.** It is dead code after Rev 37 (no screen calls it). Deleting it is the clean choice, but it is a visible service-surface removal. **Decision needed**: delete it (recommended) vs. keep it dormant. This is a code-hygiene call, not an architecture risk — flagging so the engineer doesn't leave it ambiguous. Not a PRD change either way (it was never an AC-named function).
+
+No other ambiguities. All three items are decided above with exact SQL/code for the engineer.
+
+**Proposed Shared Conventions (for Doc-Sync to carry into production.md, replacing the stale match_key material):**
+- **Route identity + duplicate soft-warning (Rev 37).** A route is identified by `id` only. There is NO uniqueness constraint or unique index on `(gym_id, grade, color_tag)` — duplicates are allowed by design. The former `routes_active_unique_idx` and `routes_pending_unique_per_submitter` are dropped; a non-unique partial index `routes_active_grade_color_idx` on `(gym_id, grade, color_tag) WHERE status='active'` backs read queries. `submit_route` performs no uniqueness pre-check and cannot raise `23505`. Data quality is maintained by the AC-187 **client-side advisory** soft warning (count of same-grade/same-color `active` routes derived from already-fetched route-list data, never a server gate) plus admin merge in Supabase Studio. The `### match_key Implementation` section in production.md must be deleted — `match_key` was never implemented.
 
 ### Review — 2026-10-13 — change (Rev 35 follow-up: batched-RPC conversion for like/save/follow status; caching strategy per query type; confirm Decision 1 AC-180 visibility scope)
 
