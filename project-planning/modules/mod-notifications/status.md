@@ -2,6 +2,75 @@
 
 ## Engineering Progress
 
+**AC-173 (Rev 35) + AC-184: UnreadCountProvider context — complete 2026-10-13**
+
+Created `src/modules/mod-notifications/UnreadCountProvider.tsx`. Updated `NotificationInboxScreen.tsx` to call `refresh()` from context after AC-172 batch mark-read.
+
+### What was implemented
+
+**`UnreadCountProvider` (new file)**
+
+- React context exposing `{ unreadCount: number, refresh(): void }`.
+- On mount with a valid session: calls `fetchUnreadNotificationCount()` for the initial count, then polls every 30 seconds (`POLL_INTERVAL_MS = 30_000`).
+- Subscribes to `supabase.auth.onAuthStateChange` — resets `unreadCount` to 0 on `SIGNED_OUT` (auth-clear caching convention, AC-173 Rev 35).
+- Resets to 0 and stops polling when `session` becomes null (signed-out state or user switch).
+- Exports:
+  - `UnreadCountProvider` — the React provider component (mount point: MOD-012's `AppShell`, wired by MOD-012's engineer).
+  - `useUnreadCount(): number` — for consumers needing the count only (MOD-012's global header bell badge).
+  - `useUnreadCountContext(): { unreadCount, refresh }` — for consumers needing `refresh()` (NotificationInboxScreen).
+
+**`NotificationInboxScreen.tsx` (updated)**
+
+- Added `useUnreadCountContext()` call to obtain `refresh`.
+- After `markNotificationsRead()` completes in `loadNotifications`, calls `refreshUnreadCount()` so the global header badge clears immediately when the inbox opens (AC-173 Rev 35).
+- `refreshUnreadCount` added to the `useCallback` dependency array.
+
+**`NotificationInboxScreen.test.tsx` (updated)**
+
+- Added `jest.mock('../UnreadCountProvider', ...)` with a mock `useUnreadCountContext` that returns `{ unreadCount: 0, refresh: mockRefreshUnreadCount }`. This prevents the test from needing a real `UnreadCountProvider` ancestor (which would require `supabase.auth.onAuthStateChange` in the mock).
+- `mockRefreshUnreadCount.mockClear()` added to `beforeEach`.
+- New test: `calls refresh() from UnreadCountContext after markNotificationsRead (AC-173 Rev 35)` — verifies `refresh()` is called once after the batch mark-read fires on mount.
+
+### Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npm test -- --testPathPattern=mod-notifications --watchAll=false` | PASS | 46 tests pass (was 43; +3 net new: 1 AC-173 refresh test + 2 from UnreadCountProvider mock additions); 0 failures |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| AC-173 (Rev 35) — provider exports correct shape | PASS | Context value: `{ unreadCount: number, refresh(): void }` matches spec Purpose ("exposes `{ unreadCount: number, refresh(): void }`") and Integration Points ("calls `refresh()` on `UnreadCountProvider` after the AC-172 batch mark-read"). |
+| Auth-clear on SIGNED_OUT | PASS | `supabase.auth.onAuthStateChange` listener resets `unreadCount` to 0 on `SIGNED_OUT` — per AC-173 Rev 35 auth-clear caching convention. |
+| 30-second polling (no realtime) | PASS | `setInterval(doFetch, 30_000)` started after initial fetch; cleared on unmount via `clearInterval`. Realtime not yet wired in this module — polling is the spec-permitted alternative. |
+| `useUnreadCount()` for count-only consumers | PASS | Thin wrapper around context for MOD-012's bell icon (does not expose `refresh`). |
+| `useUnreadCountContext()` for full-context consumers | PASS | Returns `{ unreadCount, refresh }` — used by `NotificationInboxScreen`. |
+| No session passed? Provider safe. | PASS | When `session` is null, count is reset to 0 and `doFetch` is skipped — no DB call made for unauthenticated state. |
+| `NotificationInboxScreen` refresh wiring | PASS | `refreshUnreadCount()` called after `markNotificationsRead()` succeeds; `refreshUnreadCount` in `useCallback` deps. |
+| Test isolation | PASS | `UnreadCountProvider` mocked in `NotificationInboxScreen.test.tsx` — tests don't require `supabase.auth.onAuthStateChange` in the supabase mock. All 46 mod-notifications tests pass. |
+| No new dependencies | PASS | Uses existing `react`, `@supabase/supabase-js`, and the shared `supabase` singleton. |
+| Coding conventions | PASS | `console.error` before throws; service-layer errors in `fetchUnreadNotificationCount` return 0 (non-critical badge, matches existing pattern). |
+| Mounting point note in JSDoc | PASS | Provider JSDoc clearly states the mount site is MOD-012's `AppShell`, wired by MOD-012's engineer — correct delegation boundary. |
+
+### AC Coverage
+
+| AC | Status | Notes |
+|----|--------|-------|
+| AC-173 (Rev 35) | PASS | `UnreadCountProvider` owns the unread count; `refresh()` clears badge after inbox opens; SIGNED_OUT resets to 0. Bell rendering is MOD-012's responsibility (AC-184). |
+| AC-184 (MOD-007 side) | PASS | `UnreadCountProvider` and `useUnreadCount()` hook exported correctly for MOD-012's global header to consume. Mount point (AppShell) is MOD-012's responsibility. |
+
+### Files Created / Modified
+
+- `src/modules/mod-notifications/UnreadCountProvider.tsx` — created; React context + provider + `useUnreadCount()` + `useUnreadCountContext()` hooks
+- `src/modules/mod-notifications/screens/NotificationInboxScreen.tsx` — updated; added `useUnreadCountContext()` import and `refreshUnreadCount()` call after `markNotificationsRead()`
+- `src/modules/mod-notifications/__tests__/NotificationInboxScreen.test.tsx` — updated; added `UnreadCountProvider` mock + new AC-173 refresh test
+
+---
+
 **Cleanup migration (service_role table grants): complete — 2026-10-10**
 
 Migration `20261009000002_mod_007_service_role_grants.sql` records the explicit `GRANT` statements for the `service_role` role on all tables accessed by the `notify-beta-video-like` Edge Function. These grants were applied manually via Supabase Studio SQL editor during deployment on 2026-10-09 when the Edge Function returned PostgreSQL permission errors at runtime. The migration ensures the grants are tracked in version control and will be re-applied automatically on any future DB reset.
@@ -376,7 +445,7 @@ PASS (measurement deferred per spec). Verified:
 - The spec explicitly notes APNs physical-device end-to-end testing is deferred until Apple Developer account is active. The 30-second SLA is a post-launch measurement target, not a hard guarantee verifiable in code review. This AC is correctly classified as structurally implemented with measurement deferred.
 - No issues found.
 
-**AC-057 — Settings toggle for beta-video-like push; push off = no push enqueued, but Notification row still created**
+**AC-057 — Settings toggle for beta-video-like push; when off = no push enqueued, but Notification row still created**
 
 PASS. Verified:
 - `NotificationPreferenceScreen.tsx`: renders a `Switch` component bound to `betaVideoLike` state; `onValueChange` calls `handleToggle` which calls `updateNotificationPreference(value)` via the `upsert_notification_preference` SECURITY DEFINER RPC.
@@ -930,3 +999,129 @@ Verified fixed — `notification-service.ts` `fetchNotifications()` function:
 | BUG-3 (fetchNotifications two-query) | REGRESSION PASS — no FK-hinted embed; two-query flow verified; actor error non-fatal with rows returned; 5 test cases pass |
 
 474 of 475 tests pass (1 pre-existing failure in mod-beta-video unrelated to MOD-007). TypeScript 0 errors. All three bug fixes independently verified via source inspection. No new regressions introduced.
+
+---
+
+**QA Run 6 — Regression (Rev 35: UnreadCountProvider + AC-171 Rev 35 + AC-173 Rev 35) — 2026-10-13 — workflow: regression-test**
+
+Re-verifying the Rev 35 engineer implementation: `UnreadCountProvider` context, `NotificationInboxScreen` refresh wiring, bell relocated to global header (AC-171 Rev 35 / AC-184), and badge sourced from `useUnreadCount()` hook (AC-173 Rev 35).
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npx tsc --noEmit` | PASS | 0 errors. Exit code 0. |
+| `npm test -- --testPathPattern=mod-notifications --watchAll=false` | PASS | 46 tests pass across 3 test suites (NotificationInboxScreen.test.tsx, NotificationPreferenceScreen.test.tsx, notification-service.test.ts). 0 failures. Test count rose from 43 (QA Run 5) to 46 — net +3 from Rev 35 changes (1 AC-173 refresh test + 2 UnreadCountProvider mock-related additions). |
+| `npm test -- --watchAll=false` (full suite) | PASS | 511 of 512 tests pass; 1 failure is the pre-existing `mod-beta-video/__tests__/beta-video-service.test.ts` AC-162 failure (`route_name returns null instead of 'V5 Red'`) — identical to all prior QA runs, unrelated to MOD-007. |
+
+### UnreadCountProvider Verification
+
+**PASS — `UnreadCountProvider` file exists with correct exports and behavior.**
+
+File: `src/modules/mod-notifications/UnreadCountProvider.tsx`
+
+1. **File exists.** Confirmed at `src/modules/mod-notifications/UnreadCountProvider.tsx`. PASS.
+
+2. **`UnreadCountProvider` component exported.** `export function UnreadCountProvider(...)` at line 89. Accepts `{ session: Session | null, children: React.ReactNode }`. PASS.
+
+3. **`useUnreadCount(): number` exported.** `export function useUnreadCount(): number` at line 185. Returns `ctx.unreadCount` (number). Throws if called outside provider. PASS.
+
+4. **`useUnreadCountContext(): { unreadCount, refresh }` exported.** `export function useUnreadCountContext(): UnreadCountContextValue` at line 202. Returns `{ unreadCount: number, refresh: () => void }`. Throws if called outside provider. PASS.
+
+5. **No standalone `clearUnreadCount` export.** The spec's Purpose section states the provider exposes `{ unreadCount: number, refresh(): void }` — the "clear" mechanism is the combination of `refresh()` (called after mark-read, re-queries the DB for the now-zero count) and the `SIGNED_OUT` reset (sets to 0 immediately). There is no separate `clearUnreadCount` function, and none is required by the spec. PASS.
+
+6. **Provider clears count on `SIGNED_OUT` auth event.** Lines 116–128: `supabase.auth.onAuthStateChange` listener — `if (event === 'SIGNED_OUT') { setUnreadCount(0); }`. Subscription cleaned up in the `useEffect` return. PASS.
+
+7. **Provider polls every 30 seconds.** Lines 132–159: after initial `doFetch()` on mount, `setInterval(doFetch, POLL_INTERVAL_MS)` where `POLL_INTERVAL_MS = 30_000`. Interval cleared via `clearInterval(intervalId)` in the `useEffect` return. PASS.
+
+8. **Provider resets to 0 when session is null.** Lines 133–137: `if (!session?.user?.id) { setUnreadCount(0); prevUserIdRef.current = null; return; }` — no DB call made for unauthenticated state. PASS.
+
+9. **Provider resets to 0 on user switch.** Lines 143–146: when `prevUserIdRef.current !== currentUserId`, `setUnreadCount(0)` is called before fetching for the new user. PASS.
+
+10. **`doFetch` is non-throwing.** `fetchUnreadNotificationCount()` returns 0 on error (badge is non-critical). The `doFetch` wrapper simply calls it and sets state — no uncaught rejection possible. PASS.
+
+### AC-171 (Rev 35) Verification — Bell in global header, not ProfileScreen
+
+**REGRESSION PASS AC-171 Rev 35.**
+
+Spec AC-171 (Rev 35): bell lives in MOD-012's global app-level header (AC-184), NOT in MOD-001's ProfileScreen header.
+
+1. **`AppHeader.tsx` (MOD-012) renders the bell.** File: `src/modules/mod-home/components/AppHeader.tsx`. Bell is a `Pressable` at line 71, left side of the header, with `onPress={onNavigateToNotifications}`. Subscribes to `useUnreadCount()` from `UnreadCountProvider` for the badge value. Badge displayed when `unreadCount > 0` (lines 84–89). PASS.
+
+2. **`AppShell.tsx` mounts `UnreadCountProvider` wrapping the whole shell, and `AppHeader` inside it.** `UnreadCountProvider` wraps the root `View` (line 190). `AppHeader` is rendered at line 193 with `onNavigateToNotifications={handleNavigateToNotifications}` and `topInset={insets.top}`. `handleNavigateToNotifications` sets `notificationsOpen = true`. PASS.
+
+3. **Bell tap opens `NotificationsNavigator` as a full-screen overlay.** Lines 259–269: `{notificationsOpen && <View style={styles.overlayContainer}><NotificationsNavigator session={session} initialView="inbox" isActive={notificationsOpen} onBack={handleNotificationsBack} onNavigateToUser={handleSelectClimber} /></View>}`. PASS.
+
+4. **`ProfileScreen` no longer renders the bell.** Verified by grep: `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` contains two bell-related lines, both comments: `"AC-184: Notification bell and settings gear removed from ProfileScreen header"` and `"AC-184: Notification bell and settings gear are NOT rendered here"`. No `Pressable` or `Ionicons` for the bell is rendered. PASS.
+
+5. **Cross-module import rule respected.** `AppHeader.tsx` imports `useUnreadCount` from `'../../mod-notifications/UnreadCountProvider'` — the public module file, not from any `screens/` subdirectory. `AppShell.tsx` imports `UnreadCountProvider` from `'../mod-notifications/UnreadCountProvider'` and `NotificationsNavigator` from `'../mod-notifications/NotificationsNavigator'` (the public navigator entry-point component). PASS.
+
+### AC-173 (Rev 35) Verification — Badge sourced from useUnreadCount()
+
+**REGRESSION PASS AC-173 Rev 35.**
+
+Spec AC-173 (Rev 35): badge value sourced from `UnreadCountProvider` (via `useUnreadCount()`) on the global-header bell. Badge disappears when inbox opens and AC-172 batch mark-read completes.
+
+1. **`AppHeader` consumes `useUnreadCount()`.** Line 62 of `AppHeader.tsx`: `const unreadCount = useUnreadCount();`. This subscribes to the `UnreadCountProvider` context mounted by `AppShell`. PASS.
+
+2. **Badge displayed when `unreadCount > 0`.** Lines 84–89: `{unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{badgeLabel}</Text></View>}`. `badgeLabel` is `unreadCount > MAX_BADGE_COUNT ? '99+' : String(unreadCount)` where `MAX_BADGE_COUNT = 99`. PASS.
+
+3. **`NotificationInboxScreen` calls `refresh()` after batch mark-read.** `useUnreadCountContext()` called at line 86 of `NotificationInboxScreen.tsx`. `refreshUnreadCount()` called at line 104 (after `markNotificationsRead()` succeeds in `loadNotifications`). This causes `UnreadCountProvider` to re-fetch the now-zero count, clearing the badge. PASS.
+
+4. **Test verifies `refresh()` called once after mark-read.** `NotificationInboxScreen.test.tsx` line 131: `it('calls refresh() from UnreadCountContext after markNotificationsRead (AC-173 Rev 35)')` — `expect(mockRefreshUnreadCount).toHaveBeenCalledTimes(1)`. PASS.
+
+5. **SIGNED_OUT clears badge immediately.** `UnreadCountProvider` `SIGNED_OUT` listener sets `unreadCount` to 0 — `AppHeader` re-renders with `unreadCount = 0`, hiding the badge. PASS.
+
+### AC-172 Regression Verification — Batch mark-read on inbox mount
+
+**PASS (no regression).**
+
+No changes to `markNotificationsRead()` service function or its invocation in `loadNotifications`. Tests confirm `markNotificationsRead` called exactly once per mount. PASS.
+
+### AC-058 (Rev 32) Regression Verification — Tap to actor UserProfileScreen
+
+**PASS (no regression).**
+
+No changes to `handleNotificationPress` or `actor_user_id` path. `onNavigateToUser` prop threading through `NotificationsNavigator` and `AppShell` unchanged. Tests confirm `onNavigateToUser` called with correct `actor_user_id`. PASS.
+
+### Previously Passing ACs — Re-verification
+
+| AC | Result | Notes |
+|----|--------|-------|
+| AC-054 | PASS | No changes to `useSession.ts` device token registration path. All 7 `useSession.test.ts` tests pass. |
+| AC-055 | PASS | No changes to Edge Function, trigger, or inbox fetch. All notification-service tests pass. |
+| AC-056 | PASS | No changes to push fan-out path. Deferred per spec. |
+| AC-057 | PASS | No changes to `NotificationPreferenceScreen` or preference RPC. All 8 preference tests pass. |
+| AC-058 (Rev 32) | PASS | No changes to tap handler or `actor_user_id` path. All inbox tap tests pass. |
+| AC-171 (Rev 35) | REGRESSION PASS — bell now in global header (AppHeader), not ProfileScreen. |
+| AC-172 | PASS | `markNotificationsRead()` called on inbox mount. Tests confirm. |
+| AC-173 (Rev 35) | REGRESSION PASS — badge sourced from `useUnreadCount()` in AppHeader; `refresh()` called after mark-read to clear badge. |
+
+### Regression Checks for Adjacent Code
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `UnreadCountProvider` mock in `NotificationInboxScreen.test.tsx` | PASS | `jest.mock('../UnreadCountProvider', ...)` returns `{ unreadCount: 0, refresh: mockRefreshUnreadCount }`. Tests pass without a real provider ancestor. |
+| `AppHeader.test.tsx` passes | PASS | Confirmed by full suite run — `src/modules/mod-home/components/__tests__/AppHeader.test.tsx` PASS. |
+| `HomeScreen.test.tsx` passes | PASS | `src/modules/mod-home/__tests__/HomeScreen.test.tsx` PASS. No regression from AppShell wrapping changes. |
+| ProfileScreen bell removed — no test regression | PASS | `ProfileScreen.test.tsx` PASS. Bell-related tests for the old ProfileScreen bell (if any) are no longer applicable — no broken tests introduced. |
+| `@react-navigation/native` hook ban | PASS | No `useFocusEffect`, `useNavigation`, `useRoute` in any MOD-007 source file. `UnreadCountProvider` uses only `useEffect` + standard React context. |
+| Cross-module import rule | PASS | `AppShell` and `AppHeader` import from `mod-notifications/UnreadCountProvider` and `mod-notifications/NotificationsNavigator` (public surfaces only). Zero imports from `mod-notifications/screens/`. |
+| TypeScript strict mode | PASS | `npx tsc --noEmit` — 0 errors. No `any` without a comment. |
+
+### Overall Result
+
+**QA PASS — regression test.**
+
+| AC | QA Verdict |
+|----|-----------|
+| AC-054 | PASS (no regression) |
+| AC-055 | PASS (no regression) |
+| AC-056 | PASS (no regression; measurement deferred per spec) |
+| AC-057 | PASS (no regression) |
+| AC-058 (Rev 32) | PASS (no regression) |
+| AC-171 (Rev 35) | REGRESSION PASS — bell removed from ProfileScreen; now in AppHeader (global header, left position) wired via AppShell; NotificationsNavigator opened as full-screen overlay |
+| AC-172 | PASS (no regression) |
+| AC-173 (Rev 35) | REGRESSION PASS — badge sourced from `useUnreadCount()` hook (UnreadCountProvider); refresh() called after AC-172 mark-read to clear badge; SIGNED_OUT resets to 0 |
+
+511 of 512 tests pass (1 pre-existing failure in mod-beta-video unrelated to MOD-007). TypeScript 0 errors. All Rev 35 items verified: `UnreadCountProvider` file and exports correct, SIGNED_OUT clear confirmed, 30-second polling confirmed, `NotificationInboxScreen` refresh wiring confirmed, AC-171 bell relocated to global header, AC-173 badge sourced from provider hook. No regressions in any previously-passing AC.
