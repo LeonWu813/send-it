@@ -4,14 +4,14 @@
 **Module Name**: Route Catalog
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002
-**Last Synced from PRD Revision**: 14
-**Last Updated**: 2026-09-28
+**Last Synced from PRD Revision**: 36
+**Last Updated**: 2026-10-13
 
 ---
 
 ## Purpose
 
-Own the route submission (filter-first, single-page, direct-submit) flow, the 4-value status lifecycle (`active | pending | retired | rejected`), submitter-only pending visibility and withdrawal, admin-only approve/reject/retire via Supabase Studio (Phase 1), the forward-compatible admin identity design for Phase 1.5 in-app admin, the composed route display name (grade + color + optional section label), and the saved-route bookmark interaction (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list).
+Own the route submission (filter-first, single-page, direct-submit) flow, the 4-value status lifecycle (`active | pending | retired | rejected`), submitter-only pending visibility and withdrawal, admin-only approve/reject/retire via Supabase Studio (Phase 1), the forward-compatible admin identity design for Phase 1.5 in-app admin, the composed route display name (grade + color + optional section label), the saved-route bookmark interaction (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list), the per-user route-visit tracking upsert on route detail open (`user_route_visits`, AC-179), and the "new beta video" tag logic and rendering on route cards in the gym route list (AC-180/AC-181).
 
 ---
 
@@ -39,7 +39,7 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 - In-app admin UI for route status management (approve / reject / retire) is out of scope for Phase 1 (planned for Phase 1.5); Supabase Studio is the admin surface for Phase 1.
 - Global (cross-user) one-pending-per-combo prevention is out of scope — only per-submitter enforcement is required.
 - A user-editable free-text route name is out of scope for Phase 1 — the display name is composed automatically from grade and hold color (with optional section label), not entered by the submitter.
-- A dedicated saved-routes surface on the Profile or Home tab is out of scope for Phase 1 — saved routes are surfaced only in the browse flow (bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list).
+- A dedicated saved-routes list screen on the Profile tab is out of scope for Phase 1 — saved routes are surfaced in the browse flow (bookmark toggle on the route detail screen and read-only saved indicator on the gym route list) and in the Home screen Projecting Routes section (MOD-012, AC-177/AC-178), but not as a standalone saved-routes list view on the Profile tab.
 
 ---
 
@@ -89,7 +89,7 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 
 **AC-046** (new): RouteDetailScreen shall display a bookmark icon toggling saved (filled) / unsaved (outline), reflecting whether the route is in the current user's `saved_routes` list. When tapped, the bookmark shall add or remove the route from the user's `saved_routes` list and update the toggle state immediately (optimistic update). RouteDetailScreen is the only save/unsave action point for routes.
 
-**AC-047** (new): RouteListScreen shall display a read-only filled bookmark indicator on saved-route cards only; no indicator is shown for unsaved routes. The list indicator is read-only — tapping it performs no save/unsave action (tapping the route entry navigates to its detail screen per AC-042). No saved-routes list surface is provided on the Profile or Home tab in Phase 1.
+**AC-047** (revised): RouteListScreen shall display a read-only filled bookmark indicator on saved-route cards only; no indicator is shown for unsaved routes. The list indicator is read-only — tapping it performs no save/unsave action (tapping the route entry navigates to its detail screen per AC-042).
 
 **AC-125** (new): The route detail screen shall display the gym's name as a subtitle directly beneath the route display-name title. The route detail screen shall not render a separate "岩館" (gym) section label or header; the gym name appears only as the subtitle.
 
@@ -102,6 +102,13 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 **AC-129** (new): The Send History Detail screen shall list all of the logged-in user's individual ascent records for the route (each showing at minimum style and attempts count), and shall provide a back control that returns the user to the route detail screen. Records are sourced from MOD-004's public service.
 
 **AC-130** (new): The route detail screen shall present two action controls positioned below the send-summary section: a "Record Send History" control that launches the log-send flow (AC-010), and an "Upload Beta Video" control that launches the beta-video upload flow (AC-037). These replace any prior placement of the log-send and add-beta-video entry points on the screen.
+
+
+**AC-179** (new, Rev 35): When the current user opens a route's detail screen (RouteDetailScreen), the system shall upsert a row into a `user_route_visits` table keyed on `(user_id, route_id)`, setting `last_viewed_at` to the current time. This per-user route-visit record backs the most-recently-viewed ordering (AC-175, via the route's gym) and the "new beta video" tag logic (AC-180). **This introduces a new `user_route_visits` table and requires Tech Lead architecture review** (table placement/ownership, composite-key upsert pattern, read/write-own-rows-only RLS, grants, and the cross-module query that reads it) before Doc-Sync/Engineering implements it.
+
+**AC-180** (new, Rev 35): The system shall determine whether a route has a "new beta video" for the current user by comparing the route's beta videos' `created_at` against the current user's `user_route_visits.last_viewed_at` for that route (AC-179): a route qualifies for the tag when at least one of its visible beta videos has `created_at` greater than the user's `last_viewed_at`, OR when the user has no `user_route_visits` row for that route at all (never visited). The set of "visible beta videos" respects the existing beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154, and beta-video privacy AC-158). **This logic reads `user_route_visits` (AC-179) and performs a cross-module query against beta videos (MOD-005); it requires Tech Lead architecture review** to assign the owning module for the tag computation and to specify the query shape, consistent with the AC-179 table review. **Clarifying note (Rev 36, visibility-filter scope — Option B)**: the "visible beta videos" set used by this tag computation is scoped per the current viewing user: a beta video counts toward the "new beta video" tag only when it would be visible to that specific user under the full beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154 evaluated for this viewer, and beta-video privacy AC-158 evaluated for this viewer-vs-poster follower relationship). A route therefore does not qualify for the tag on the strength of a beta video the current user cannot see. This is a scope clarification only — it does not change AC-180's qualification logic (newer `created_at` than `last_viewed_at`, or no visit row) beyond fixing which videos are in scope for the comparison, and it remains subject to the same Tech Lead architecture review as the rest of AC-180.
+
+**AC-181** (new, Rev 35): The system shall render a "new beta video" tag on route cards that qualify per AC-180. The tag shall appear on the shared route card (AC-183) wherever that card surfaces a route — specifically the Home screen's Projecting Routes section (AC-177) and the gym route list (RouteListScreen, MOD-003). When a route does not qualify (AC-180), no tag is rendered.
 
 ---
 
@@ -177,6 +184,21 @@ app_settings
    -- Seeds: route_auto_approve = 'true' (auto-approve ON at Phase 1 launch).
    -- Read only inside SECURITY DEFINER functions.
 ```
+
+UserRouteVisits  (per-user route-visit tracking — NEW, requires Tech Lead review)
+ - user_id (FK User, ON DELETE CASCADE), route_id (FK Route, ON DELETE CASCADE),
+   last_viewed_at (timestamptz)
+ - PK: (user_id, route_id)
+   -- Upserted on route detail open (AC-179): on open, set last_viewed_at = now()
+   --   for (current user, route). Backs the Home "new beta video" tag (AC-180:
+   --   a route qualifies when a visible beta video's created_at > last_viewed_at,
+   --   or when no visit row exists for that (user, route)) and the most-recently-
+   --   viewed Saved Gyms ordering (AC-175, via the route's gym).
+   -- NEW table — requires a migration AND Tech Lead architecture review
+   --   (table placement/ownership, composite-key upsert, own-rows-only RLS,
+   --   grants, and the cross-module read against beta videos for AC-180).
+   -- RLS: own-rows-only — an authenticated user may read and write only rows
+   --   where user_id = auth.uid().
 
 All tables guarded by Supabase Row-Level Security policies.
 

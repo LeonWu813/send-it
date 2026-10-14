@@ -4,13 +4,13 @@
 **Module Name**: Profile History & Stats
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-004
-**Last Synced from PRD Revision**: 5
+**Last Synced from PRD Revision**: 36
 
 ---
 
 ## Purpose
 
-Render the current user's (and other users', per privacy) send history with gym/grade/date filters and basic stats (sends by grade bar chart, total sends, current streak, highest grade).
+Render the current user's (and other users', per privacy) send history with gym/grade/date filters and basic stats (sends by grade bar chart, total sends, current streak, highest grade). The profile send-history section renders route entries using the shared route card component (AC-183, owned by MOD-012 at `src/components/RouteCard.tsx`) imported via the app-level path.
 
 ---
 
@@ -44,13 +44,16 @@ Climbers tracking progress want to see their full send history and basic stats w
 
 **AC-064** (new — code gap, future module): The system shall navigate a user from another user's entry in the activity feed (or any surfaced user reference, e.g. a beta video author or follower) to that user's profile and send history, subject to the target's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state rather than the send history.
 
+
+**AC-065** (new): The system shall display an achievement icon for each logged send in the send history, mapped from the send's ascent style: `flash` → a flash (⚡) achievement icon, `top` → a send/top-out achievement icon, and `attempt` → a project/tried achievement icon (🎯). The icon set covers exactly the three ascent styles (there is no `project` style; the former `project` achievement maps to the `attempt` style per AC-014).
+
 > **Boundary note on AC-064**: The source affordance (tappable user reference in the activity feed or elsewhere) is owned by MOD-006 (Social Graph & Feed); the destination screen (profile + send history) is owned by MOD-008. MOD-008's engineer owns the destination screen and the privacy gate. The privacy enforcement (AC-063 `followers_only` → hidden/403) must run server-side (RLS/RPC), consistent with the MOD-006 feed-RPC convention in the PRD — not client-side hiding only.
 
 ---
 
 ## Integration Points
 
-none
+**AC-183 — Shared RouteCard component (MOD-012 → MOD-008)**: The profile send-history section uses the shared route card component at `src/components/RouteCard.tsx` (owned by MOD-012). MOD-008 imports it via the app-level path `src/components/RouteCard` per the App-Level Shared Presentational Components convention in `production.md`. MOD-012 must ship `RouteCard` before MOD-008 QA handoff for the send-history section.
 
 ---
 
@@ -59,13 +62,16 @@ none
 ```
 Ascent (a "log")
  - id, user_id (FK User), route_id (FK Route),
-   style (flash | top | attempt | project), attempts,
+   style (ascent_style enum: flash | top | attempt), attempts,
    note, logged_at, is_private
    -- grade is NOT stored per-log; always read from route.grade at display time
+   -- is_private is ALWAYS true in Phase 1 (AC-132); not user-controllable.
+   -- The 'project' style is REMOVED — not in the enum and not selectable.
 
 User
- - id, display_name, avatar_url, home_gym_id, bio,
-   privacy_setting (public | followers_only), created_at
+ - id, display_name, avatar_url,
+   bio, privacy_setting (public | followers_only),
+   beta_video_privacy (public | followers_only, default public), created_at
 
 Route
  - id, gym_id (FK Gym), grade (V-scale enum), color_tag, ...
@@ -116,3 +122,4 @@ Route
 - Competition and league scoring (out of scope entirely).
 - Training plans and workout logging (out of scope entirely).
 - Beta video history (beta video listings on a profile are rendered per the uploader's privacy setting but the video playback component belongs to MOD-005).
+- RouteCard component implementation (owned by MOD-012 at `src/components/RouteCard.tsx`; MOD-008 consumes it as a cross-module app-level import).

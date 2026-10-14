@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 9399c65c3193569f2fcae248429761dbe20538df
-timestamp: 2026-10-14T05:12:59Z
+commit: 0929e12356aab78275deb3368272d35a02792c0b
+timestamp: 2026-10-13T00:00:00Z
 ```
 
 
@@ -2357,6 +2357,58 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Pending Human Sign-off | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-13 — Delta Sync (Revisions 35+36, [SUBSTANTIVE])
+
+**Sync type:** delta (two back-to-back [SUBSTANTIVE] PM Update entries synced together)
+**PRD Revisions:** 35 and 36
+**PM Update references:**
+- 2026-10-13 [SUBSTANTIVE] — HomeScreen/navigation/global-UI overhaul: 8-part UX change set (PRD Revision 35)
+- 2026-10-13 [SUBSTANTIVE] — Rev 35 architecture-review follow-ups applied (PRD Revision 36)
+
+**Files modified:**
+
+- `project-planning/production.md` — Last Synced from PRD Revision 33 → 36. Header updated. Module Index updated for MOD-001 (no bell/settings in ProfileScreen header), MOD-003 (user_route_visits, routes_with_new_beta, new-beta tag), MOD-007 (UnreadCountProvider context), MOD-012 (4-section home, global header, src/components/). Directory Layout: added `src/components/` with RouteCard.tsx and SwipeBackWrapper.tsx. Added six new Shared Conventions:
+  1. App-Level Shared Presentational Components (src/components/ owned by MOD-012)
+  2. Admin-Managed Content Uses a Dedicated Read-All/Write-Admin Table (not app_settings)
+  3. "Is-New" / Recency Indicators Use a Batched SECURITY INVOKER RPC
+  4. UnreadCountProvider Context (MOD-007-Owned, Consumed by MOD-012 Global Header)
+  5. Data-Access and Caching Conventions (batch-vs-single RPC rule; server-side predicate reuse; client cache auth-clear rule with per-type strategies)
+  Note: PanResponder convention was already present ("Prefer RN PanResponder for Simple Swipe Gestures") — no change needed.
+
+- `project-planning/modules/mod-home/spec.md` — **Complete rewrite** (was synced to PRD rev 8). Last Synced from PRD Revision 8 → 36. New Dependencies: MOD-001, MOD-002, MOD-003, MOD-006, MOD-007. New Purpose: 4-section home (Events Banner, Saved Gyms, Projecting Routes, Following activity), global header, shared components owned by MOD-012. New Context: admin banner (admin_banners table), most-recently-viewed gyms, Projecting Routes from saved_routes, Following activity. New Acceptance Criteria: AC-110, AC-111 (revised), AC-112 (revised), AC-113, AC-114 (revised), AC-115, AC-123 removed, AC-124 removed, AC-174, AC-175, AC-176, AC-177, AC-178, AC-181, AC-182, AC-183, AC-184, AC-185. New Integration Points: 8 entries (AppShell tabs, Saved Gyms most-recently-viewed, Projecting Routes, new-beta tag RPC, Following activity, global header + UnreadCountProvider, shared RouteCard, MOD-001 ProfileScreen bell/settings removal). Data Model: SavedGym (existing) + admin_banners (new, Tech Lead review required).
+
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced from PRD Revision 14 → 36. Purpose updated with user_route_visits and new-beta tag. AC-047 updated (removed non-goal sentence about no saved-routes on Home). Added AC-179 (user_route_visits upsert on route detail open, Tech Lead review required). Added AC-180 (routes_with_new_beta RPC, Option B visibility scope clarification from Rev 36). Added AC-181 (new-beta tag rendering on route cards, shared with MOD-012). Added UserRouteVisits to Data Model. Updated Out of Scope (saved-routes surface now exists on Home via MOD-012).
+
+- `project-planning/modules/mod-auth-profile/spec.md` — Last Synced from PRD Revision 22 → 36. Purpose updated: notification bell removed from ProfileScreen header (moved to MOD-012 global header per AC-184). Requirements: added requirement that bell+settings NOT rendered in ProfileScreen header. Out of Scope: added note that bell+settings moved to MOD-012 global header.
+
+- `project-planning/modules/mod-notifications/spec.md` — Last Synced from PRD Revision 33 → 36. Purpose updated: bell now in MOD-012 global header (AC-184), not ProfileScreen; UnreadCountProvider owned by MOD-007. AC-171 updated (revised, Rev 35): bell in global app-level header, not ProfileScreen. AC-173 updated (revised, Rev 35): badge on global header bell (supersedes Rev 32 ProfileScreen-header badge). Integration Points updated: bell entry point now MOD-012 ↔ MOD-007 (not MOD-001 ↔ MOD-007). Key Implementation Notes: badge note updated to global header; UnreadCountProvider pattern documented.
+
+- `project-planning/modules/mod-social-feed/spec.md` — Last Synced from PRD Revision 22 → 36. US-008 ACs list: added AC-186. US-020 ACs list: removed AC-123, AC-124. Added AC-186 (get_like_info_batch RPC, SECURITY INVOKER, Phase 1 deferred, Tech Lead review required).
+
+- `project-planning/modules/mod-profile-history/spec.md` — Last Synced from PRD Revision 5 → 36. Purpose: noted shared RouteCard usage (AC-183, src/components/RouteCard.tsx). Integration Points: added AC-183 RouteCard entry. Data Model: corrected stale data (removed `project` style, removed `home_gym_id`, added `beta_video_privacy`). Out of Scope: added RouteCard implementation note.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — read-only.
+- `project-planning/modules/mod-gym-directory/spec.md` — not in scope for Rev 35/36.
+- `project-planning/modules/mod-beta-video/spec.md` — not in scope for Rev 35/36 (AC-181 new-beta tag rendering is owned by MOD-012, not MOD-005; no MOD-005 AC changes in Rev 35/36).
+- `project-planning/modules/mod-moderation/spec.md` — not in scope for Rev 35/36.
+- `project-planning/modules/mod-localization-theme/spec.md` — not in scope for Rev 35/36.
+- `project-planning/modules/mod-social-feed/status.md`, all other `status.md` files — owned by Engineer/QA agents.
+- Agent wrappers — not in scope (no new module added, no dependency list change requiring wrapper regeneration; existing wrapper dependency lists remain accurate for other modules).
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none — all PRD content was explicit enough to translate directly. AC-179 (user_route_visits) and AC-186 (get_like_info_batch) are flagged as Tech Lead review required within their AC text, matching the PRD's own language.
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs confirmed by running verify-sync.sh against the baseline (before this sync's changes) via `git stash` — the failures existed before any Rev 35/36 changes. Check 4 FAIL (pre-existing script bug): the awk range `/^## Related User Stories/,/^## /` immediately exits on macOS because the opening delimiter itself matches `^## ` — only the heading line is captured, not the section body. All US-IDs ARE present in each spec's Related User Stories section; alternative awk pattern confirms this. Check 6 FAIL (pre-existing script bug): script regex over-matches non-phase-plan PRD content (§11 gym seed data "Milestone:" and "Rule:" lines) as "phase names"; Phase Plan section in status.md is correctly written with Phase 1/2/3. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
 
 ### 2026-10-13 — Trivial Passthrough ([TRIVIAL])
 

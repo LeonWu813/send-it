@@ -3,35 +3,35 @@
 **Module ID**: MOD-012
 **Module Name**: Home
 **Phase**: 1
-**Dependencies**: MOD-001, MOD-002, MOD-006
-**Last Synced from PRD Revision**: 8
+**Dependencies**: MOD-001, MOD-002, MOD-003 (saved_routes / route-visit data and route detail navigation for the Projecting Routes section, AC-177/AC-178; shared route card thumbnail source `photo_url`, AC-183), MOD-006 (followed-climbers activity for the Following section, AC-182), MOD-007 (NotificationInboxScreen + unread-count for the global-header bell, AC-184)
+**Last Synced from PRD Revision**: 36
 
 ---
 
 ## Purpose
 
-Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders three sections — a static banner strip, the user's saved gyms strip, and the climbers the user follows — and provides navigation from those sections into the gym detail and user profile surfaces.
+Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders four sections in order — (1) a single admin-managed Events Banner (AC-112/AC-174), (2) the user's Saved Gyms strip (AC-113/AC-114/AC-115), (3) the user's Projecting Routes section sourced from `saved_routes` with V-grade filter tabs (AC-177/AC-178), and (4) a Following activity section showing followed climbers' new beta-video counts (AC-182) — and provides navigation from those sections into the gym route list, route detail, and user profile surfaces. Own the global app-level header rendered on all screens except the fullscreen beta-video reel viewer (AC-133) and auth/signed-out screens — bell on the left wiring to MOD-007's inbox, settings on the right (AC-184); the shared route card component with a fixed small square `photo_url` thumbnail, consumed by the Home Projecting section, RouteListScreen, and the profile send-history section (AC-183); and the swipe left-to-right back gesture on all screens that have a back icon (AC-185). Own the `src/components/` app-level shared presentational component directory (RouteCard, SwipeBackWrapper).
 
 ---
 
 ## Context
 
-Climbers who train at multiple gyms need quick access to all their saved gyms without a single fixed home gym. Climbers connected to the local scene want a landing surface that surfaces the gyms and people most relevant to them. Send It's Home screen addresses both needs by displaying saved gyms (from the `saved_gyms` join table) and followed climbers (from MOD-006's block-filtered public service) alongside static promotional banners. The app is organized around a persistent three-tab bottom navigation shell (Home, Gyms, Profile), with the Home tab as the default landing screen after login.
+Climbers who train at multiple gyms need quick access to all their saved gyms without a single fixed home gym. Climbers connected to the local scene want a landing surface that surfaces the gyms, routes, and people most relevant to them. Send It's Home screen addresses these needs by displaying (in fixed order): an admin-managed Events Banner, saved gyms (from the `saved_gyms` join table, ordered by most-recently-viewed via `user_route_visits`, AC-175), the user's Projecting Routes (from `saved_routes`, with V-grade tabs, AC-177), and a Following activity section showing followed climbers' new beta-video counts (AC-182). The app is organized around a persistent three-tab bottom navigation shell (Home, Gyms, Profile), with the Home tab as the default landing screen after login. The former Following Climbers strip (AC-123/AC-124) is replaced by the Following activity section (AC-182). A global app-level header (bell icon left, settings icon right) is rendered on all screens except the fullscreen beta-video reel viewer and auth/signed-out screens (AC-184); the bell wires to MOD-007's NotificationInboxScreen and carries an unread-count badge sourced from MOD-007's UnreadCountProvider context.
 
 **US-019** (Save multiple gyms for quick access):
 As a climber who trains at more than one gym, I want to bookmark any gym and have all my saved gyms available from the Home screen, so that I can quickly jump to the gyms I care about without a single fixed home gym.
 
 **US-020** (See my saved gyms and followed climbers on a Home screen):
-As a climber connected to the local scene, I want a Home screen that shows announcement banners, my saved gyms, and the climbers I follow, so that I have a single landing surface that surfaces the gyms and people most relevant to me.
+As a climber connected to the local scene, I want a Home screen that shows an announcement banner, my saved gyms, my projecting routes, and the activity of the climbers I follow, so that I have a single landing surface that surfaces the gyms, routes, and people most relevant to me.
 
 **US-001** (Sign up and start using the app) applies implicitly because AC-001 (revised) specifies that on first run the app navigates the user directly to the Home tab — the Home tab is the default landing screen.
 
 **Non-goals for this module:**
-- Server-driven or dynamic banners in Phase 1 — banners are static and hardcoded in `src/lib/banners.ts`.
-- A full activity feed on the Home screen — that is MOD-006's surface.
+- A full chronological activity feed on the Home screen — that is MOD-006's surface (deferred Phase 2, AC-159).
 - The `saved_gyms` write operations (INSERT/DELETE) — owned by MOD-002.
 - The gym detail screen — owned by MOD-002.
 - The profile screen — owned by MOD-001.
+- The notification inbox screen contents — owned by MOD-007.
 - Cities other than Taipei and New Taipei (Phase 1 scope).
 - Android support (Phase 2).
 
@@ -44,16 +44,60 @@ As a climber connected to the local scene, I want a Home screen that shows annou
 
 ---
 
+## Acceptance Criteria Covered
+
+**AC-110** (new): The system shall present a persistent bottom tab bar with three icon-only tabs: Home (house icon), Gyms (climb icon), and Profile (person icon). The Home tab is the default tab after login.
+
+**AC-111** (revised, Rev 35): The Home screen shall render four sections in the following order: (1) Events Banner (AC-112), (2) Saved Gyms (AC-113), (3) Projecting Routes (AC-177), and (4) Following activity (AC-182). Any section with no content applies its own empty-state or hidden behavior as defined in its AC; the ordering of the sections that do render is fixed as listed.
+
+**AC-112** (revised, Rev 35): The Events Banner section shall display exactly one banner at a time — a single, admin-managed banner whose content is sourced per AC-174. If no active banner is defined, the section shall be hidden.
+
+**AC-113** (new): The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002).
+
+**AC-114** (revised, Rev 35): Tapping a gym in the Saved Gyms strip shall navigate the user directly to that gym's RouteListScreen (MOD-003), passing the gym context (gym ID and gym name). This supersedes the prior tab-switch-only behavior (Phase 1 originally switched to the Gyms tab without a deep link).
+
+**AC-115** (new): When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it."
+
+**AC-123** (removed, Rev 35): The former Following Climbers horizontal strip is replaced by the Following activity section (AC-182). This AC ID is retired and intentionally not reused.
+
+**AC-124** (removed, Rev 35): The former Following Climbers empty-state criterion is superseded by the Following activity section's empty-state behavior (AC-182). This AC ID is retired and intentionally not reused.
+
+**AC-174** (new, Rev 35): The Events Banner content (AC-112) shall be sourced from an admin-managed store — either the `app_settings` table or a dedicated admin banner table — with row-level security that allows read access to all authenticated users and write access to admins only. The banner content is created and edited by the admin via Supabase Studio in Phase 1; there is no in-app banner-authoring UI. **This introduces an admin-managed content source and requires Tech Lead architecture review** (table choice — `app_settings` vs. dedicated banner table — schema, read-all / write-admin-only RLS, and owning module) before Doc-Sync/Engineering implements it.
+
+**AC-175** (new, Rev 35): The Saved Gyms section (AC-113) shall order the user's saved gyms by most-recently-viewed first. Ordering is derived from the user's own view/visit activity and shall not use GPS or device location. When recency data is unavailable for a saved gym, that gym shall still appear in the strip (ordered after gyms that do have recency data).
+
+**AC-176** (new, Rev 35): Tapping a gym in the Saved Gyms strip shall navigate the user directly to that gym's RouteListScreen (MOD-003), passing the gym context (gym ID and gym name). (This is the same navigation contract as the revised AC-114; AC-176 states it as a standalone criterion for the Saved Gyms interaction.)
+
+**AC-177** (new, Rev 35): The Home screen shall render a Projecting Routes section sourced from the current user's `saved_routes` (MOD-003). The section shall provide V-grade filter tabs that filter the displayed projecting routes by grade. Each projecting route shall be shown using the shared route card (AC-183). When the user has no saved routes, the section shall display an appropriate empty state.
+
+**AC-178** (new, Rev 35): Tapping a projecting route card in the Home Projecting Routes section (AC-177) shall navigate the user to that route's detail screen (RouteDetailScreen, MOD-003), passing the route identifier.
+
+**AC-181** (new, Rev 35): The system shall render a "new beta video" tag on route cards that qualify per AC-180. The tag shall appear on the shared route card (AC-183) wherever that card surfaces a route — specifically the Home screen's Projecting Routes section (AC-177) and the gym route list (RouteListScreen, MOD-003). When a route does not qualify (AC-180), no tag is rendered.
+
+**AC-182** (new, Rev 35): The Home screen shall render a Following activity section listing the climbers the current user follows (sourced from MOD-006). Each entry is a user row showing the climber's avatar, `display_name`, a "X new beta video(s)" count, and a relative timestamp of the most recent new beta video. Tapping a row shall navigate the user to that climber's `UserProfileScreen` (MOD-006). When the current user follows no one (or no followed climber has new beta videos, per the section's defined behavior), the section shall display an appropriate empty state. This section replaces the former Following Climbers strip (AC-123/AC-124, removed).
+
+**AC-183** (new, Rev 35): The system shall provide a shared route card component that renders a route with a fixed small square thumbnail on the right sourced from the route's existing `photo_url` field (no schema change). The shared route card shall be used in the Home screen's Projecting Routes section (AC-177), the gym route list (RouteListScreen, MOD-003), and the profile send-history section (MOD-008). The card also renders the "new beta video" tag when the route qualifies (AC-181). **This is a shared cross-module component and requires Tech Lead architecture review to assign the owning module** (and the consuming modules' import contract) before Doc-Sync/Engineering implements it.
+
+**AC-184** (new, Rev 35): The system shall render a global app-level header on all screens EXCEPT the fullscreen beta-video reel viewer (AC-133) and the auth/signed-out screens. The header shall contain the notification bell on the left (wired to MOD-007's `NotificationInboxScreen` per AC-171, carrying the unread-count badge per AC-173) and a settings control on the right (navigating to MOD-010's SettingsScreen). **This is an app-level, cross-cutting UI surface and requires Tech Lead architecture review to assign the owning module** and specify where the header mounts relative to the tab shell and each navigator, before Doc-Sync/Engineering implements it.
+
+**AC-185** (new, Rev 35): The system shall support a swipe left-to-right back gesture on every screen that displays a back icon; the gesture shall perform the same navigation-pop action as tapping that screen's back control. This is a behavioral requirement only — the implementation library/approach is deferred to the Tech Lead and recorded in `production.md`. **This is a cross-cutting navigation behavior and requires Tech Lead architecture review to assign the owning module** and choose the gesture implementation approach before Doc-Sync/Engineering implements it.
+
+---
+
 ## Requirements
 
 - The app shall present a persistent bottom tab bar with three icon-only tabs: Home (house icon), Gyms (climb icon), Profile (person icon). The Home tab is the default tab after login (AC-110).
-- The Home screen shall render three sections in order: Banners, Saved Gyms, Following Climbers (AC-111).
-- The Banners section shall display up to 3 static, hardcoded banner cards in a horizontal scroll. If no banners are defined, the section shall be hidden (AC-112).
-- The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002) (AC-113).
-- Tapping a gym in the Saved Gyms strip shall navigate to the Gyms tab (Phase 1: switches to the Gyms tab; deep-link to a specific gym's detail screen is a future enhancement) (AC-114).
+- The Home screen shall render four sections in order: Events Banner, Saved Gyms, Projecting Routes, Following activity (AC-111).
+- The Events Banner section shall display exactly one admin-managed banner at a time sourced per AC-174. If no active banner is defined, the section shall be hidden (AC-112).
+- The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name, ordered by most-recently-viewed first (AC-175). A "View All" control shall navigate to the full gym list (MOD-002) (AC-113).
+- Tapping a gym in the Saved Gyms strip shall navigate the user directly to that gym's RouteListScreen (MOD-003), passing the gym context (AC-114, AC-176).
 - When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it." (AC-115).
-- The Following Climbers section shall display a horizontal scroll strip of climbers the current user follows (sourced from MOD-006 public service), each showing avatar and display name. Tapping a climber shall navigate to that climber's profile (AC-123).
-- When the current user follows no one, the Following Climbers section shall display an appropriate empty state (AC-124).
+- The Home screen shall render a Projecting Routes section from `saved_routes` (MOD-003) with V-grade filter tabs; each route uses the shared route card (AC-183) and shows the "new beta video" tag when the route qualifies (AC-181) (AC-177).
+- Tapping a projecting route card shall navigate to that route's RouteDetailScreen (MOD-003) (AC-178).
+- The Home screen shall render a Following activity section showing followed climbers' avatar, display_name, new beta-video count, and relative timestamp (sourced from MOD-006). Tapping a row navigates to that climber's UserProfileScreen (MOD-006). Appropriate empty state when no followed climbers have new beta videos (AC-182).
+- The system shall render a global app-level header on all screens except the reel viewer and auth/signed-out screens. The header contains a bell (left, wired to MOD-007 NotificationInboxScreen, with unread-count badge per AC-173) and a settings control (right, navigating to MOD-010 SettingsScreen) (AC-184).
+- The system shall support a swipe left-to-right back gesture on every screen with a back icon (AC-185).
+- The shared `RouteCard` component and `SwipeBackWrapper` component live at `src/components/` (owned by MOD-012) (AC-183, AC-185).
 
 ---
 
@@ -61,42 +105,28 @@ As a climber connected to the local scene, I want a Home screen that shows annou
 
 **Input:**
 - Authenticated session (`user_id`)
-- Saved gyms list (via `SELECT saved_gyms JOIN gyms WHERE user_id = auth.uid()` against the `saved_gyms` table created in the MOD-012 migration)
-- Follow list (via MOD-006's block-filtered public service function)
-- Static banner configuration (`src/lib/banners.ts`)
+- Saved gyms list (via `SELECT saved_gyms JOIN gyms WHERE user_id = auth.uid()`, ordered by most-recently-viewed using `user_route_visits` — owned by MOD-003)
+- Projecting routes list (via `SELECT saved_routes JOIN routes WHERE user_id = auth.uid()`, owned by MOD-003)
+- "New beta video" qualification set (via MOD-003's `routes_with_new_beta` RPC, AC-180)
+- Admin banner content (via `admin_banners` table per AC-174 — read-all SELECT, admin-only writes)
+- Follow list activity (via MOD-006's public service for the Following activity section, AC-182)
+- Unread notification count (via MOD-007's UnreadCountProvider context, AC-173/AC-184)
 
 **Output:**
-- Rendered Home screen (banners section, saved gyms strip, following climbers strip)
+- Rendered Home screen (Events Banner, Saved Gyms strip, Projecting Routes with V-grade tabs, Following activity section)
 - Rendered persistent three-tab bottom navigation bar
-- Navigation events to GymNavigator (Tab 2, MOD-002) and ProfileNavigator (Tab 3, MOD-001)
+- Rendered global app-level header (bell + unread-count badge + settings control) on all non-exempt screens
+- Navigation events to RouteListScreen (MOD-003, AC-114/AC-176), RouteDetailScreen (MOD-003, AC-178), UserProfileScreen (MOD-006, AC-182), NotificationInboxScreen (MOD-007, AC-184), SettingsScreen (MOD-010, AC-184), GymNavigator (Tab 2, MOD-002), ProfileNavigator (Tab 3, MOD-001)
 
 ---
 
 ## Dependencies
 
-- MOD-001 (ProfileNavigator entry point mounted as Tab 3)
-- MOD-002 (GymNavigator entry point mounted as Tab 2; gym detail navigation from Saved Gyms strip; `saved_gyms` table write-owner for bookmark interactions)
-- MOD-006 (block-filtered follow-list public service function for Following Climbers section)
-
----
-
-## Acceptance Criteria
-
-**AC-110** (new): The system shall present a persistent bottom tab bar with three icon-only tabs: Home (house icon), Gyms (climb icon), and Profile (person icon). The Home tab is the default tab after login.
-
-**AC-111** (new): The Home screen shall render three sections in order: Banners, Saved Gyms, and Following Climbers.
-
-**AC-112** (new): The Banners section shall display up to 3 static, hardcoded banner cards in a horizontal scroll. If no banners are defined, the section shall be hidden.
-
-**AC-113** (new): The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002).
-
-**AC-114** (new): Tapping a gym in the Saved Gyms strip shall navigate to the Gyms tab (Phase 1: switches to the Gyms tab; deep-link to a specific gym's detail screen is a future enhancement).
-
-**AC-115** (new): When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it."
-
-**AC-123** (new): The Following Climbers section shall display a horizontal scroll strip of the climbers the current user follows (sourced from MOD-006), each showing the climber's avatar and display name. Tapping a climber shall navigate to that climber's profile.
-
-**AC-124** (new): When the current user follows no one, the Following Climbers section shall display an appropriate empty state.
+- MOD-001 (ProfileNavigator entry point mounted as Tab 3; ProfileScreen no longer owns bell+settings — those moved to MOD-012 global header per AC-184)
+- MOD-002 (GymNavigator entry point mounted as Tab 2; "View All" gyms navigation)
+- MOD-003 (saved_routes data and RouteDetailScreen navigation for Projecting Routes section, AC-177/AC-178; `routes_with_new_beta` RPC for new-beta tag, AC-180/AC-181; most-recently-viewed gym ordering via `user_route_visits`, AC-175)
+- MOD-006 (followed-climbers activity data for the Following activity section, AC-182)
+- MOD-007 (NotificationInboxScreen navigation target for global-header bell, AC-184; UnreadCountProvider context for unread-count badge, AC-173)
 
 ---
 
@@ -104,11 +134,19 @@ As a climber connected to the local scene, I want a Home screen that shows annou
 
 1. **AppShell mounts MOD-002's GymNavigator (Tab 2)**: MOD-002 engineer must expose `GymNavigator` as a public entry-point component. MOD-012 engineer implements `AppShell` and imports `GymNavigator`. MOD-002 engineer must confirm the navigator entry point is exposed before MOD-012 QA handoff.
 
-2. **AppShell mounts MOD-001's ProfileNavigator (Tab 3)**: MOD-001 engineer must expose a `ProfileNavigator` entry-point component. MOD-012 engineer imports and mounts it. MOD-001 engineer must confirm the navigator entry point is exposed before MOD-012 QA handoff.
+2. **AppShell mounts MOD-001's ProfileNavigator (Tab 3)**: MOD-001 engineer must expose a `ProfileNavigator` entry-point component. MOD-012 engineer imports and mounts it. MOD-001 engineer must confirm the navigator entry point is exposed before MOD-012 QA handoff. Note: MOD-001's ProfileScreen header no longer contains the bell or settings icon — those are now on the MOD-012 global header per AC-184.
 
-3. **Saved Gyms strip reads `saved_gyms` table**: MOD-012 engineer implements the read query (`SELECT saved_gyms JOIN gyms WHERE user_id = auth.uid()`) in `mod-home/home-service.ts`. The `saved_gyms` table is created in the MOD-012 migration — MOD-012 migration must run before MOD-002 can write to it. The write operations (INSERT/DELETE) on `saved_gyms` are owned by MOD-002 (see MOD-002 spec Integration Points). This is a shared-table access split by verb; both specs document the boundary.
+3. **Saved Gyms strip reads `saved_gyms` table**: MOD-012 engineer implements the read query (`SELECT saved_gyms JOIN gyms WHERE user_id = auth.uid()`) in `mod-home/home-service.ts`. Most-recently-viewed ordering is derived from MOD-003's `user_route_visits` table (per AC-175) — MOD-012 reads this table via a join or RPC owned by MOD-003. The write operations (INSERT/DELETE) on `saved_gyms` are owned by MOD-002.
 
-4. **Following Climbers section reads follow data via MOD-006 public service**: MOD-012 must call MOD-006's public block-filtered service function to retrieve the followed-climbers list (avatar + display_name). MOD-012 must never query the `follows` table directly — that read must go through MOD-006's service to respect block-filtering composition (AC-082/AC-084). MOD-006 must be implemented before MOD-012 QA. In the interim, the Following Climbers section may stub behind the AC-124 empty state.
+4. **Projecting Routes section reads `saved_routes` via MOD-003**: MOD-012 must call MOD-003's public service to retrieve the current user's saved routes (with route data). MOD-012 must never query the `saved_routes` table directly — that read must go through MOD-003's service. MOD-003 must be implemented before MOD-012 QA.
+
+5. **New-beta tag qualification via MOD-003's `routes_with_new_beta` RPC**: MOD-012 calls MOD-003's `routes_with_new_beta(route_ids uuid[])` RPC (AC-180) once per screen load to determine which route cards display the new-beta tag (AC-181). MOD-012 must not implement this logic independently — it reads from MOD-003's RPC.
+
+6. **Following activity section reads followed-climbers activity via MOD-006 public service**: MOD-012 must call MOD-006's public service to retrieve the following-activity data (avatar + display_name + new-beta-video count + relative timestamp). MOD-012 must never query the `follows` table directly — that read must go through MOD-006's service to respect block-filtering composition (AC-082/AC-084). MOD-006 must be implemented before MOD-012 QA.
+
+7. **Global header bell wires to MOD-007's NotificationInboxScreen and UnreadCountProvider**: MOD-007 must expose `NotificationInboxScreen` as a navigable target and `UnreadCountProvider` as a React context. MOD-012 mounts `UnreadCountProvider` inside `AppShell` wrapping the global header. The global header subscribes to `unreadCount` for the badge value. `NotificationInboxScreen` calls `refresh()` on the provider after the AC-172 batch mark-read. MOD-007 must be implemented before MOD-012 QA for this integration.
+
+8. **Shared route card component (`src/components/RouteCard.tsx`) consumed by MOD-003 RouteListScreen and MOD-008 send-history section**: MOD-012 owns the file at `src/components/RouteCard.tsx`. Both MOD-003 and MOD-008 import it via the app-level path per the App-Level Shared Presentational Components convention in production.md. MOD-012 must ship `RouteCard` before MOD-003 and MOD-008 QA handoff for any surface that uses it.
 
 ---
 
@@ -119,6 +157,11 @@ SavedGym  (join table — a user's bookmarked gyms)
  - user_id (FK User, ON DELETE CASCADE), gym_id (FK Gym, ON DELETE CASCADE),
    created_at
  - PK: (user_id, gym_id)
+
+admin_banners  (admin-managed Events Banner content — NEW, requires Tech Lead review)
+ - schema TBD pending Tech Lead architecture review (AC-174)
+ - RLS: read-all authenticated SELECT; admin-only INSERT/UPDATE/DELETE (public.is_admin())
+ - Owned by MOD-012 pending Tech Lead review confirmation
 ```
 
 MOD-012 owns the `SavedGym` DDL. The table is created in the MOD-012 migration file (e.g., `20260924000001_mod_012_home.sql`). This migration must run after migrations 001 (users) and 002 (gyms) since both FKs reference them.
@@ -131,32 +174,35 @@ RLS policy set for `saved_gyms`:
 
 Grants: `GRANT SELECT, INSERT, DELETE ON public.saved_gyms TO authenticated;` (no UPDATE, no anon).
 
-The composite PK `(user_id, gym_id)` is the only index needed — the leading `user_id` column covers the `WHERE user_id = auth.uid()` filter for the Home strip query. No separate single-column `user_id` index is required.
+The composite PK `(user_id, gym_id)` is the only index needed — the leading `user_id` column covers the `WHERE user_id = auth.uid()` filter for the Home strip query.
 
 ---
 
 ## Key Implementation Notes
 
-- `AppShell` lives in `src/modules/mod-home/AppShell.tsx`. `App.tsx` imports and renders `AppShell` (replacing the current inline navigator selection in `App.tsx`). `App.tsx` remains the composition root (SafeAreaProvider → ThemeProvider → AuthNavigator → AppShell) but no longer contains navigator-selection logic.
-- Tab state: `type TabKey = 'home' | 'gyms' | 'profile'`. State lives in `AppShell` as `const [activeTab, setActiveTab] = useState<TabKey>('home')`. Default is `'home'` (AC-110).
-- Keep-alive mount: render all three tab subtrees simultaneously. Wrap each in a `View` whose style toggles `display: activeTab === key ? 'flex' : 'none'`. Do NOT use conditional unmount (loses navigation stack and scroll position). Do NOT use `flex: 0` (still lays out, can leak touch targets).
-- Bottom safe area: the `TabBar` component calls `useSafeAreaInsets()` and applies `paddingBottom: insets.bottom` plus a spacing token to its container so touch targets clear the home indicator (see production.md "Bottom Safe Area for Pinned Bottom Bars" convention).
-- Screens inside tabs whose content scrolls to the bottom must add tab-bar height plus `insets.bottom` to their `contentContainerStyle` `paddingBottom` so bottom content is not hidden behind the tab bar.
-- Banner data lives in `src/lib/banners.ts` (structure/keys/image refs only). User-facing banner strings live in the i18n locale catalogs, not inlined in `banners.ts`.
-- Cross-module import rule: `mod-home` may import only public service functions and navigator entry-point components from other modules. Never import from another module's `screens/` or `components/` subdirectories directly.
-- The `saved_gyms` migration (`20260924000001_mod_012_home.sql`) must include: table DDL, both FK constraints with ON DELETE CASCADE, the three RLS policies, RLS enabled (`ALTER TABLE public.saved_gyms ENABLE ROW LEVEL SECURITY`), and the explicit GRANT (`GRANT SELECT, INSERT, DELETE ON public.saved_gyms TO authenticated`).
-- The DROP COLUMN `home_gym_id` is a separate MOD-001-owned migration. MOD-012 migration does not need to reference it.
-- MOD-006 must ship its public block-filtered follow-list service function before MOD-012 can wire the Following Climbers section. Until MOD-006 ships, that section remains in the AC-124 empty state.
+- `AppShell` lives in `src/modules/mod-home/AppShell.tsx`. `App.tsx` imports and renders `AppShell`. Tab state: `type TabKey = 'home' | 'gyms' | 'profile'`. State lives in `AppShell` as `const [activeTab, setActiveTab] = useState<TabKey>('home')`. Default is `'home'` (AC-110).
+- Keep-alive mount: render all three tab subtrees simultaneously. Wrap each in a `View` whose style toggles `display: activeTab === key ? 'flex' : 'none'`. Do NOT use conditional unmount. Do NOT use `flex: 0`.
+- Bottom safe area: the `TabBar` component calls `useSafeAreaInsets()` and applies `paddingBottom: insets.bottom` plus a spacing token.
+- **Global app-level header (AC-184)**: The global header is mounted at the `AppShell` level, rendering above the tab-content area on all screens except the fullscreen reel viewer (AC-133) and auth/signed-out screens. It contains the notification bell on the left and a settings control on the right. The bell renders the unread-count badge sourced from `UnreadCountProvider` (MOD-007-owned context). Tapping the bell navigates to MOD-007's `NotificationInboxScreen`. Tapping the settings control navigates to MOD-010's SettingsScreen. Architecture review required before implementation to determine exact mount point relative to tab shell and individual navigators.
+- **UnreadCountProvider (AC-173/AC-184)**: Mount `UnreadCountProvider` (owned by MOD-007) inside `AppShell` wrapping the global header. Do NOT read the `Notification` table directly from MOD-012 — subscribe only to the context value exposed by MOD-007.
+- **Admin banner (AC-174)**: The Events Banner reads from the `admin_banners` table (dedicated table with read-all SELECT per the Admin-Managed Content convention in production.md). If no active banner row exists, the section is hidden. Architecture review required for table schema/RLS before implementation.
+- **Saved Gyms most-recently-viewed ordering (AC-175)**: Derive ordering from `user_route_visits` (owned by MOD-003) via a join on the route's `gym_id`. When a saved gym has no associated route visits, it still appears in the strip, ordered after gyms with recency data.
+- **Projecting Routes section (AC-177)**: Source from `saved_routes` via MOD-003's public service. Filter displayed routes by V-grade via tab selector. Each route card uses `src/components/RouteCard.tsx`. Render the new-beta tag using the boolean result from MOD-003's `routes_with_new_beta` RPC.
+- **Swipe-back gesture (AC-185)**: Implemented via RN core `PanResponder` in `src/components/SwipeBackWrapper.tsx` (per the Prefer RN PanResponder for Simple Swipe Gestures convention in production.md). Gate `onMoveShouldSetPanResponder` on a horizontal, rightward, edge-originating gesture (touch starts near the left edge, `evt.nativeEvent.pageX < ~30`) to avoid stealing horizontal-scroll gestures. Architecture review required before implementation to confirm wrap strategy and assign module ownership.
+- **Shared route card (AC-183)**: `src/components/RouteCard.tsx` renders a route with a fixed small square `photo_url` thumbnail on the right, plus the "new beta video" tag (AC-181). The component is pure/presentational — it takes data + callbacks as props. Consuming modules (MOD-003 RouteListScreen, MOD-008 send-history section) import via `src/components/RouteCard` per the App-Level Shared Presentational Components convention.
+- Cross-module import rule: `mod-home` may import only public service functions and navigator entry-point components from other modules. For shared presentational components, use the `src/components/` app-level path.
+- The `saved_gyms` migration (`20260924000001_mod_012_home.sql`) must include: table DDL, both FK constraints with ON DELETE CASCADE, the three RLS policies, RLS enabled, and the explicit GRANT.
 
 ---
 
 ## Out of Scope for This Module
 
-- Server-driven or dynamic banners in Phase 1 (banners are static/hardcoded).
-- A full activity feed (owned by MOD-006).
+- A full chronological activity feed (deferred to Phase 2, AC-159; owned by MOD-006).
 - The `saved_gyms` INSERT/DELETE write operations (owned by MOD-002).
 - The gym detail screen (owned by MOD-002).
 - The profile screen content (owned by MOD-001).
 - The send history surface (owned by MOD-008, embedded by MOD-001).
+- The notification inbox screen contents (owned by MOD-007).
 - Android support (Phase 2).
 - Cities other than Taipei and New Taipei (Phase 1 scope).
+- The bell and settings entry points on MOD-001's ProfileScreen header (those are removed per AC-184 and AC-171 revised; they now live on the MOD-012 global header only).

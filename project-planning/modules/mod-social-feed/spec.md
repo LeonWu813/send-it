@@ -4,8 +4,8 @@
 **Module Name**: Social Graph & Feed
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-004, MOD-005, MOD-008, MOD-009 (block/unblock actions and block-status service for the UserProfileScreen three-dots sheet + blocked state, AC-150/AC-152/AC-153)
-**Last Synced from PRD Revision**: 22
-**Last Updated**: 2026-09-30
+**Last Synced from PRD Revision**: 36
+**Last Updated**: 2026-10-13
 
 ---
 
@@ -45,9 +45,9 @@ For US-007 (AC-159), the chronological activity feed UI is formally deferred to 
 
 **US-007 Acceptance Criteria**: AC-050, AC-051, AC-159
 
-**US-008 Acceptance Criteria**: AC-052, AC-053
+**US-008 Acceptance Criteria**: AC-052, AC-053, AC-186
 
-**US-020 Acceptance Criteria**: AC-110, AC-111, AC-112, AC-113, AC-114, AC-115, AC-123, AC-124, AC-150, AC-153
+**US-020 Acceptance Criteria**: AC-110, AC-111, AC-112, AC-113, AC-114, AC-115, AC-150, AC-153
 
 **US-022 Acceptance Criteria**: AC-145, AC-146, AC-147, AC-148, AC-149
 
@@ -62,8 +62,6 @@ For US-007 (AC-159), the chronological activity feed UI is formally deferred to 
 **AC-052**: The system shall allow a user to like exactly one time per beta video (idempotent) and immediately reflect the like count change on the video.
 
 **AC-053**: The system shall not render a comment UI anywhere in the app in Phase 1 and shall not expose a like affordance on plain send logs.
-
-> **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006. **Phase 1 status (AC-159)**: the feed UI (`FeedScreen.tsx`) and this `get_activity_feed` RPC are deferred to Phase 2 — they remain in the codebase as dead code and are never imported or rendered in Phase 1.
 
 **AC-146** (revised): The system shall provide a Followers list screen listing all users who follow the profile being viewed. Each list entry is a user card showing the user's circular avatar and `display_name` only — no per-card sends count or highest grade is displayed. Tapping a card navigates to that user's MOD-008 other-user profile surface (AC-064), subject to that user's privacy setting (AC-063). Blocked users are excluded (AC-082, AC-084).
 
@@ -82,6 +80,12 @@ For US-007 (AC-159), the chronological activity feed UI is formally deferred to 
 **AC-159** (new): The social activity feed UI is formally deferred to Phase 2. `FeedScreen.tsx` in `mod-social-feed/screens/` and the `get_activity_feed` RPC shall remain in the codebase as dead code but shall never be imported or rendered in any navigator or shell, with zero runtime impact and no new wiring to `HomeScreen`.
 
 **AC-163** (new): The `UserProfileScreen` (the other-user profile overlay reached via `handleSelectClimber`) shall display a 3-column `BetaVideoGrid` (AC-160) below the stats section (AC-149), showing all beta videos by that user fetched via `fetchBetaVideosByUser` (AC-162). Tapping a cell shall open `BetaVideoReelViewer` cycling through that user's videos, starting at the tapped index. In this context the viewer is passed `reelContext = 'profile'` (AC-164): the poster-identity row is visible but NOT tappable (no navigation on tap). This grid is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state (AC-064) rather than the grid. MOD-006 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer`.
+
+
+**AC-186** (new, Rev 36, Phase 1 — deferred): The system shall provide a batched like-info RPC `get_like_info_batch(beta_video_ids uuid[])` that, for the current user, returns in a single round-trip the per-video like count and the current user's own like state (liked / not liked) for each supplied beta-video id, so that a list or grid of beta videos can resolve all like counts and like states without issuing one query per video (eliminating the per-card N+1 like-info lookups). The RPC is `SECURITY INVOKER` and remains subject to the existing beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154, beta-video privacy AC-158); it does not expose like info for videos the caller cannot see. The single-video like affordance and its idempotent one-like-per-video semantics (AC-052) are unchanged — this AC adds only a batched read path for like info. **Phase 1 status — deferred**: `get_like_info_batch` is introduced now for the data-access/caching convention (§10) and performance of beta-video grids, but its implementation and wiring are deferred within Phase 1; callers continue to use the existing per-video like-info path until the batched RPC is implemented, at which point it supersedes the per-card lookups with zero change to AC-052 behavior. **This is a new Postgres RPC and requires Tech Lead architecture review** (RPC signature/return shape, the visibility-composition inside the RPC, and the `SECURITY INVOKER` + RLS interaction) before Doc-Sync/Engineering implements it.
+
+> **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006. **Phase 1 status (AC-159)**: the feed UI (`FeedScreen.tsx`) and this `get_activity_feed` RPC are deferred to Phase 2 — they remain in the codebase as dead code and are never imported or rendered in Phase 1.
+
 
 ---
 

@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 24 (2026-10-02)
-**Last Updated**: 2026-10-04
+**Last synced from PRD**: rev 36 (2026-10-13)
+**Last Updated**: 2026-10-13
 
 ---
 
@@ -54,18 +54,18 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 
 | MOD-ID  | Directory              | Module Name                  | One-line description                                                                                      |
 |---------|------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------|
-| MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD (name/avatar/bio/privacy), Profile tab surface with send history and Logout. |
+| MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD (name/avatar/bio/privacy), Profile tab surface with send history; no bell/settings in ProfileScreen header (moved to MOD-012 global header). |
 | MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form, and saved-gym bookmark toggle (add/remove from saved_gyms). |
-| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, 4-value status lifecycle, submitter-only pending visibility, admin approve/reject/retire via Studio. |
+| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, 4-value status lifecycle, per-user route-visit tracking (user_route_visits), routes_with_new_beta RPC, new-beta tag on route cards. |
 | MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override; ascent style restricted to {flash, top, attempt}.     |
 | MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection (≤60 sec, 45 MB native-file size gate, no client-side compression), thumbnail, storage upload, inline playback, reel viewer, report flow.             |
 | MOD-006 | mod-social-feed        | Social Graph & Feed          | Follow/unfollow, chronological activity feed via SECURITY INVOKER RPC, beta-video like reactions.        |
-| MOD-007 | mod-notifications      | Notifications                | Device token registration, notification preferences, Edge Function push fan-out, in-app inbox.            |
+| MOD-007 | mod-notifications      | Notifications                | Device token registration, notification preferences, Edge Function push fan-out, in-app inbox, UnreadCountProvider context (consumed by MOD-012 global header). |
 | MOD-008 | mod-profile-history    | Profile History & Stats      | Send history with filters, stats bar chart, streak, highest grade — for self and (per privacy) others.    |
 | MOD-009 | mod-moderation         | Moderation (Report & Block)  | Report submission, symmetric block/unblock, feed filtering, scheduled report-digest Edge Function.        |
 | MOD-010 | mod-localization-theme | Localization & Theming       | i18n catalog loading, device-locale detection, zh-TW fallback, language toggle, Light/Dark theming.       |
 | MOD-011 | mod-analytics          | Analytics                    | PostHog event instrumentation across the app (cross-cutting; no user-facing UI).                          |
-| MOD-012 | mod-home               | Home                         | Persistent three-tab bottom navigation shell (AppShell) and Home screen (banners, saved-gyms strip, following-climbers strip). |
+| MOD-012 | mod-home               | Home                         | Persistent three-tab bottom navigation shell (AppShell), Home screen (Events Banner, Saved Gyms, Projecting Routes, Following activity), global app-level header (bell + settings), shared src/components/ (RouteCard, SwipeBackWrapper). |
 
 ---
 
@@ -80,6 +80,9 @@ src/
     theme.ts                   # Theme provider / tokens
     i18n.ts                    # i18n initialization
     banners.ts                 # Static banner definitions (structure/keys/image refs; strings in i18n catalogs)
+  components/                  # App-level shared presentational components (MOD-012 owns)
+    RouteCard.tsx              # Shared route card with photo_url thumbnail (AC-183)
+    SwipeBackWrapper.tsx       # Swipe-left-to-right back gesture wrapper (AC-185)
   modules/
     mod-auth-profile/
     mod-gym-directory/
@@ -339,6 +342,31 @@ Strict mode is on for all TypeScript code, including Edge Functions. No `any` wi
 ### Testing Conventions
 
 Jest + React Native Testing Library. One test file per source file. Test behaviour, not implementation.
+
+
+### App-Level Shared Presentational Components
+
+Genuinely module-agnostic presentational components consumed by three or more unrelated modules (e.g. `RouteCard`, `SwipeBackWrapper`) live at top-level `src/components/`, not inside any module's `components/` directory. This is the component analogue of `src/lib/` for cross-cutting non-component code. These components are **pure/presentational**: they take data + callback props and own no module service dependency (the consuming screen does the fetching and passes results down), so they create no cross-module coupling. MOD-012 (the aggregator/shell module) owns the `src/components/` directory. All modules import these via the app-level path `src/components/<Name>`. This is an explicit, narrow exception to the `Cross-Module Imports` rule's ban on importing another module's internal `components/`: it applies ONLY to components that live at `src/components/` (owned by no single module), never to reaching into a specific module's internal `components/` directory — that remains forbidden.
+
+### Admin-Managed Content Uses a Dedicated Read-All/Write-Admin Table
+
+`app_settings` is DEFINER-only (RLS enabled, no policies, no client grants; read only inside SECURITY DEFINER functions) and must stay that way. Any admin-authored content that authenticated clients must READ directly (e.g. the Events Banner) uses a dedicated table with a read-all-authenticated SELECT policy (`TO authenticated USING (true)`, `GRANT SELECT`) and admin-only write policies gated by `public.is_admin()` (never an inlined JWT check). The admin authors content via Supabase Studio (service_role bypasses RLS). Do not punch a client-facing SELECT grant into `app_settings` to serve client-readable content.
+
+### "Is-New" / Recency Indicators Use a Batched SECURITY INVOKER RPC
+
+When a list or grid must determine which of N items qualifies for a "new" or "recency" tag (e.g. the "new beta video" tag on route cards, AC-180/AC-181), the qualification logic runs server-side in a single `SECURITY INVOKER` RPC over the visible item-id set — never N individual client-side checks. The RPC composes the same visibility rules the individual-item path enforces (e.g. reported-video exclusion AC-142, blocked-user filter AC-154, beta-video privacy AC-158) so RLS remains the security fence and the batched path does not widen visibility. Reference contract: `routes_with_new_beta(route_ids uuid[])` (AC-180), owned by MOD-003, returns the subset of supplied route ids for which the current user's `user_route_visits.last_viewed_at` is older than at least one visible beta video's `created_at`, or where no visit row exists for that (user, route).
+
+### UnreadCountProvider Context (MOD-007-Owned, Consumed by MOD-012 Global Header)
+
+MOD-007 owns a small `UnreadCountProvider` React context that exposes `{ unreadCount: number, refresh(): void }`. It is mounted by MOD-012 inside `AppShell` wrapping the global app-level header. The global header (MOD-012) subscribes to `unreadCount` for the notification bell badge (AC-173). `NotificationInboxScreen` (MOD-007) calls `refresh()` after its AC-172 batch mark-read so the badge clears when the inbox is opened. MOD-007 owns the context because MOD-007 owns the notification domain and the `Notification` table read; MOD-012 subscribes only — it does not read the `Notification` table directly. This mirrors the existing pattern of `useSession` being a singleton consumed reactively across the shell.
+
+### Data-Access and Caching Conventions
+
+For any list or grid that renders N items each needing the same per-item lookup (e.g. per-beta-video like count + the current user's like state), prefer a single batched server-side RPC that resolves all N items in one round-trip over issuing one query per item (the per-card N+1 pattern). The batched RPC stays `SECURITY INVOKER` and composes the same visibility rules the single-item path enforces, so RLS remains the security fence and a batched read never widens visibility. Reference contract: the batched like-info RPC `get_like_info_batch(beta_video_ids uuid[])` (AC-186) returns per-video like count + the caller's own like state for a supplied id set.
+
+**Server-side predicate reuse**: when AC-142 (reported-video exclusion), AC-154 (blocked-user filter), and AC-158 (beta-video privacy) are composed inside an RPC (e.g. `routes_with_new_beta` or `get_like_info_batch`), reuse the exact SQL predicates already established by the canonical `Beta-Video Visibility Has One Canonical Exclusion Predicate` convention and the existing `get_activity_feed` RPC — never hand-write a parallel copy. Drift between RPC copies of the same predicate is a silent bug.
+
+**Client cache auth-clear rule**: on the client, like counts and like state fetched via a batched RPC may be held in a short-lived in-memory cache keyed by `beta_video_id` and reused across the surfaces that render the same video within a session (route-detail grid, reel viewer, profile grids). The cache must be cleared on sign-out and must never persist across auth changes. The cache is advisory for read performance only and is never the source of truth for a write — an optimistic update from the user's own like/unlike action (AC-052) is always authoritative over the cache.
 
 ### Commit Conventions
 

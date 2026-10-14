@@ -4,14 +4,14 @@
 **Module Name**: Auth & Profile
 **Phase**: 1
 **Dependencies**: MOD-005 (`BetaVideoGrid` component, `fetchBetaVideosByUser` service, and `BetaVideoReelViewer` `profile` context for the own-videos grid on ProfileScreen, AC-164)
-**Last Synced from PRD Revision**: 22
-**Last Updated**: 2026-09-30
+**Last Synced from PRD Revision**: 36
+**Last Updated**: 2026-10-13
 
 ---
 
 ## Purpose
 
-Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). There is no home gym concept — saved gyms live in MOD-012.
+Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). The notification bell is no longer in the ProfileScreen header — it moves to the global app-level header owned by MOD-012 (AC-184), which wires to MOD-007's NotificationInboxScreen. There is no home gym concept — saved gyms live in MOD-012.
 
 ---
 
@@ -142,6 +142,7 @@ All tables guarded by Supabase Row-Level Security policies.
 - The Profile screen must display follower and following count links immediately below the bio, sourced from MOD-006's social-graph public service, navigating to AC-146 and AC-147 screens respectively (AC-145).
 - The Profile screen must display a 3-column `BetaVideoGrid` below the full send history, showing own beta videos via `fetchBetaVideosByUser(currentUserId)` (MOD-005), opening `BetaVideoReelViewer` with `reelContext = 'profile'` on cell tap (AC-164).
 - The Logout control must be removed from the Profile screen `listFooterComponent`; the session-ending behavior moves to MOD-010's SettingsScreen (AC-167).
+- The notification bell and settings icon must NOT be rendered in the ProfileScreen header — those controls are on MOD-012's global app-level header (AC-184).
 - The MOD-001 engineer must add a migration to DROP COLUMN `home_gym_id` from `public.users` and remove all source references listed in the Impact Map (auth-service.ts, types.ts, AuthNavigator.tsx, HomeGymSelectionScreen.tsx, test files, i18n catalogs).
 
 ---
@@ -177,3 +178,4 @@ All tables guarded by Supabase Row-Level Security policies.
 - Payments, subscriptions, or monetization.
 - Saved gyms (owned by MOD-012 — the `SavedGym` join table replaces the removed `home_gym_id` field).
 - Logout control on the Profile screen (removed per AC-167; moved to MOD-010 SettingsScreen per AC-168).
+- Notification bell or settings icon in the ProfileScreen header (removed per AC-171 revised and AC-184; both controls now live on MOD-012's global app-level header).
