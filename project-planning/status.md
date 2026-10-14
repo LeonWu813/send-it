@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-route-catalog
+agent: qa-mod-gym-directory
 mode: regression
-module: mod-route-catalog
+module: mod-gym-directory
 result: success
-commit: 76e6ff042ce88982430273018da905a2f95c7065
+commit: 00b7575a7906ef89b262082fc21552bc5ffd0a8a
 timestamp: 2026-10-14T00:00:00Z
 ```
 

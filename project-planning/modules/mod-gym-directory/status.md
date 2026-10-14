@@ -2,6 +2,20 @@
 
 ## Engineering Progress
 
+### Implementation — 2026-10-14 (Convention fix — console.error before throw in gym-service.ts)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/gym-service.ts` — added `console.error('[functionName] error:', error)` immediately before every user-facing `throw new Error(...)` in all six error-catch sites: `listGyms`, `loadGym` (non-PGRST116 branch only), `fetchSavedGymIds`, `saveGym`, `unsaveGym`, `submitGymRequest`. The `PGRST116` branch in `loadGym` returns `null` (no throw) and received no change. No other logic was altered.
+
+**Motivation:**
+Addresses the pre-existing shared-convention gap flagged by QA in the AC-176 regression pass: "Log Raw Supabase Error Before Throwing a User-Facing String" (production.md Shared Convention). All six throwing sites were missing the required log call.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Scope: change limited to `gym-service.ts`; no logic, return values, or thrown messages changed
+
+---
+
 ### Implementation — 2026-10-13 (AC-176 deep-link fix — initialRoutesGymId prop)
 
 **Files modified:**
@@ -762,3 +776,149 @@ No features added beyond what AC-176 specifies:
 All existing MOD-002 ACs (AC-004, AC-005, AC-006, AC-070, AC-120, AC-121, AC-122) pass. 44/44 MOD-002 tests pass. 38/38 MOD-012 tests pass. TypeScript compilation clean (exit 0). 510/512 total tests pass (2 pre-existing failures in mod-beta-video, unrelated to this change).
 
 One pre-existing shared-convention gap noted (missing `console.error` before throw in gym-service.ts service functions) — not a regression from this change, flagged for follow-up.
+
+---
+
+## QA Results — Regression (console.error convention fix — gym-service.ts)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-10-14
+**Scope**: Verify all 6 `console.error('[functionName] error:', error)` calls are present immediately before their corresponding `throw` in `gym-service.ts`. Confirm no other logic was changed. Run `npx tsc --noEmit` and the MOD-002 test suite.
+
+### Source Code Inspection — 6 Sites
+
+Each site was verified by reading `src/modules/mod-gym-directory/gym-service.ts` directly.
+
+**REGRESSION PASS — listGyms (lines 36–39)**
+
+```
+if (error) {
+  console.error('[listGyms] error:', error);
+  throw new Error('Failed to load gyms. Please try again.');
+}
+```
+
+`console.error('[listGyms] error:', error)` is at line 37, immediately before `throw` at line 38. No intervening statements. PASS.
+
+**REGRESSION PASS — loadGym non-PGRST116 branch (lines 58–65)**
+
+```
+if (error) {
+  // PGRST116 = no rows found — return null, not an error
+  if (error.code === 'PGRST116') {
+    return null;
+  }
+  console.error('[loadGym] error:', error);
+  throw new Error('Failed to load gym details. Please try again.');
+}
+```
+
+`console.error('[loadGym] error:', error)` is at line 63, immediately before `throw` at line 64. The PGRST116 branch (lines 60–62) returns `null` with no throw and received no change — correctly untouched. PASS.
+
+**REGRESSION PASS — fetchSavedGymIds (lines 86–89)**
+
+```
+if (error) {
+  console.error('[fetchSavedGymIds] error:', error);
+  throw new Error('Failed to load saved gyms. Please try again.');
+}
+```
+
+`console.error('[fetchSavedGymIds] error:', error)` is at line 87, immediately before `throw` at line 88. PASS.
+
+**REGRESSION PASS — saveGym (lines 109–112)**
+
+```
+if (error) {
+  console.error('[saveGym] error:', error);
+  throw new Error('Failed to save gym. Please try again.');
+}
+```
+
+`console.error('[saveGym] error:', error)` is at line 110, immediately before `throw` at line 111. PASS.
+
+**REGRESSION PASS — unsaveGym (lines 130–133)**
+
+```
+if (error) {
+  console.error('[unsaveGym] error:', error);
+  throw new Error('Failed to unsave gym. Please try again.');
+}
+```
+
+`console.error('[unsaveGym] error:', error)` is at line 131, immediately before `throw` at line 132. PASS.
+
+**REGRESSION PASS — submitGymRequest (lines 160–163)**
+
+```
+if (error) {
+  console.error('[submitGymRequest] error:', error);
+  throw new Error('Failed to submit gym request. Please try again.');
+}
+```
+
+`console.error('[submitGymRequest] error:', error)` is at line 161, immediately before `throw` at line 162. PASS.
+
+### No Other Logic Changed
+
+Verified by full read of `gym-service.ts`:
+- All function signatures are identical to the prior pass (same parameter names, same return types).
+- All return values are unchanged (same data transforms, same null-coalescing, same field mappings).
+- All thrown error messages are identical to the prior pass.
+- The PGRST116 `return null` path in `loadGym` is unchanged — no throw added to it.
+- The `GYM_SUMMARY_SELECT` and `GYM_DETAIL_SELECT` constants are unchanged.
+- No new imports, no new functions, no removed functions.
+
+PASS — change is strictly additive (one `console.error` line per error-catch site, nothing else altered).
+
+### Live Confirmation from Automated Tests
+
+The Jest output from the MOD-002 test suite (below) confirms the `console.error` calls fire correctly at runtime in the error-path tests. All six function names appear in the Jest console output:
+
+- `[listGyms] error:` — from gym-service.test.ts error-path test for `listGyms`
+- `[loadGym] error:` — from gym-service.test.ts non-PGRST116 error-path test for `loadGym`
+- `[fetchSavedGymIds] error:` — from gym-service.test.ts error-path test for `fetchSavedGymIds`
+- `[saveGym] error:` — from gym-service.test.ts error-path test for `saveGym`
+- `[unsaveGym] error:` — from gym-service.test.ts error-path test for `unsaveGym`
+- `[submitGymRequest] error:` — from gym-service.test.ts error-path test for `submitGymRequest`
+
+This confirms the calls are correctly placed and execute on the error path — not dead code.
+
+### TypeScript Compilation
+
+Command: `npx tsc --noEmit`
+Result: **PASS — exit code 0, 0 errors**
+
+### Automated Test Suite — MOD-002
+
+Command: `npx jest --watchAll=false --testPathPattern="mod-gym-directory"`
+Result: **44/44 tests passed, 4 suites, exit code 0**
+
+Suites: gym-service.test.ts, GymDetailScreen.test.tsx, GymListScreen.test.tsx, RequestGymScreen.test.tsx — all pass.
+
+Test count is unchanged from the prior pass (44/44). No new tests were added by this change, and no tests were removed.
+
+Console warnings: pre-existing `act(...)` warnings from `@expo/vector-icons` Icon font loading — upstream issue, unchanged from all prior passes.
+
+### Regression — All Existing ACs
+
+**PASS AC-004**: GymListScreen unchanged. All GymListScreen tests pass (no regression to gym list rendering, city filter, bilingual display, or search).
+
+**PASS AC-005**: GymDetailScreen and GymNavigator unchanged. "View Routes" behavior and back-navigation unaffected. GymDetailScreen tests pass.
+
+**PASS AC-006**: GymListScreen tap-to-navigate unchanged. Verified by passing GymListScreen tests.
+
+**PASS AC-070**: RequestGymScreen and `submitGymRequest()` function signature unchanged. 5/5 RequestGymScreen tests pass.
+
+**PASS AC-120**: GymDetailScreen bookmark icon unchanged. 2/2 bookmark state tests pass.
+
+**PASS AC-121**: Optimistic bookmark toggle unchanged. 3/3 optimistic-update tests pass.
+
+**PASS AC-122**: Read-only list indicator unchanged. 2/2 indicator tests pass.
+
+**PASS (Shared Convention — Log Raw Supabase Error Before Throwing)**: The pre-existing gap flagged in the AC-176 QA pass is now resolved. All six throwing sites in `gym-service.ts` now call `console.error('[functionName] error:', error)` immediately before the `throw`. No throwing site was missed.
+
+### Overall Verdict
+
+**QA PASS** — All 6 `console.error` sites verified present and correctly placed immediately before their `throw`. No other logic changed. TypeScript compilation clean (exit 0, 0 errors). 44/44 MOD-002 tests pass. All existing ACs confirmed with no regressions. Shared Convention gap from AC-176 QA pass is resolved.
