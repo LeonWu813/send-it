@@ -1902,3 +1902,238 @@ Both are implementation bugs — route to `engineer-mod-home`.
 
 **Result: READY FOR QA RE-VERIFICATION**
 
+
+---
+
+### QA Run 11 — Regression — 2026-10-13
+
+**Workflow**: regression-test (re-verification after Engineer fixed both QA Run 10 bugs)
+
+**Bugs being re-verified (QA Run 10):**
+1. **FAIL: Cross-module import rule** — `AppShell.tsx` imported `SettingsScreen` from `'../mod-localization-theme/screens/SettingsScreen'` (a `screens/` subdirectory). Violates production.md cross-module import convention.
+2. **FAIL: Inline string literals** — `relativeTime()` returned hardcoded English strings ("today", "1 day ago", "N days ago") rendered directly in the Following Activity section. No matching i18n keys existed in either locale file.
+
+**Engineer fixes applied:**
+- `src/modules/mod-home/AppShell.tsx` — line 68 import changed from `'../mod-localization-theme/screens/SettingsScreen'` to `'../mod-localization-theme/SettingsScreen'`; comment block updated. `mod-localization-theme/SettingsScreen.tsx` created at module root as a single re-export (`export { default } from './screens/SettingsScreen'`).
+- `src/modules/mod-home/screens/HomeScreen.tsx` — `relativeTime()` signature updated to accept `t: (key: string, opts?: Record<string, unknown>) => string`; all three return paths now use `t('home.followingActivity.today')`, `t('home.followingActivity.dayAgo')`, `t('home.followingActivity.daysAgo', { count: diffDays })`; call site updated from `relativeTime(item.latestAt)` to `relativeTime(item.latestAt, t)`.
+- `locales/en/common.json` — added `home.followingActivity.today` ("today"), `home.followingActivity.dayAgo` ("1 day ago"), `home.followingActivity.daysAgo` ("{{count}} days ago").
+- `locales/zh-TW/common.json` — added matching zh-TW keys: `"today": "今天"`, `"dayAgo": "1 天前"`, `"daysAgo": "{{count}} 天前"`.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output (exit 0)
+- `npm run check:i18n`: PASS — "i18n completeness OK"
+- `npx jest --testPathPattern="mod-home|src/components" --passWithNoTests --watchAll=false --no-coverage`: PASS — 52 tests, 5 suites, 0 failures
+- `npx jest --passWithNoTests --watchAll=false --no-coverage`: 512 tests, 35 suites — 511 pass, 1 fail (pre-existing `mod-beta-video` failure, confirmed unrelated to MOD-012; same failure present since QA Run 10 self-check note)
+
+---
+
+#### REGRESSION PASS — Bug 1: Cross-module import rule — SettingsScreen
+
+**Verification of `src/modules/mod-localization-theme/SettingsScreen.tsx`:**
+File exists at the module root. Content: `export { default } from './screens/SettingsScreen';` — a single passthrough re-export, identical pattern to the QA Run 7 fix for `UserProfileNavigator`. PASS.
+
+**Verification of `AppShell.tsx` line 68:**
+`import SettingsScreen from '../mod-localization-theme/SettingsScreen';` — imports from the module-root file, not from `screens/`. The import no longer reaches into `mod-localization-theme/screens/`. PASS.
+
+**Comment block in `AppShell.tsx` updated:**
+Lines 52–55 now read: "SettingsScreen from mod-localization-theme/SettingsScreen (module-root public entry-point; does not reach into screens/)." Stale reference to `screens/` removed. PASS.
+
+**production.md compliance:**
+The convention allows "public service functions (data layer) and navigator entry-point components (mounting)" — never `screens/` or `components/` subdirectories directly. `SettingsScreen.tsx` at the module root serves as the public mounting point. The import in `AppShell.tsx` targets this module-root file. Cross-module import rule satisfied.
+
+Input: `AppShell.tsx` importing `SettingsScreen` cross-module.
+Actual (after fix): import path is `'../mod-localization-theme/SettingsScreen'` — a module-root file, not a `screens/` subdirectory path.
+Expected per production.md: cross-module imports must target public service functions or navigator entry-point components only.
+Status: RESOLVED.
+
+---
+
+#### REGRESSION PASS — Bug 2: Inline string literals — relativeTime() now uses i18n keys
+
+**Verification of `HomeScreen.tsx` `relativeTime()` function (lines 131–139):**
+```
+function relativeTime(
+  isoDate: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const diffDays = Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000);
+  if (diffDays === 0) return t('home.followingActivity.today');
+  if (diffDays === 1) return t('home.followingActivity.dayAgo');
+  return t('home.followingActivity.daysAgo', { count: diffDays });
+}
+```
+All three return paths use `t()`. No raw English strings remain in the function. PASS.
+
+**Verification of call site (line 637):**
+`{relativeTime(item.latestAt, t)}` — `t` is passed as the second argument. `t` is already in scope from `const { t } = useTranslation('common')` at the top of the component. PASS.
+
+**Verification of EN locale keys (`locales/en/common.json` lines 286–288):**
+- `"today": "today"` — PASS.
+- `"dayAgo": "1 day ago"` — PASS.
+- `"daysAgo": "{{count}} days ago"` — PASS.
+
+**Verification of zh-TW locale keys (`locales/zh-TW/common.json` lines 286–288):**
+- `"today": "今天"` — PASS.
+- `"dayAgo": "1 天前"` — PASS.
+- `"daysAgo": "{{count}} 天前"` — PASS.
+
+**`npm run check:i18n`**: PASS — "i18n completeness OK". Key parity between EN and zh-TW confirmed by automated script.
+
+Input: Following Activity row with `latestAt` of today / 1 day ago / N days ago.
+Actual (after fix): `t('home.followingActivity.today')` / `t('home.followingActivity.dayAgo')` / `t('home.followingActivity.daysAgo', { count: N })` — resolved through the i18n catalog.
+Expected per production.md: all user-facing strings must use i18n keys via `t()`.
+Status: RESOLVED.
+
+---
+
+#### Re-verification of all 15 ACs and additional checks
+
+**AC-110: Persistent bottom tab bar — three icon-only tabs, Home default**
+PASS — `AppShell.tsx` `useState<TabKey>('home')` default intact. Neither fix touches tab state or `TabBar.tsx`. TabBar tests (5) pass. PASS.
+
+**AC-111 (rev): Home screen renders four sections in order — Events Banner, Saved Gyms, Projecting Routes, Following Activity**
+PASS — `HomeScreen.tsx` JSX section order unchanged: (1) Events Banner, (2) Saved Gyms, (3) Projecting Routes, (4) Following Activity. PASS.
+
+**AC-112 (rev): Events Banner — single admin-managed banner; hidden when none active**
+PASS — `loadBanner` queries `admin_banners WHERE is_active=true LIMIT 1 MAYBYSINGLE`. Section hidden when `activeBanner === null`. Banner tests pass. PASS.
+
+**AC-113: Saved Gyms section — horizontal scroll strip with gym photo_url + name; "View All" navigates to gym list**
+PASS — Saved gyms horizontal `ScrollView` with Image + Text per gym; "View All" Pressable calls `onViewAllGyms()`. Tests pass. PASS.
+
+**AC-114 (rev) / AC-176: Tapping a gym navigates to RouteListScreen**
+PASS — `onSelectGym(gym.id, gym.name)` on chip press; `AppShell.handleSelectGym` sets `selectedRoutesGymId`, `selectedRoutesGymName`, increments `routesNavKey`, switches to 'gyms'. Test verifies callback fires with correct gymId and gymName. Integration note carried forward (RouteListScreen deep-link pending MOD-002 prop exposure). PASS.
+
+**AC-115: When no saved gyms, display "Tap the bookmark on any gym to save it."**
+PASS — `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, unchanged). Test assertion passes. PASS.
+
+**AC-174: admin_banners migration — read-all authenticated SELECT, admin-only writes**
+PASS — Migration `20261013000001_mod_012_admin_banners.sql` unchanged. DDL, RLS (4 policies), GRANT verified in QA Run 10. PASS.
+
+**AC-175: Saved Gyms ordered by most-recently-viewed; no-recency gyms still appear**
+PASS — `loadSavedGyms` recency sort logic unchanged. PASS.
+
+**AC-177: Projecting Routes section — from MOD-003 service; V-grade filter tabs; empty state**
+PASS — `fetchSavedRouteIds()` call, GRADE_TABS render, empty state logic unchanged. Tests pass. PASS.
+
+**AC-178: Route card tap navigates to RouteDetailScreen**
+PASS — `onSelectRoute(route.id, route.gym_id)` on RouteCard press; `AppShell.handleSelectRoute` sets deep-link state. Test verifies callback. PASS.
+
+**AC-181: "New Beta" tag on qualifying route cards**
+PASS — `routes_with_new_beta` RPC call and 60s cache logic unchanged. `hasNewBetaVideo` passed to RouteCard. Tests pass. PASS.
+
+**AC-182: Following Activity section — avatar + display_name + new-beta count + timestamp; tap navigates to UserProfileScreen; empty state**
+PASS — `loadFollowingActivity` logic (fetchFollowing + beta_videos batched query) unchanged. `relativeTime(item.latestAt, t)` now produces i18n-keyed output (see Bug 2 above). Row Pressable with `onSelectClimber(item.userId)` unchanged. Tests pass. PASS.
+
+**AC-183: Shared RouteCard component — name+grade left, 48×48 thumbnail right, New Beta badge**
+PASS — `src/components/RouteCard.tsx` unchanged. 9 tests pass. PASS.
+
+**AC-184: Global app-level header — bell left (unread badge from UnreadCountProvider), settings right**
+PASS — `AppHeader.tsx` unchanged. Settings overlay now opens via the correct `SettingsScreen` import (Bug 1 fixed). `UnreadCountProvider` wiring unchanged. 8 tests pass. PASS.
+
+**AC-185: Swipe left-to-right back gesture (SwipeBackWrapper)**
+PASS — `src/components/SwipeBackWrapper.tsx` unchanged. 4 tests pass. PASS.
+
+**Keep-alive mount strategy:**
+PASS — `AppShell.tsx` keep-alive logic (`display: 'none'` on inactive tabs) unchanged by both fixes. PASS.
+
+**Top safe area — AppHeader owns the top:**
+PASS — `HomeScreen.tsx` `makeStyles` does not apply topInset; `AppHeader` owns `paddingTop: topInset + theme.spacing.sm`. Unchanged. PASS.
+
+**Bottom safe area — TabBar:**
+PASS — `TabBar.tsx` `paddingBottom: bottomInset + theme.spacing.sm` unchanged. PASS.
+
+**Cross-module import rule (all imports):**
+PASS — `AppShell.tsx` imports verified:
+- `SettingsScreen` from `'../mod-localization-theme/SettingsScreen'` (module root, fixed). PASS.
+- `UserProfileScreen` from `'../mod-social-feed/UserProfileNavigator'` (module root, fixed in QA Run 7). PASS.
+- `GymNavigator` from `'../mod-gym-directory/GymNavigator'` (module root). PASS.
+- `ProfileNavigator` from `'../mod-auth-profile/ProfileNavigator'` (module root). PASS.
+- `NotificationsNavigator` from `'../mod-notifications/NotificationsNavigator'` (module root). PASS.
+- `UnreadCountProvider` from `'../mod-notifications/UnreadCountProvider'` (module root). PASS.
+No imports from any module's `screens/` or `components/` subdirectories. PASS.
+
+**i18n completeness (EN + zh-TW):**
+PASS — `npm run check:i18n` exits 0 ("i18n completeness OK"). All `home.*` keys including the newly added `home.followingActivity.today`, `home.followingActivity.dayAgo`, `home.followingActivity.daysAgo` present in both locales. PASS.
+
+**Inline string literals:**
+PASS — `relativeTime()` no longer contains hardcoded English strings. All three return paths use `t()` (see Bug 2 above). No raw string literals in render paths. PASS.
+
+**No hardcoded hex colors:**
+PASS — No style changes introduced by either fix. PASS.
+
+**Migration correctness — saved_gyms:**
+PASS — `20260924000002_mod_012_home.sql` unchanged. PASS.
+
+**Migration correctness — admin_banners:**
+PASS — `20261013000001_mod_012_admin_banners.sql` unchanged. PASS.
+
+**Gold-plating check:**
+PASS — No features beyond spec introduced by either fix. PASS.
+
+**TypeScript strict mode:**
+PASS — `npx tsc --noEmit` exits 0, no output. PASS.
+
+---
+
+#### Adjacent code check (fix proximity)
+
+**Bug 1 (AppShell.tsx import path change):**
+Adjacent items verified:
+- All other `AppShell.tsx` imports unchanged (GymNavigator, ProfileNavigator, UserProfileNavigator, NotificationsNavigator, UnreadCountProvider, AppHeader, TabBar, HomeNavigator). PASS.
+- Tab state, handler callbacks, overlay render logic — all unchanged. PASS.
+- `mod-localization-theme/screens/SettingsScreen.tsx` (the underlying screen) — unchanged; module-root re-export is a passthrough. PASS.
+
+**Bug 2 (HomeScreen.tsx relativeTime + locale additions):**
+Adjacent items verified:
+- `home.followingActivity.title`, `home.followingActivity.newVideos`, `home.followingActivity.newVideos_other`, `home.followingActivity.empty` — unchanged in both locales. PASS.
+- All other `home.*` locale keys (`home.savedGyms.*`, `home.projectingRoutes.*`, `home.routeCard.*`, `home.appHeader.*`, `home.banners.*`) — unchanged. PASS.
+- `relativeTime` call site guard `{item.latestAt !== null && (...)}` — unchanged; null guard still present. PASS.
+- All four `loadXxx` useEffect hooks in HomeScreen — unchanged. PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 11
+
+| AC / Check | QA Run 10 | QA Run 11 |
+|---|---|---|
+| AC-110: Three-tab bar, Home default | PASS | PASS |
+| AC-111 (rev): Four sections in order | PASS | PASS |
+| AC-112 (rev): Admin-managed banner; hidden when none active | PASS | PASS |
+| AC-113: Saved Gyms strip + View All | PASS | PASS |
+| AC-114 (rev) / AC-176: Gym tap → onSelectGym(gymId, gymName) | PASS (integration note) | PASS (integration note carried forward) |
+| AC-115: Saved gyms empty state | PASS | PASS |
+| AC-174: admin_banners migration — DDL, RLS, GRANT | PASS | PASS |
+| AC-175: Saved Gyms ordered by recency; no-recency gyms appear | PASS | PASS |
+| AC-177: Projecting Routes — fetchSavedRouteIds, grade tabs, empty state | PASS | PASS |
+| AC-178: Route card tap → onSelectRoute(routeId, gymId) | PASS | PASS |
+| AC-181: New Beta badge via routes_with_new_beta RPC + cache | PASS | PASS |
+| AC-182: Following Activity — fetchFollowing, beta_videos, avatar+name+count+timestamp, tap → onSelectClimber, empty state | PASS | PASS |
+| AC-183: RouteCard — name+grade left, 48×48 thumbnail right, New Beta badge | PASS | PASS |
+| AC-184: AppHeader — bell left (unread badge), settings right, mounted in AppShell | PASS | PASS |
+| AC-185: SwipeBackWrapper — PanResponder, left-edge gate | PASS | PASS |
+| Cross-module import rule — SettingsScreen imported from screens/ | FAIL | REGRESSION PASS |
+| Inline string literals — relativeTime() hardcoded EN strings | FAIL | REGRESSION PASS |
+| i18n completeness (EN + zh-TW, check:i18n) | PASS | PASS |
+| No hardcoded hex colors | PASS | PASS |
+| No inline string literals | FAIL | REGRESSION PASS |
+| Migration: admin_banners DDL + RLS + GRANT | PASS | PASS |
+| Migration: saved_gyms DDL + RLS + GRANT | PASS | PASS |
+| `npx tsc --noEmit` | PASS — 0 errors | PASS — 0 errors |
+| `npm run check:i18n` | PASS | PASS — "i18n completeness OK" |
+| `npx jest mod-home + src/components` | PASS — 52 tests, 5 suites | PASS — 52 tests, 5 suites |
+| `npx jest` (full suite) | PASS — 512 tests; 1 pre-existing mod-beta-video failure | PASS — 512 tests; 1 pre-existing mod-beta-video failure |
+| Gold-plating check | PASS | PASS |
+
+**Result: ALL PASS — MOD-012 QA PASS**
+
+All 15 acceptance criteria verified. Both QA Run 10 bugs are resolved:
+- The `SettingsScreen` cross-module import now targets the module-root public entry point (`mod-localization-theme/SettingsScreen.tsx`), not the internal `screens/` subdirectory.
+- `relativeTime()` no longer returns hardcoded English strings; all three paths use `t()` with i18n keys present in both EN and zh-TW locale files.
+
+No regressions introduced. TypeScript clean (0 errors). i18n check passes. 52/52 mod-home tests pass. 511/512 full-suite tests pass (pre-existing `mod-beta-video` failure, unrelated to MOD-012, unchanged from QA Run 10).
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip and Events Banner.
