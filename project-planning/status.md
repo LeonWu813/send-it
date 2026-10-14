@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-home
-mode: verify
-module: mod-home
-result: bugs-found
-commit: 416894bcc1e0b1a62ac0a9342fe0f70b9c431fb2
+agent: qa-mod-gym-directory
+mode: regression
+module: mod-gym-directory
+result: success
+commit: 23aac1769c01ea270bc44f868fd6f010e8f9bf1a
 timestamp: 2026-10-13T00:00:00Z
 ```
 

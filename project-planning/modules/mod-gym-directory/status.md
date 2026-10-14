@@ -647,3 +647,118 @@ The `<Ionicons>` bookmark indicator on list cards is still a plain `<Ionicons>` 
 3. Apply the Taipei or New Taipei city filter — saved gyms that pass the filter still appear first within filtered results.
 4. Type a search query — saved gyms matching the search appear before unsaved gyms in search results.
 5. Unsave a gym on its detail screen, return to the list — that gym drops back to its natural position among unsaved gyms.
+
+---
+
+## QA Results — Regression (AC-176 deep-link fix — initialRoutesGymId prop)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-10-13
+**Scope**: AC-176 fix — `initialRoutesGymId`/`initialRoutesGymName`/`routesNavKey` props added to `GymNavigator`, `AppShell` updated to pass them when a saved gym is tapped on HomeScreen. Full regression across all existing MOD-002 ACs.
+
+### Automated Test Suite
+
+Command: `npm test -- --watchAll=false`
+Result: **510/512 passed, 2 failed (pre-existing in mod-beta-video, unrelated to this change)**
+
+MOD-002 tests: 44/44 passed, 4 suites — gym-service.test.ts, GymDetailScreen.test.tsx, GymListScreen.test.tsx, RequestGymScreen.test.tsx. All pass.
+MOD-012 (AppShell/HomeScreen) tests: 38/38 passed, 3 suites — HomeScreen.test.tsx, TabBar.test.tsx, AppHeader.test.tsx. All pass.
+
+Pre-existing failures confirmed: `mod-beta-video/__tests__/beta-video-service.test.ts` (route_name field flattening) and `mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` (AC-139 report button visibility). Both failures match the engineer's self-check entry ("1 pre-existing failure in mod-beta-video beta-video-service.test.ts line 417 — confirmed pre-existing by stash/restore verification, unrelated to this change"). The BetaVideoReelViewer failure is also pre-existing. Neither is in MOD-002 or adjacent to this change.
+
+### TypeScript Compilation
+
+Command: `npx tsc --noEmit`
+Result: **PASS — exit code 0, 0 errors**
+
+### Primary Verification — AC-176 New Behavior
+
+**PASS — GymNavigatorProps accepts `initialRoutesGymId?: string` and `initialRoutesGymName?: string` props.**
+
+`GymNavigatorProps` in `GymNavigator.tsx` lines 64–66:
+- `initialRoutesGymId?: string` — present, optional
+- `initialRoutesGymName?: string` — present, optional
+- `routesNavKey?: number` — present, optional (trigger for the useEffect)
+
+All three props are destructured in the function signature (lines 93–95) and passed through correctly.
+
+**PASS — When `initialRoutesGymId` is provided, the navigator initializes to the `routes` view for that gym (RouteListScreen), skipping GymDetailScreen.**
+
+`GymNavigator.tsx` lines 126–135: a `useEffect` keyed on `routesNavKey` fires when AppShell increments the counter. Inside the effect: `if (initialRoutesGymId) { setView({ name: 'routes', gymId: initialRoutesGymId, gymName: initialRoutesGymName ?? '', fromHome: true }) }`. This sets the view directly to `{ name: 'routes', ... }` — GymDetailScreen (`{ name: 'detail' }`) is never entered. When `view.name === 'routes'`, the JSX renders `<RouteNavigator ...>` (line 185), which mounts RouteListScreen as its initial view. GymDetailScreen render is conditional on `view.name === 'detail'` (line 175) — it is never rendered in the deep-link path.
+
+The `fromHome: true` flag is set correctly on this path. The `routesNavKey` trigger pattern mirrors the existing `gymNavKey`/`routeNavKey` patterns — key increments on every tap so the effect fires even when the same gym is tapped twice after navigating back.
+
+**PASS — Back from the deep-linked RouteListScreen returns to the gym list (not to a GymDetailScreen that was never visited).**
+
+`GymNavigator.tsx` lines 190–194: when `view.name === 'routes'`, `onBackToGym` is conditionally selected:
+- `view.fromHome === true`: `onBackToGym = navigateToList` — calls `setView({ name: 'list' })`, returning to the gym list. No GymDetailScreen is ever entered.
+- `view.fromHome === false`: `onBackToGym = () => setView({ name: 'detail', gymId: view.gymId })` — returns to the gym detail (the normal "View Routes" path from GymDetailScreen).
+
+The `fromHome: true` branch correctly sends back to the list. The discriminated union variant `{ name: 'routes'; gymId: string; gymName: string; fromHome: boolean }` (line 38) captures this as a type-checked flag.
+
+**PASS — `AppShell.tsx` (MOD-012) passes `initialRoutesGymId` when the user taps a saved gym on HomeScreen.**
+
+`AppShell.tsx` lines 122–145, 219–222:
+- State: `selectedRoutesGymId`, `selectedRoutesGymName`, `routesNavKey` declared (lines 122–124).
+- `handleSelectGym(gymId, gymName)` (line 138): sets `selectedRoutesGymId(gymId)`, `selectedRoutesGymName(gymName)`, increments `routesNavKey` via `setRoutesNavKey((k) => k + 1)`, and switches to the `'gyms'` tab. The old `selectedGymId`/`gymNavKey` path is NOT used for this action — the old `setSelectedGymId` is only called from `handleViewAllGyms` (which sets it to `undefined`, used for the "View All" tap path).
+- Props threaded to `<GymNavigator ...>` (lines 219–222): `initialRoutesGymId={selectedRoutesGymId}`, `initialRoutesGymName={selectedRoutesGymName}`, `routesNavKey={routesNavKey}` — all three are correctly passed.
+- HomeScreen test (HomeScreen.test.tsx line 246): "calls onSelectGym with gymId and gymName when gym chip is pressed (AC-114/AC-176)" — passes, verifying that `onSelectGym('gym-001', 'MegaSTONE')` is called correctly when the saved gym chip is pressed.
+
+**PASS — Existing GymNavigator behavior is unchanged when `initialRoutesGymId` is not provided (normal gym list → detail → routes flow).**
+
+- `GymNavigator` initializes to `view = { name: 'list' }` (line 104) — unchanged.
+- The `initialRoutesGymId` useEffect is guarded by `if (initialRoutesGymId)` — when the prop is undefined (normal use), the effect body does not execute and the view remains on the list.
+- The `navigateToRoutes(gymId, gymName)` function (line 163) sets `fromHome: false` — unchanged behavior, back from routes returns to detail.
+- The `navigateToDetail` / `navigateToList` / `navigateToRequest` functions are all unchanged.
+- GymDetailScreen, GymListScreen, RequestGymScreen render conditionals are unchanged.
+
+### Acceptance Criteria — Full Regression
+
+**PASS AC-004**: GymListScreen unchanged. All GymListScreen tests pass. City filter, bilingual display, search — all verified by passing test suite. No regression.
+
+**PASS AC-005**: GymDetailScreen "View Routes" button still calls `onViewRoutes(gym.id, gym.name)` → `navigateToRoutes(gymId, gymName)` → `setView({ name: 'routes', gymId, gymName, fromHome: false })`. Back from this path: `view.fromHome === false` → `onBackToGym = () => setView({ name: 'detail', gymId: view.gymId })` — returns to GymDetailScreen as before. BUG-2 from prior QA pass (back went to list) remains fixed. No regression.
+
+**PASS AC-006**: Tapping a gym row calls `onSelectGym(item.id)` → `navigateToDetail(gymId)` → `view = { name: 'detail', gymId }`. Unchanged. Verified by passing GymListScreen tests.
+
+**PASS AC-070**: RequestGymScreen and `submitGymRequest()` are unchanged. 5/5 RequestGymScreen tests pass. No regression.
+
+**PASS AC-120**: GymDetailScreen bookmark icon unchanged. 2/2 bookmark icon state tests pass. No regression.
+
+**PASS AC-121**: GymDetailScreen optimistic bookmark toggle unchanged. 3/3 optimistic-update tests pass (save, unsave, revert on error). No regression.
+
+**PASS AC-122**: GymListScreen read-only saved indicator unchanged. 2/2 indicator tests pass. No regression. Sort order for saved gyms (prior enhancement) also unchanged — `sortedGyms` memo and FlatList `data={sortedGyms}` untouched.
+
+### Shared Conventions Check
+
+**PASS**: No hardcoded hex colors introduced — all color references in new code use theme tokens or are absent.
+
+**PASS**: No hardcoded strings introduced — no user-facing JSX string literals in GymNavigator or AppShell.
+
+**PASS**: Supabase client singleton unchanged — no new `createClient()` calls.
+
+**PASS**: TypeScript strict mode — `npx tsc --noEmit` exits with code 0, 0 errors.
+
+**PASS**: No `@react-navigation/native` hooks introduced — GymNavigator uses `useState`/`useEffect` local state machine; no navigation context required.
+
+**NOTE (pre-existing gap, not a regression introduced by AC-176)**: `gym-service.ts` service functions `fetchSavedGymIds`, `saveGym`, `unsaveGym`, `listGyms`, and `loadGym` throw user-facing errors without calling `console.error('[functionName] error:', error)` first. This violates the "Log Raw Supabase Error Before Throwing a User-Facing String" Shared Convention in `production.md`. This gap was present in the Rev 7 QA pass and was not flagged at that time. The AC-176 change did not touch `gym-service.ts`. Routing: this is a pre-existing implementation bug not introduced by the current change; not a regression blocker for this QA run. Engineer-mod-gym-directory should address in a follow-up pass.
+
+### Gold-Plating Check
+
+No features added beyond what AC-176 specifies:
+- No additional navigator states introduced.
+- The `initialGymId`/`gymNavKey` props (AC-114 old path) are retained but now unused by `handleSelectGym` — they remain available for any future caller. This is explicitly noted in the Engineer's design decisions and is not gold-plating (dead-letter preservation, not a new feature).
+- No new dependencies.
+
+### Overall Verdict
+
+**QA PASS** — AC-176 deep-link fix verified. All five items from the task brief pass:
+1. `GymNavigatorProps` accepts `initialRoutesGymId?: string`, `initialRoutesGymName?: string`, `routesNavKey?: number` — PASS
+2. Navigator initializes to `routes` view (RouteListScreen), skipping GymDetailScreen — PASS
+3. Back from deep-linked RouteListScreen returns to gym list (`fromHome: true` → `navigateToList`) — PASS
+4. `AppShell.tsx` passes `initialRoutesGymId` when user taps a saved gym on HomeScreen — PASS
+5. Existing GymNavigator behavior unchanged when `initialRoutesGymId` is not provided — PASS
+
+All existing MOD-002 ACs (AC-004, AC-005, AC-006, AC-070, AC-120, AC-121, AC-122) pass. 44/44 MOD-002 tests pass. 38/38 MOD-012 tests pass. TypeScript compilation clean (exit 0). 510/512 total tests pass (2 pre-existing failures in mod-beta-video, unrelated to this change).
+
+One pre-existing shared-convention gap noted (missing `console.error` before throw in gym-service.ts service functions) — not a regression from this change, flagged for follow-up.
