@@ -128,14 +128,14 @@ function clearNewBetaCache(): void {
 
 // ── Relative timestamp helper ─────────────────────────────────────────────────
 
-function relativeTime(isoDate: string): string {
-  const now = Date.now();
-  const then = new Date(isoDate).getTime();
-  const diffMs = now - then;
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'today';
-  if (diffDays === 1) return '1 day ago';
-  return `${diffDays} days ago`;
+function relativeTime(
+  isoDate: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+): string {
+  const diffDays = Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000);
+  if (diffDays === 0) return t('home.followingActivity.today');
+  if (diffDays === 1) return t('home.followingActivity.dayAgo');
+  return t('home.followingActivity.daysAgo', { count: diffDays });
 }
 
 // ── Grade filter helpers ──────────────────────────────────────────────────────
@@ -634,7 +634,7 @@ export default function HomeScreen({
                   </Text>
                   {item.latestAt !== null && (
                     <Text style={styles.activityTime}>
-                      {relativeTime(item.latestAt)}
+                      {relativeTime(item.latestAt, t)}
                     </Text>
                   )}
                 </View>

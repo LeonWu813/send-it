@@ -282,7 +282,10 @@
       "title": "追蹤動態",
       "newVideos": "{{count}} 支新 Beta 影片",
       "newVideos_other": "{{count}} 支新 Beta 影片",
-      "empty": "追蹤攀岩者以查看他們的新 Beta 影片。"
+      "empty": "追蹤攀岩者以查看他們的新 Beta 影片。",
+      "today": "今天",
+      "dayAgo": "1 天前",
+      "daysAgo": "{{count}} 天前"
     },
     "routeCard": {
       "newBeta": "新 Beta",

@@ -282,7 +282,10 @@
       "title": "Following Activity",
       "newVideos": "{{count}} new beta video",
       "newVideos_other": "{{count}} new beta videos",
-      "empty": "Follow climbers to see their new beta videos."
+      "empty": "Follow climbers to see their new beta videos.",
+      "today": "today",
+      "dayAgo": "1 day ago",
+      "daysAgo": "{{count}} days ago"
     },
     "routeCard": {
       "newBeta": "New Beta",

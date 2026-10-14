@@ -1859,3 +1859,46 @@ PASS — `npx tsc --noEmit` exits 0, no output. PASS.
 
 Both are implementation bugs — route to `engineer-mod-home`.
 
+---
+
+### Bugfix — QA Run 10 bugs — 2026-10-13
+
+**Bugs fixed (QA Run 10):**
+
+1. **Cross-module import rule violation — `AppShell.tsx` line 68**
+   - Old import: `import SettingsScreen from '../mod-localization-theme/screens/SettingsScreen'`
+   - New import: `import SettingsScreen from '../mod-localization-theme/SettingsScreen'`
+   - MOD-010 created the public re-export at `src/modules/mod-localization-theme/SettingsScreen.tsx` in parallel. `AppShell.tsx` now targets that module-root file, identical pattern to the QA Run 7 fix for `UserProfileNavigator`.
+   - Also updated the comment block in `AppShell.tsx` that described the import.
+
+2. **Inline string literals — `relativeTime()` hardcoded English strings**
+   - Added three i18n keys to `locales/en/common.json` under `home.followingActivity`: `"today"`, `"dayAgo"` (`"1 day ago"`), `"daysAgo"` (`"{{count}} days ago"`).
+   - Added matching zh-TW keys to `locales/zh-TW/common.json`: `"today": "今天"`, `"dayAgo": "1 天前"`, `"daysAgo": "{{count}} 天前"`.
+   - Updated `relativeTime()` signature to accept `t: (key: string, opts?: Record<string, unknown>) => string` and use `t('home.followingActivity.today')`, `t('home.followingActivity.dayAgo')`, `t('home.followingActivity.daysAgo', { count: diffDays })` instead of raw English strings.
+   - Updated the call site `{relativeTime(item.latestAt)}` → `{relativeTime(item.latestAt, t)}` (the `t` function is already in scope from `const { t } = useTranslation('common')`).
+
+**Files changed:**
+- `src/modules/mod-home/AppShell.tsx` — line 68: import path updated; comment block updated.
+- `src/modules/mod-home/screens/HomeScreen.tsx` — `relativeTime()` signature updated; call site passes `t`.
+- `locales/en/common.json` — added `home.followingActivity.today`, `home.followingActivity.dayAgo`, `home.followingActivity.daysAgo`.
+- `locales/zh-TW/common.json` — added matching zh-TW keys.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors (exit 0) |
+| `npm run check:i18n` | PASS — "i18n completeness OK" |
+| `npx jest --testPathPattern="mod-home\|src/components" --passWithNoTests --watchAll=false --no-coverage` | PASS — 52 tests, 5 suites, 0 failures |
+| `npx jest --passWithNoTests --watchAll=false --no-coverage` | PASS — 512 tests total; 1 pre-existing mod-beta-video failure unrelated to MOD-012 |
+| Cross-module import rule: AppShell no longer imports from mod-localization-theme/screens/ | PASS |
+| mod-localization-theme/SettingsScreen.tsx exists at module root (created by MOD-010 in parallel) | PASS |
+| No inline string literals in relativeTime() | PASS |
+| i18n keys: home.followingActivity.today/dayAgo/daysAgo present in EN and zh-TW | PASS |
+| relativeTime() uses t() for all three return paths | PASS |
+| Call site passes t function: relativeTime(item.latestAt, t) | PASS |
+| No hardcoded hex colors | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA RE-VERIFICATION**
+
