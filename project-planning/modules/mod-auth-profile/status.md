@@ -1238,3 +1238,265 @@ On `UserProfileScreen`, the same misalignment existed in the opposite direction:
 | No new dependencies | PASS |
 
 **Result: READY FOR QA**
+
+---
+
+## Engineering Progress — AC-184 — 2026-10-13
+
+### Changes Implemented
+
+**AC-184: Remove notification bell and settings gear from ProfileScreen header**
+
+MOD-012 now owns both controls in the global app-level header. ProfileScreen no longer renders or wires them.
+
+**1. `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`**
+- Removed `@expo/vector-icons` (`Ionicons`) import — only used by the two removed icons; no longer needed.
+- Removed `fetchUnreadNotificationCount` import from `mod-notifications/notification-service` — only fetched for the bell badge.
+- Removed `onNavigateSettings?: () => void` and `onNavigateNotifications?: () => void` from `ProfileScreenProps` interface.
+- Removed those two props from the function destructure.
+- Removed `unreadCount` state (`useState(0)`) — was only used to drive the bell badge.
+- Removed `fetchUnreadNotificationCount()` call from `loadData`'s `Promise.all` — `loadData` now fetches only follower counts and beta videos.
+- Removed the bell `<Pressable>` block (including the `setUnreadCount(0)` optimistic clear and the unread badge `<View>`) from `profileHeader`.
+- Removed the settings gear `<Pressable>` block from `profileHeader`.
+- Removed six styles from `makeStyles`: `notificationsButton`, `notificationsButtonPressed`, `unreadBadge`, `unreadBadgeText`, `settingsButton`, `settingsButtonPressed`.
+- Updated file-level JSDoc comment and `profileHeader` inline comment to reference AC-184.
+
+**2. `src/modules/mod-auth-profile/ProfileNavigator.tsx`**
+- Removed `onNavigateSettings={() => setView('settings')}` and `onNavigateNotifications={() => setView('notifications')}` from the `<ProfileScreen>` render call — no longer consumed by ProfileScreen.
+
+**3. `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx`**
+- Removed `jest.mock('../../mod-notifications/notification-service', ...)` block — module no longer imported by ProfileScreen.
+- Removed `import { fetchUnreadNotificationCount }` — no longer referenced in the test file.
+- Removed `import { waitFor }` from `@testing-library/react-native` — no longer needed.
+- Removed the "renders the bell icon button when onNavigateNotifications is provided (AC-171)" test — button no longer exists.
+- Removed the "shows unread badge when unread count > 0 (AC-173)" test — badge and fetch no longer exist.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors, exit 0 |
+| Bell `<Pressable>` absent from `profileHeader` | PASS |
+| Settings gear `<Pressable>` absent from `profileHeader` | PASS |
+| `Ionicons` import removed | PASS |
+| `fetchUnreadNotificationCount` import removed | PASS |
+| `unreadCount` state removed | PASS |
+| `onNavigateSettings` / `onNavigateNotifications` removed from interface and destructure | PASS |
+| Six bell/settings styles removed from `makeStyles` | PASS |
+| `ProfileNavigator.tsx` no longer passes the two dead props to `<ProfileScreen>` | PASS |
+| `ProfileScreen.test.tsx` mock and AC-171/AC-173 tests removed | PASS |
+| `useSafeAreaInsets()` retained — `headerContainer` still uses `topInset` | PASS |
+| All other ProfileScreen behavior unchanged (avatar, name, bio, AC-145 counts, AC-164 grid) | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+| No new dependencies | PASS |
+
+**Result: READY FOR QA**
+
+---
+
+## QA Run 6 — Regression — 2026-10-13 (AC-184: bell and settings gear removal)
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification after AC-184 change — Rev 35 notification bell and settings gear removed from ProfileScreen header)
+**Scope**: AC-184 primary verification; full regression of AC-061/AC-062 (refetchKey/tab-focus), AC-063, AC-117, AC-145, AC-156, AC-157, AC-164, AC-167; automated suite; TypeScript
+
+---
+
+### 1. AC-184 Primary Verification
+
+**Criterion 1: ProfileScreen.tsx contains no bell icon Pressable**
+
+PASS. Full read of `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` confirmed. The `profileHeader` JSX block (lines 142–207) contains exactly three `<Pressable>` elements: two for follower/following count links (AC-145, lines 165–176 and 178–189) and one for Edit Profile (AC-117, lines 193–205). No bell icon `<Pressable>` or any `<Pressable>` wired to a notifications navigation callback is present anywhere in the file.
+
+**Criterion 2: ProfileScreen.tsx contains no `notificationsButton` style**
+
+PASS. Grep for `notificationsButton`, `notificationsButtonPressed`, `unreadBadge`, `unreadBadgeText` in `ProfileScreen.tsx` returns zero matches. The `makeStyles` function (lines 266–369) defines only: `root`, `headerContainer`, `header`, `avatar`, `avatarPlaceholder`, `displayName`, `bio`, `followCountsRow`, `followCountItem`, `followCountItemPressed`, `followCountNumber`, `followCountLabel`, `editProfileButton`, `editProfileButtonPressed`, `editProfileButtonText`, `videoSectionContainer`, `videoSectionTitle`, `videoSectionEmpty`. No bell or notifications styles present.
+
+**Criterion 3: ProfileScreen.tsx contains no `fetchUnreadNotificationCount` import**
+
+PASS. Grep for `fetchUnreadNotificationCount` in `ProfileScreen.tsx` returns zero matches. The import block (lines 28–49) imports only: `Session` from `@supabase/supabase-js`; React hooks; `react-i18next`; `react-native` UI primitives; `react-native-safe-area-context`; `useTheme`; `BetaVideoGrid`, `BetaVideoReelViewer`, `fetchBetaVideosByUser`, `BetaVideo` from `mod-beta-video`; `SendHistoryProfile` from `mod-profile-history`; `fetchFollowerCounts` from `mod-social-feed/social-feed-service`; `useSession`. No import from `mod-notifications`.
+
+**Criterion 4: ProfileScreen.tsx contains no `onNavigateNotifications` prop**
+
+PASS. The `ProfileScreenProps` interface (lines 51–69) declares: `session`, `onNavigateEditProfile`, `isActive`, `onNavigateToRoute`, `onNavigateToFollowers`, `onNavigateToFollowing`. No `onNavigateNotifications` or `onNavigateSettings` prop is declared. The function destructure (lines 71–78) matches — neither prop is destructured.
+
+**Criterion 5: ProfileScreen.tsx contains no settings gear Pressable**
+
+PASS. Confirmed above — only three `<Pressable>` elements in the entire file; none is the settings gear.
+
+**Criterion 6: ProfileScreen.tsx contains no `settingsButton` style**
+
+PASS. Grep for `settingsButton` or `settingsButtonPressed` in `ProfileScreen.tsx` returns zero matches.
+
+**Criterion 7: ProfileScreen.tsx contains no `onNavigateSettings` prop**
+
+PASS. Confirmed above — `ProfileScreenProps` does not declare `onNavigateSettings`.
+
+**Criterion 8: ProfileNavigator.tsx no longer passes `onNavigateSettings` or `onNavigateNotifications` to ProfileScreen**
+
+PASS. Full read of `src/modules/mod-auth-profile/ProfileNavigator.tsx` confirmed. The `<ProfileScreen>` render call (lines 126–135) passes: `session`, `isActive`, `onNavigateEditProfile`, `onNavigateToRoute`, `onNavigateToFollowers`, `onNavigateToFollowing`. Neither `onNavigateSettings` nor `onNavigateNotifications` appears anywhere in `ProfileNavigator.tsx` (grep returns zero matches).
+
+**Criterion 9: No `Ionicons` / `@expo/vector-icons` import in ProfileScreen.tsx**
+
+PASS. Grep for `Ionicons`, `@expo/vector-icons` in `ProfileScreen.tsx` returns zero matches.
+
+**Criterion 10: `unreadCount` state removed from ProfileScreen.tsx**
+
+PASS. Grep for `unreadCount`, `setUnreadCount` in `ProfileScreen.tsx` returns zero matches. The only `useState` declarations are: `followerCount`, `followingCount`, `betaVideos`, `reelStartIndex`, `showReel`, `refetchKey`.
+
+**Criterion 11: AC-184 referenced in file-level JSDoc comment and inline comment in profileHeader**
+
+PASS. Line 18–19 of `ProfileScreen.tsx`: `"AC-184: Notification bell and settings gear removed from ProfileScreen header —"` / `"both controls now live on MOD-012's global app-level header."` Line 140–141: `"// AC-184: Notification bell and settings gear are NOT rendered here — they"` / `"//         live on MOD-012's global app-level header."` Both references are accurate.
+
+---
+
+### 2. Regression — All Previously Passing ACs
+
+**AC-061 — N/A (not in this module's spec)**
+
+Note: AC-061 is not listed in the spec's Acceptance Criteria Covered section and does not appear in the spec text. The invocation mentioned it as a regression check; it is not owned by MOD-001. No action — not a regression target for this module.
+
+**AC-062 — refetchKey tab-focus mechanism**
+
+PASS. `ProfileScreen.tsx` line 96–102: `const [refetchKey, setRefetchKey] = useState(0)` and `useEffect(() => { if (isActive) setRefetchKey((prev) => prev + 1); }, [isActive])`. `refetchKey` is passed to `<SendHistoryProfile refetchKey={refetchKey} ... />` (line 237). The AC-184 change did not touch these lines — the `refetchKey` mechanism is intact and unchanged. `isOwnProfile` prop also confirmed present (line 236).
+
+**AC-063 — profile privacy setting (public / followers_only)**
+
+PASS. No changes to `EditProfileScreen.tsx`, `upsertProfile()`, `types.ts`, or the original migration. `privacy_setting` enum with `DEFAULT 'public'` persists in the schema. Confirmed unchanged from QA Run 5.
+
+**AC-117 — Edit Profile entry point**
+
+PASS. Edit Profile `<Pressable>` (lines 193–205 of `ProfileScreen.tsx`) present, wired to `onNavigateEditProfile`, with `accessibilityRole="button"` and `accessibilityLabel={t('profile.editProfile')}`. `ProfileNavigator.tsx` wires `onNavigateEditProfile={() => setView('editProfile')}`. Confirmed unchanged from QA Run 5.
+
+**AC-145 — follower/following count links**
+
+PASS. Both count `<Pressable>` elements confirmed in `profileHeader` (lines 165–189). `fetchFollowerCounts` import from `mod-social-feed/social-feed-service` (line 48) unchanged. `followerCount` and `followingCount` state initialized to `0` (lines 88–89). Labels use `t('socialFeed.followers')` and `t('socialFeed.following')` — both confirmed in EN and zh-TW catalogs. `flexDirection: 'row'` with `justifyContent: 'flex-start'` places followers left, following right.
+
+**AC-156 — beta_video_privacy column and service function**
+
+PASS. Migration `supabase/migrations/20260930000002_mod_001_beta_video_privacy.sql` confirmed: `ALTER TABLE public.users ADD COLUMN IF NOT EXISTS beta_video_privacy privacy_setting NOT NULL DEFAULT 'public';`. `updateBetaVideoPrivacy` function confirmed in `auth-service.ts` (line 288) and exported from `index.ts` (line 25).
+
+**AC-157 — updateBetaVideoPrivacy public service function**
+
+PASS. `updateBetaVideoPrivacy(value: 'public' | 'followers_only')` confirmed at `auth-service.ts` lines 288–303: gets session via `supabase.auth.getSession()`, throws if unauthenticated, updates `users.beta_video_privacy` for the current user. Exported from module barrel.
+
+**AC-164 — BetaVideoGrid below send history**
+
+PASS. `profileFooter` JSX (lines 213–228): `<BetaVideoGrid videos={betaVideos} onPressVideo={...} horizontalPadding={theme.spacing.lg} emptyState={...} />` confirmed. `BetaVideoReelViewer` rendered conditionally (lines 251–260) with `reelContext="profile"`, `visible={showReel}`, `initialIndex={reelStartIndex}`, `session={_session}`, `onDismiss`. `fetchBetaVideosByUser(userId)` called in `Promise.all` within `loadData` (line 116). No changes to this block from AC-184 removal.
+
+**AC-167 — Logout removed from ProfileScreen**
+
+PASS. Grep for `signOut`, `logout`, `Logout` in `ProfileScreen.tsx` returns only comments referencing AC-167 (lines 16, 212). No `signOut` import, no logout `<Pressable>`, no `isSigningOut` state, no `handleLogout` function. Confirmed removed and not re-introduced.
+
+**ProfileNavigator — settings and notifications branches still present (not removed)**
+
+PASS. `ProfileNavigator.tsx` still retains `view === 'settings'` → `<SettingsScreen onBack={() => setView('profile')} />` (lines 91–93) and `view === 'notifications'` → `<NotificationsNavigator ...>` (lines 95–104). These branches still work — AC-184 removed the props from `ProfileScreen` that previously triggered `setView('settings')` and `setView('notifications')`, but MOD-012's global header can trigger those views by other means if needed in the future. The branches are not dead code from a routing standpoint; they remain correctly defined.
+
+**No hardcoded hex colors introduced**
+
+PASS. No hex literals in `ProfileScreen.tsx` or `ProfileNavigator.tsx`. All style values use `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.fontWeight.*`, `theme.borderRadius.*` tokens.
+
+**No inline string literals introduced**
+
+PASS. All text content in `ProfileScreen.tsx` uses `t('...')` (i18n-wrapped) or runtime data values. No raw string literals added.
+
+**Supabase singleton (production.md convention)**
+
+PASS. No new `createClient()` call sites introduced by the AC-184 change. `ProfileScreen.tsx` does not import from `lib/supabase` directly.
+
+**No service_role key in client code**
+
+PASS. No new env var reads introduced.
+
+**Cross-module import rule**
+
+PASS. Removing `fetchUnreadNotificationCount` (mod-notifications import) eliminates one cross-module dependency. All remaining cross-module imports in `ProfileScreen.tsx` are: `BetaVideoGrid`/`BetaVideoReelViewer`/`fetchBetaVideosByUser` from `mod-beta-video` (AC-164), `SendHistoryProfile` from `mod-profile-history` (AC-118), `fetchFollowerCounts` from `mod-social-feed` (AC-145). All are authorized cross-module imports per the spec Integration Points.
+
+**useSafeAreaInsets — not removed**
+
+PASS. `useSafeAreaInsets()` (line 81) and `makeStyles(theme, insets.top)` (line 82) retained. `headerContainer: { paddingTop: topInset + theme.spacing.md }` (line 273) still applies the top inset correctly.
+
+**ProfileNavigator exposed as public entry point**
+
+PASS. `export default function ProfileNavigator` unchanged in `src/modules/mod-auth-profile/ProfileNavigator.tsx`.
+
+---
+
+### 3. Automated Test Suite
+
+**mod-auth-profile tests (isolated)**
+
+Command: `npx jest --watchAll=false --testPathPattern="src/modules/mod-auth-profile"`
+Result: 20 tests, 3 suites — all PASS
+Exit code: 0
+
+Suites passing:
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts`
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts`
+- `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx`
+
+Note: `react-native-safe-area-context` mock emits `act()` warnings for async state updates (follower counts + beta videos loading inside `loadData`). These are pre-existing infrastructure warnings from the test harness, not introduced by the AC-184 change, and do not affect test pass/fail results.
+
+**Full test suite**
+
+Command: `npm test -- --watchAll=false`
+Result: 512 tests, 35 suites — 2 FAIL (both in `mod-beta-video`), 510 PASS
+Exit code: 1 (due to `mod-beta-video` failures only)
+
+The 2 failing tests are:
+1. `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — `fetchBetaVideosByUser` `route_name` assertion (pre-existing; noted in prior QA runs and `mod-beta-video` status; `mod-auth-profile` is a consumer of this service, not its owner)
+2. `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — AC-139 `reel-report-button` assertion (pre-existing `mod-beta-video` failure)
+
+Both failures are in `mod-beta-video` (MOD-005), not in `mod-auth-profile` (MOD-001). They were pre-existing before the AC-184 change and are not regressions introduced by this change. MOD-001's own 20 tests are all passing.
+
+---
+
+### 4. TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+Exit code: 0
+
+The AC-184 change removed the `Ionicons` import and `fetchUnreadNotificationCount` import from `ProfileScreen.tsx`. TypeScript exits 0, confirming no new type errors and no broken import references.
+
+---
+
+### 5. Summary
+
+| Item | Result |
+|------|--------|
+| AC-184: No bell icon Pressable in ProfileScreen.tsx | PASS |
+| AC-184: No `notificationsButton` style in ProfileScreen.tsx | PASS |
+| AC-184: No `fetchUnreadNotificationCount` import in ProfileScreen.tsx | PASS |
+| AC-184: No `onNavigateNotifications` prop in ProfileScreenProps | PASS |
+| AC-184: No settings gear Pressable in ProfileScreen.tsx | PASS |
+| AC-184: No `settingsButton` style in ProfileScreen.tsx | PASS |
+| AC-184: No `onNavigateSettings` prop in ProfileScreenProps | PASS |
+| AC-184: ProfileNavigator passes neither prop to ProfileScreen | PASS |
+| AC-184: No `Ionicons` / `@expo/vector-icons` import | PASS |
+| AC-184: `unreadCount` state removed | PASS |
+| AC-062 regression: refetchKey/tab-focus mechanism intact | PASS |
+| AC-063 regression: privacy_setting column + EditProfile unaffected | PASS |
+| AC-117 regression: Edit Profile Pressable present and wired | PASS |
+| AC-145 regression: follower/following count links unchanged | PASS |
+| AC-156 regression: beta_video_privacy migration + service function | PASS |
+| AC-157 regression: updateBetaVideoPrivacy exported from barrel | PASS |
+| AC-164 regression: BetaVideoGrid + BetaVideoReelViewer unchanged | PASS |
+| AC-167 regression: Logout absent from ProfileScreen | PASS |
+| ProfileNavigator settings/notifications branches retained | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Supabase singleton convention | PASS |
+| Cross-module import boundaries | PASS |
+| useSafeAreaInsets retained | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS |
+| mod-auth-profile test suite (20 tests, 3 suites) | PASS |
+| Full test suite — mod-beta-video failures pre-existing, not regressions | PASS (MOD-001 scope) |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**MOD-001 Rev 35/AC-184 regression — QA PASS.**
