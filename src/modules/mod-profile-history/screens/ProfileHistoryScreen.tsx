@@ -30,8 +30,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import SharedRouteCard from '../../../components/RouteCard';
 import { useTheme } from '../../../lib/theme';
-import RouteCard from '../components/RouteCard';
 import StatsPanel from '../components/StatsPanel';
 import {
   fetchProfileHistory,
@@ -231,9 +231,30 @@ export default function ProfileHistoryScreen({
       contentContainerStyle={styles.contentContainer}
       data={filtered}
       keyExtractor={(item) => item.route_id}
-      renderItem={({ item }) => (
-        <RouteCard card={item} onPress={onNavigateToRoute} />
-      )}
+      renderItem={({ item }) => {
+        // Build the route display name per production.md Route Display Name Format:
+        // "{grade} {LocalizedColor}" with section in parentheses when non-null.
+        // e.g. "V3 Blue (Cave)"
+        const colorLabel = item.color_tag
+          ? t(`routeCatalog.colors.${item.color_tag}`)
+          : '';
+        const sectionSuffix = item.section_label ? ` (${item.section_label})` : '';
+        const routeName = `${item.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionSuffix}`;
+
+        return (
+          <SharedRouteCard
+            route={{
+              id: item.route_id,
+              name: routeName,
+              grade: item.grade,
+              photo_url: item.photo_url,
+              gymName: item.gym_name,
+            }}
+            onPress={() => onNavigateToRoute?.(item.route_id, item.gym_id)}
+            hasNewBetaVideo={false}
+          />
+        );
+      }}
       ListHeaderComponent={ListHeader}
       ListEmptyComponent={ListEmpty}
       ListFooterComponent={extraListFooter ?? null}

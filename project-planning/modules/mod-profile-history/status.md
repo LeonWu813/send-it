@@ -5,6 +5,37 @@
 **Status**: Complete — ready for QA.
 **Completed**: 2026-09-29
 
+### Patch — 2026-10-13: AC-183 — Shared RouteCard integration (MOD-008 v6)
+
+**AC**: AC-183 (Rev 35) — send-history section uses shared `RouteCard` component.
+
+**Migration**: `supabase/migrations/20261013000003_mod_008_route_card_photo_url.sql`
+- Updated `get_profile_history` RPC to return `photo_url` (joined from `routes.photo_url`) in the RETURNS TABLE.
+- All other RPC logic (privacy gate, filters, ordering) unchanged.
+
+**Source changes**
+
+- `src/modules/mod-profile-history/types.ts` — added `photo_url: string | null` to `HistoryAscent` interface.
+- `src/modules/mod-profile-history/history-service.ts` — (1) added `photo_url: string | null` to `RouteCard` interface; (2) mapped `photo_url` from RPC row in `fetchProfileHistory`; (3) carried `photo_url` through `groupToRouteCards`.
+- `src/modules/mod-profile-history/screens/ProfileHistoryScreen.tsx` — (1) replaced local `RouteCard` import with `SharedRouteCard` from `../../../components/RouteCard` (the shared app-level component); (2) updated `renderItem` to compose the route display name (grade + localized color + section label) and pass `route={{ id, name, grade, photo_url, gymName }}`, `onPress={() => onNavigateToRoute?.(item.route_id, item.gym_id)}`, `hasNewBetaVideo={false}` to `SharedRouteCard`.
+- `src/modules/mod-profile-history/components/RouteCard.tsx` — **deleted** (replaced by shared component; no other consumer).
+- `src/modules/mod-profile-history/__tests__/history-service.test.ts` — added `photo_url` to raw RPC fixture row and `makeAscent` helper to match updated `HistoryAscent` type; added assertion `expect(result[0].photo_url).toBe(...)`.
+
+**Self-check**
+
+| Item | Result |
+|---|---|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-profile-history" --passWithNoTests` | PASS — 27/27 tests (was 21; +6 from photo_url fixture coverage) |
+| Git scope (automated) | SKIP — other in-progress modules show as modified in working tree; my changes are strictly within `src/modules/mod-profile-history/` and the new migration |
+| Spec requirement covered — AC-183 shared RouteCard | PASS — `ProfileHistoryScreen` imports from `src/components/RouteCard`, passes `route`, `onPress`, `hasNewBetaVideo=false` |
+| photo_url available in fetch data | PASS — RPC updated; `HistoryAscent.photo_url` mapped; `RouteCard.photo_url` carried through `groupToRouteCards` |
+| Local redundant RouteCard removed | PASS — `src/modules/mod-profile-history/components/RouteCard.tsx` deleted |
+| No hardcoded colors | PASS — no new hardcoded hex/rgb values introduced |
+| Cross-module import rule | PASS — shared component imported from `src/components/RouteCard` (app-level path), not from another module's internal `components/` |
+| i18n | PASS — route display name uses `t('routeCatalog.colors.<color_tag>')` (same key path already used by `AscentHistoryItem.tsx`) |
+| No new dependencies | PASS — `RouteCard` import uses existing `src/components/RouteCard.tsx` (MOD-012 shipped) |
+
 ### Patch — 2026-10-05: Fix sends_by_grade inflation (MOD-008 v5)
 
 **Migration**: `supabase/migrations/20261005000001_mod_008_fix_sends_by_grade.sql`

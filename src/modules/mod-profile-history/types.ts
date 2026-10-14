@@ -34,6 +34,8 @@ export interface HistoryAscent {
   grade: string;
   color_tag: string;
   section_label: string | null;
+  /** Route photo URL from routes.photo_url — null when no photo is set. */
+  photo_url: string | null;
   style: 'flash' | 'top' | 'attempt';
   attempts: number;
   note: string | null;

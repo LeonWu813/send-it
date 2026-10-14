@@ -48,6 +48,7 @@ describe('fetchProfileHistory', () => {
         grade: 'V3',
         color_tag: 'blue',
         section_label: null,
+        photo_url: 'https://example.com/photo.jpg',
         style: 'top',
         attempts: 2,
         note: null,
@@ -67,6 +68,7 @@ describe('fetchProfileHistory', () => {
     expect(result[0].grade).toBe('V3');
     expect(result[0].gym_name).toBe('Test Gym');
     expect(result[0].style).toBe('top');
+    expect(result[0].photo_url).toBe('https://example.com/photo.jpg');
     // All filter params must be null — filters removed from this call
     expect(mockRpc).toHaveBeenCalledWith(
       'get_profile_history',
@@ -336,6 +338,7 @@ describe('groupToRouteCards', () => {
       grade: 'V3',
       color_tag: 'blue',
       section_label: null,
+      photo_url: null,
       style: 'top',
       attempts: 1,
       note: null,

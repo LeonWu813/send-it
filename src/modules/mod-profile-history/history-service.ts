@@ -62,18 +62,19 @@ export async function fetchProfileHistory(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- RPC return shape untyped at runtime
   return (data as any[]).map((row): HistoryAscent => ({
-    ascent_id:    row.ascent_id   as string,
-    route_id:     row.route_id    as string,
-    gym_id:       row.gym_id      as string,
-    gym_name:     row.gym_name    as string,
-    grade:        row.grade       as string,
-    color_tag:    row.color_tag   as string,
+    ascent_id:    row.ascent_id    as string,
+    route_id:     row.route_id     as string,
+    gym_id:       row.gym_id       as string,
+    gym_name:     row.gym_name     as string,
+    grade:        row.grade        as string,
+    color_tag:    row.color_tag    as string,
     section_label: row.section_label as string | null,
-    style:        row.style       as HistoryAscent['style'],
-    attempts:     row.attempts    as number,
-    note:         row.note        as string | null,
-    logged_at:    row.logged_at   as string,
-    is_private:   row.is_private  as boolean,
+    photo_url:    (row.photo_url   as string | null) ?? null,
+    style:        row.style        as HistoryAscent['style'],
+    attempts:     row.attempts     as number,
+    note:         row.note         as string | null,
+    logged_at:    row.logged_at    as string,
+    is_private:   row.is_private   as boolean,
   }));
 }
 
@@ -160,6 +161,8 @@ export interface RouteCard {
   grade: string;
   color_tag: string | null;
   section_label: string | null;
+  /** Route photo URL passed through from routes.photo_url for the shared RouteCard component. */
+  photo_url: string | null;
   gym_id: string;
   gym_name: string;
   best_style: 'flash' | 'top';
@@ -190,6 +193,7 @@ export function groupToRouteCards(ascents: HistoryAscent[]): RouteCard[] {
         grade:            a.grade,
         color_tag:        a.color_tag ?? null,
         section_label:    a.section_label ?? null,
+        photo_url:        a.photo_url ?? null,
         gym_id:           a.gym_id,
         gym_name:         a.gym_name,
         best_style:       a.style as 'flash' | 'top',
