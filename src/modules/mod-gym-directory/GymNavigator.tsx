@@ -31,7 +31,11 @@ type GymView =
   | { name: 'list' }
   | { name: 'detail'; gymId: string }
   | { name: 'request' }
-  | { name: 'routes'; gymId: string; gymName: string }
+  /**
+   * `fromHome: true`  — arrived via AC-176 Saved Gyms deep-link; back goes to list.
+   * `fromHome: false` — arrived via GymDetailScreen "View Routes" button; back goes to detail.
+   */
+  | { name: 'routes'; gymId: string; gymName: string; fromHome: boolean }
   /**
    * Direct route deep-link view: shows RouteNavigator initialized to a specific
    * route's detail screen. gymId is the real gym ID passed from AppShell so
@@ -48,6 +52,18 @@ interface GymNavigatorProps {
    *  fires even when the same gym is tapped twice after navigating back. */
   initialGymId?: string;
   gymNavKey?: number;
+  /**
+   * AC-176: When provided, the navigator opens directly on RouteListScreen for
+   * this gym, bypassing GymDetailScreen. Used by AppShell when the user taps a
+   * saved gym chip on the Home screen Saved Gyms strip. Back from RouteListScreen
+   * returns to the gym list (not a detail), since the user arrived from the Home
+   * tab with no prior GymDetailScreen in the back stack.
+   * `routesNavKey` is incremented on every tap so the useEffect fires even when
+   * the same gym is tapped twice after navigating back.
+   */
+  initialRoutesGymId?: string;
+  initialRoutesGymName?: string;
+  routesNavKey?: number;
   /**
    * When provided, the navigator opens directly on the route detail screen
    * for this route ID. Used by AppShell when the user taps a route card in
@@ -74,6 +90,9 @@ export default function GymNavigator({
   session,
   initialGymId,
   gymNavKey,
+  initialRoutesGymId,
+  initialRoutesGymName,
+  routesNavKey,
   routeDeepLinkId,
   gymDeepLinkId,
   routeNavKey,
@@ -97,6 +116,23 @@ export default function GymNavigator({
       setView({ name: 'detail', gymId: initialGymId });
     }
   }, [gymNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // AC-176: Deep-link to a gym's RouteListScreen directly from the Home tab
+  // Saved Gyms strip, bypassing GymDetailScreen.
+  // routesNavKey is the trigger; initialRoutesGymId and initialRoutesGymName
+  // are the payload. Back from RouteListScreen returns to the gym list (not
+  // to GymDetailScreen) because the user arrived from the Home tab.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (initialRoutesGymId) {
+      setView({
+        name: 'routes',
+        gymId: initialRoutesGymId,
+        gymName: initialRoutesGymName ?? '',
+        fromHome: true,
+      });
+    }
+  }, [routesNavKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Deep-link to a specific route detail from MOD-008 profile history.
   // routeNavKey is the trigger; routeDeepLinkId and gymDeepLinkId are the payload.
@@ -125,7 +161,7 @@ export default function GymNavigator({
   }
 
   function navigateToRoutes(gymId: string, gymName: string): void {
-    setView({ name: 'routes', gymId, gymName });
+    setView({ name: 'routes', gymId, gymName, fromHome: false });
   }
 
   return (
@@ -151,7 +187,11 @@ export default function GymNavigator({
           gymId={view.gymId}
           gymName={view.gymName}
           session={session}
-          onBackToGym={() => setView({ name: 'detail', gymId: view.gymId })}
+          onBackToGym={
+            view.fromHome
+              ? navigateToList
+              : () => setView({ name: 'detail', gymId: view.gymId })
+          }
           onNavigateToUser={onNavigateToUser}
         />
       )}

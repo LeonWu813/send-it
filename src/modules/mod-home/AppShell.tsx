@@ -31,9 +31,11 @@
  *   Tapping the settings icon in AppHeader opens SettingsScreen as a
  *   full-screen overlay.
  *
- * Deep-link note (onSelectGym / AC-114, AC-176):
- *   Tapping a saved gym on HomeScreen switches to the Gyms tab AND passes the
- *   gymId + gymName to GymNavigator so it opens that gym's RouteListScreen.
+ * Deep-link note (onSelectGym / AC-176):
+ *   Tapping a saved gym chip on HomeScreen switches to the Gyms tab AND passes
+ *   gymId + gymName via initialRoutesGymId/initialRoutesGymName props so
+ *   GymNavigator opens that gym's RouteListScreen directly. Back from
+ *   RouteListScreen returns to the gym list (no GymDetailScreen in the stack).
  *
  * Route deep-link (onSelectRoute / AC-178):
  *   Tapping a projecting route card on HomeScreen switches to the Gyms tab
@@ -116,6 +118,11 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   const [selectedGymId, setSelectedGymId] = useState<string | undefined>(undefined);
   const [gymNavKey, setGymNavKey] = useState(0);
 
+  // AC-176: Routes deep-link state — tap a saved gym chip → Gyms tab + RouteListScreen directly.
+  const [selectedRoutesGymId, setSelectedRoutesGymId] = useState<string | undefined>(undefined);
+  const [selectedRoutesGymName, setSelectedRoutesGymName] = useState<string | undefined>(undefined);
+  const [routesNavKey, setRoutesNavKey] = useState(0);
+
   // Route deep-link state (AC-178): tap a projecting route → Gyms tab + RouteDetailScreen.
   const [routeDeepLinkId, setRouteDeepLinkId] = useState<string | undefined>(undefined);
   const [gymDeepLinkId, setGymDeepLinkId] = useState<string | undefined>(undefined);
@@ -128,13 +135,13 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     setActiveTab('gyms');
   }
 
-  function handleSelectGym(gymId: string, _gymName: string): void {
-    // Navigate to that gym's GymDetailScreen (deep-link via GymNavigator prop).
-    // AC-114/AC-176: GymNavigator currently supports deep-link to GymDetailScreen;
-    // direct RouteListScreen deep-link is a pending MOD-002 integration point
-    // (requires GymNavigator to expose an initialRoutesGymId prop + gymName).
-    setSelectedGymId(gymId);
-    setGymNavKey((k) => k + 1);
+  function handleSelectGym(gymId: string, gymName: string): void {
+    // AC-176: Navigate directly to that gym's RouteListScreen via the new
+    // initialRoutesGymId prop on GymNavigator. Back from RouteListScreen returns
+    // to the gym list (not a GymDetailScreen) since the user came from Home.
+    setSelectedRoutesGymId(gymId);
+    setSelectedRoutesGymName(gymName);
+    setRoutesNavKey((k) => k + 1);
     setActiveTab('gyms');
   }
 
@@ -210,6 +217,9 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
               session={session}
               initialGymId={selectedGymId}
               gymNavKey={gymNavKey}
+              initialRoutesGymId={selectedRoutesGymId}
+              initialRoutesGymName={selectedRoutesGymName}
+              routesNavKey={routesNavKey}
               routeDeepLinkId={routeDeepLinkId}
               gymDeepLinkId={gymDeepLinkId}
               routeNavKey={routeNavKey}

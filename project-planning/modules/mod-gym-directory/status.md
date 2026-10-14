@@ -2,6 +2,28 @@
 
 ## Engineering Progress
 
+### Implementation — 2026-10-13 (AC-176 deep-link fix — initialRoutesGymId prop)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/GymNavigator.tsx` — added `initialRoutesGymId?: string`, `initialRoutesGymName?: string`, `routesNavKey?: number` to `GymNavigatorProps`; added `fromHome: boolean` discriminant to the `routes` GymView variant; added `useEffect` on `routesNavKey` that sets `view = { name: 'routes', gymId: initialRoutesGymId, gymName: initialRoutesGymName, fromHome: true }`; updated `navigateToRoutes` to set `fromHome: false`; updated `routes` JSX to use `navigateToList` as `onBackToGym` when `view.fromHome === true` (back goes to gym list, not GymDetailScreen), and `setView({ name: 'detail' })` when `fromHome === false` (preserves existing behavior).
+- `src/modules/mod-home/AppShell.tsx` — added `selectedRoutesGymId`, `selectedRoutesGymName`, `routesNavKey` state; updated `handleSelectGym` to use the new routes deep-link state (sets `selectedRoutesGymId`/`selectedRoutesGymName`/increments `routesNavKey`) instead of `selectedGymId`/`gymNavKey`; threaded `initialRoutesGymId`, `initialRoutesGymName`, `routesNavKey` as props to `GymNavigator`; updated the header comment's deep-link note.
+
+**Design decisions:**
+- `fromHome` discriminant on the `routes` view variant: rather than a separate `routes-from-home` view name, a boolean flag keeps the discriminated union compact and the JSX rendering path single. The flag is the minimal extension needed to distinguish the two back-navigation targets.
+- `routesNavKey` trigger pattern mirrors the existing `gymNavKey` and `routeNavKey` patterns — the key increments on every tap so `useEffect` fires even when the same gym is tapped twice after navigating back.
+- `initialGymId`/`gymNavKey` are left in place (not removed) since they were part of the existing interface. They are now unused by AppShell's `handleSelectGym` but could be used by other callers.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Tests: `npm test -- --watchAll=false` — 512 total (511 pass, 1 pre-existing failure in `mod-beta-video` `beta-video-service.test.ts` line 417 — confirmed pre-existing by stash/restore verification, unrelated to this change)
+- Scope: changes are limited to `GymNavigator.tsx` (MOD-002) and `AppShell.tsx` (MOD-012 integration wiring, explicitly required by AC-176 to complete the end-to-end deep-link)
+- No new dependencies introduced
+- No hardcoded hex colors or strings
+- `fromHome: true` path: `onBackToGym = navigateToList` (back stack: Home → RouteListScreen → gym list)
+- `fromHome: false` path: `onBackToGym = () => setView({ name: 'detail', gymId })` (back stack: gym list → detail → routes → detail — unchanged behavior)
+
+---
+
 ### Implementation — 2026-09-24 (i18n terminology fix — replace all zh-TW 體育館 with 岩館)
 
 **Files modified:**
