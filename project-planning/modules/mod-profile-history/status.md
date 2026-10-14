@@ -334,3 +334,132 @@ Note: the i18n key used is `routeCatalog.colors.<color_tag>` (not `routes.colors
 All 3 bugs verified fixed. No new regressions detected. Full automated suite: 399/399 pass.
 
 QA PASS — mod-profile-history is ready for human QA.
+
+---
+
+## QA Run 3 — Regression — 2026-10-13
+
+**QA verdict: PASS**
+**Mode**: regression-test (AC-183 shared RouteCard integration — re-verify all existing ACs + verify AC-183 items)
+**Tester**: qa-mod-profile-history
+
+---
+
+### Automated checks
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-profile-history" --passWithNoTests` | PASS — 27/27 tests (was 21; +6 from photo_url fixture coverage) |
+| `npx jest --passWithNoTests` (full suite) | 510/512 pass — 2 failures in `mod-beta-video` only; confirmed pre-existing (last mod-beta-video commit `4c91738` predates AC-183 engineer commit `d3def04`; no mod-profile-history file in those failures). Zero regressions introduced by AC-183 patch. |
+
+---
+
+### AC-183 specific verification
+
+**AC-183 item 1 — SharedRouteCard imported from app-level path** — PASS
+
+`ProfileHistoryScreen.tsx` line 33: `import SharedRouteCard from '../../../components/RouteCard';`
+
+Resolved path: `src/components/RouteCard.tsx` (owned by MOD-012). This is the correct app-level shared component path per the App-Level Shared Presentational Components convention in `production.md` and per the AC-183 spec text ("imported via the app-level path `src/components/RouteCard`"). No internal module `components/` path used.
+
+**AC-183 item 2 — Local RouteCard.tsx deleted** — PASS
+
+`src/modules/mod-profile-history/components/` directory contains: `AscentHistoryItem.tsx`, `FilterBar.tsx`, `SendHistoryProfile.tsx`, `StatsPanel.tsx`. No `RouteCard.tsx` present. The local redundant component has been deleted as required.
+
+**AC-183 item 3 — Route cards render with photo_url thumbnail on right and hasNewBetaVideo={false}** — PASS
+
+`ProfileHistoryScreen.tsx` lines 244–256 `renderItem`:
+```
+<SharedRouteCard
+  route={{
+    id: item.route_id,
+    name: routeName,
+    grade: item.grade,
+    photo_url: item.photo_url,
+    gymName: item.gym_name,
+  }}
+  onPress={() => onNavigateToRoute?.(item.route_id, item.gym_id)}
+  hasNewBetaVideo={false}
+/>
+```
+
+`src/components/RouteCard.tsx` layout: left side = route info (`<View style={styles.info}>`), right side = thumbnail (lines 88–97: `route.photo_url !== null ? <Image source={{ uri: route.photo_url }} style={styles.thumbnail} ... /> : <View style={styles.thumbnailPlaceholder} />`). `hasNewBetaVideo={false}` suppresses the "New Beta" badge correctly. Photo renders on the right as required.
+
+**AC-183 item 4 — Migration includes photo_url in RETURNS TABLE** — PASS
+
+`supabase/migrations/20261013000003_mod_008_route_card_photo_url.sql` RETURNS TABLE (line 32): `photo_url TEXT`. Body (line 51): `r.photo_url AS photo_url`. Joined from `public.routes r` via `JOIN public.routes r ON r.id = a.route_id`. Migration naming follows `YYYYMMDDNNNNNN_mod_NNN_<slug>.sql` convention. SECURITY INVOKER and `SET search_path = public` are present (lines 39–41). REVOKE/GRANT pattern correct (lines 81–82).
+
+**AC-183 item 5 — HistoryAscent type includes photo_url: string | null** — PASS
+
+`src/modules/mod-profile-history/types.ts` lines 38–39:
+```
+/** Route photo URL from routes.photo_url — null when no photo is set. */
+photo_url: string | null;
+```
+
+**AC-183 item 6 — photo_url carried through history-service** — PASS
+
+`history-service.ts`:
+- `RouteCard` interface (line 165): `photo_url: string | null`
+- `fetchProfileHistory` mapping (line 72): `photo_url: (row.photo_url as string | null) ?? null`
+- `groupToRouteCards` (line 196): `photo_url: a.photo_url ?? null`
+
+The field is correctly mapped from RPC row through `HistoryAscent` into `RouteCard`.
+
+**AC-183 item 7 — Route display name format preserved (production.md convention)** — PASS
+
+`ProfileHistoryScreen.tsx` lines 238–242 composes the route name used by `SharedRouteCard`:
+```
+const colorLabel = item.color_tag
+  ? t(`routeCatalog.colors.${item.color_tag}`)
+  : '';
+const sectionSuffix = item.section_label ? ` (${item.section_label})` : '';
+const routeName = `${item.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionSuffix}`;
+```
+Input [grade='V3', color_tag='blue', section_label='Cave'] produces routeName='V3 Blue (Cave)'. Matches production.md Route Display Name Format. The BUG-003 fix (previously verified in QA Run 2 on `AscentHistoryItem.tsx`) is also correctly applied in `ProfileHistoryScreen`'s new `renderItem` using the same i18n key path `routeCatalog.colors.<color_tag>`.
+
+---
+
+### Previously-passing ACs re-verified (regressions check)
+
+**AC-060** — PASS. `fetchProfileHistory` called with all null filters in `ProfileHistoryScreen` — all ascents fetched, client-side grade-tab filtering applied. RPC WHERE clauses (gym/grade/date filters) unchanged in the new migration. Server-side filtering logic untouched.
+
+**AC-061** — PASS. `StatsPanel` is rendered in `ListHeader` (`ProfileHistoryScreen.tsx` line 214: `{stats !== null && <StatsPanel stats={stats} />}`). `fetchProfileStats` call unchanged. All 5 StatsPanel tests still pass.
+
+**AC-062** — PASS. `useEffect(() => { void loadData(); }, [loadData, refetchKey])` (line 136) unchanged. `refetchKey` prop still accepted and wired. The complete chain (`AppShell → ProfileNavigator → ProfileScreen → SendHistoryProfile → ProfileHistoryScreen`) verified in QA Run 2 is intact; no files in that chain were modified by the AC-183 patch.
+
+**AC-064** — PASS. Privacy gate: `!isOwnProfile && statsData.total_sends === 0 && historyData.length === 0 → setVisibility('hidden')` (lines 121–125) unchanged. Hidden banner render (lines 157–164) unchanged. `get_profile_history` RPC privacy WHERE clause unchanged in the new migration (only added `r.photo_url AS photo_url` to the SELECT list and RETURNS TABLE; all filter/privacy logic identical to prior version).
+
+**SECURITY INVOKER** — PASS. New migration `20261013000003_mod_008_route_card_photo_url.sql` uses `SECURITY INVOKER` (line 39) and `SET search_path = public` (line 41). Existing `get_profile_stats` RPC unchanged.
+
+**Migration convention** — PASS. New migration `20261013000003_mod_008_route_card_photo_url.sql` follows `YYYYMMDDNNNNNN_mod_NNN_<slug>.sql` convention.
+
+**Safe area insets** — PASS. `useSafeAreaInsets()` + `makeStyles(theme, topInsetForStyles)` + `paddingTop: topInset + theme.spacing.md` pattern unchanged in `ProfileHistoryScreen.tsx`.
+
+**i18n** — PASS. `routeName` composition uses `t('routeCatalog.colors.<color_tag>')` — same key path used throughout the module. No new i18n keys added by AC-183 patch. No keys removed.
+
+**No hardcoded hex colors** — PASS. No new hex/rgb values in any changed file. `src/components/RouteCard.tsx` uses only `theme.colors.*` tokens.
+
+**Supabase singleton** — PASS. `history-service.ts` import unchanged.
+
+**Grade never stored in Ascent** — PASS. No schema changes to the `ascents` table. New migration only modifies `get_profile_history` function return shape.
+
+**Cross-module import rule** — PASS. `SharedRouteCard` imported from `src/components/RouteCard` (app-level, not another module's internal directory). This is the explicit exception defined in the App-Level Shared Presentational Components convention.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0.
+
+---
+
+### Non-blocking observations
+
+- The `console.error` before throw convention (`production.md §Log Raw Supabase Error Before Throwing`) is still absent from `fetchProfileHistory`, `fetchProfileStats`, and `fetchHistoryGyms` in `history-service.ts`. This is a pre-existing gap — not introduced by AC-183 — and was present at QA Run 1 and QA Run 2. Not a regression; noted for awareness.
+- `src/components/RouteCard.tsx` contains two raw pixel values in `routeName` (`marginBottom: 2`) and `grade`/`gymName` (`marginBottom: 2`) and `newBetaBadge` (`paddingVertical: 2`). These are layout constants, not hex colors — no violation of the production.md Theming Rules. MOD-012 owns this file; not a MOD-008 finding.
+
+---
+
+### Handoff
+
+AC-183 regression test: all items verified. No regressions introduced by the AC-183 patch. All pre-existing ACs (AC-060, AC-061, AC-062, AC-064) continue to pass.
+
+QA PASS — mod-profile-history AC-183 regression verified.
