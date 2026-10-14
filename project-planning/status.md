@@ -3,15 +3,16 @@
 ## Last Action
 
 ```
-agent: qa-mod-moderation
-mode: regression
-module: mod-moderation
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: 3693c85d0e67b53f19e165519986eb6dd56084bd
+commit: 6acc1e5208fb0e1fa8761811c88df4233909da7a
 timestamp: 2026-10-13T00:00:00Z
 ```
 
 
+- **2026-10-13 [SUBSTANTIVE]** — HomeScreen/navigation/global-UI overhaul: 8-part UX change set (PRD Revision 35). Leon (via coordinator) approved the exact change set and directed the [SUBSTANTIVE] tag. **PRD change — 8 parts**: (1) **Events Banner → admin-managed** — AC-112 revised so banner content is operator-controlled; AC-174 (new) specifies the admin-managed source. (2) **Saved Gyms list** — AC-175 (new) orders by most-recently-viewed; AC-176 (new) taps a saved gym straight into `RouteListScreen`; AC-114 revised to align with the new ordering/nav. (3) **Projecting Routes section** on HomeScreen — AC-177 (new) renders a section sourced from `saved_routes`; AC-178 (new) adds V-grade filter tabs. (4) **"New beta video" tag** — AC-179/AC-180/AC-181 (new) surface a "new beta video" indicator backed by a new `user_route_visits` table tracking last-viewed timestamps per user/route. (5) **Following activity section** — AC-182 (new) replaces the retired AC-123/AC-124; shows activity from followed users. (6) **Shared route card** — AC-183 (new) renders a shared route card with a `photo_url` thumbnail on the right. (7) **Global app-level header** — AC-184 (new) adds a persistent app-level header (bell icon left, settings icon right) on all screens except the reel viewer and auth screens; AC-171 and AC-173 revised to reflect the relocated bell/settings affordances. (8) **Swipe-to-go-back** — AC-185 (new) adds a swipe-back gesture on every screen that shows a back icon. **Non-Goal reversal**: the §2 Non-Goal that forbade a saved-routes surface on Home was **removed** (parts 2–3 depend on this). **Retired ACs**: AC-123 and AC-124 retired, replaced by AC-182. **`**Revision**` bumped 34 → 35; Status line `[SUBSTANTIVE] — Revision 35`; Date → 2026-10-13.** **Why [SUBSTANTIVE]**: new DB table (`user_route_visits`), new cross-cutting UI surfaces (global header, swipe-back, shared route card), new module dependencies, Non-Goal reversal, and substantial AC additions/retirements — well past the trivial threshold. **Requires Tech Lead architecture review BEFORE Doc-Sync/Engineering** on the flagged items: AC-174 (admin-managed Events Banner table/schema + owning module); AC-179/AC-180 (new `user_route_visits` table schema, RLS, and owning module); AC-183 (shared route card — shared-component ownership decision); AC-184 (global app-level header — owning module for a cross-cutting UI surface); AC-185 (swipe-to-go-back — owning module / navigation-layer decision). Module-boundary, dependency, and phase-plan impact to be determined by that review; several new ACs are cross-cutting and may not map cleanly to one existing module. **Next step**: **run `claude --agent tech-lead`** for architecture review of the flagged items (AC-174, AC-179/180, AC-183, AC-184, AC-185) BEFORE Doc-Sync. Do NOT invoke Doc-Sync until the Tech Lead has recorded module-ownership and schema decisions for these items. Doc-Sync NOT invoked here.
 - **2026-10-13 [TRIVIAL]** — AC-085 report-digest email deferred for Phase 1 (PRD Revision 34). Leon (via coordinator) approved the exact change verbatim and directed the [TRIVIAL] tag. **Decision (user-confirmed)**: real email delivery (Resend/SMTP) and a registered cron schedule for the 6-hourly open-report digest are NOT required before App Store submission and are deferred post-launch. App Store Guideline 1.2 requires a report UI and a stated 24-hour response commitment — it does not require a technical alerting mechanism. For Phase 1's small user base the operator (wu.tsan@northeastern.edu) manually checks Supabase Studio for open reports. The existing `report-digest` Edge Function queries the `Report` table correctly but only `console.log`s the digest in Phase 1; this stub is accepted for Phase 1. Real email + cron are revisited post-launch when report volume warrants automation. **PRD change**: §8 MOD-009 AC-085 marked `(revised, Rev 34)` with a "Phase 1 deferral (accepted, not a bug)" note appended (digest-scope language unchanged — still `Report`-table only, excludes `VideoReport`). Two descriptive cross-references updated for consistency: §10 "Report alerting" bullet and §12 "Admin bandwidth for reports" risk now note the same Phase 1 deferral. PRD Status line `[TRIVIAL] — Revision 34`; `**Revision**` bumped 33 → 34; Date → 2026-10-13. **Why [TRIVIAL]**: no new AC ID, no new module, no new dependency, no DB migration, no module-boundary change, no phase-plan change. Documents an already-accepted Phase 1 scope posture on an existing AC; the digest's data scope and all other ACs are unchanged. **For Doc-Sync**: sync the MOD-009 spec so AC-085 carries the Phase 1 deferral note (email delivery + cron deferred post-launch; Edge Function exists + queries correctly but console.logs only in Phase 1; operator reviews Studio manually). No new module directory. **Run `claude --agent doc-sync`** — Doc-Sync NOT invoked here.
 - **2026-10-07 [TRIVIAL]** — AC-171 bell-icon position correction (PRD Revision 33). Leon (via coordinator) approved the exact change verbatim and directed the [TRIVIAL] tag. Change: in §8 MOD-007 AC-171 the bell icon's position in the `ProfileScreen` header was corrected from "top-right" to "top-left" (bell on the left; the settings gear remains on the right). The AC marker was updated from `(new, Rev 32)` to `(revised, Rev 33)` to reflect the in-place revision. PRD Status line `[TRIVIAL] — Revision 33`; `**Revision**` bumped 32 → 33; Date 2026-10-07. **Wording-only — no behavioral change beyond the icon's horizontal position.** No new AC ID, no new module, no new dependency, no DB migration, no module-boundary change, no phase-plan change. The prior Rev 32 [SUBSTANTIVE] entry's decision-1 note recorded "top-right" as the original (now-corrected) placement — this entry supersedes that positional detail only. **Doc-Sync not invoked for this change** — the engineer is already fixing the code directly; the MOD-007/MOD-001 specs may carry the corrected AC-171 position on the next routine sync pass.
 - **2026-10-07 [SUBSTANTIVE]** — MOD-007 Notifications: four user-confirmed decisions closing gaps in the in-app notification inbox (PRD Revision 32). Leon (via coordinator) approved the exact change set verbatim and directed the [SUBSTANTIVE] tag. PRD Status line `[SUBSTANTIVE] — Revision 32`; `**Revision**` bumped 31 → 32; Date 2026-10-07. **No DB migration required** — the `Notification` table already carries `recipient_user_id`, `actor_user_id`, `target_id`, `target_type`, and `is_read` (PRD §9 Data Model). **Four decisions**:
@@ -313,6 +314,183 @@ timestamp: 2026-10-13T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-13 — change (Rev 35 architecture review: 5 flagged items — AC-174 banner source, AC-179/180 user_route_visits, AC-183 shared route card, AC-184 global header, AC-185 swipe-back)
+
+**Context**: PRD Rev 35 (HomeScreen/navigation/global-UI overhaul) flagged five items for Tech Lead sign-off before Doc-Sync runs. Advisory review of each: table/schema/RLS choices, module ownership, query shapes, and cross-cutting mount strategy. No files edited except this review and the Proposed Shared Conventions below. Every recommendation is advisory — the human and PM decide what to adopt; Doc-Sync carries the approved conventions into `production.md`, and the owning-module assignments flow into the module specs on the next sync. These five sit alongside the already-flagged Rev 35 DB items that are not in this batch (`user_route_visits` is here; `saved_routes`, `beta_videos` reporting columns, and the `ascent_style` enum swap were reviewed in prior entries and are unchanged).
+
+---
+
+#### Item 1 — AC-174: Admin-managed Events Banner data source
+
+**Recommendation: Option B — a dedicated `admin_banners` table.** Reject reusing `app_settings`.
+
+Rationale:
+- **`app_settings` is architecturally wrong for this.** Per the established `app_settings Table Pattern` convention (production.md), `app_settings` has **RLS enabled with NO policies and NO client-facing grants** — authenticated and anon users receive **zero rows**. It is read **only inside SECURITY DEFINER functions**. AC-174 requires **read-all-authenticated**, which is the exact opposite of that table's contract. Reusing it would force either (a) punching a client-facing SELECT grant into `app_settings` (which breaks the "feature toggles are never client-readable" guarantee that `submit_route` auto-approve and other DEFINER-gated toggles rely on), or (b) wrapping the banner read in a DEFINER RPC for no reason. Neither is acceptable. `app_settings` stays DEFINER-only.
+- **The banner is richer than a key/value string.** AC-112 (one banner at a time, hidden when none active) plus the natural operator need (title, body, optional image, an active flag, optional expiry) do not fit a single `value TEXT` cell without serializing JSON into it — which loses column-level typing, makes the "is there an active banner right now?" query awkward, and gives the Studio-editing operator a worse authoring surface.
+- A dedicated table is one migration — cheap, and it is the clean home for the read-all/write-admin-only RLS split the AC asks for.
+
+Proposed schema (advisory — final wording is Doc-Sync's to carry in):
+```
+admin_banners
+ - id uuid PK default gen_random_uuid()
+ - title text (nullable)
+ - body text (nullable)
+ - image_url text (nullable)
+ - active boolean NOT NULL default false
+ - expires_at timestamptz (nullable)
+ - created_at timestamptz NOT NULL default now()
+ - updated_at timestamptz NOT NULL default now()
+```
+RLS (read-all-authenticated / write-admin-only, using the existing `public.is_admin()` helper — do NOT inline the JWT check):
+- SELECT policy: `TO authenticated USING (true)` (all authenticated users read).
+- INSERT/UPDATE/DELETE policy: `USING (public.is_admin()) WITH CHECK (public.is_admin())`.
+- `GRANT SELECT` to `authenticated`; admin writes go through service_role (Studio) which bypasses RLS, so the admin-write policy is belt-and-suspenders for the `is_admin()` claim path (Phase 1.5-ready, consistent with the `Admin Identity` convention).
+
+"One banner at a time" selection (AC-112): the read query selects the single active, non-expired banner, most-recent first:
+```sql
+SELECT * FROM admin_banners
+WHERE active = true AND (expires_at IS NULL OR expires_at > now())
+ORDER BY created_at DESC
+LIMIT 1;
+```
+If none returned, the section hides (AC-112). The client never needs to enforce "exactly one" — `LIMIT 1` on the ordered active set does it, and the operator is responsible for not leaving multiple banners `active` (acceptable for a Studio-only, solo-operator surface in Phase 1).
+
+**Owning module: MOD-012 (Home).** MOD-012 owns the Events Banner section and the HomeScreen that renders it, so it owns both the `admin_banners` migration and the read service (`fetchActiveBanner()`). This mirrors MOD-012 already owning the Home surface and its data reads. No other module reads banners in Phase 1. This supersedes the existing `src/lib/banners.ts` static-banner convention for this surface — the banner is now data-sourced, not a static constant; `banners.ts` becomes dead/removable for the admin banner (coordinate with Doc-Sync whether to retire it).
+
+---
+
+#### Item 2 — AC-179/AC-180: `user_route_visits` table + the "new beta video" query
+
+**Table placement / ownership: MOD-003 (Route Catalog).** MOD-003 owns `routes`, owns the route detail screen where the upsert fires (AC-179), owns `saved_routes`, and already owns the AC-180/AC-181 tag logic per its revised Purpose. Placing `user_route_visits` anywhere else splits route-scoped ownership. MOD-003 owns the migration and the upsert service.
+
+**RLS: own-rows-only, confirmed.** Mirror the confirmed `saved_routes` / `saved_gyms` design exactly: `user_id DEFAULT auth.uid()` FK to `public.users(id)` ON DELETE CASCADE, `route_id` FK to `routes(id)` ON DELETE CASCADE, composite PK `(user_id, route_id)`, own-rows RLS for SELECT / INSERT / UPDATE (`user_id = auth.uid()`), `GRANT SELECT, INSERT, UPDATE` to `authenticated`. **Note the one deliberate difference from `saved_routes`: this table needs UPDATE** (saved_routes was INSERT/DELETE only), because the upsert re-writes `last_viewed_at` on every visit. No DELETE grant is needed. The FK must target `public.users(id)` not `auth.users(id)` per the `User-Owned Tables That Participate in PostgREST Joins Reference public.users` convention (future-proofs an embedded join even if Phase 1 doesn't use one).
+
+**Upsert pattern (AC-179), confirmed:**
+```sql
+INSERT INTO user_route_visits (user_id, route_id, last_viewed_at)
+VALUES (auth.uid(), $1, now())
+ON CONFLICT (user_id, route_id) DO UPDATE SET last_viewed_at = now();
+```
+Fires once per route detail open. `user_id` is NOT a client parameter — it derives from `auth.uid()` (the DEFAULT plus the RLS WITH CHECK enforces this). This is a plain authenticated upsert under RLS, not a DEFINER RPC — the user owns their own visit rows, so no privilege escalation is needed.
+
+**Indexing:** the composite PK `(user_id, route_id)` already serves the per-(user,route) lookup for AC-180's tag check and the upsert conflict target — no extra index needed there. **Add a secondary index on `(route_id)`** only if AC-180 is implemented as a server-side join across many routes (see below). For the recommended client-side batch shape it is not strictly required, but it is cheap and harmless; I recommend adding `CREATE INDEX ON user_route_visits (route_id)` to keep the server-side option open and to support the AC-175 most-recently-viewed-gym derivation (which joins visits → routes → gym).
+
+**AC-180 tag computation — owning module and query shape.**
+
+*Owning module:* **MOD-003.** Its revised Purpose already claims "the 'new beta video' tag logic and rendering on route cards." The tag is route-scoped and belongs with the route card data. MOD-012's HomeScreen and MOD-003's RouteListScreen both *consume* it; MOD-003 *computes* it. MOD-005 is read-only here (its visibility predicate is reused, not re-owned).
+
+*Query shape — recommend a SECURITY INVOKER RPC that takes a set of route IDs and returns the qualifying subset.* This is the cleanest fit for the existing conventions and avoids an N+1:
+
+```sql
+-- MOD-003-owned, SECURITY INVOKER (RLS scopes user_route_visits to auth.uid()
+-- automatically; the beta-video visibility predicate is applied in-query).
+CREATE FUNCTION routes_with_new_beta(route_ids uuid[])
+RETURNS TABLE (route_id uuid) ... SECURITY INVOKER STABLE AS $$
+  SELECT r.id
+  FROM unnest(route_ids) AS r(id)
+  WHERE EXISTS (
+    SELECT 1 FROM beta_videos bv
+    WHERE bv.route_id = r.id
+      AND (bv.is_reported = false OR bv.report_dismissed = true)   -- AC-142 canonical predicate
+      AND bv.created_at > COALESCE(
+            (SELECT urv.last_viewed_at
+             FROM user_route_visits urv
+             WHERE urv.user_id = auth.uid() AND urv.route_id = r.id),
+            'epoch'::timestamptz)   -- never-visited => epoch => any video qualifies (AC-180)
+  );
+$$;
+```
+
+Why this shape:
+- **Batched, not N+1.** Follows the `Personal Cross-Module Data Overlays` convention: the consuming screen calls it **once per screen** with all visible route IDs (`routes_with_new_beta(visibleRouteIds)`), never once per card. Both HomeScreen (Projecting section) and RouteListScreen call it with their visible set.
+- **SECURITY INVOKER + `auth.uid()`** means `user_route_visits` is RLS-scoped automatically and the tag is correctly per-viewer.
+- **The never-visited case (AC-180) is handled by `COALESCE(..., 'epoch')`** — no visit row ⇒ every visible beta video is "newer than epoch" ⇒ route qualifies. Clean, no special-casing in the client.
+- **Beta-video visibility:** the AC-142 reported-video predicate is reused verbatim in-query. **Important caveat for the owning engineer:** AC-180 says the "visible beta videos" set must also respect the **blocked-user filter (AC-154)** and **beta-video privacy (AC-158)**. AC-154 is currently a *client-side* filter over a fetched set (per its own AC wording and the existing MOD-005 implementation), and AC-158 composes a Follow-relationship check. Pushing all three into this RPC is possible but duplicates MOD-005's visibility logic server-side and risks it drifting from the client-side AC-154 path. **Flag for PM/human decision (see Concerns):** either (a) accept that the "new beta video" tag uses only the AC-142 predicate server-side and is a best-effort indicator that may occasionally over-count when a blocked/private video exists (low-stakes — it's a tag, not content exposure), or (b) require the RPC to also apply AC-154/AC-158 server-side, accepting the duplicated predicate. My recommendation is **(a) for Phase 1**: the tag is an advisory "something's new" dot, not a content surface; a blocked/followers-only video is never actually *shown* on the card (AC-154/AC-158 still gate the route detail grid and viewer), so the worst case is a tag with no visible new video behind it after the user opens the route. That is an acceptable Phase 1 trade-off and avoids duplicating the visibility stack. This is a PM/human call, not mine to decide.
+
+*Alternative considered and not recommended:* computing the tag purely client-side by fetching each route's beta videos. Rejected — it is N+1 across the route list and re-implements the visibility predicate in the client for every surface. The RPC keeps one canonical definition.
+
+---
+
+#### Item 3 — AC-183: Shared route card component
+
+**Recommendation: Option A — app-level `src/components/RouteCard.tsx`.** Reject Option B (MOD-003 exports it).
+
+Rationale:
+- **The existing `Cross-Module Imports` convention permits importing another module's public *service functions* and *navigator entry-point components* — not its internal `screens/` or `components/`.** A route card is a plain presentational `components/` item. If MOD-003 "exported" it, MOD-012 and MOD-008 would be importing from MOD-003's internal `components/` directory, which the convention explicitly forbids. So Option B as literally stated violates the import rule. The convention does **not** currently extend to UI components — and the right fix is not to loosen the cross-module rule (that invites every module reaching into every other module's components), but to put genuinely shared, module-agnostic presentational components where they belong: a top-level `src/components/`.
+- **Precedent already exists for app-level shared code.** `src/lib/` holds cross-cutting non-component code (`theme.ts`, `i18n.ts`, `banners.ts`, `supabase.ts`) owned by no single module. A route card consumed by three unrelated modules (MOD-012 Home, MOD-003 RouteList, MOD-008 send history) is the component analogue. It belongs to the app, not to one module.
+- **Avoids a circular/awkward dependency.** MOD-008 (send history) does not currently depend on MOD-003; making it import a MOD-003 component to render a send row would create a new cross-module coupling purely for a visual element.
+
+**Ownership of the app-level component:** this is the one wrinkle — `src/components/RouteCard.tsx` is not inside any module directory, so "which engineer owns it" needs an explicit answer. **Recommend: MOD-012 (Home) owns app-level shared presentational components** as the aggregator/shell module, the same way it owns the cross-cutting shell. It is already the aggregator that composes other modules and the natural home for app-level UI concerns in this codebase. The alternative — a new "shared/app-shell" ownership — is heavier than warranted for Phase 1. (If the human prefers, MOD-003 could own the *file* while it lives at `src/components/` since the card is route-domain — but then the "no importing another module's internals" rule is satisfied by location, and the import path is app-level. I lean MOD-012 for consistency with it owning the other two Rev 35 cross-cutting surfaces, but this is a human call.)
+
+**Import contract for consumers:** all three consumers import `RouteCard` from `src/components/RouteCard.tsx` (app-level path), never from a module directory. The card is **pure/presentational**: it takes a route-shaped prop plus a `hasNewBeta: boolean` prop (computed by the consumer via MOD-003's `routes_with_new_beta` RPC, Item 2) and an `onPress` callback. The card does **not** fetch the tag itself — keeping it presentational means it has no module-service dependency and the N+1 concern stays with the screen, not the card. `photo_url` is read straight off the route prop (no schema change, per AC-183).
+
+**New Proposed Shared Convention needed** (below) to document that `src/components/` is the home for app-level shared presentational components, owned by MOD-012, imported by app-level path — because the current `Cross-Module Imports` convention has no provision for shared UI components and would otherwise be read as forbidding this.
+
+---
+
+#### Item 4 — AC-184: Global app-level header
+
+**Owning module: MOD-012 (Home).** It owns the tab shell (`AppShell`) and is already the aggregator that composes MOD-007 (inbox) and MOD-010 (settings) via their public navigator entry points. The header wires to both, so MOD-012 is the correct owner. Confirmed.
+
+**Where it mounts — recommend Option B (tab-shell level in MOD-012), NOT Option C (App.tsx root).** Reasoning:
+
+- **The exclusion set rules out a naive app-root absolute overlay.** AC-184 excludes the header from (1) the fullscreen reel viewer (AC-133) and (2) auth/signed-out screens. Auth screens render *below* `AppShell` in the composition root (`SafeAreaProvider → ThemeProvider → AuthNavigator → AppShell`), so a header mounted at `App.tsx` root above everything (Option C) would either paint over the auth screens (wrong) or need conditional logic reaching up from deep screens to hide itself (fragile). Mounting at the **AppShell/tab-shell level** naturally excludes auth screens — `AppShell` only mounts *after* authentication, so the header simply doesn't exist on auth screens by construction.
+- **The reel-viewer exclusion is cleanly handled** because the reel viewer is a full-screen RN `<Modal presentationStyle="overFullScreen">` (per the `Custom Fullscreen Media Viewers` convention) — a modal renders *above* the shell's header regardless, so the header is visually absent while the reel is open without any special hide logic. This is actually an argument for the header living at the shell level: the modal covers it for free.
+- **Option A (each screen imports the header itself) is rejected** — it scatters a cross-cutting surface across every screen, guarantees drift, and makes the "except these screens" exclusion a per-screen opt-out that will be forgotten on new screens. One mount point, defined exclusions, is the maintainable choice.
+
+Concretely: the header renders inside `AppShell`, above the active tab's navigator content and above the bottom tab bar's sibling (i.e., `AppShell` lays out `[GlobalHeader][active tab subtree (keep-alive)][TabBar]`). Because all three tab subtrees are kept alive via `display:none`/`flex` (existing convention), the single header sits above whichever tab is visible. Screens pushed *within* a tab's navigator (RouteDetail, UserProfile overlay, etc.) render inside the tab subtree, so the shell header remains above them — correct, since those screens should show the global header per AC-184. The reel-viewer modal and the (pre-shell) auth screens are the only exclusions, both handled structurally as above.
+
+**Unread-count badge (AC-173) — recommend Option A (a context/provider at the shell level holding the unread count).** Reject Option B (each screen fetches independently):
+- There is now exactly **one** header instance (shell-level), so there is exactly **one** consumer of the count — the badge on that single bell. Option B's "each screen fetches" problem largely dissolves because there is only one header, but the count still needs to (a) load on shell mount, (b) refresh when the inbox batch-marks-read (AC-172) so the badge clears, and (c) ideally refresh when a new notification arrives.
+- **Recommend a small `UnreadCountProvider` context owned by MOD-007**, mounted by MOD-012 inside `AppShell` wrapping the header. It exposes `{ unreadCount, refresh() }`. MOD-007 owns it because MOD-007 owns the notification domain and the `Notification` read. The header (MOD-012) subscribes to it for the badge; `NotificationInboxScreen` (MOD-007) calls `refresh()` after its AC-172 batch mark-read so the badge clears (AC-173). This keeps the count's source of truth in the notification module and gives the shell a clean subscribe-only surface. This mirrors the existing pattern of `useSession` being a singleton consumed reactively across the shell.
+- Phase 1 scope note: live push-driven refresh (badge increments the instant a push arrives) is a nice-to-have; a `refresh()` on shell focus / inbox close is sufficient for AC-173 as written (badge reflects unread count, clears on inbox open). Real-time subscription can be a Phase 2 refinement.
+
+**ProfileScreen (MOD-001) loses its bell + settings header icons — confirmed.** AC-171 (revised) and AC-184 move the bell to the global header; the settings control also moves to the global header's right side. Per the existing `Relocated Cross-Module Entry Points Are Removed from the Old Location` convention, **MOD-001's engineer must remove the bell and the settings affordance from the ProfileScreen header** so exactly one entry path exists for each. Two bells (one in ProfileScreen, one in the global header) would be a defect, not redundancy. This is a MOD-001 code change to coordinate alongside the MOD-012 header build. (Note the Logout control already moved to SettingsScreen per AC-167/AC-168 — this is the same relocation pattern applied to the bell and settings icons.)
+
+---
+
+#### Item 5 — AC-185: Swipe-to-go-back
+
+**Implementation approach — recommend `PanResponder` (RN core), NOT `react-native-gesture-handler`.** This is a direct application of the existing `Prefer RN PanResponder for Simple Swipe Gestures` convention, which states verbatim: do not add `react-native-gesture-handler` (a native dependency requiring a rebuild + root provider) for gestures expressible with core `PanResponder` (single-axis swipe, threshold-based). A left-to-right edge swipe that fires an `onBack` callback past a distance/velocity threshold is exactly a single-axis threshold gesture. The reel viewer already uses `PanResponder` for its swipe-up/down navigation (per that convention and the `Custom Fullscreen Media Viewers` work), so there is precedent and no new native dependency, no `GestureHandlerRootView` provider, and no native rebuild. **This overrides the item's premise that gesture-handler is "the natural choice"** — in this codebase, which deliberately runs no `NavigationContainer` and prefers RN built-ins, `PanResponder` is the house pattern. Adding gesture-handler now would also pull in a root provider the composition root currently does not have, which is a larger change than the behavior warrants.
+
+**Component: `SwipeBackWrapper` at `src/components/SwipeBackWrapper.tsx`** (app-level, same reasoning and ownership as the route card in Item 3 — MOD-012 owns app-level shared components). It wraps a screen's content and accepts an `onBack: () => void` prop, firing it when a left-to-right horizontal swipe exceeds the threshold. Per the convention, **always pair the gesture with the existing on-screen back control as the accessible fallback** — the back icon stays; the swipe is additive. The wrapper calls the *same* `onBack` the back icon already calls, so there is one pop path.
+
+**Conflict mitigation (horizontal scroll views) — real, and `PanResponder` handles it via the responder negotiation, not `simultaneousHandlers`.** `simultaneousHandlers`/`activeOffsetX` are gesture-handler props and do not apply to `PanResponder`. The `PanResponder` equivalents:
+- Gate `onMoveShouldSetPanResponder` on a **horizontal, rightward, edge-originating** gesture: require `dx > threshold`, `dx > |dy|` (clearly horizontal), and ideally that the touch **started near the left edge** (`evt.nativeEvent.pageX < ~30` at grant) — a left-edge-origin requirement is the standard way to avoid stealing horizontal-scroll gestures that begin in the middle of the screen (V-grade tabs, the Projecting Routes horizontal strip). An inner horizontal `ScrollView` in the middle of the screen never starts at the left edge, so the wrapper won't claim it.
+- The reel viewer is **excluded** entirely (see below), so its horizontal/vertical swipe navigation never contends with the wrapper.
+- Flag for the owning engineer: the left-edge-origin heuristic is the primary conflict defense; verify on device against the Projecting Routes horizontal strip and the V-grade filter tabs specifically (both named in the item). This is a device-verification item, not something unit tests can confirm (consistent with the native-build/device-verification conventions).
+
+**Reel viewer (AC-133) explicitly excluded — confirmed.** The reel viewer owns its own full-screen swipe navigation (up/down for next/previous, per AC-039) and its own back control (AC-133). It must **not** be wrapped in `SwipeBackWrapper`; its horizontal space and gesture handling belong to the viewer. The exclusion is structural: the reel viewer is a MOD-005 modal and simply is not wrapped. (Auth screens likewise have no back-stack to pop and are not wrapped.)
+
+**Owning module: MOD-012** (owns app-level shared components, consistent with Items 3 and the header). Individual screens across modules opt in by wrapping their content in `SwipeBackWrapper` and passing their existing `onBack`. Because the app uses custom state-machine navigators (no `NavigationContainer`), "pop" is whatever `onBack` each screen already does — the wrapper is navigator-agnostic by design, which is the right fit for this codebase.
+
+---
+
+**Concerns** (must address before proceeding):
+- **AC-180 visibility scope is ambiguous and needs a PM/human decision.** AC-180 says the "new beta video" set respects AC-142 (reported) AND AC-154 (blocked) AND AC-158 (beta-video privacy). AC-142 is a clean SQL predicate reusable server-side; AC-154 is currently a client-side filter and AC-158 composes a Follow check. Decide: **(a)** the tag RPC uses only the AC-142 predicate (recommended for Phase 1 — the tag is an advisory indicator, the actual video is still gated by AC-154/AC-158 on the route detail grid, so nothing leaks; worst case is a tag with nothing new behind it after opening), or **(b)** push AC-154/AC-158 into the RPC too, duplicating MOD-005's visibility stack server-side. This governs the exact query shape and must be resolved before Doc-Sync writes the MOD-003 spec.
+- **App-level `src/components/` has no current owner or convention.** Items 3 and 5 both introduce app-level shared components (`RouteCard`, `SwipeBackWrapper`). The `Cross-Module Imports` convention as written would be read as forbidding modules from importing them (they're "components"). A new Proposed Shared Convention (below) must be adopted to legitimize `src/components/` as app-level, MOD-012-owned, app-path-imported — otherwise Doc-Sync has no basis to write these into specs without appearing to violate the import rule. Needs PM to log it and Doc-Sync to sync it.
+- **AC-174 retires the static `src/lib/banners.ts` for the admin banner.** The existing `Shared Non-Module Constants` convention points the banner at a static constant file; AC-174 makes it data-sourced. Confirm with Doc-Sync whether `banners.ts` is removed or repurposed, so the convention and the code don't contradict each other after sync.
+
+**Recommendations** (suggested improvements):
+- Assign **MOD-012 as the owner of the new `src/components/` app-level shared-component directory** (RouteCard, SwipeBackWrapper) and of the `admin_banners` migration + read service. Assign **MOD-003** as owner of `user_route_visits` (migration + upsert + `routes_with_new_beta` RPC). Assign **MOD-007** as owner of the `UnreadCountProvider` context (consumed by the MOD-012 header). These three ownership lines should be written into the specs by Doc-Sync.
+- Add a `(route_id)` index on `user_route_visits` even under the recommended client-batched RPC shape — cheap, and it keeps the server-side join option and the AC-175 recently-viewed-gym derivation performant.
+- For AC-185, have the owning engineer device-verify the left-edge-origin heuristic against the two named horizontal scrollers (Projecting Routes strip, V-grade tabs) before QA handoff — this is a device check, not a unit-test check.
+
+**Approved** (looks solid as-is):
+- The AC-179 `user_route_visits` upsert pattern (`INSERT ... ON CONFLICT (user_id, route_id) DO UPDATE SET last_viewed_at = now()`), own-rows-only RLS, and composite PK as proposed in the item and §9 Data Model are correct and consistent with the confirmed `saved_routes`/`saved_gyms` design — adopt as-is (with the one noted addition of an UPDATE grant, which `saved_routes` did not need).
+- Confirming MOD-012 as owner of the global header (AC-184) and MOD-003 as owner of the AC-180 tag computation matches both modules' already-written Rev 35 Purpose statements — no restructuring needed.
+- The PanResponder/`src/components` direction for AC-185 and the dedicated-table direction for AC-174 both fall straight out of existing conventions (`Prefer RN PanResponder…`, `app_settings Table Pattern`) — no new architectural ground, just correct application.
+
+**Proposed Shared Conventions** (for Doc-Sync to carry into production.md, pending PM log + human approval):
+
+1. **App-Level Shared Presentational Components** — Genuinely module-agnostic presentational components consumed by three or more unrelated modules (e.g. `RouteCard`, `SwipeBackWrapper`) live at top-level `src/components/`, not inside any module's `components/` directory. This is the component analogue of `src/lib/` for cross-cutting non-component code. These components are **pure/presentational**: they take data + callback props and own no module service dependency (the consuming screen does the fetching and passes results down), so they create no cross-module coupling. MOD-012 (the aggregator/shell module) owns the `src/components/` directory. All modules import these via the app-level path `src/components/<Name>`. This is an explicit, narrow exception to the `Cross-Module Imports` rule's ban on importing another module's internal `components/`: it applies ONLY to components that live at `src/components/` (owned by no single module), never to reaching into a specific module's internal `components/` directory — that remains forbidden.
+
+2. **Admin-Managed Content Uses a Dedicated Read-All/Write-Admin Table, Never `app_settings`** — `app_settings` is DEFINER-only (RLS enabled, no policies, no client grants; read only inside SECURITY DEFINER functions) and must stay that way. Any admin-authored content that authenticated clients must READ directly (e.g. the Events Banner) uses a dedicated table with a read-all-authenticated SELECT policy (`TO authenticated USING (true)`, `GRANT SELECT`) and admin-only write policies gated by `public.is_admin()` (never an inlined JWT check). The admin authors content via Supabase Studio (service_role bypasses RLS). Do not punch a client-facing SELECT grant into `app_settings` to serve client-readable content.
+
+3. **"Is-New / recency" Indicators Use a Batched SECURITY INVOKER RPC Over the Visible ID Set** — A per-item "new/unseen" tag that compares another module's content timestamps against a per-user last-seen table (e.g. the "new beta video" tag comparing `beta_videos.created_at` against `user_route_visits.last_viewed_at`) is computed by a `SECURITY INVOKER STABLE` RPC owned by the module that owns the item domain. The RPC takes the screen's full visible ID array and returns the qualifying subset — called ONCE per screen, never once per card (extends `Personal Cross-Module Data Overlays` to the is-new/recency case). SECURITY INVOKER lets RLS scope the per-user table to `auth.uid()` automatically. A missing last-seen row is treated as "everything is new" via `COALESCE(last_seen, 'epoch')`. Reused beta-video visibility predicates (e.g. AC-142's `is_reported = false OR report_dismissed = true`) must be copied verbatim from the canonical predicate, never re-derived.
+
+---
 
 ### Review — 2026-10-11 — audit (pre-build completeness check for MOD-009 / MOD-010 / MOD-011 — how much is already implemented from earlier cross-module work?)
 
