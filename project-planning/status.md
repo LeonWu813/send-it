@@ -7,7 +7,7 @@ agent: tech-lead
 mode: review
 module: n/a
 result: success
-commit: 6acc1e5208fb0e1fa8761811c88df4233909da7a
+commit: a0bd98251f4c5960d339c907478f1eabd169a594
 timestamp: 2026-10-13T00:00:00Z
 ```
 
@@ -314,6 +314,145 @@ timestamp: 2026-10-13T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-13 — change (Rev 35 follow-up: batched-RPC conversion for like/save/follow status; caching strategy per query type; confirm Decision 1 AC-180 visibility scope)
+
+**Context**: Follow-up to the Rev 35 architecture review above. Three questions evaluated against the actual codebase (not just the PRD): (1) whether like/save/follow status queries should become batched RPCs following the `routes_with_new_beta` (AC-180) pattern; (2) a caching strategy per query type across three candidate approaches; (3) confirmation of Decision 1 (AC-180 visibility scope, full Option B — all three filters server-side). Advisory only — no source code touched; the human and PM decide what to adopt, Doc-Sync carries any approved conventions into `production.md`. The project uses plain async/await service files (no React Query/SWR) and custom `useState` state-machine navigators (no React Navigation, no `NavigationContainer`) — both are deliberate house patterns reflected in existing conventions, and these recommendations stay inside them rather than proposing a data-fetching library.
+
+**Grounding — what the code actually does today** (verified, not assumed):
+- **Like status** (`fetchLikeInfo` → `get_like_info` SECURITY INVOKER RPC): in `BetaVideoReelViewer` it fires **one call per `currentIndex` change** (genuinely one-at-a-time as the user swipes). In `FeedScreen` it is already a `Promise.all` fan-out over all beta-video items (parallel, but still N PostgREST round-trips per feed load).
+- **Save status** (`fetchSavedRouteIds` → single `saved_routes` SELECT): **already batched correctly** — returns the full set of the current user's saved route IDs in **one** query. `RouteListScreen` and `RouteDetailScreen` each call it once per screen and test membership client-side. This is NOT an N+1 and does not match the "checked individually per card" description in the question — the code already does the right thing.
+- **Follow status** (`fetchIsFollowing(followeeId)` → single `follows` SELECT): only consumer is `UserProfileScreen`, **one call per screen** (one profile at a time). Followers/Following **lists** render via `fetchFollowersList`/`fetchFollowingList`, which already return the full list in one call; they do **not** currently fetch per-row follow status for each listed user.
+
+---
+
+#### Question 1 — Should like / save / follow status become batched RPCs?
+
+**Like status — YES for the feed; NO (not a batch problem) for the reel viewer. Recommend a `get_like_info_batch(target_ids[])` SECURITY INVOKER RPC, consumed only by FeedScreen.**
+
+1. *Right fix?* A batched RPC is the right fix **for FeedScreen only**. The reel viewer's one-call-per-swipe pattern is not an N+1 in the batch sense — it fetches exactly the one video the user is looking at, on demand; batching the whole playlist's like info up front would prefetch likes for videos the user may never swipe to, and the count can go stale between prefetch and view. Leave the reel viewer as-is (single `fetchLikeInfo` per active index). FeedScreen's `Promise.all` fan-out, by contrast, issues N PostgREST round-trips on every feed load — that is the real N+1 to collapse.
+2. *Query shape:* new RPC in **MOD-006** (owns `reactions` and the existing `get_like_info`): `get_like_info_batch(p_target_type text, p_target_ids uuid[]) RETURNS TABLE (target_id uuid, like_count int, user_has_liked bool)`, `SECURITY INVOKER STABLE`, `SET search_path = public`, EXECUTE to `authenticated` only. Body: `SELECT t.id, COUNT(r.user_id), BOOL_OR(r.user_id = auth.uid()) FROM unnest(p_target_ids) t(id) LEFT JOIN reactions r ON r.target_id = t.id AND r.target_type = p_target_type GROUP BY t.id`. SECURITY INVOKER keeps RLS scoping intact; `auth.uid()` (never a user_id param) drives `user_has_liked`, consistent with the existing `get_like_info` and the SECURITY DEFINER/INVOKER conventions.
+3. *Expected gain:* FeedScreen drops from **1 + N** round-trips (feed RPC + one like call per video) to **1 + 1** (feed RPC + one batch like call). On a 20-item feed over LTE that removes ~19 sequential-ish network calls — directly serves the "feed initial render ≤2s with a warm cache" NFR. The reel viewer sees no change (correctly).
+4. *Risks/downsides:* Low. `BOOL_OR(r.user_id = auth.uid())` is correct for the one-like-per-user constraint. One edge: a `target_id` with zero reactions must still return a row with `like_count = 0, user_has_liked = false` — the `unnest ... LEFT JOIN` shape above guarantees that (every input id appears). Verify that against live PostgREST per the `Manually Verify Every New or Modified PostgREST Embed/Join String` convention (this is an RPC, not an embed, but the "exercise it live before done" spirit applies to the GROUP BY/LEFT JOIN correctness).
+
+**Save status — NO. Already optimal; do not convert.** `fetchSavedRouteIds()` is a single-query set fetch, which is strictly better than a batched RPC keyed by visible IDs (it needs no input array, returns a small ID set, and membership is an O(1) `Set.has()` client-side). Converting it to `routes_with_saved_status(route_ids[])` would be a **regression** — more payload shape, an input array to thread, and no round-trip saved. Keep as-is. The one caveat: as the saved-routes set grows unbounded in Phase 2+ this becomes a large unfiltered fetch; for Phase 1 (realistic saved counts) it is fine. If it ever matters, the fix is pagination, not a per-ID batch RPC.
+
+**Follow status — NO batch needed for current surfaces; YES *only if* a future surface renders a follow button per row in a user list.**
+1. *Right fix?* For the two current consumers (UserProfileScreen = one profile; Followers/Following lists = no per-row follow state today) there is **no N+1 and nothing to batch**. `fetchIsFollowing` for a single profile is correct as-is. A batched RPC is only warranted if a list-of-users surface starts showing a per-row "Following/Follow" button for each listed user (the question's hypothetical). **This is not in the current code** — do not build it speculatively.
+2. *Query shape (for the hypothetical only):* MOD-006-owned `follow_status_batch(p_user_ids uuid[]) RETURNS TABLE (user_id uuid, is_following bool)`, `SECURITY INVOKER STABLE`: `SELECT u.id, EXISTS(SELECT 1 FROM follows f WHERE f.follower_id = auth.uid() AND f.followee_id = u.id) FROM unnest(p_user_ids) u(id)`. Called once per list screen with all visible user IDs.
+3. *Expected gain (hypothetical):* a followers list with per-row buttons would otherwise be 1 (list) + N (one `fetchIsFollowing` per row); the batch collapses it to 1 + 1.
+4. *Risks:* none structurally; the real risk is **building it before a surface needs it**. Defer until the per-row-button requirement actually lands.
+
+*Pattern note:* the AC-180 `routes_with_new_beta` RPC and the proposed `get_like_info_batch` are the same shape as the existing `Personal Cross-Module Data Overlays` convention (batched, own-user-scoped, `fetch...(ids[])`, SECURITY INVOKER, called once per screen). The like-batch is a clean in-convention application; no new convention is needed for it beyond what already exists. The only genuinely new general rule worth codifying is the negative one — *don't* batch a set-membership fetch that's already a single query, and *don't* batch a single-item on-demand fetch (reel viewer). That is captured in Proposed Shared Convention 1 below.
+
+---
+
+#### Question 2 — Caching strategy per query type
+
+Framing: with no React Query/SWR, there is no cache layer today — every screen re-fetches on mount/focus. The three candidates map cleanly to three different data characteristics, so the recommendation is **per-query-type, not one-size-fits-all**. I weight all of these against the house preference for the smallest mechanism that works (same ethos as "prefer RN built-ins; no native dep for a small behavior").
+
+**Like status / like count → Option A (in-memory module-level Map), short TTL ~30s; combine with optimistic write-through on like/unlike. Not B, not C.**
+- *Why A:* like counts are high-churn and cheap to refetch; they must never survive an app restart (C is wrong — a persisted stale count is worse than no cache). A context (B) is overkill and would re-render every consumer on any count change.
+- *TTL:* ~30s is reasonable. The dominant benefit is not the TTL though — it's **write-through on the user's own like/unlike**: when the user taps like, update the cached entry immediately (optimistic) so the reel viewer and feed agree without a refetch. The existing reel-viewer code already does optimistic local state; a module-level Map lets that optimistic value be shared with FeedScreen.
+- *Invalidate:* on the user's own like/unlike (write-through, immediate), and by TTL expiry for other users' likes. Clear the whole Map on sign-out.
+- *Caveat:* a module-level mutable Map is a singleton with test-isolation implications — provide a `__clearLikeCache()` for tests and clear on auth change, or the cache leaks across logged-in users. Flagged as a condition on adopting A anywhere.
+
+**Save status → Option B (app-level context holding `savedRouteIds: Set<string>`), no TTL, invalidate on user action. Not A, not C (as the primary).**
+- *Why B:* save status is **user-action-driven, low-churn, and read on many screens** (RouteList, RouteDetail, and the Rev 35 Projecting Routes section on HomeScreen all need it). It only changes when *this user* saves/unsaves — there is no external churn to TTL against. A context whose `Set` is updated by the same `saveRoute`/`unsaveRoute` calls that write the DB is the exact fit: one fetch of `fetchSavedRouteIds()` on provider mount, then mutate the Set on every save/unsave, and every consumer reads from context. This also eliminates the current repeated `fetchSavedRouteIds()` calls across RouteList/RouteDetail/Home.
+- *TTL:* none. Invalidated only by the user's own save/unsave (the context updates the Set and calls the service).
+- *Invalidate:* on `saveRoute`/`unsaveRoute` (context mutates its Set + calls service), and a full refetch on sign-in / provider mount. Clear on sign-out.
+- *Optional C as a cold-start nicety (not required):* persisting the saved-ID Set to AsyncStorage would let the Projecting Routes section paint instantly on cold start before the network returns, then reconcile. This is a legitimate use of C (saved routes are slow-changing, exactly C's stated sweet spot) but it is a **nice-to-have, not Phase 1 required** — the context (B) is the load-bearing choice; AsyncStorage is a cold-start hydration layer on top of it if the cold-start NFR needs it.
+
+**Follow status → Option A (in-memory Map) with a short-to-medium TTL (~60s), OR none. Not B, not C.**
+- *Why not B:* unlike saved routes, follow status is read on far fewer surfaces (just UserProfileScreen today) and is **about other users**, not a stable set owned by the current user, so an app-level Set is a poor fit (it would need every other user's id). 
+- *Why A or none:* for the single-profile check, a tiny `Map<followeeId, {isFollowing, fetchedAt}>` with write-through on follow/unfollow avoids a refetch when navigating back to a profile you just followed. But given only one consumer, **"none" (keep `fetchIsFollowing` per screen mount) is an acceptable Phase 1 answer** — the win is marginal. If the per-row-button list surface from Q1 ever lands, revisit with A + write-through keyed by user id.
+- *TTL (if A):* ~60s. *Invalidate:* on the user's own follow/unfollow (write-through), TTL otherwise, clear on sign-out. *Never C* — follow status should not survive a restart stale.
+
+**New-beta tag (AC-180 `routes_with_new_beta`) → Option A (in-memory Map), very short TTL (~15–30s) OR none; invalidate on route-visit upsert. Not B, not C.**
+- *Why not C:* the tag is inherently recency-relative (it compares `beta_videos.created_at` to `user_route_visits.last_viewed_at`); a persisted "has new beta" boolean goes stale the instant a new video is uploaded or the user visits the route. Persisting it (C) would surface a wrong dot after restart. 
+- *Why A or none:* within a single session, HomeScreen and RouteListScreen both call `routes_with_new_beta(visibleIds)`; a short-TTL Map keyed by route id avoids recomputing for ids already resolved this session. But the **critical invalidation** is action-driven, not TTL: when the user opens a route (AC-179 fires the `user_route_visits` upsert), that route's tag must flip to false immediately — so the opening screen should **optimistically clear the cached tag for that route id** on visit, exactly like the like write-through. Given the RPC is already batched and cheap, **"none" (recompute per screen) is also perfectly acceptable for Phase 1**; the Map is an optimization only if profiling shows the repeated calls matter.
+- *TTL (if A):* ~15–30s. *Invalidate:* immediately on route-visit upsert for that route id (write-through to false); TTL otherwise; clear on sign-out.
+
+**Cross-cutting caution for any of these:** a module-level mutable cache (A) and a context (B) both hold per-user state that MUST be cleared on sign-out, or user B sees user A's cached likes/saves/follows after a logout-login on the same device. Whatever is adopted, the clear-on-auth-change hook is non-negotiable and should be wired through `useSession` (the existing reactive-session singleton). This is the single biggest risk in adding any client cache to this codebase and is called out as a condition in the Concerns below.
+
+---
+
+#### Question 3 — Confirm Decision 1 (AC-180 visibility scope, full Option B: all three filters server-side)
+
+The human rejected the report-only filter (my prior recommendation (a)) and chose **full Option B**: `routes_with_new_beta` applies **all three** visibility filters server-side — AC-142 (reported/dismissed), AC-154 (blocked users), and AC-158 (beta-video privacy/follows). **This is architecturally sound. Confirmed, with three concrete query-correctness conditions the owning engineer (MOD-003) must meet.**
+
+*Why it's sound:* pushing all three filters server-side makes the tag's "visible beta video" set **definitionally identical** to the set the user can actually open on the route-detail grid and in the viewer — so the worst case I flagged for option (a) (a tag with nothing behind it after the user taps in) cannot occur. That is a genuinely better user experience and removes the "best-effort indicator" caveat. The cost is exactly what I noted before: the three predicates now exist server-side **in addition to** wherever MOD-005 applies them client-side, so they can drift. Option B is the right call **provided the drift risk is contained by making the predicates reusable, not re-derived.**
+
+*Updated query shape (replaces the sketch in the prior review's Item 2):*
+```sql
+CREATE FUNCTION routes_with_new_beta(route_ids uuid[])
+RETURNS TABLE (route_id uuid) LANGUAGE sql STABLE SECURITY INVOKER
+SET search_path = public AS $$
+  SELECT r.id
+  FROM unnest(route_ids) AS r(id)
+  WHERE EXISTS (
+    SELECT 1 FROM beta_videos bv
+    WHERE bv.route_id = r.id
+      -- AC-142 canonical predicate (copied verbatim, never re-derived):
+      AND (bv.is_reported = false OR bv.report_dismissed = true)
+      -- AC-154 blocked-user filter (symmetric block):
+      AND NOT EXISTS (
+        SELECT 1 FROM blocks b
+        WHERE (b.blocker_id = auth.uid() AND b.blocked_id = bv.user_id)
+           OR (b.blocker_id = bv.user_id AND b.blocked_id = auth.uid())
+      )
+      -- AC-158 beta-video privacy: uploader public, OR self, OR (followers_only AND I follow them):
+      AND (
+        bv.user_id = auth.uid()
+        OR EXISTS (SELECT 1 FROM users u WHERE u.id = bv.user_id
+                   AND u.privacy = 'public')
+        OR EXISTS (SELECT 1 FROM follows f
+                   WHERE f.follower_id = auth.uid() AND f.followee_id = bv.user_id)
+      )
+      AND bv.created_at > COALESCE(
+            (SELECT urv.last_viewed_at FROM user_route_visits urv
+             WHERE urv.user_id = auth.uid() AND urv.route_id = r.id),
+            'epoch'::timestamptz)
+  );
+$$;
+```
+
+**Concerns with the query (conditions on confirming Option B):**
+1. **The three predicates MUST match MOD-005's canonical definitions exactly, and the privacy predicate in particular must be reconciled with the real `users` privacy model before this is written.** The AC-158 clause above is my reconstruction of "public OR self OR followers-only-and-following"; the exact column/enum (`users.privacy`, the `followers_only` value name, whether there is a third `private` state) must be read from the live schema / MOD-001's spec, not guessed. **I do not have the `users` privacy enum confirmed in front of me** — the engineer must confirm the actual column and values and adjust the clause. Flagging this rather than asserting it, per the "don't guess, confirm against evidence" rule.
+2. **Drift control:** AC-142 already has a canonical-predicate convention ("Beta-Video Visibility Has One Canonical Exclusion Predicate") demanding verbatim reuse. AC-154 and AC-158, once pushed server-side, now need the same discipline — otherwise the client-side AC-154/AC-158 paths and this RPC can silently disagree. Best mitigation: if MOD-005/MOD-006 already expose these as SQL (e.g. a blocks predicate used in `get_activity_feed`), **reuse that exact SQL** here; do not hand-write a parallel copy. This should be a documented condition in the MOD-003 spec (see Proposed Shared Convention 2).
+3. **Performance:** three correlated `EXISTS` subqueries per candidate beta video, across all `route_ids`, is heavier than the report-only version. For Phase 1 route-list sizes this is fine, but it makes the `(route_id)` index on `user_route_visits` (recommended in the prior review) and existing indexes on `blocks(blocker_id, blocked_id)` and `follows(follower_id, followee_id)` load-bearing. Confirm those indexes exist; the `follows`/`blocks` ones almost certainly already do (they back the feed RPC), but verify before QA handoff.
+4. **Verify live before done:** this RPC composes four predicates and a correlated recency check — exactly the kind of multi-predicate SQL that mocked unit tests cannot validate. Exercise it against the live/local Supabase instance (Studio SQL editor or raw RPC call) before marking the AC done, per the existing manual-verification convention.
+
+**Net:** Option B confirmed as architecturally sound and the better UX. It supersedes recommendation (a) in the prior review. Adopt the updated query shape above, subject to conditions 1–4 — condition 1 (confirm the real privacy model) must be resolved before Doc-Sync writes the MOD-003 spec so the spec carries the correct predicate.
+
+---
+
+**Concerns** (must address before proceeding):
+- **Any client cache (Options A or B, Question 2) MUST clear on auth change.** A module-level Map or a context holding per-user like/save/follow/new-beta state will leak across a logout→login on the same device if not cleared. Wire a clear-on-sign-out through the existing `useSession` singleton. This is a hard condition on adopting any caching, not a nice-to-have.
+- **AC-180 Option B requires the real `users` privacy model to be confirmed before the RPC is written** (Question 3, condition 1). The privacy clause above is a reconstruction; the actual column/enum values must be read from MOD-001's schema and must match MOD-005's client-side AC-158 path verbatim. Resolve before Doc-Sync writes the MOD-003 spec.
+- **Do not build the follow-status batch RPC or the per-row follow-button caching speculatively.** No current surface renders per-row follow state; building `follow_status_batch` now is premature. Defer until a surface actually needs it (Question 1).
+
+**Recommendations** (suggested improvements):
+- Add `get_like_info_batch(target_type, target_ids[])` (MOD-006, SECURITY INVOKER) and switch **FeedScreen only** to it (1+N → 1+1). Leave the reel viewer's per-index `fetchLikeInfo` unchanged — it is on-demand single-item, not an N+1.
+- Do **not** convert `fetchSavedRouteIds` to a per-ID batch RPC — it is already a single-query set fetch and a batch RPC would be a regression. If save status needs sharing across RouteList/RouteDetail/Home, use a save-status **context** (Option B) around the existing single fetch, not a new RPC.
+- Caching, if adopted: like → Map + 30s TTL + optimistic write-through; save → context Set, action-invalidated, optional AsyncStorage cold-start hydration; follow → Map + ~60s TTL or none; new-beta tag → Map + short TTL with visit-upsert write-through, or none. "None" is a legitimate Phase 1 answer for follow and new-beta; the only clearly worthwhile caches are like-count write-through (agreement across reel viewer + feed) and the save-status context (eliminates repeated `fetchSavedRouteIds` across three surfaces).
+- For AC-180 Option B: reuse MOD-005/MOD-006's existing blocked/privacy SQL predicates verbatim rather than hand-writing parallel copies; confirm supporting indexes on `user_route_visits(route_id)`, `blocks`, and `follows`; verify the composed RPC live before QA handoff.
+
+**Approved** (looks solid as-is):
+- Current **save status** access (`fetchSavedRouteIds` single-query set fetch, membership tested client-side) — already optimal, do not change the data-access shape.
+- Current **reel-viewer like** access (one `fetchLikeInfo` per active index) — correct on-demand single-item fetch, not an N+1; leave as-is.
+- Current **single-profile follow** check (`fetchIsFollowing` once per UserProfileScreen) — correct as-is.
+- **AC-180 full Option B** (all three visibility filters server-side) as a design decision — architecturally sound and the better UX; confirmed, subject to the four query-correctness conditions above.
+
+**Proposed Shared Conventions** (for Doc-Sync to carry into production.md, pending PM log + human approval):
+
+1. **Batch a Per-Item Read Only When It Is Genuinely N-Across-Items; Never Batch a Set-Membership or On-Demand Single-Item Read** — A batched `fetch...(ids[])` / SECURITY INVOKER RPC over the visible ID set is the right tool ONLY when a screen would otherwise issue one call per visible item (true N+1), e.g. per-video like info across a feed, or the AC-180 new-beta tag across a route list. It is the WRONG tool for (a) a set-membership check already served by a single query returning the user's full owned-ID set (e.g. `fetchSavedRouteIds` → test membership with `Set.has()` client-side) — batching that is a regression; and (b) an on-demand single-item fetch for the one item currently in view (e.g. the reel viewer's per-swipe like fetch) — batching prefetches items the user may never see and risks staleness. Extends `Personal Cross-Module Data Overlays`: the batch shape is for N-across-items reads, not for every multi-call pattern.
+
+2. **Server-Side Reuse of a Visibility/Access Predicate Must Copy the Canonical SQL Verbatim, Never Re-Derive It** — When an RPC pushes an existing access/visibility filter server-side (e.g. AC-180's `routes_with_new_beta` applying the AC-154 blocked-user and AC-158 beta-video-privacy filters in addition to the AC-142 reported predicate), it must reuse the canonical SQL predicate verbatim — ideally the exact SQL already used by the owning module's feed/listing RPC (`get_activity_feed` for blocks/privacy) — not a hand-written parallel copy. This extends the existing `Beta-Video Visibility Has One Canonical Exclusion Predicate` convention from the AC-142 predicate to the AC-154 and AC-158 predicates whenever they are enforced server-side, because a parallel copy will silently drift from the client-side path and surface a tag/filter that disagrees with what the user can actually open.
+
+3. **Any Client-Side Cache (In-Memory Map or Context) Holding Per-User State Must Clear on Auth Change** — This codebase has no data-fetching library (no React Query/SWR); any caching added (module-level `Map`, app-level context) holds per-user state in process memory and MUST be cleared on sign-out/auth change, wired through the `useSession` singleton. Otherwise a logout→login on the same device leaks the previous user's cached likes/saves/follows/new-beta tags to the next user. Caching strategy is chosen per data characteristic, not globally: high-churn counts (likes) → in-memory Map + short TTL + optimistic write-through on the user's own mutation; user-owned low-churn sets read on many screens (saved routes) → app-level context Set, invalidated by the user's own action (optional AsyncStorage cold-start hydration for slow-changing sets only); recency-relative tags (new-beta) and other-user relational state (follow) → in-memory Map + short TTL with action write-through, or no cache at all. Never persist high-churn or recency-relative values to AsyncStorage — a stale persisted count/tag after restart is worse than refetching.
+
+---
 
 ### Review — 2026-10-13 — change (Rev 35 architecture review: 5 flagged items — AC-174 banner source, AC-179/180 user_route_visits, AC-183 shared route card, AC-184 global header, AC-185 swipe-back)
 
