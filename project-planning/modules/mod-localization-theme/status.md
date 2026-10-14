@@ -2,6 +2,21 @@
 
 ## Engineering Progress
 
+### Integration fix — 2026-10-13 (cross-module import violation: MOD-012 AppShell.tsx)
+
+**Fix: public re-export for SettingsScreen at module root**
+
+MOD-012's `AppShell.tsx` imported `SettingsScreen` directly from the internal `screens/` subdirectory of mod-localization-theme, violating the Cross-Module Imports shared convention (production.md: "A module may import another module's public service functions and navigator entry-point components only — never its internal `screens/` or `components/` subdirectories directly"). Fix: created a public re-export barrel at the module root.
+
+- [pass] `src/modules/mod-localization-theme/SettingsScreen.tsx` created — one-line re-export: `export { default } from './screens/SettingsScreen'`
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] No behavior change — re-export only; module output is identical
+- [pass] No new dependencies introduced
+- [pass] No other files modified
+
+**Files created**
+- `src/modules/mod-localization-theme/SettingsScreen.tsx` (new — public re-export)
+
 ### Bugfix — 2026-10-13 (QA Run 1 — three failures)
 
 **Bug 1 — AC-157 label mismatch (short state labels)**
