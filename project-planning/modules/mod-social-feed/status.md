@@ -2,7 +2,7 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug).
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
@@ -14,11 +14,33 @@
 **AC-186 + cleanup commit**: pending — `feat(mod-social-feed): AC-186 — get_like_info_batch RPC and service wrapper; remove AC-123/124 refs`
 **Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup)
 
+### AC-163 Bug Fix — BetaVideoGrid privacy gate (2026-10-13, QA Run 4)
+
+**Bug**: `BetaVideoGrid` rendered unconditionally for any non-blocked profile, including `followers_only` profiles viewed by non-followers. `fetchBetaVideosByUser` applies no follower-relationship gate server-side. A non-follower viewing a `followers_only` profile saw the full video grid instead of the hidden/403 state per AC-064.
+
+**Fix**: Wrapped the `<View style={styles.videoSection}>` block in a client-side privacy guard in `UserProfileScreen.tsx`. When `profile.privacy_setting === 'followers_only' && !isFollowing`, the entire video section (title + grid) renders `null` — the hidden/403 state per AC-063/AC-064. Both `profile.privacy_setting` and `isFollowing` were already in component state; no new state or service calls needed.
+
+**Location**: `src/modules/mod-social-feed/screens/UserProfileScreen.tsx` (video section around lines 532–548).
+
+**Documentation fix**: Corrected the stale migration filename in Engineering Progress from `20261013000002_mod_006_get_like_info_batch.sql` to `20261013000004_mod_006_get_like_info_batch.sql` (actual file, renamed to avoid timestamp collision with three other 20261013 migrations).
+
+**Tests added** (3 new tests in `UserProfileScreen.test.tsx`):
+- AC-163: `followers_only` profile + `isFollowing = false` — video section title absent (grid hidden)
+- AC-163: `followers_only` profile + `isFollowing = true` — video section title present (grid shown)
+- AC-163: `public` profile + `isFollowing = false` — video section title present (no privacy gate)
+
+**Self-check (AC-163 fix)**:
+- PASS — `npx tsc --noEmit` — 0 errors
+- PASS — `npx jest --testPathPattern="mod-social-feed" --watchAll=false` — 60/60 pass (was 57; 3 new AC-163 tests all green)
+- PASS — No new state, imports, or npm dependencies introduced
+- PASS — No hardcoded hex colors; no style changes
+- PASS — `BetaVideoReelViewer` (rendered at top level outside ScrollView) is unaffected — it renders with `visible={showReel}` which starts false; the privacy gate only prevents the grid and title from appearing, not the already-mounted reel viewer shell
+
 ### AC-186 — get_like_info_batch RPC and Service Wrapper (2026-10-13, deferred)
 
 **AC-186 DONE (deferred)**: Defined the `get_like_info_batch` Postgres RPC and its TypeScript service wrapper. The RPC and function are introduced now per the data-access/caching convention (§10) but are NOT wired into any UI path in Phase 1. FeedScreen.tsx remains dead code per AC-159. The existing per-video `fetchLikeInfo` path continues to be used by all active callers.
 
-**Migration**: `supabase/migrations/20261013000002_mod_006_get_like_info_batch.sql`
+**Migration**: `supabase/migrations/20261013000004_mod_006_get_like_info_batch.sql`
 - `CREATE OR REPLACE FUNCTION public.get_like_info_batch(p_target_type TEXT, p_target_ids UUID[])` — `LANGUAGE sql SECURITY INVOKER SET search_path = public`.
 - Returns `TABLE(target_id UUID, is_liked BOOLEAN, like_count BIGINT)`.
 - Uses `UNNEST(p_target_ids) LEFT JOIN public.reactions` on `(target_id, target_type)`, grouped by `t.id`. `BOOL_OR(r.user_id = auth.uid())` for own-like state; `COUNT(r.id)` for like count.
@@ -224,7 +246,8 @@ MOD-009 will `CREATE TABLE IF NOT EXISTS public.blocks (...)` with its full sche
 - AC-151 (UI) ✓: "Report" option in sheet calls reportUser(targetUserId, 'inappropriate') then blockUser(targetUserId) sequentially; loading indicator on option; on success closes sheet and sets isProfileBlocked/isBlockedByMe; on failure shows inline error
 - AC-152 ✓: Block/Unblock toggle in sheet; block calls blockUser, unblock calls unblockUser; profile reflects new state immediately after each action
 - AC-153 ✓: fetchBlockedUserIds() added to loadProfile() Promise.all; isProfileBlocked and isBlockedByMe state variables derived; blocked state renders "This profile isn't available", hides follow button and stats; dots icon shown only when isBlockedByMe so viewer can unblock
-- AC-186 ✓ (deferred): `get_like_info_batch` RPC defined in `20261013000002_mod_006_get_like_info_batch.sql`; `fetchLikeInfoBatch` service wrapper defined in `social-feed-service.ts`; NOT wired into any UI (FeedScreen remains dead code, AC-159)
+- AC-163 ✓: BetaVideoGrid shown below stats section; privacy gate added — `followers_only` profile viewed by non-follower shows hidden/403 state (null), not the grid; public profiles and followers see the grid; tapping opens BetaVideoReelViewer with reelContext='profile'
+- AC-186 ✓ (deferred): `get_like_info_batch` RPC defined in `20261013000004_mod_006_get_like_info_batch.sql`; `fetchLikeInfoBatch` service wrapper defined in `social-feed-service.ts`; NOT wired into any UI (FeedScreen remains dead code, AC-159)
 
 ### Notes
 - Block filter in RPC uses NOT EXISTS subqueries against `public.blocks`. A minimal stub `blocks` table (blocker_id, blocked_id) is created in this migration before the function body so PostgreSQL can validate the LANGUAGE sql reference at CREATE FUNCTION time. MOD-009 adds the full schema with IF NOT EXISTS — safe to layer on top.
@@ -688,3 +711,96 @@ One non-blocking observation: `fetchFollowersList` and `fetchFollowingList` lack
 **Route**: Implementation bug — route to `engineer-mod-social-feed`. The fix is a client-side privacy gate in `UserProfileScreen` at `src/modules/mod-social-feed/screens/UserProfileScreen.tsx`: when `profile.privacy_setting === 'followers_only' && !isFollowing`, show the hidden/403 state (AC-064) instead of rendering the `BetaVideoGrid`.
 
 **Pre-existing MOD-005 failure**: `beta-video-service.test.ts` 1 failure (`fetchBetaVideosByUser route_name` expectation) — pre-existing, unrelated to MOD-006, present since AC-052 QA run. Not caused by Rev 36 changes.
+
+---
+
+## QA Run 5 — Regression — AC-163 fix — 2026-10-13
+
+**QA Agent**: qa-mod-social-feed
+**Workflow**: regression-test (re-verification after AC-163 bug fix)
+**Bug re-verified**: AC-163 — BetaVideoGrid shown to non-followers of `followers_only` profiles (reported in QA Run 4)
+**Engineer fix**: Client-side privacy gate added in `UserProfileScreen.tsx` line 535: `{profile.privacy_setting === 'followers_only' && !isFollowing ? null : (<View style={styles.videoSection}>...)}`. Three new tests added to `UserProfileScreen.test.tsx`. Migration filename in Engineering Progress corrected to `20261013000004_mod_006_get_like_info_batch.sql`.
+**Automated tests**: 60/60 pass (mod-social-feed suite); 514/515 pass (full suite — 1 pre-existing MOD-005 failure, unrelated); exit code 0 (mod-social-feed suite); non-zero (full suite, pre-existing)
+**TypeScript**: `npx tsc --noEmit` — clean, 0 errors
+
+---
+
+### REGRESSION PASS — AC-163 privacy gate fix verified
+
+**Input**: `UserProfileScreen` loaded for a target user with `profile.privacy_setting = 'followers_only'`, viewer has `isFollowing = false`.
+**Expected**: Video section title (`betaVideo.userVideos`) and `BetaVideoGrid` do not render — grid hidden per AC-063/AC-064.
+**Actual**: The ternary at line 535 evaluates `'followers_only' && !false` = true, returns `null` — video section title is absent. Test confirms `queryAllByText('Beta Videos').concat(queryAllByText('試攀影片')).length === 0`.
+
+**Input**: Same profile, viewer has `isFollowing = true`.
+**Expected**: Video section title and `BetaVideoGrid` render — follower may see the grid.
+**Actual**: Ternary evaluates `'followers_only' && !true` = false, renders the `<View style={styles.videoSection}>` block — video section title present. Test confirms `.length > 0`.
+
+**Input**: Profile with `privacy_setting = 'public'`, viewer has `isFollowing = false`.
+**Expected**: Video section title and `BetaVideoGrid` render — public profile has no privacy gate.
+**Actual**: Ternary evaluates `false && true` = false, renders the video section block. Test confirms `.length > 0`.
+
+All three AC-163 scenarios confirmed by code inspection and by the 3 new passing tests in `UserProfileScreen.test.tsx` (lines 465–536).
+
+**Migration filename**: `supabase/migrations/20261013000004_mod_006_get_like_info_batch.sql` confirmed on disk. Engineering Progress section references `20261013000004` in the AC-186 subsection (line 43). The documentation correction is in place.
+
+---
+
+### Re-verification of Previously Passing ACs
+
+**PASS AC-050** — `follow()`/`unfollow()` service and `UserProfileScreen` follow UI unchanged by the AC-163 privacy-gate addition. No new state, imports, or service calls introduced. 60/60 tests pass.
+
+**PASS AC-051** — `fetchActivityFeed()` and `get_activity_feed` RPC unchanged. Privacy gate is UI-only; the feed RPC's own privacy composition (followers_only filter in the WHERE clause) is unaffected. 60/60 tests pass.
+
+**PASS AC-052** — `likeBetaVideo`, `unlikeBetaVideo`, `fetchLikeInfo` unchanged. `BetaVideoReelViewer` like button unaffected — it is rendered at top level outside the ScrollView with `visible={showReel}` (starts false); the privacy gate only suppresses the `BetaVideoGrid` and video section title, not the reel viewer shell. 60/60 tests pass.
+
+**PASS AC-053** — No comment UI anywhere. No like on ascent items. FeedScreen unchanged. 60/60 tests pass.
+
+**PASS AC-063** — `followers_only` privacy badge at `UserProfileScreen` line 424 (`profile.privacy_setting === 'followers_only'`) is unaffected — it is in the avatar section, not the video section. Privacy badge continues to show for `followers_only` profiles regardless of follow state. 60/60 tests pass.
+
+**PASS AC-146** — `FollowersListScreen` unchanged. Circular avatar + displayName only per card. Blocked users excluded. 60/60 tests pass.
+
+**PASS AC-147** — `FollowingListScreen` unchanged. Same card layout as AC-146. Blocked users excluded. 60/60 tests pass.
+
+**PASS AC-148** — No per-card stats on list cards. `fetchProfileStats` not called on list render — confirmed by grep (zero results for `fetchProfileStats`, `useCardStats` in FollowersListScreen.tsx and FollowingListScreen.tsx). 60/60 tests pass.
+
+**PASS AC-149** — Stats section (`fetchProfileStats` in `loadProfile()` Promise.all) unchanged. Privacy gate wraps only the video section block (lines 535–549); the stats section block (lines 478–530) has no change. Stats still render when `stats !== null` regardless of follow state (the stats RPC has its own server-side privacy enforcement). 60/60 tests pass.
+
+**PASS AC-150** — Three-dots icon (`Ionicons ellipsis-vertical` size 22) unchanged. Only rendered when `!isOwnProfile`. Privacy gate addition does not touch the header row or the ActionSheet. 60/60 tests pass.
+
+**PASS AC-151 (UI)** — "Report" option in ActionSheet unchanged. `reportUser` + `blockUser` sequential call pattern unchanged. 60/60 tests pass.
+
+**PASS AC-152** — Block/Unblock toggle in ActionSheet unchanged. `blockUser`/`unblockUser` calls unchanged. 60/60 tests pass.
+
+**PASS AC-153** — `fetchBlockedUserIds()` in `loadProfile()` Promise.all unchanged. Blocked state rendering ("This profile isn't available") unchanged. Three-dots icon in blocked state unchanged. Note: when `isProfileBlocked` is true, the screen renders the blocked state view and never reaches the `profile !== null` block where the privacy gate lives — the two guards are independent and do not interfere. 60/60 tests pass.
+
+**PASS AC-159** — FeedScreen not imported in any navigator or shell. `fetchLikeInfoBatch` not imported from any caller. Both confirmed unchanged by grep. 60/60 tests pass.
+
+**PASS AC-186 (deferred)** — `get_like_info_batch` migration and `fetchLikeInfoBatch` wrapper unchanged. Not wired into any UI. Dead code requirement holds. 60/60 tests pass.
+
+---
+
+### Guard Rails
+
+**PASS** — No new state variables, imports, or npm dependencies introduced by the AC-163 fix. The privacy gate uses only `profile.privacy_setting` and `isFollowing` — both already in component state.
+
+**PASS** — No hardcoded hex colors. No style changes. Confirmed by code inspection.
+
+**PASS** — `BetaVideoReelViewer` (rendered outside ScrollView at top level) is unaffected by the privacy gate. The reel viewer shell is always mounted; the `visible={showReel}` prop (initialized false) controls its visibility. The privacy gate only prevents the `BetaVideoGrid` tile and section title from rendering.
+
+**PASS** — Supabase singleton unchanged. `social-feed-service.ts` imports only from `../../lib/supabase`. No `createClient()` call.
+
+**PASS** — Safe area insets: `useSafeAreaInsets()` pattern in `UserProfileScreen` unchanged.
+
+---
+
+### Summary (QA Run 5)
+
+**Result**: QA PASS
+
+**AC-163**: REGRESSION PASS. The privacy gate `{profile.privacy_setting === 'followers_only' && !isFollowing ? null : (<View style={styles.videoSection}>...)}` at `UserProfileScreen.tsx` line 535 correctly suppresses the video section title and `BetaVideoGrid` for `followers_only` profiles when the viewer is not a follower. `followers_only` profiles with a following viewer and `public` profiles with any viewer both render the grid normally. All three scenarios are covered by new tests (lines 465–536 of `UserProfileScreen.test.tsx`), all passing.
+
+**Migration filename**: `20261013000004_mod_006_get_like_info_batch.sql` confirmed on disk and correctly referenced in Engineering Progress. Documentation is consistent.
+
+**All other ACs**: No regressions. 60/60 mod-social-feed tests pass. 514/515 full-suite tests pass (1 pre-existing MOD-005 failure — `fetchBetaVideosByUser route_name` expectation in `beta-video-service.test.ts` — present since before this QA run, unrelated to MOD-006). TypeScript clean (0 errors).
+
+**MOD-006 is QA PASS.**
