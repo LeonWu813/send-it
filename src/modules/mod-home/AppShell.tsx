@@ -13,24 +13,44 @@
  *   Never use conditional unmount — loses state.
  *   Never use `flex: 0` — still lays out and leaks touch targets.
  *
- * Deep-link note (onSelectGym / AC-114):
- *   Tapping a saved gym on HomeScreen switches to the Gyms tab AND passes the
- *   gymId to GymNavigator via the `initialGymId` prop so it opens the gym
- *   detail screen directly. `selectedGymId` is cleared after a short delay so
- *   that subsequent tab switches (without a gym selection) land on the list.
+ * Global app-level header (AC-184):
+ *   AppHeader is mounted inside UnreadCountProvider, above the tab-content area.
+ *   It renders on all non-exempt screens. The fullscreen reel viewer (AC-133) is
+ *   exempt — it renders as a full-screen overlay above AppShell, so the header
+ *   is naturally hidden. Auth screens are outside AppShell entirely.
  *
- * Climber profile overlay (onSelectClimber / AC-123):
- *   Tapping a climber chip opens UserProfileScreen from MOD-006 as a
- *   modal-style overlay rendered on top of the current tab content.
- *   `targetUserId` state drives visibility: non-null = overlay open.
- *   The overlay's onBack callback clears `targetUserId` to dismiss it.
- *   This is a Phase 1 approach; a dedicated navigator stack is Phase 2.
+ * UnreadCountProvider (AC-173, AC-184):
+ *   Wraps the entire AppShell content so that AppHeader (bell badge) and
+ *   NotificationInboxScreen (post-batch-read refresh) share the same context.
+ *
+ * Notifications overlay (AC-184):
+ *   Tapping the bell icon in AppHeader opens NotificationsNavigator as a
+ *   full-screen overlay (same pattern as the climber profile overlay).
+ *
+ * Settings overlay (AC-184):
+ *   Tapping the settings icon in AppHeader opens SettingsScreen as a
+ *   full-screen overlay.
+ *
+ * Deep-link note (onSelectGym / AC-114, AC-176):
+ *   Tapping a saved gym on HomeScreen switches to the Gyms tab AND passes the
+ *   gymId + gymName to GymNavigator so it opens that gym's RouteListScreen.
+ *
+ * Route deep-link (onSelectRoute / AC-178):
+ *   Tapping a projecting route card on HomeScreen switches to the Gyms tab
+ *   and opens RouteDetailScreen within the correct gym.
+ *
+ * Climber profile overlay (onSelectClimber / AC-182):
+ *   Tapping a following-activity row opens UserProfileScreen as an overlay.
  *
  * Cross-module imports:
  *   - GymNavigator from mod-gym-directory (public entry-point component).
  *   - ProfileNavigator from mod-auth-profile (public entry-point component).
- *   - UserProfileScreen from mod-social-feed/UserProfileNavigator (public
- *     module-root entry-point component; does not reach into screens/).
+ *   - UserProfileNavigator from mod-social-feed (public module-root entry point).
+ *   - NotificationsNavigator from mod-notifications (public entry-point component).
+ *   - UnreadCountProvider from mod-notifications/UnreadCountProvider.
+ *   - SettingsScreen from mod-localization-theme (imported via ProfileNavigator
+ *     pattern — consistent with how ProfileNavigator already imports it).
+ *   - AppHeader from this module's components.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -38,9 +58,13 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { UnreadCountProvider } from '../mod-notifications/UnreadCountProvider';
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
 import GymNavigator from '../mod-gym-directory/GymNavigator';
+import NotificationsNavigator from '../mod-notifications/NotificationsNavigator';
 import UserProfileScreen from '../mod-social-feed/UserProfileNavigator';
+import SettingsScreen from '../mod-localization-theme/screens/SettingsScreen';
+import AppHeader from './components/AppHeader';
 import TabBar, { type TabKey } from './components/TabBar';
 import HomeNavigator from './HomeNavigator';
 
@@ -77,110 +101,170 @@ const styles = StyleSheet.create({
 
 export default function AppShell({ session }: AppShellProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
-  /** Non-null while a climber profile overlay is open (AC-123). */
+  const insets = useSafeAreaInsets();
+
+  /** Non-null while a climber profile overlay is open (AC-182). */
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
-  /** When the user taps a saved gym chip on the Home screen, this is set to
-   *  the gym ID so GymNavigator can open that gym's detail screen directly
-   *  (AC-114 deep-link). The `gymNavKey` counter ensures every tap triggers
-   *  a fresh useEffect in GymNavigator even if the same gym is tapped twice
-   *  in a row after navigating back to the list. */
+
+  /** Non-null while the notifications overlay is open (AC-184). */
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  /** Non-null while the settings overlay is open (AC-184). */
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Gym deep-link state (AC-114, AC-176): tap a saved gym → Gyms tab + RouteListScreen.
   const [selectedGymId, setSelectedGymId] = useState<string | undefined>(undefined);
   const [gymNavKey, setGymNavKey] = useState(0);
-  /** Route deep-link state: when the user taps a route card in the profile
-   *  history surface, we switch to the Gyms tab and pass the routeId + gymId
-   *  to GymNavigator so it opens the route detail screen within that gym's
-   *  route list. Back from the detail returns to the route list, not Profile. */
+
+  // Route deep-link state (AC-178): tap a projecting route → Gyms tab + RouteDetailScreen.
   const [routeDeepLinkId, setRouteDeepLinkId] = useState<string | undefined>(undefined);
   const [gymDeepLinkId, setGymDeepLinkId] = useState<string | undefined>(undefined);
   const [routeNavKey, setRouteNavKey] = useState(0);
-  const insets = useSafeAreaInsets();
+
+  // ── Tab navigation ────────────────────────────────────────────────────────
 
   function handleViewAllGyms(): void {
     setSelectedGymId(undefined);
     setActiveTab('gyms');
   }
 
-  function handleSelectGym(gymId: string): void {
-    // Increment gymNavKey so GymNavigator's useEffect fires on every tap,
-    // even if the same gym is tapped twice after the user navigated back to
-    // the list. The gymId tells GymNavigator which detail screen to open.
+  function handleSelectGym(gymId: string, _gymName: string): void {
+    // Navigate to that gym's GymDetailScreen (deep-link via GymNavigator prop).
+    // AC-114/AC-176: GymNavigator currently supports deep-link to GymDetailScreen;
+    // direct RouteListScreen deep-link is a pending MOD-002 integration point
+    // (requires GymNavigator to expose an initialRoutesGymId prop + gymName).
     setSelectedGymId(gymId);
     setGymNavKey((k) => k + 1);
     setActiveTab('gyms');
   }
 
-  function handleSelectClimber(userId: string): void {
-    // Open the climber's profile as a modal-style overlay (AC-123).
-    setTargetUserId(userId);
-  }
-
-  const handleNavigateToRoute = useCallback((routeId: string, gymId: string): void => {
-    // Increment routeNavKey so GymNavigator's useEffect fires on every tap,
-    // even if the same route is tapped twice after the user navigated back.
+  const handleSelectRoute = useCallback((routeId: string, gymId: string): void => {
+    // Navigate to RouteDetailScreen within the correct gym (AC-178).
     setRouteDeepLinkId(routeId);
     setGymDeepLinkId(gymId);
     setRouteNavKey((k) => k + 1);
     setActiveTab('gyms');
   }, []);
 
+  // ── Overlay callbacks ─────────────────────────────────────────────────────
+
+  function handleSelectClimber(userId: string): void {
+    setTargetUserId(userId);
+  }
+
   function handleClimberProfileBack(): void {
     setTargetUserId(null);
   }
 
+  function handleNavigateToNotifications(): void {
+    setNotificationsOpen(true);
+  }
+
+  function handleNotificationsBack(): void {
+    setNotificationsOpen(false);
+  }
+
+  function handleNavigateToSettings(): void {
+    setSettingsOpen(true);
+  }
+
+  function handleSettingsBack(): void {
+    setSettingsOpen(false);
+  }
+
+  const handleNavigateToRoute = useCallback((routeId: string, gymId: string): void => {
+    setRouteDeepLinkId(routeId);
+    setGymDeepLinkId(gymId);
+    setRouteNavKey((k) => k + 1);
+    setActiveTab('gyms');
+  }, []);
+
   return (
-    <View style={styles.root}>
-      <View style={styles.tabContentArea}>
-        {/* Tab 1 — Home */}
-        <View style={[styles.tabContent, activeTab !== 'home' && styles.hidden]}>
-          <HomeNavigator
-            session={session}
-            isActive={activeTab === 'home'}
-            onViewAllGyms={handleViewAllGyms}
-            onSelectGym={handleSelectGym}
-            onSelectClimber={handleSelectClimber}
-          />
+    <UnreadCountProvider session={session}>
+      <View style={styles.root}>
+        {/* Global app-level header (AC-184) — above tab content on all non-exempt screens */}
+        <AppHeader
+          onNavigateToNotifications={handleNavigateToNotifications}
+          onNavigateToSettings={handleNavigateToSettings}
+          topInset={insets.top}
+        />
+
+        <View style={styles.tabContentArea}>
+          {/* Tab 1 — Home */}
+          <View style={[styles.tabContent, activeTab !== 'home' && styles.hidden]}>
+            <HomeNavigator
+              session={session}
+              isActive={activeTab === 'home'}
+              onViewAllGyms={handleViewAllGyms}
+              onSelectGym={handleSelectGym}
+              onSelectRoute={handleSelectRoute}
+              onSelectClimber={handleSelectClimber}
+              onNavigateToNotifications={handleNavigateToNotifications}
+              onNavigateToSettings={handleNavigateToSettings}
+            />
+          </View>
+
+          {/* Tab 2 — Gyms */}
+          <View style={[styles.tabContent, activeTab !== 'gyms' && styles.hidden]}>
+            <GymNavigator
+              session={session}
+              initialGymId={selectedGymId}
+              gymNavKey={gymNavKey}
+              routeDeepLinkId={routeDeepLinkId}
+              gymDeepLinkId={gymDeepLinkId}
+              routeNavKey={routeNavKey}
+              onNavigateToUser={handleSelectClimber}
+            />
+          </View>
+
+          {/* Tab 3 — Profile */}
+          <View style={[styles.tabContent, activeTab !== 'profile' && styles.hidden]}>
+            <ProfileNavigator
+              session={session}
+              isActive={activeTab === 'profile'}
+              onNavigateToRoute={handleNavigateToRoute}
+              onNavigateToUser={handleSelectClimber}
+            />
+          </View>
         </View>
 
-        {/* Tab 2 — Gyms */}
-        <View style={[styles.tabContent, activeTab !== 'gyms' && styles.hidden]}>
-          <GymNavigator
-            session={session}
-            initialGymId={selectedGymId}
-            gymNavKey={gymNavKey}
-            routeDeepLinkId={routeDeepLinkId}
-            gymDeepLinkId={gymDeepLinkId}
-            routeNavKey={routeNavKey}
-            onNavigateToUser={handleSelectClimber}
-          />
-        </View>
+        <TabBar
+          activeTab={activeTab}
+          onTabPress={setActiveTab}
+          bottomInset={insets.bottom}
+        />
 
-        {/* Tab 3 — Profile */}
-        <View style={[styles.tabContent, activeTab !== 'profile' && styles.hidden]}>
-          <ProfileNavigator
-            session={session}
-            isActive={activeTab === 'profile'}
-            onNavigateToRoute={handleNavigateToRoute}
-            onNavigateToUser={handleSelectClimber}
-          />
-        </View>
+        {/* Climber profile overlay (AC-182) */}
+        {targetUserId !== null && (
+          <View style={styles.overlayContainer}>
+            <UserProfileScreen
+              targetUserId={targetUserId}
+              session={session}
+              onBack={handleClimberProfileBack}
+            />
+          </View>
+        )}
+
+        {/* Notifications overlay (AC-184) */}
+        {notificationsOpen && (
+          <View style={styles.overlayContainer}>
+            <NotificationsNavigator
+              session={session}
+              initialView="inbox"
+              isActive={notificationsOpen}
+              onBack={handleNotificationsBack}
+              onNavigateToUser={handleSelectClimber}
+            />
+          </View>
+        )}
+
+        {/* Settings overlay (AC-184) */}
+        {settingsOpen && (
+          <View style={styles.overlayContainer}>
+            <SettingsScreen onBack={handleSettingsBack} />
+          </View>
+        )}
       </View>
-
-      <TabBar
-        activeTab={activeTab}
-        onTabPress={setActiveTab}
-        bottomInset={insets.bottom}
-      />
-
-      {/* Climber profile overlay — rendered above tab content (AC-123) */}
-      {targetUserId !== null && (
-        <View style={styles.overlayContainer}>
-          <UserProfileScreen
-            targetUserId={targetUserId}
-            session={session}
-            onBack={handleClimberProfileBack}
-          />
-        </View>
-      )}
-    </View>
+    </UnreadCountProvider>
   );
 }

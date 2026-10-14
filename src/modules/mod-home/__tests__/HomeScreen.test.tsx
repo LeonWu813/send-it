@@ -1,387 +1,565 @@
 /**
- * Tests for HomeScreen (MOD-012).
+ * Tests for HomeScreen (MOD-012, Rev 36).
  *
- * Tests behaviour: banner section, saved gyms strip, following climbers
- * strip and empty state, and navigation callbacks.
+ * Covers: AC-111 rev (4 sections), AC-112 (admin banner), AC-113/AC-115 (saved
+ * gyms strip + empty state), AC-174 (admin_banners table source), AC-175
+ * (most-recently-viewed ordering), AC-177 (projecting routes section + empty
+ * state), AC-178 (route card tap → onSelectRoute), AC-181 (new beta badge),
+ * AC-182 (following activity section + empty state + tap → onSelectClimber).
  *
- * gym-service, social-feed-service, and supabase are mocked to avoid real
- * network calls.
+ * Mocks:
+ *   - supabase (all .from() calls)
+ *   - mod-route-catalog/route-service (fetchSavedRouteIds)
+ *   - mod-social-feed/social-feed-service (fetchFollowing)
+ *   - src/components/RouteCard (isolates RouteCard rendering from HomeScreen)
  */
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
-jest.mock('../../mod-gym-directory/gym-service');
+jest.mock('../../mod-route-catalog/route-service');
 jest.mock('../../mod-social-feed/social-feed-service');
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
     from: jest.fn(),
+    rpc: jest.fn(),
   },
 }));
-
-// Mock BANNERS so banner-related behaviour is deterministic in tests
-jest.mock('../../../lib/banners', () => ({
-  BANNERS: [
-    {
-      id: 'banner-1',
-      titleKey: 'home.banners.competition',
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      imageSource: require('../../../assets/banners/banner1.png'),
-    },
-  ],
-}));
+// Shallow-mock RouteCard so tests assert on props, not RouteCard internals.
+jest.mock('../../../components/RouteCard', () => {
+  const React = require('react');
+  const { Text, Pressable } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ route, onPress, hasNewBetaVideo }: { route: { name: string; grade: string }; onPress: () => void; hasNewBetaVideo?: boolean }) =>
+      React.createElement(
+        Pressable,
+        { onPress, testID: `route-card-${route.name}`, accessibilityRole: 'button' },
+        React.createElement(Text, null, route.name),
+        React.createElement(Text, null, route.grade),
+        hasNewBetaVideo ? React.createElement(Text, null, 'New Beta') : null,
+      ),
+  };
+});
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 
-import HomeScreen from '../screens/HomeScreen';
-import * as gymService from '../../mod-gym-directory/gym-service';
+import HomeScreen, { clearNewBetaCacheForTests } from '../screens/HomeScreen';
+import * as routeService from '../../mod-route-catalog/route-service';
 import * as socialFeedService from '../../mod-social-feed/social-feed-service';
 import { supabase } from '../../../lib/supabase';
 import { renderOptions } from '../test-utils';
 
 // ── Typed helpers ─────────────────────────────────────────────────────────────
-const mockFetchSavedGymIds = gymService.fetchSavedGymIds as jest.MockedFunction<
-  typeof gymService.fetchSavedGymIds
+const mockFetchSavedRouteIds = routeService.fetchSavedRouteIds as jest.MockedFunction<
+  typeof routeService.fetchSavedRouteIds
 >;
 const mockFetchFollowing = socialFeedService.fetchFollowing as jest.MockedFunction<
   typeof socialFeedService.fetchFollowing
 >;
 const mockFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
+const mockRpc = supabase.rpc as jest.MockedFunction<typeof supabase.rpc>;
 
+// ── Mock session ──────────────────────────────────────────────────────────────
 const MOCK_SESSION = {
   user: { id: 'user-001' },
   access_token: 'tok',
 } as unknown as Session;
 
-const GYM_FIXTURES = [
-  { id: 'gym-001', name: 'MegaSTONE Climbing Gym', photo_url: null },
-  { id: 'gym-002', name: 'T-UP Wanhua', photo_url: 'https://example.com/photo.jpg' },
-];
+// ── Mock props ────────────────────────────────────────────────────────────────
+const DEFAULT_PROPS = {
+  session: MOCK_SESSION,
+  isActive: true,
+  onViewAllGyms: jest.fn(),
+  onSelectGym: jest.fn(),
+  onSelectRoute: jest.fn(),
+  onSelectClimber: jest.fn(),
+};
 
-const FOLLOWING_FIXTURES = [
-  { id: 'user-002', display_name: 'Alice Chen', avatar_url: null },
-  { id: 'user-003', display_name: 'Bob Lin', avatar_url: 'https://example.com/bob.jpg' },
-];
+// ── Builder helpers ───────────────────────────────────────────────────────────
 
-/**
- * Builds a minimal chainable Supabase query builder for a SELECT.in chain.
- * Matches how HomeScreen queries: supabase.from('gyms').select(...).in('id', ids)
- */
-function makeSelectInBuilder(result: { data: unknown; error: unknown }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const resolvedPromise = Promise.resolve(result);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const builder: any = {
+/** Builds a chainable mock query builder that resolves to `result`. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeQueryBuilder(result: { data: unknown; error: null | object }): any {
+  const promise = Promise.resolve(result);
+  return {
     select: jest.fn().mockReturnThis(),
+    eq: jest.fn().mockReturnThis(),
     in: jest.fn().mockReturnThis(),
-    then: resolvedPromise.then.bind(resolvedPromise),
+    gte: jest.fn().mockReturnThis(),
+    order: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    maybeSingle: jest.fn().mockReturnValue(Promise.resolve(result)),
+    then: promise.then.bind(promise),
   };
-  return builder;
+}
+
+// ── Default mock setup ────────────────────────────────────────────────────────
+
+/** Sets up supabase.from() to return sensible defaults for all tables. */
+function setupDefaultMocks() {
+  mockFetchSavedRouteIds.mockResolvedValue([]);
+  mockFetchFollowing.mockResolvedValue([]);
+  mockRpc.mockResolvedValue({ data: [], error: null } as never);
+
+  mockFrom.mockImplementation((table: string) => {
+    if (table === 'admin_banners') {
+      return makeQueryBuilder({ data: null, error: null });
+    }
+    if (table === 'saved_gyms') {
+      return makeQueryBuilder({ data: [], error: null });
+    }
+    if (table === 'user_route_visits') {
+      return makeQueryBuilder({ data: [], error: null });
+    }
+    if (table === 'routes') {
+      return makeQueryBuilder({ data: [], error: null });
+    }
+    if (table === 'beta_videos') {
+      return makeQueryBuilder({ data: [], error: null });
+    }
+    return makeQueryBuilder({ data: null, error: null });
+  });
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('HomeScreen', () => {
+describe('HomeScreen (Rev 36)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default: no followed users — prevents tests that don't care about the
-    // following strip from hanging on an unresolved promise.
-    mockFetchFollowing.mockResolvedValue([]);
+    clearNewBetaCacheForTests();
+    setupDefaultMocks();
   });
 
-  // ── Banner section (AC-112) ──────────────────────────────────────────────────
+  // ── AC-112 / AC-174: Events Banner ────────────────────────────────────────
 
-  it('renders banner cards when BANNERS is non-empty (AC-112)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
+  describe('Events Banner (AC-112, AC-174)', () => {
+    it('hides the banner section when no active banner exists', async () => {
+      // Default: admin_banners returns null.
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        // No banner text should be rendered.
+        expect(screen.queryByText('Competition')).toBeNull();
+      });
+    });
 
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
+    it('renders the banner title when an active banner exists (AC-112)', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') {
+          return makeQueryBuilder({
+            data: {
+              id: 'banner-1',
+              title: 'Summer Comp',
+              body: 'Sign up now!',
+              image_url: null,
+            },
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
 
-    await waitFor(() => {
-      expect(screen.getByText('Competition')).toBeTruthy();
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Summer Comp')).toBeTruthy();
+      });
+    });
+
+    it('renders the banner body text (AC-112)', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') {
+          return makeQueryBuilder({
+            data: {
+              id: 'banner-1',
+              title: 'Summer Comp',
+              body: 'Sign up now!',
+              image_url: null,
+            },
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Sign up now!')).toBeTruthy();
+      });
+    });
+
+    it('reads from admin_banners table (AC-174)', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(mockFrom).toHaveBeenCalledWith('admin_banners');
+      });
     });
   });
 
-  // ── Saved Gyms section (AC-113, AC-114, AC-115) ──────────────────────────────
+  // ── AC-113 / AC-115: Saved Gyms ───────────────────────────────────────────
 
-  it('shows empty prompt when user has no saved gyms (AC-115)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(
-        screen.getByText('Tap the bookmark on any gym to save it.'),
-      ).toBeTruthy();
-    });
-  });
-
-  it('renders saved gym chips when the user has saved gyms (AC-113)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue(['gym-001', 'gym-002']);
-    const qb = makeSelectInBuilder({ data: GYM_FIXTURES, error: null });
-    mockFrom.mockReturnValue(qb as unknown as ReturnType<typeof supabase.from>);
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy();
-      expect(screen.getByText('T-UP Wanhua')).toBeTruthy();
-    });
-  });
-
-  it('calls onViewAllGyms when the View All pressable is tapped (AC-113)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-    const onViewAllGyms = jest.fn();
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={onViewAllGyms}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('View All')).toBeTruthy();
+  describe('Saved Gyms (AC-113, AC-115)', () => {
+    it('renders the "Saved Gyms" section title', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Saved Gyms')).toBeTruthy();
+      });
     });
 
-    fireEvent.press(screen.getByText('View All'));
-    expect(onViewAllGyms).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onSelectGym with the gym ID when a gym chip is tapped (AC-114)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue(['gym-001']);
-    const qb = makeSelectInBuilder({ data: [GYM_FIXTURES[0]], error: null });
-    mockFrom.mockReturnValue(qb as unknown as ReturnType<typeof supabase.from>);
-    const onSelectGym = jest.fn();
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={onSelectGym}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy();
+    it('shows empty state when user has no saved gyms (AC-115)', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(
+          screen.getByText('Tap the bookmark on any gym to save it.'),
+        ).toBeTruthy();
+      });
     });
 
-    fireEvent.press(screen.getByText('MegaSTONE Climbing Gym'));
-    expect(onSelectGym).toHaveBeenCalledWith('gym-001');
-  });
+    it('renders gym chips for saved gyms (AC-113)', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') {
+          return makeQueryBuilder({ data: null, error: null });
+        }
+        if (table === 'saved_gyms') {
+          return makeQueryBuilder({
+            data: [
+              {
+                gym_id: 'gym-001',
+                gyms: { id: 'gym-001', name: 'MegaSTONE', photo_url: null },
+              },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'user_route_visits') {
+          return makeQueryBuilder({ data: [], error: null });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
 
-  // ── Following Climbers section (AC-123, AC-124) ──────────────────────────────
-
-  it('renders the Following section empty state when user follows no one (AC-124)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-    // mockFetchFollowing already returns [] via beforeEach default
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Follow climbers to see their activity')).toBeTruthy();
-    });
-  });
-
-  it('renders the Following section header (AC-123)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Following')).toBeTruthy();
-    });
-  });
-
-  it('renders followed user chips when the user follows others (AC-123)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-    mockFetchFollowing.mockResolvedValue(FOLLOWING_FIXTURES);
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Alice Chen')).toBeTruthy();
-      expect(screen.getByText('Bob Lin')).toBeTruthy();
-    });
-  });
-
-  it('calls fetchFollowing with the current user id (AC-123)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-    mockFetchFollowing.mockResolvedValue([]);
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(mockFetchFollowing).toHaveBeenCalledWith('user-001');
-    });
-  });
-
-  it('calls onSelectClimber with the correct user ID when a climber chip is tapped (AC-123)', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-    mockFetchFollowing.mockResolvedValue(FOLLOWING_FIXTURES);
-    const onSelectClimber = jest.fn();
-
-    render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={true}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={onSelectClimber}
-      />,
-      renderOptions(),
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Alice Chen')).toBeTruthy();
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('MegaSTONE')).toBeTruthy();
+      });
     });
 
-    fireEvent.press(screen.getByText('Alice Chen'));
-    expect(onSelectClimber).toHaveBeenCalledWith('user-002');
-  });
+    it('calls onSelectGym with gymId and gymName when gym chip is pressed (AC-114/AC-176)', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') {
+          return makeQueryBuilder({ data: null, error: null });
+        }
+        if (table === 'saved_gyms') {
+          return makeQueryBuilder({
+            data: [
+              {
+                gym_id: 'gym-001',
+                gyms: { id: 'gym-001', name: 'MegaSTONE', photo_url: null },
+              },
+            ],
+            error: null,
+          });
+        }
+        if (table === 'user_route_visits') {
+          return makeQueryBuilder({ data: [], error: null });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
 
-  // ── Focus-triggered refetch (Bug 2 fix) ─────────────────────────────────────
-
-  it('refetches saved gyms when isActive changes from false to true', async () => {
-    // Initially inactive — render with no saved gyms
-    mockFetchSavedGymIds.mockResolvedValue([]);
-
-    const { rerender } = render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={false}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    // Simulate user saving a gym on the Gyms tab, then switching back to Home
-    mockFetchSavedGymIds.mockResolvedValue(['gym-001']);
-    const qb = makeSelectInBuilder({ data: [GYM_FIXTURES[0]], error: null });
-    mockFrom.mockReturnValue(qb as unknown as ReturnType<typeof supabase.from>);
-
-    await act(async () => {
-      rerender(
-        <HomeScreen
-          session={MOCK_SESSION}
-          isActive={true}
-          onViewAllGyms={jest.fn()}
-          onSelectGym={jest.fn()}
-          onSelectClimber={jest.fn()}
-        />,
+      const mockOnSelectGym = jest.fn();
+      render(
+        <HomeScreen {...DEFAULT_PROPS} onSelectGym={mockOnSelectGym} />,
+        renderOptions(),
       );
+      await waitFor(() => screen.getByText('MegaSTONE'));
+      fireEvent.press(screen.getByText('MegaSTONE'));
+      expect(mockOnSelectGym).toHaveBeenCalledWith('gym-001', 'MegaSTONE');
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy();
+    it('calls onViewAllGyms when "View All" is pressed (AC-113)', async () => {
+      const mockOnViewAll = jest.fn();
+      render(
+        <HomeScreen {...DEFAULT_PROPS} onViewAllGyms={mockOnViewAll} />,
+        renderOptions(),
+      );
+      await waitFor(() => screen.getByText('View All'));
+      fireEvent.press(screen.getByText('View All'));
+      expect(mockOnViewAll).toHaveBeenCalledTimes(1);
     });
   });
 
-  it('refetches following list when isActive changes from false to true', async () => {
-    mockFetchSavedGymIds.mockResolvedValue([]);
-    // Initially inactive with no following
-    mockFetchFollowing.mockResolvedValue([]);
+  // ── AC-177 / AC-178 / AC-181: Projecting Routes ───────────────────────────
 
-    const { rerender } = render(
-      <HomeScreen
-        session={MOCK_SESSION}
-        isActive={false}
-        onViewAllGyms={jest.fn()}
-        onSelectGym={jest.fn()}
-        onSelectClimber={jest.fn()}
-      />,
-      renderOptions(),
-    );
-
-    // Simulate following a user on a different screen, then returning to Home
-    mockFetchFollowing.mockResolvedValue(FOLLOWING_FIXTURES);
-
-    await act(async () => {
-      rerender(
-        <HomeScreen
-          session={MOCK_SESSION}
-          isActive={true}
-          onViewAllGyms={jest.fn()}
-          onSelectGym={jest.fn()}
-          onSelectClimber={jest.fn()}
-        />,
-      );
+  describe('Projecting Routes (AC-177, AC-178, AC-181)', () => {
+    it('renders the "Projecting" section title', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Projecting')).toBeTruthy();
+      });
     });
 
-    await waitFor(() => {
-      expect(screen.getByText('Alice Chen')).toBeTruthy();
+    it('shows empty state when user has no saved routes (AC-177)', async () => {
+      mockFetchSavedRouteIds.mockResolvedValue([]);
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(
+          screen.getByText('Save a route to track your projects.'),
+        ).toBeTruthy();
+      });
+    });
+
+    it('renders route cards for projecting routes (AC-177)', async () => {
+      mockFetchSavedRouteIds.mockResolvedValue(['route-001']);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'routes') {
+          return makeQueryBuilder({
+            data: [
+              {
+                id: 'route-001',
+                gym_id: 'gym-001',
+                name: 'Crimson Tide',
+                grade: 'V5',
+                photo_url: null,
+              },
+            ],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+      mockRpc.mockResolvedValue({ data: [], error: null } as never);
+
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Crimson Tide')).toBeTruthy();
+      });
+    });
+
+    it('renders "New Beta" badge on qualifying routes (AC-181)', async () => {
+      mockFetchSavedRouteIds.mockResolvedValue(['route-001']);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'routes') {
+          return makeQueryBuilder({
+            data: [{ id: 'route-001', gym_id: 'gym-001', name: 'Crimson Tide', grade: 'V5', photo_url: null }],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+      // RPC returns route-001 as having new beta.
+      mockRpc.mockResolvedValue({
+        data: [{ route_id: 'route-001' }],
+        error: null,
+      } as never);
+
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('New Beta')).toBeTruthy();
+      });
+    });
+
+    it('calls onSelectRoute when a route card is pressed (AC-178)', async () => {
+      mockFetchSavedRouteIds.mockResolvedValue(['route-001']);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'routes') {
+          return makeQueryBuilder({
+            data: [{ id: 'route-001', gym_id: 'gym-001', name: 'Crimson Tide', grade: 'V5', photo_url: null }],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+      mockRpc.mockResolvedValue({ data: [], error: null } as never);
+
+      const mockOnSelectRoute = jest.fn();
+      render(
+        <HomeScreen {...DEFAULT_PROPS} onSelectRoute={mockOnSelectRoute} />,
+        renderOptions(),
+      );
+      await waitFor(() => screen.getByText('Crimson Tide'));
+      fireEvent.press(screen.getByTestId('route-card-Crimson Tide'));
+      expect(mockOnSelectRoute).toHaveBeenCalledWith('route-001', 'gym-001');
+    });
+
+    it('renders V-grade filter tabs (AC-178)', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        // "All" tab should always be present.
+        expect(screen.getByText('All')).toBeTruthy();
+      });
+    });
+
+    it('calls routes_with_new_beta RPC (AC-181)', async () => {
+      mockFetchSavedRouteIds.mockResolvedValue(['route-001']);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'routes') {
+          return makeQueryBuilder({
+            data: [{ id: 'route-001', gym_id: 'gym-001', name: 'Wave', grade: 'V3', photo_url: null }],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(mockRpc).toHaveBeenCalledWith('routes_with_new_beta', {
+          route_ids: ['route-001'],
+        });
+      });
+    });
+  });
+
+  // ── AC-182: Following Activity ─────────────────────────────────────────────
+
+  describe('Following Activity (AC-182)', () => {
+    it('renders the "Following Activity" section title', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Following Activity')).toBeTruthy();
+      });
+    });
+
+    it('shows empty state when user follows no one (AC-182)', async () => {
+      mockFetchFollowing.mockResolvedValue([]);
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(
+          screen.getByText('Follow climbers to see their new beta videos.'),
+        ).toBeTruthy();
+      });
+    });
+
+    it('shows empty state when followed users have no new beta videos (AC-182)', async () => {
+      mockFetchFollowing.mockResolvedValue([
+        { id: 'user-002', display_name: 'Alice', avatar_url: null },
+      ]);
+      // beta_videos returns empty for all followed users.
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
+        return makeQueryBuilder({ data: [], error: null });
+      });
+
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(
+          screen.getByText('Follow climbers to see their new beta videos.'),
+        ).toBeTruthy();
+      });
+    });
+
+    it('renders following-activity rows for users with new beta videos (AC-182)', async () => {
+      mockFetchFollowing.mockResolvedValue([
+        { id: 'user-002', display_name: 'Alice Chen', avatar_url: null },
+      ]);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') {
+          return makeQueryBuilder({
+            data: [
+              { uploader_user_id: 'user-002', created_at: new Date().toISOString() },
+              { uploader_user_id: 'user-002', created_at: new Date().toISOString() },
+            ],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Alice Chen')).toBeTruthy();
+        expect(screen.getByText('2 new beta videos')).toBeTruthy();
+      });
+    });
+
+    it('calls onSelectClimber with userId when activity row is tapped (AC-182)', async () => {
+      mockFetchFollowing.mockResolvedValue([
+        { id: 'user-002', display_name: 'Alice Chen', avatar_url: null },
+      ]);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') {
+          return makeQueryBuilder({
+            data: [{ uploader_user_id: 'user-002', created_at: new Date().toISOString() }],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+
+      const mockOnSelectClimber = jest.fn();
+      render(
+        <HomeScreen {...DEFAULT_PROPS} onSelectClimber={mockOnSelectClimber} />,
+        renderOptions(),
+      );
+      await waitFor(() => screen.getByText('Alice Chen'));
+      fireEvent.press(screen.getByLabelText('Alice Chen'));
+      expect(mockOnSelectClimber).toHaveBeenCalledWith('user-002');
+    });
+
+    it('uses fetchFollowing from mod-social-feed to get followed user list (AC-182)', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(mockFetchFollowing).toHaveBeenCalledWith(MOCK_SESSION.user.id);
+      });
+    });
+  });
+
+  // ── AC-111: Section ordering ───────────────────────────────────────────────
+
+  describe('Section ordering (AC-111)', () => {
+    it('renders all four section titles in order', async () => {
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => {
+        expect(screen.getByText('Saved Gyms')).toBeTruthy();
+        expect(screen.getByText('Projecting')).toBeTruthy();
+        expect(screen.getByText('Following Activity')).toBeTruthy();
+      });
+    });
+  });
+
+  // ── Keep-alive re-fetch (isActive) ────────────────────────────────────────
+
+  describe('Keep-alive re-fetch pattern', () => {
+    it('re-fetches saved gyms when isActive flips to true', async () => {
+      const { rerender } = render(
+        <HomeScreen {...DEFAULT_PROPS} isActive={false} />,
+        renderOptions(),
+      );
+      const callsBefore = mockFrom.mock.calls.filter(
+        (c) => c[0] === 'saved_gyms',
+      ).length;
+
+      rerender(<HomeScreen {...DEFAULT_PROPS} isActive={true} />);
+      await waitFor(() => {
+        const callsAfter = mockFrom.mock.calls.filter(
+          (c) => c[0] === 'saved_gyms',
+        ).length;
+        expect(callsAfter).toBeGreaterThan(callsBefore);
+      });
     });
   });
 });

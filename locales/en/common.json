@@ -63,6 +63,8 @@
     "back": "Back",
     "blockedAccounts": "Blocked Accounts",
     "betaVideoPrivacy": "Beta Video Visibility",
+    "betaVideoPrivacyPublic": "All Users",
+    "betaVideoPrivacyFollowersOnly": "Followers Only",
     "betaVideoPrivacySubtextPublic": "All users can see your beta videos",
     "betaVideoPrivacySubtextFollowersOnly": "Only followers can see your beta videos",
     "language": {
@@ -269,6 +271,27 @@
     "following": {
       "title": "Following",
       "empty": "Follow climbers to see their activity"
+    },
+    "projectingRoutes": {
+      "title": "Projecting",
+      "allGrades": "All",
+      "empty": "Save a route to track your projects.",
+      "emptyFiltered": "No projecting routes at this grade."
+    },
+    "followingActivity": {
+      "title": "Following Activity",
+      "newVideos": "{{count}} new beta video",
+      "newVideos_other": "{{count}} new beta videos",
+      "empty": "Follow climbers to see their new beta videos."
+    },
+    "routeCard": {
+      "newBeta": "New Beta",
+      "thumbnailAlt": "Route photo for {{name}}"
+    },
+    "appHeader": {
+      "bellA11y": "Notifications",
+      "bellA11yUnread": "Notifications, {{count}} unread",
+      "settingsA11y": "Settings"
     }
   },
   "betaVideo": {

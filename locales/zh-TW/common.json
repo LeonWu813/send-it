@@ -63,6 +63,8 @@
     "back": "返回",
     "blockedAccounts": "已封鎖的帳號",
     "betaVideoPrivacy": "Beta 影片僅限追蹤者",
+    "betaVideoPrivacyPublic": "所有人",
+    "betaVideoPrivacyFollowersOnly": "僅限追蹤者",
     "betaVideoPrivacySubtextPublic": "所有人皆可觀看你的 Beta 影片",
     "betaVideoPrivacySubtextFollowersOnly": "僅限追蹤者可觀看你的 Beta 影片",
     "language": {
@@ -269,6 +271,27 @@
     "following": {
       "title": "追蹤中",
       "empty": "追蹤攀岩者以查看他們的動態"
+    },
+    "projectingRoutes": {
+      "title": "目標路線",
+      "allGrades": "全部",
+      "empty": "收藏一條路線來追蹤你的目標。",
+      "emptyFiltered": "此難度沒有目標路線。"
+    },
+    "followingActivity": {
+      "title": "追蹤動態",
+      "newVideos": "{{count}} 支新 Beta 影片",
+      "newVideos_other": "{{count}} 支新 Beta 影片",
+      "empty": "追蹤攀岩者以查看他們的新 Beta 影片。"
+    },
+    "routeCard": {
+      "newBeta": "新 Beta",
+      "thumbnailAlt": "{{name}} 的路線照片"
+    },
+    "appHeader": {
+      "bellA11y": "通知",
+      "bellA11yUnread": "通知，{{count}} 則未讀",
+      "settingsA11y": "設定"
     }
   },
   "betaVideo": {

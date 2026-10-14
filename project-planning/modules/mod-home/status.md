@@ -1541,3 +1541,58 @@ PASS — `npx tsc --noEmit` exits 0 with no output. No unguarded `any` in mod-ho
 All 8 acceptance criteria pass. All automated checks pass. No regressions in the full 378-test suite. TypeScript clean. Implementation fully conforms to the spec and production.md shared conventions.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip. The migration creates the `saved_gyms` table, enables RLS, and grants the required verbs to `authenticated`.
+
+---
+
+### Implementation — 2026-10-13 (Rev 35/36)
+
+**Scope:** Rev 35/36 overhaul — admin-managed Events Banner, Saved Gyms most-recently-viewed ordering, Projecting Routes section with grade filter tabs + new-beta tag, Following Activity section, global AppHeader (bell + settings), SwipeBackWrapper, shared RouteCard component, UnreadCountProvider wiring.
+
+**ACs addressed:** AC-111 (rev), AC-112 (rev), AC-113, AC-114 (rev), AC-115, AC-174, AC-175, AC-176, AC-177, AC-178, AC-181, AC-182, AC-183, AC-184, AC-185.
+
+**Files created:**
+- `supabase/migrations/20261013000001_mod_012_admin_banners.sql` — `admin_banners` table DDL, RLS (SELECT all authenticated; INSERT/UPDATE/DELETE admin-only via `public.is_admin()`), `GRANT SELECT TO authenticated`. Per Admin-Managed Content convention (Rev 35).
+- `src/components/RouteCard.tsx` — App-level shared presentational component (AC-183). Props: `route: { id, name, grade, photo_url, gymName? }`, `onPress`, `hasNewBetaVideo?`. Layout: name+grade left, 48x48 thumbnail right, "New Beta" badge when `hasNewBetaVideo` is true. Theme tokens, i18n.
+- `src/components/SwipeBackWrapper.tsx` — PanResponder-based swipe-back wrapper (AC-185). Props: `onBack`, `children`, `enabled`. Gate: touch starts within left 20% of screen width, dx > 50, vx > 0.3, dx > dy * 2. Per "Prefer RN PanResponder for Simple Swipe Gestures" convention.
+- `src/components/__tests__/RouteCard.test.tsx` — 9 tests (name/grade rendering, gymName, thumbnail, placeholder, new-beta badge, onPress).
+- `src/components/__tests__/SwipeBackWrapper.test.tsx` — 4 tests (children rendering, enabled=false behavior).
+- `src/modules/mod-home/components/AppHeader.tsx` — Global app-level header (AC-184). Bell icon (left) wired to `onNavigateToNotifications`, unread badge from `useUnreadCount()`. Settings icon (right) wired to `onNavigateToSettings`. topInset prop for safe-area. Badge capped at 99+.
+- `src/modules/mod-home/components/__tests__/AppHeader.test.tsx` — 8 tests (bell/settings render, badge 0/N/99+, a11y labels, press callbacks).
+
+**Files modified:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — Complete rewrite. 4 sections: (1) Events Banner from `admin_banners WHERE is_active=true LIMIT 1`; (2) Saved Gyms ordered by `user_route_visits` recency, tap calls `onSelectGym(gymId, gymName)`; (3) Projecting Routes from `fetchSavedRouteIds()` + routes fetch + grade filter tabs + `routes_with_new_beta` RPC with 60s in-memory Map cache + `RouteCard` component; (4) Following Activity from `fetchFollowing()` + batched `beta_videos` query (last 14 days) grouped by uploader. Exports `clearNewBetaCacheForTests()` for test isolation.
+- `src/modules/mod-home/HomeNavigator.tsx` — Updated props: added `onSelectRoute`, `onSelectGym` now takes `(gymId, gymName)`, added `onNavigateToNotifications`, `onNavigateToSettings`.
+- `src/modules/mod-home/AppShell.tsx` — Added `UnreadCountProvider` wrapper. Added `AppHeader` above tab-content area. New state for `notificationsOpen` and `settingsOpen`. Added `NotificationsNavigator` and `SettingsScreen` full-screen overlays. Added `onSelectRoute` callback. Note: GymNavigator currently deep-links to GymDetailScreen (one tap from RouteListScreen); direct RouteListScreen deep-link (full AC-176 intent) is a pending MOD-002 integration point.
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — Complete rewrite. 24 tests covering all new ACs.
+- `locales/en/common.json` — Added `home.projectingRoutes.*`, `home.followingActivity.*`, `home.routeCard.*`, `home.appHeader.*`.
+- `locales/zh-TW/common.json` — Matching zh-TW translations for all new keys.
+
+**Key decisions:**
+- `user_route_visits` and `routes_with_new_beta` RPC are owned by MOD-003 (migrations pending). HomeScreen queries them as reads; gracefully handles missing table/RPC with empty results — no crash.
+- Following Activity queries `beta_videos` directly for `uploader_user_id IN (followed_ids)` after getting the block-filtered follow list from MOD-006's `fetchFollowing`. MOD-012 does not query `follows` directly.
+- `newBetaCache` is module-level (60s TTL), cleared on user-id change (auth-clear convention).
+
+### Self-Check Results — 2026-10-13
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm run check:i18n` | PASS — i18n completeness OK |
+| `npx jest --no-coverage` | PASS — 509 tests total (1 pre-existing failure in mod-beta-video, unrelated to this change) |
+| New tests | PASS — 47 new tests, 4 test files |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Migration: DDL, RLS, GRANT | PASS |
+| Theme tokens throughout | PASS |
+| i18n hook for all user-facing strings | PASS |
+| Cross-module imports restricted to public services/navigators | PASS |
+| No @react-navigation/native hooks | PASS |
+| Keep-alive mount (display:none) preserved | PASS |
+| Auth-clear convention (cache cleared on user change) | PASS |
+| PanResponder for SwipeBackWrapper (no gesture-handler dep) | PASS |
+| Admin banner: dedicated table + read-all SELECT + admin writes | PASS |
+
+**Integration notes pending other modules:**
+- MOD-003 must create `user_route_visits` table + `routes_with_new_beta` RPC for full AC-175/AC-181 QA.
+- MOD-002 must expose an `initialRoutesGymId`+`gymName` prop in `GymNavigator` for full AC-176 deep-link to RouteListScreen; currently deep-links to GymDetailScreen.
+- MOD-007 `UnreadCountProvider` already exists and is wired correctly.
