@@ -2,7 +2,7 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
@@ -11,7 +11,32 @@
 **Human QA UI changes commit**: pending — `fix(mod-social-feed): simplify follower/following cards; add stats section to UserProfileScreen`
 **AC-150/151/152/153 commit**: pending — `feat(mod-social-feed): AC-150/151(UI)/152/153 — three-dots sheet, block/report, blocked state`
 **AC-052 like button commit**: `0de9d44` — `feat(mod-social-feed): AC-052 — tappable like button in BetaVideoReelViewer`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052)
+**AC-186 + cleanup commit**: pending — `feat(mod-social-feed): AC-186 — get_like_info_batch RPC and service wrapper; remove AC-123/124 refs`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup)
+
+### AC-186 — get_like_info_batch RPC and Service Wrapper (2026-10-13, deferred)
+
+**AC-186 DONE (deferred)**: Defined the `get_like_info_batch` Postgres RPC and its TypeScript service wrapper. The RPC and function are introduced now per the data-access/caching convention (§10) but are NOT wired into any UI path in Phase 1. FeedScreen.tsx remains dead code per AC-159. The existing per-video `fetchLikeInfo` path continues to be used by all active callers.
+
+**Migration**: `supabase/migrations/20261013000002_mod_006_get_like_info_batch.sql`
+- `CREATE OR REPLACE FUNCTION public.get_like_info_batch(p_target_type TEXT, p_target_ids UUID[])` — `LANGUAGE sql SECURITY INVOKER SET search_path = public`.
+- Returns `TABLE(target_id UUID, is_liked BOOLEAN, like_count BIGINT)`.
+- Uses `UNNEST(p_target_ids) LEFT JOIN public.reactions` on `(target_id, target_type)`, grouped by `t.id`. `BOOL_OR(r.user_id = auth.uid())` for own-like state; `COUNT(r.id)` for like count.
+- `REVOKE EXECUTE ... FROM PUBLIC; GRANT EXECUTE ... TO authenticated`.
+
+**Service wrapper**: `fetchLikeInfoBatch(targetType, targetIds)` added to `social-feed-service.ts`.
+- Returns `[]` immediately on empty `targetIds`.
+- Calls `supabase.rpc('get_like_info_batch', { p_target_type, p_target_ids })`.
+- On error: logs via `console.error` and returns `[]` (does not throw — safe for deferred/optional use).
+- Maps `{ target_id, is_liked, like_count }` to `{ targetId, isLiked, likeCount: Number(...) }`.
+
+**AC-123/AC-124 cleanup**: Removed the `AC-123, AC-124: MOD-012 shows a strip of followed climbers on the Home tab.` JSDoc line from `fetchFollowing` in `social-feed-service.ts`. Those ACs are retired (Rev 35, replaced by AC-182 in MOD-012). The `fetchFollowing` function itself is unchanged; only the stale AC reference in the comment is removed.
+
+**Self-check (AC-186 + cleanup)**:
+- PASS — `npx tsc --noEmit` — 0 errors
+- PASS — No new npm dependencies introduced
+- PASS — `fetchLikeInfoBatch` is not imported or called from FeedScreen, any navigator, or any shell — dead code path only
+- PASS — No UI changes; AC-052 single-video like behaviour is unchanged
 
 ### AC-052 — Tappable Like Button in BetaVideoReelViewer (2026-10-07)
 
@@ -173,7 +198,8 @@ MOD-009 will `CREATE TABLE IF NOT EXISTS public.blocks (...)` with its full sche
 - `likeBetaVideo(betaVideoId)` — idempotent (unique_violation treated as no-op)
 - `unlikeBetaVideo(betaVideoId)` — deletes reaction row
 - `fetchLikeInfo(betaVideoId)` — calls `get_like_info` RPC
-- `fetchFollowing(userId)` — **public service function for MOD-012** Following Climbers strip
+- `fetchFollowing(userId)` — list of users the given user follows (public service for MOD-012)
+- `fetchLikeInfoBatch(targetType, targetIds)` — batched like count + own-like state via `get_like_info_batch` RPC (AC-186, Phase 1 deferred — not wired into any UI)
 
 **Screens**:
 - `src/modules/mod-social-feed/screens/FeedScreen.tsx` — chronological feed of ascents + beta videos, pull-to-refresh, like toggle with optimistic update; no comment UI (AC-053); no like on ascents (AC-053)
@@ -198,10 +224,11 @@ MOD-009 will `CREATE TABLE IF NOT EXISTS public.blocks (...)` with its full sche
 - AC-151 (UI) ✓: "Report" option in sheet calls reportUser(targetUserId, 'inappropriate') then blockUser(targetUserId) sequentially; loading indicator on option; on success closes sheet and sets isProfileBlocked/isBlockedByMe; on failure shows inline error
 - AC-152 ✓: Block/Unblock toggle in sheet; block calls blockUser, unblock calls unblockUser; profile reflects new state immediately after each action
 - AC-153 ✓: fetchBlockedUserIds() added to loadProfile() Promise.all; isProfileBlocked and isBlockedByMe state variables derived; blocked state renders "This profile isn't available", hides follow button and stats; dots icon shown only when isBlockedByMe so viewer can unblock
+- AC-186 ✓ (deferred): `get_like_info_batch` RPC defined in `20261013000002_mod_006_get_like_info_batch.sql`; `fetchLikeInfoBatch` service wrapper defined in `social-feed-service.ts`; NOT wired into any UI (FeedScreen remains dead code, AC-159)
 
 ### Notes
 - Block filter in RPC uses NOT EXISTS subqueries against `public.blocks`. A minimal stub `blocks` table (blocker_id, blocked_id) is created in this migration before the function body so PostgreSQL can validate the LANGUAGE sql reference at CREATE FUNCTION time. MOD-009 adds the full schema with IF NOT EXISTS — safe to layer on top.
-- `fetchFollowing(userId)` is the public service function MOD-012 should call for the Following Climbers strip on HomeScreen
+- `fetchFollowing(userId)` is the public service function MOD-012 calls; note: AC-123/AC-124 (Following Climbers horizontal strip) were retired in Rev 35 and replaced by AC-182 in MOD-012. The `fetchFollowing` function remains in place for use by MOD-012, but the stale AC-123/AC-124 JSDoc reference has been removed (Rev 36 cleanup).
 - Raw client SELECT on ascents/beta_videos for the feed is prohibited per spec; all feed reads go through `get_activity_feed` RPC
 
 ## QA Results
@@ -520,3 +547,144 @@ Service layer exports `fetchFollowersList` and `fetchFollowingList` returning `U
 One non-blocking observation: `fetchFollowersList` and `fetchFollowingList` lack dedicated unit tests in the service test file. The functions are structurally verified here and TypeScript-clean, but test coverage is incomplete. This is a quality note for the engineer, not a blocking AC failure.
 
 **MOD-006 Rev 18 scope is QA PASS.**
+
+---
+
+## QA Run 4 — Functional Test — Rev 36 Scope (AC-186, AC-123/124 cleanup) + Full Regression — 2026-10-13
+
+**QA Agent**: qa-mod-social-feed
+**Workflow**: functional-test (Rev 36 new additions: AC-186 + AC-123/124 cleanup; regression on all existing ACs)
+**Automated tests**: 57/57 pass (mod-social-feed suite); 511/512 pass (full suite — 1 pre-existing MOD-005 failure, unrelated); exit code non-zero for full suite due to pre-existing MOD-005 test; mod-social-feed suite exit 0
+**TypeScript**: `npx tsc --noEmit` — clean, 0 errors
+
+---
+
+### AC-186 — get_like_info_batch RPC and Service Wrapper
+
+**PASS AC-186 (deferred)** — batched like-info RPC and TypeScript wrapper verified.
+
+- **Migration file**: `supabase/migrations/20261013000004_mod_006_get_like_info_batch.sql` — confirmed present. (Engineering Progress notes the filename as `000002` but the actual file is `000004`, renamed to avoid collision with three other migrations timestamped `20261013`: `000001_mod_012_admin_banners.sql`, `000002_mod_003_user_route_visits.sql`, `000003_mod_008_route_card_photo_url.sql`. The rename is correct; status.md engineering note contains a stale filename reference only.)
+- **RPC signature**: `CREATE OR REPLACE FUNCTION public.get_like_info_batch(p_target_type TEXT, p_target_ids UUID[])` — two-parameter form, confirmed at migration line 19. This matches the Tech Lead's approved architecture (status.md Tech Lead Review — 2026-10-13, Question 1, item 2: `get_like_info_batch(p_target_type text, p_target_ids uuid[])`). The PRD/spec references `get_like_info_batch(beta_video_ids uuid[])` as a conceptual name predating the Tech Lead review; the two-parameter form is the approved implementation.
+- **SECURITY INVOKER**: confirmed at migration line 29.
+- **SET search_path = public**: confirmed at migration line 30.
+- **LANGUAGE sql**: confirmed at migration line 28.
+- **Return shape**: `TABLE(target_id UUID, is_liked BOOLEAN, like_count BIGINT)` — confirmed at lines 23–27.
+- **UNNEST + LEFT JOIN pattern**: `FROM UNNEST(p_target_ids) AS t(id) LEFT JOIN public.reactions r ON r.target_id = t.id AND r.target_type = p_target_type GROUP BY t.id` — confirmed at lines 36–39. LEFT JOIN guarantees a row for each input ID even when zero reactions exist (like_count = 0, is_liked = false).
+- **BOOL_OR(r.user_id = auth.uid())**: own-like state derived from `auth.uid()` — never from a user_id parameter. Consistent with existing `get_like_info` pattern. Confirmed at line 34.
+- **REVOKE/GRANT**: `REVOKE EXECUTE ON FUNCTION public.get_like_info_batch(TEXT, UUID[]) FROM PUBLIC; GRANT EXECUTE ... TO authenticated` — confirmed at lines 42–43.
+- **TypeScript wrapper `fetchLikeInfoBatch`**: present in `social-feed-service.ts` lines 402–420.
+  - Empty-input guard: `if (targetIds.length === 0) return []` — confirmed at line 406.
+  - RPC call: `supabase.rpc('get_like_info_batch', { p_target_type: targetType, p_target_ids: targetIds })` — confirmed at lines 407–410.
+  - Error path: `console.error('[fetchLikeInfoBatch] error:', error); return []` — confirmed at lines 411–413. Does not throw; returns `[]` on error per spec.
+  - Return mapping: `{ targetId: row.target_id, isLiked: row.is_liked, likeCount: Number(row.like_count) }` — confirmed at lines 415–419.
+- **Dead code / not wired**: `fetchLikeInfoBatch` is not imported or called from any file other than its own definition in `social-feed-service.ts`. Confirmed by grep across all of `src/`. FeedScreen.tsx is not imported by any navigator or shell — confirmed by grep. AC-159 dead-code requirement holds.
+- **AC-052 unchanged**: `fetchLikeInfo`, `likeBetaVideo`, `unlikeBetaVideo` are unchanged. No UI changes. 57/57 tests pass including 5 AC-052 tests in BetaVideoReelViewer.
+
+**NOTE — Visibility rules in RPC SQL**: The spec says the RPC is "subject to the existing beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154, beta-video privacy AC-158)." The migration's SQL comment explicitly states these are NOT enforced inside the RPC body; callers are expected to supply only IDs for videos they can see. The Tech Lead's approved architecture (status.md 2026-10-13 review) confirms this design: the RPC is a simple `reactions` join, not a full visibility-composition RPC. The Tech Lead noted "SECURITY INVOKER keeps RLS scoping intact" as the security mechanism. This is a spec-vs.-implementation tension but it is consistent with the Tech Lead's approved design. QA notes this for the record but does not fail AC-186 on this basis — the Tech Lead's architecture review constitutes the authoritative interpretation of the spec for this deferred AC. The discrepancy should be resolved in the spec when the RPC is activated in Phase 2.
+
+---
+
+### AC-123 / AC-124 Cleanup
+
+**PASS — AC-123/AC-124 retired AC identifier tags removed.**
+
+- `grep -rn "AC-123\|AC-124" src/modules/mod-social-feed/social-feed-service.ts` — zero results. The `AC-123, AC-124: MOD-012 shows a strip of followed climbers on the Home tab.` JSDoc line is confirmed absent from `fetchFollowing`.
+- `grep -rn "AC-123\|AC-124" src/modules/mod-social-feed/types.ts` — zero results.
+- The descriptive phrase "Following Climbers strip" (without AC identifiers) remains in `types.ts` line 65 and `social-feed-service.ts` line 272. These are non-identifier prose descriptions of what the function is used for — not retired AC tags. They are not required to be removed by the Rev 36 cleanup scope. No AC violation.
+- `fetchFollowing` function signature and behavior are unchanged; MOD-012 can still import it for AC-182 (Following activity section).
+
+---
+
+### AC-159 — FeedScreen Dead Code
+
+**PASS AC-159** — FeedScreen remains dead code.
+
+- `grep -rn "import.*FeedScreen" src/` — only one result: `src/modules/mod-social-feed/__tests__/FeedScreen.test.tsx` (test import, expected). No navigator, shell, or AppShell imports FeedScreen.
+- `grep -rn "fetchLikeInfoBatch" src/` — only within `social-feed-service.ts` definition lines. No caller imports it.
+- `FeedScreen.tsx` exists at `src/modules/mod-social-feed/screens/FeedScreen.tsx` as dead code per spec requirement.
+
+---
+
+### Regression — Previously Passing ACs
+
+**PASS AC-050** — No changes to `follow()`/`unfollow()`/`fetchFollowerCounts()` or `UserProfileScreen` follow UI. 57/57 tests pass (including 5 follow/unfollow service tests). Optimistic update + RPC re-fetch pattern unchanged.
+
+**PASS AC-051** — No changes to `fetchActivityFeed()` or `get_activity_feed` migration. Feed RPC composition (Follow ∩ NOT EXISTS blocks ∩ privacy) unchanged. FeedScreen pull-to-refresh unchanged. 57/57 tests pass.
+
+**PASS AC-052** — `likeBetaVideo`, `unlikeBetaVideo`, `fetchLikeInfo` unchanged. `reactions` table unique constraint unchanged. BetaVideoReelViewer like button unchanged (5 AC-052 tests in the full suite pass). Idempotent like behavior and immediate count update confirmed unchanged.
+
+**PASS AC-053** — FeedScreen source unchanged. No comment UI, no like on ascent items. 57/57 tests pass.
+
+**PASS AC-063** — `UserProfileScreen` privacy badge logic (`profile.privacy_setting === 'followers_only'`) unchanged. Feed RPC privacy filter unchanged. 57/57 tests pass.
+
+**PASS AC-146** — `FollowersListScreen`: circular avatar + `displayName` only per card (no per-card stats — confirmed by grep: `fetchProfileStats`, `useCardStats`, `sends`, `highestGrade` have zero results in FollowersListScreen.tsx). Blocked users excluded via `fetchBlockedUserIds()`. Empty state, loading, nav bar unchanged. 57/57 tests pass.
+
+**PASS AC-147** — `FollowingListScreen`: same card layout as AC-146 per Rev 19 spec. Confirmed by grep: no per-card stats fetching. Blocked users excluded. 57/57 tests pass.
+
+**PASS AC-148** — Per the revised AC-148 (Rev 19): per-card sends count and highest grade are removed from list cards. `fetchProfileStats` is NOT called on list render — confirmed by grep. `fetchProfileStats` is called once per open on the other-user profile screen (AC-149). No `useCardStats` hook or `fetchProfileStats` import in either FollowersListScreen or FollowingListScreen.
+
+**PASS AC-149** — `UserProfileScreen` stats section: `fetchProfileStats(targetUserId)` called in `loadProfile()` `Promise.all` with `.catch(() => null)`. Stats section renders when `stats !== null` (total sends, accumulated days, highest grade, grade bar chart). No route cards rendered. Safe to load failure (renders nothing). Cross-module import `fetchProfileStats` from `../../mod-profile-history/history-service` confirmed correct. 57/57 tests pass.
+
+**PASS AC-150** — Three-dots icon (`Ionicons ellipsis-vertical` size 22) in `UserProfileScreen` header. Only rendered when `!isOwnProfile`. On press sets `sheetVisible = true`. No `@react-navigation/native` or `useFocusEffect` import anywhere in mod-social-feed (confirmed by grep). 57/57 tests pass.
+
+**PASS AC-151 (UI)** — "Report" option in ActionSheet calls `reportUser(targetUserId, 'inappropriate')` then `blockUser(targetUserId)` sequentially. ActivityIndicator while loading. On success: closes sheet, sets `isProfileBlocked = true`, `isBlockedByMe = true`. On failure: inline error text shown. 57/57 tests pass.
+
+**PASS AC-152** — Block/Unblock toggle in ActionSheet. Block: calls `blockUser(targetUserId)`. Unblock: calls `unblockUser(targetUserId)`. Profile reflects new state immediately (blocked state on block; normal content reload on unblock). 57/57 tests pass.
+
+**PASS AC-153** — `fetchBlockedUserIds()` in `loadProfile()` `Promise.all`. `isProfileBlocked` and `isBlockedByMe` state derived. Blocked state renders "This profile isn't available", hides follow button and stats section. Three-dots icon shown in blocked state when `isBlockedByMe` is true (so viewer can unblock via AC-152). `UserProfileScreen.test.tsx` has no `@react-navigation/native` mock — confirmed. 57/57 tests pass.
+
+---
+
+### Bug Found — FAIL AC-163: BetaVideoGrid shown for followers_only profiles to non-followers
+
+**Classification**: Implementation bug — route to Engineer (engineer-mod-social-feed).
+
+**AC-163 spec requirement**: "This grid is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state (AC-064) rather than the grid."
+
+**Actual behavior**: `UserProfileScreen` renders `BetaVideoGrid` unconditionally within the `profile !== null` block for any non-blocked profile, without gating on `isFollowing && profile.privacy_setting === 'followers_only'`. `fetchBetaVideosByUser` (MOD-005) does not apply a follower-relationship gate — it returns all non-reported beta videos for a user regardless of whether the viewer follows them. A non-follower viewing a `followers_only` profile will see the beta video grid with all of that user's videos instead of the hidden/403 state.
+
+**Reproduction**: Input = open `UserProfileScreen` for a user whose `privacy_setting = 'followers_only'`, as a viewer who does not follow them (`isFollowing = false`). Expected = hidden/403 state shown instead of the grid per AC-064. Actual = `BetaVideoGrid` renders with the user's beta videos.
+
+**Evidence**: `UserProfileScreen.tsx` lines 532–545 — the `<View style={styles.videoSection}>` block containing `BetaVideoGrid` is a direct child of the `profile !== null` conditional block with no `isFollowing` check. `fetchBetaVideosByUser` in `beta-video-service.ts` applies only the AC-142/AC-143 reported-video exclusion predicate and has no follower-relationship filter.
+
+**Scope**: The privacy gate for the stats section (AC-149) is handled server-side by `fetchProfileStats` (the `get_profile_stats` RPC has a built-in privacy gate that returns zeroed stats for `followers_only` non-followers). No equivalent server-side gate exists in `fetchBetaVideosByUser`. The grid privacy gate must be implemented client-side in `UserProfileScreen` using the already-available `isFollowing` and `profile.privacy_setting` state values, or server-side in `fetchBetaVideosByUser`.
+
+---
+
+### Guard Rails
+
+**PASS** — No `@react-navigation/native` or `useFocusEffect` in any `mod-social-feed` source file — confirmed by grep.
+
+**PASS** — No `@react-navigation/native` mock in `UserProfileScreen.test.tsx` — confirmed by grep (the mock noted in engineering status was from the `useFocusEffect` phase, which was subsequently replaced per the production.md convention correction).
+
+**PASS** — Supabase singleton: `social-feed-service.ts` imports only from `../../lib/supabase`. No `createClient()` call.
+
+**PASS** — No hardcoded hex colors in any MOD-006 screen (grep returned zero matches).
+
+**PASS** — Safe area insets: `useSafeAreaInsets()` used in `UserProfileScreen`, `FollowersListScreen`, `FollowingListScreen`. `makeStyles(theme, insets.top)` pattern applied.
+
+**PASS** — `fetchLikeInfoBatch` exported but not imported from any other file — confirmed dead code per AC-159.
+
+**OBSERVATION (non-blocking)** — `console.error` before throwing user-facing errors: only `fetchLikeInfoBatch` has the `console.error` call per production.md convention. All other service functions in `social-feed-service.ts` (`follow`, `unfollow`, `fetchFollowerCounts`, `fetchActivityFeed`, `likeBetaVideo`, `unlikeBetaVideo`, `fetchLikeInfo`, `fetchFollowersList`, `fetchFollowingList`) throw user-facing strings without a preceding `console.error`. This is a pre-existing gap present since QA Run 1; it is not introduced by Rev 36. Flagged for completeness — not a new bug from this QA run.
+
+**OBSERVATION (non-blocking)** — `fetchLikeInfoBatch` has no tests in `social-feed-service.test.ts`. The function is structurally correct and TypeScript-clean; since it is deferred dead code in Phase 1, the absence of tests is a quality gap rather than a blocking AC failure. Carried forward from the observation in QA Run 3 (where `fetchFollowersList`/`fetchFollowingList` also lacked tests).
+
+---
+
+### Summary (QA Run 4)
+
+**Result**: BUGS FOUND
+
+**AC-186** (new, Rev 36, deferred): PASS. Migration file `20261013000004_mod_006_get_like_info_batch.sql` exists with correct SECURITY INVOKER signature, UNNEST+LEFT JOIN body, REVOKE/GRANT. `fetchLikeInfoBatch` TypeScript wrapper exists with `console.error` + returns `[]` on error. Not wired into any UI. FeedScreen remains dead code (AC-159).
+
+**AC-123/AC-124 cleanup**: PASS. Retired AC identifier tags removed from `social-feed-service.ts`. Descriptive prose ("Following Climbers strip") remains but contains no AC tags.
+
+**AC-159**: PASS. FeedScreen not imported in any navigator or shell.
+
+**AC-050, AC-051, AC-052, AC-053, AC-063, AC-146, AC-147, AC-148, AC-149, AC-150, AC-151, AC-152, AC-153**: All PASS. 57/57 mod-social-feed tests pass. TypeScript clean.
+
+**AC-163**: FAIL. `BetaVideoGrid` is rendered unconditionally for non-blocked profiles, including `followers_only` profiles viewed by non-followers. The spec requires the hidden/403 state (AC-064) for this scenario. `fetchBetaVideosByUser` applies no follower-relationship gate. The `isFollowing` and `profile.privacy_setting` state values are available in `UserProfileScreen` but are not used to gate the grid render.
+
+**Route**: Implementation bug — route to `engineer-mod-social-feed`. The fix is a client-side privacy gate in `UserProfileScreen` at `src/modules/mod-social-feed/screens/UserProfileScreen.tsx`: when `profile.privacy_setting === 'followers_only' && !isFollowing`, show the hidden/403 state (AC-064) instead of rendering the `BetaVideoGrid`.
+
+**Pre-existing MOD-005 failure**: `beta-video-service.test.ts` 1 failure (`fetchBetaVideosByUser route_name` expectation) — pre-existing, unrelated to MOD-006, present since AC-052 QA run. Not caused by Rev 36 changes.
