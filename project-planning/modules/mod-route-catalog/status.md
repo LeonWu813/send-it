@@ -2,6 +2,57 @@
 
 ## Engineering Progress
 
+### AC-179, AC-180, AC-181 — Route visit tracking + new-beta tag (2026-10-13)
+
+**ACs implemented:**
+- AC-179: per-user route-visit upsert on RouteDetailScreen open (`user_route_visits` table).
+- AC-180: `routes_with_new_beta` SECURITY INVOKER RPC — returns subset of supplied route_ids where a visible beta video's `created_at > last_viewed_at` (or no visit row exists). Full beta-video visibility predicates applied server-side (AC-142 exclusion, AC-154 block filter, AC-158 privacy).
+- AC-181: "new beta video" tag on route cards via shared `RouteCard` (`hasNewBetaVideo` prop); rendered on RouteListScreen; fetched once per gym screen load, not per card.
+
+**Migration:**
+- `supabase/migrations/20261013000002_mod_003_user_route_visits.sql`:
+  - `user_route_visits` table: composite PK `(user_id, route_id)`, own-rows RLS (SELECT/INSERT/UPDATE), `GRANT SELECT, INSERT, UPDATE TO authenticated`.
+  - `routes_with_new_beta(route_ids UUID[])` SECURITY INVOKER RPC. `REVOKE EXECUTE FROM PUBLIC`, `GRANT EXECUTE TO authenticated`.
+
+**Service (route-service.ts):**
+- `upsertRouteVisit(routeId)` — fire-and-forget void function; upserts `(route_id, now())` with `onConflict: 'user_id,route_id'`; errors swallowed.
+- `fetchRoutesWithNewBeta(routeIds)` — wraps `routes_with_new_beta` RPC; returns `string[]`; logs error + returns `[]` on failure (non-fatal).
+
+**RouteDetailScreen.tsx:**
+- Added `upsertRouteVisit(routeId)` call inside the mount `useEffect` (AC-179). Fire-and-forget on every mount (non-blocking, non-critical).
+- Import extended: `upsertRouteVisit` added to `route-service` import.
+
+**RouteListScreen.tsx:**
+- Imports `RouteCard` from `src/components/RouteCard` and `fetchRoutesWithNewBeta` from `route-service`.
+- `newBetaRouteIds: Set<string>` state added.
+- `fetchNewBeta(routeIds)`: respects 60-second module-level in-memory cache keyed on `gymId`; calls `fetchRoutesWithNewBeta` once per TTL window, not per filter change.
+- `fetchRoutes` calls `fetchNewBeta` in parallel after achievements (non-blocking).
+- `renderRouteCard` replaced with `RouteCard` usage; `hasNewBetaVideo={newBetaRouteIds.has(item.id)}`; achievement icon and saved indicator remain as overlays via absolute-positioned `View` wrappers.
+- `clearNewBetaCacheForTesting()` exported for test teardown.
+
+**Tests:**
+- `RouteDetailScreen.test.tsx`: `upsertRouteVisit` added to mock + typed variable; AC-179 test: "calls upsertRouteVisit on mount".
+- `RouteListScreen.test.tsx`: `fetchRoutesWithNewBeta` added to mock + typed variable; `clearNewBetaCacheForTesting` imported and called in `beforeEach`; AC-180/AC-181 tests: "calls fetchRoutesWithNewBeta once after routes load" and "renders 'New Beta' badge on route card when route qualifies"; all `testID="route-name"` lookups replaced with `accessibilityLabel`-based queries (RouteCard does not use testID="route-name").
+
+**Self-check (2026-10-13):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors in mod-route-catalog. Pre-existing error in `mod-profile-history/__tests__/history-service.test.ts` unchanged (pre-existing, not introduced by this change).
+- PASS: `npm test -- --watchAll=false --testPathPattern="mod-route-catalog"` — 103 tests, 5 suites, 0 failures.
+- PASS: Migration SQL follows the exact spec in the invocation prompt; AC-142 exclusion uses `(is_reported = FALSE OR report_dismissed = TRUE)` per the canonical "Beta-Video Visibility Has One Canonical Exclusion Predicate" convention (not a bare `is_reported = false`).
+- PASS: `upsertRouteVisit` is fire-and-forget — never awaited on the critical render path.
+- PASS: `fetchRoutesWithNewBeta` called once per gym screen load with all visible route ids (no N+1); cache prevents redundant RPC calls within 60-second window.
+- PASS: `RouteCard` imported from `src/components/RouteCard` per the App-Level Shared Presentational Components convention.
+- PASS: No gold-plating — strictly confined to AC-179, AC-180, AC-181.
+
+**Files changed:**
+- `supabase/migrations/20261013000002_mod_003_user_route_visits.sql` — new migration
+- `src/modules/mod-route-catalog/route-service.ts` — `upsertRouteVisit`, `fetchRoutesWithNewBeta` added
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — `upsertRouteVisit` call on mount; import extended
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — `RouteCard` usage, `fetchRoutesWithNewBeta`, `newBetaRouteIds` state, in-memory cache, `clearNewBetaCacheForTesting` export
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — `upsertRouteVisit` mock + AC-179 test
+- `src/modules/mod-route-catalog/__tests__/RouteListScreen.test.tsx` — `fetchRoutesWithNewBeta` mock + cache clear + AC-180/AC-181 tests + `testID` → `accessibilityLabel` test updates
+
+---
+
 ### Crash fix — replace useFocusEffect with useEffect (2026-10-04)
 
 **Issue (device crash)**: `RouteDetailScreen` imported `useFocusEffect` from `@react-navigation/native` and used it as the sole data-load trigger. The app has no `NavigationContainer` anywhere in the tree — all navigators (including `RouteNavigator`) are custom `useState`-based state machines. At runtime this threw "Couldn't find a navigation object. Is your component inside NavigationContainer?", crashing the screen on every device mount.
@@ -2063,3 +2114,245 @@ No new test file changes needed — the mock for `BetaVideoSection` already igno
 - PASS: No gold-plating — change confined to the reported error-placement issue
 - PASS: No new dependencies introduced
 - PASS: `uploadErrorText` style uses `theme.colors.error`, `theme.fontSize.sm`, `theme.spacing.sm` — no hardcoded color hex (marginHorizontal: 16 is a layout constant matching the existing `contentContainer.paddingHorizontal: theme.spacing.lg` = 16)
+
+---
+
+## QA Rev 35 Results — AC-179, AC-180, AC-181 + Regression
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-10-13
+**Workflow**: functional-test (first-time verification of Rev 35 additions — AC-179, AC-180, AC-181)
+**Overall verdict**: PASS — all three new ACs verified; one pre-existing low-severity gap carried forward; no regressions on any previously passing AC
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false --testPathPattern="mod-route-catalog"`
+- Result: **103 tests passed, 0 failed across 5 suites**
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+
+Full-suite run:
+- Command: `npm test -- --watchAll=false`
+- Result: **511 tests passed, 1 failed across 35 suites**
+- The 1 failure is in `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` (AC-162: `route_name` returns `null` instead of `"V5 Red"`) — a pre-existing defect in `mod-beta-video` owned by `engineer-mod-beta-video`, unrelated to any `mod-route-catalog` change. Verified by git log: the last commit touching `beta-video-service.ts` predates the Rev 35 engineering work. No mod-route-catalog test is failing.
+
+---
+
+### Infrastructure Checks
+
+- `.gitignore` contains `.env` on a standalone line: PASS (pre-verified in all prior QA runs; no gitignore changes in this delta)
+- No HTML template comments in spec.md: PASS
+- Supabase client singleton: no `createClient()` in mod-route-catalog — only `import { supabase } from '../../lib/supabase'`: PASS
+- Migration timestamp uniqueness: `20261013000002_mod_003_user_route_visits.sql` — `000002` is unique among all migrations on 2026-10-13; `000001` is `mod_012_admin_banners.sql`; `000003` is `mod_008_route_card_photo_url.sql`; `000004` is `mod_006_get_like_info_batch.sql`. No timestamp conflict. PASS
+
+---
+
+### AC-179 — `user_route_visits` table + `upsertRouteVisit` fire-and-forget on RouteDetailScreen mount
+
+**Migration: `supabase/migrations/20261013000002_mod_003_user_route_visits.sql`**
+
+- Table `user_route_visits` created with `IF NOT EXISTS`: PASS
+- Columns: `user_id UUID NOT NULL DEFAULT auth.uid() REFERENCES public.users(id) ON DELETE CASCADE`, `route_id UUID NOT NULL REFERENCES public.routes(id) ON DELETE CASCADE`, `last_viewed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`: PASS
+- Composite PK `(user_id, route_id)`: PASS
+- Supporting indexes `user_route_visits_user_idx (user_id)` and `user_route_visits_route_idx (route_id)`: PASS
+- `ENABLE ROW LEVEL SECURITY`: PASS
+- Own-rows-only RLS policies:
+  - SELECT `USING (auth.uid() = user_id)`: PASS
+  - INSERT `WITH CHECK (auth.uid() = user_id)`: PASS
+  - UPDATE `USING (auth.uid() = user_id)`: PASS
+- `GRANT SELECT, INSERT, UPDATE ON public.user_route_visits TO authenticated`: PASS
+
+**Note on RLS DELETE policy**: The spec says "own-rows-only RLS". There is no DELETE policy on `user_route_visits` (only SELECT/INSERT/UPDATE are granted and have policies). This is consistent with the intended design — visit rows are only created/updated, never deleted directly by the client. RLS enabled with no DELETE policy means no authenticated user can delete rows directly. PASS.
+
+**`upsertRouteVisit` in `route-service.ts` (lines 373–384):**
+
+- Function signature `upsertRouteVisit(routeId: string): void` — synchronous wrapper, returns void (fire-and-forget): PASS
+- Calls `supabase.from('user_route_visits').upsert({ route_id: routeId, last_viewed_at: new Date().toISOString() }, { onConflict: 'user_id,route_id' })`: PASS — upserts on composite PK conflict, sets `last_viewed_at` to now
+- Wrapped in `void Promise.resolve(...).catch(() => {})` — errors intentionally swallowed, non-blocking, never awaited: PASS
+- Note: `user_id` is not included in the upsert payload — it is populated by the `DEFAULT auth.uid()` column on the server. PostgREST upsert with `onConflict` on a composite PK requires the PK columns to be present or resolvable. Since `user_id` has `DEFAULT auth.uid()`, it is resolved server-side on INSERT and matched on UPDATE by the `user_route_visits_update_own` RLS policy (which uses `USING (auth.uid() = user_id)`). This is the same pattern as `saved_routes` (which also uses `user_id DEFAULT auth.uid()`). PASS.
+
+**RouteDetailScreen.tsx `useEffect` (lines 230–234):**
+
+- `upsertRouteVisit(routeId)` called inside the mount `useEffect` — called synchronously (not awaited), alongside `void fetchRoute()` and `void fetchMyAscents()`: PASS
+- Not awaited — fires asynchronously without blocking the render path: PASS
+- Fires on every mount (RouteNavigator conditionally unmounts/remounts RouteDetailScreen on navigate-away/back): PASS
+
+**Test coverage:**
+
+- `RouteDetailScreen.test.tsx` line 494: `'AC-179: calls upsertRouteVisit on mount (fire-and-forget visit tracking)'` — verifies `mockUpsertRouteVisit` called with `'route-001'` after screen loads: PASS
+- `upsertRouteVisit` correctly mocked (`jest.fn()`) in the route-service mock; typed variable `mockUpsertRouteVisit` declared: PASS
+- No `@react-navigation/native` mock in test file (correct per production.md convention): PASS
+
+**AC-179: PASS**
+
+---
+
+### AC-180 — `routes_with_new_beta` SECURITY INVOKER RPC + `fetchRoutesWithNewBeta` service wrapper
+
+**Migration: `routes_with_new_beta(route_ids UUID[])` in `20261013000002_mod_003_user_route_visits.sql` (lines 61–93):**
+
+- `SECURITY INVOKER`: PASS — `auth.uid()` inside the function resolves to the calling user's identity; RLS remains enforced
+- `SET search_path = public`: PASS — prevents search-path injection
+- Returns `TABLE(route_id UUID)`: PASS
+- `LANGUAGE sql`: PASS
+- `REVOKE EXECUTE ON FUNCTION public.routes_with_new_beta(UUID[]) FROM PUBLIC`: PASS
+- `GRANT EXECUTE ON FUNCTION public.routes_with_new_beta(UUID[]) TO authenticated`: PASS
+
+**Visibility predicates (Option B — full per-viewer scoping):**
+
+- AC-142 exclusion: `AND (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` — matches the canonical convention verbatim (`Beta-Video Visibility Has One Canonical Exclusion Predicate` in production.md): PASS
+- AC-158 beta-video privacy: `AND (bv.beta_video_privacy = 'public' OR EXISTS (SELECT 1 FROM public.follows f WHERE f.follower_id = auth.uid() AND f.following_id = bv.user_id) OR bv.user_id = auth.uid())` — correctly evaluates public/follower/own for the current viewer: PASS
+- AC-154 blocked-user filter: `AND bv.user_id NOT IN (SELECT blocked_user_id FROM public.blocks WHERE blocker_user_id = auth.uid() UNION SELECT blocker_user_id FROM public.blocks WHERE blocked_user_id = auth.uid())` — symmetric block in both directions: PASS
+
+**"Never visited" logic:**
+
+- `LEFT JOIN user_route_visits urv ON urv.route_id = bv.route_id AND urv.user_id = auth.uid()`: PASS
+- `bv.created_at > COALESCE(urv.last_viewed_at, '1970-01-01'::timestamptz)` — when `urv` is NULL (no visit row), `COALESCE` returns epoch, making any beta video newer than epoch qualify. This correctly implements the spec's "no visit row = route qualifies for the tag": PASS
+
+**`fetchRoutesWithNewBeta` in `route-service.ts` (lines 403–413):**
+
+- Guard: `if (routeIds.length === 0) return []` — no RPC call on empty array: PASS
+- Calls `supabase.rpc('routes_with_new_beta', { route_ids: routeIds })`: PASS
+- Error path: `console.error('[fetchRoutesWithNewBeta] error:', error)` then `return []` — complies with the "Log Raw Supabase Error Before Throwing" Shared Convention; non-fatal fallback returns empty array so the tag simply doesn't appear: PASS
+- Maps result rows to `string[]`: `(data ?? []).map((row: { route_id: string }) => row.route_id)`: PASS
+
+**Test coverage:**
+
+- `RouteListScreen.test.tsx` line 304: `'AC-180/AC-181: calls fetchRoutesWithNewBeta once after routes load'` — verifies `mockFetchRoutesWithNewBeta` called with `['r-001', 'r-002']`: PASS
+- `clearNewBetaCacheForTesting()` called in `beforeEach` so each test gets a fresh fetch: PASS
+
+**AC-180: PASS**
+
+---
+
+### AC-181 — "New Beta" tag on shared `RouteCard` from `src/components/RouteCard`; 60s cache keyed by gymId
+
+**`RouteCard` import path:**
+
+- `RouteListScreen.tsx` line 37: `import RouteCard from '../../../components/RouteCard'`
+- `RouteListScreen.tsx` line 38: `import type { RouteCardRoute } from '../../../components/RouteCard'`
+- Both imports use the correct app-level path `src/components/RouteCard` as required by the "App-Level Shared Presentational Components" convention in production.md: PASS
+
+**`RouteCard` component (`src/components/RouteCard.tsx`):**
+
+- `hasNewBetaVideo?: boolean` prop declared in `RouteCardProps`: PASS
+- Default value `false`: PASS
+- Renders `<View style={styles.newBetaBadge}><Text style={styles.newBetaText}>{t('home.routeCard.newBeta')}</Text></View>` when `hasNewBetaVideo === true`: PASS
+- No badge rendered when `hasNewBetaVideo === false` or absent: PASS
+- Pure presentational: no service dependency, no cross-module import beyond `lib/theme` and `lib/i18n`: PASS
+
+**i18n key `home.routeCard.newBeta`:**
+
+- `locales/en/common.json`: `"newBeta": "New Beta"` under `home.routeCard`: PASS
+- `locales/zh-TW/common.json`: `"newBeta": "新 Beta"` under `home.routeCard`: PASS
+
+**`hasNewBetaVideo` prop wired in `RouteListScreen` (lines 280–322):**
+
+- `const hasNewBetaVideo = newBetaRouteIds.has(item.id)` computed per card: PASS
+- `<RouteCard route={cardRoute} onPress={() => onSelectRoute(item.id)} hasNewBetaVideo={hasNewBetaVideo} />`: PASS
+- `cardRoute` shape: `{ id, name, grade, photo_url }` matching `RouteCardRoute` type: PASS
+
+**In-memory cache (`newBetaCache`, lines 49–65):**
+
+- `const NEW_BETA_CACHE_TTL_MS = 60_000` — 60-second TTL: PASS
+- `newBetaCache = new Map<string, NewBetaCacheEntry>()` — module-level, persists across filter changes within a session: PASS
+- Cache key: `gymId` (from the component prop): PASS
+- Cache check: `const cached = newBetaCache.get(gymId); const now = Date.now(); if (cached && now - cached.fetchedAt < NEW_BETA_CACHE_TTL_MS)` — returns cached result without RPC call within the TTL: PASS
+- Cache set on fresh fetch: `newBetaCache.set(gymId, { routeIds: idSet, fetchedAt: now })`: PASS
+- `clearNewBetaCacheForTesting()` exported for test teardown only: PASS
+
+**`fetchNewBeta` call pattern in `fetchRoutes` (lines 237–240):**
+
+- Called with `data.map((r) => r.id)` — all visible route IDs in a single RPC call, no N+1: PASS
+- Called via `void fetchNewBeta(...)` — non-blocking, in parallel after achievements: PASS
+- Result stored in `newBetaRouteIds` state (a `Set<string>`): PASS
+
+**Test coverage:**
+
+- `RouteListScreen.test.tsx` line 315: `'AC-181: renders "New Beta" badge on route card when route qualifies'` — mocks `mockFetchRoutesWithNewBeta` to return `['r-001']`; verifies `screen.queryAllByText(/New Beta/i)` or `screen.queryAllByText(/新 Beta/)` has length > 0: PASS
+- `src/components/__tests__/RouteCard.test.tsx` passes (confirmed in full-suite run): PASS
+
+**AC-181: PASS**
+
+---
+
+### Pre-Existing Gap (Carried Forward — Not Introduced by Rev 35)
+
+| ID | Severity | Type | Description |
+|----|----------|------|-------------|
+| Log-before-throw gap in pre-Rev-35 service functions | Low | Implementation gap | Several `throw new Error` calls in the pre-existing portions of `route-service.ts` (e.g. `findMatchingActiveRoutes`, `withdrawRoute`, `loadRoute`, `listRoutes`, `saveRoute`, `unsaveRoute`) throw without first calling `console.error(...)`. This violates the "Log Raw Supabase Error Before Throwing" Shared Convention in production.md. The gap predates Rev 35; the two new Rev 35 additions (`fetchRoutesWithNewBeta` uses `console.error` correctly; `upsertRouteVisit` swallows errors correctly as fire-and-forget). This was not addressed in the Rev 35 changeset. Route to: Engineer (low priority — add `console.error('[functionName] error:', error)` before each `throw new Error` in the pre-existing service functions). |
+
+---
+
+### Regression — All Previously Passing ACs
+
+**AC-020 (single-page submit)**: `RouteSubmitScreen.tsx` unmodified. PASS.
+**AC-021 (photo required)**: Button `disabled` state, inline hint, validation guard — unchanged. PASS.
+**AC-024b (no retire button)**: No retire button in `RouteDetailScreen.tsx`. PASS.
+**AC-025/026/027/028/029 (approval gate, RLS)**: Migration files unmodified. PASS.
+**AC-040/041 (grade + color filters, active-only, no status filter)**: `RouteListScreen.tsx` filter chips and `listRoutes()` `.eq('status', 'active')` unchanged. PASS.
+**AC-042 (tap route → detail)**: `RouteNavigator.tsx` unchanged. PASS.
+**AC-043 (pre-fill from filter state)**: `RouteSubmitScreen` `initialGrade`/`initialColorTag` props unchanged. PASS.
+**AC-045 (route display name)**: `formatRouteName` in both screens unchanged. PASS.
+**AC-046 (bookmark toggle + achievement icons)**: `isSaved` state, optimistic update, `saveRoute`/`unsaveRoute`, `fetchUserAchievements` — all unchanged. PASS.
+**AC-047 (read-only saved indicator on list)**: `savedRouteIds` state, `fetchSavedRouteIds`, saved overlay in `renderRouteCard` — unchanged. PASS.
+**AC-125 (gym name subtitle)**: `gymSubtitle` text in `RouteDetailScreen` unchanged. PASS.
+**AC-126 (added date footer)**: `addedDateFooter` text at bottom of ScrollView unchanged. PASS.
+**AC-127 (two-column send summary)**: `summarizeAscents(myAscents)` reduction unchanged. PASS.
+**AC-128 (tap summary card → send history)**: Both `summaryCard` Pressables call `onViewSendHistory(route.id)` unchanged. PASS.
+**AC-129 (SendHistoryDetailScreen)**: `SendHistoryDetailScreen.tsx` and `RouteNavigator` `send-history` view state unchanged. PASS.
+**AC-130 (action buttons; no duplicate entry points)**: `actionRow` buttons and `onRegisterUploadLauncher` pattern unchanged. PASS.
+**Photo signed URL**: `getPhotoSignedUrl` + `photoUri` state in `RouteDetailScreen` unchanged. PASS.
+**Sticky top bar**: `topBar` View outside ScrollView unchanged. PASS.
+**Safe area insets (all 4 screens)**: `useSafeAreaInsets()` + `makeStyles(theme, insets.top)` pattern confirmed on all screens. PASS.
+**Saved routes sort to top**: `sortedRoutes` `useMemo` in `RouteListScreen` unchanged. PASS.
+**No gold-plating**: Changes strictly confined to AC-179 (migration + service + screen mount), AC-180 (RPC + service wrapper), AC-181 (RouteCard + cache + prop wiring). PASS.
+
+---
+
+### Failure Summary
+
+None. All three new ACs pass. One pre-existing implementation gap carried forward (log-before-throw in pre-Rev-35 service functions — first reported in the 2026-09-23 Redesign QA as the REVOKE/COALESCE gaps; the log-before-throw convention was not yet established at that time but applies now). No new bugs introduced.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| AC-179: migration `20261013000002` exists, unique timestamp | PASS |
+| AC-179: composite PK `(user_id, route_id)` | PASS |
+| AC-179: own-rows RLS SELECT/INSERT/UPDATE | PASS |
+| AC-179: `GRANT SELECT, INSERT, UPDATE TO authenticated` | PASS |
+| AC-179: `upsertRouteVisit(routeId)` fire-and-forget in `useEffect` on mount | PASS |
+| AC-179: errors swallowed (non-critical) | PASS |
+| AC-179: test "calls upsertRouteVisit on mount" passes | PASS |
+| AC-180: `routes_with_new_beta` RPC exists — SECURITY INVOKER | PASS |
+| AC-180: `SET search_path = public` | PASS |
+| AC-180: AC-142 exclusion predicate verbatim canonical form | PASS |
+| AC-180: AC-158 privacy filter (public/follower/own) | PASS |
+| AC-180: AC-154 symmetric block filter | PASS |
+| AC-180: no-visit-row case via COALESCE to epoch | PASS |
+| AC-180: `REVOKE FROM PUBLIC` + `GRANT TO authenticated` | PASS |
+| AC-180: `fetchRoutesWithNewBeta` — `console.error` + returns `[]` on error | PASS |
+| AC-180: test "calls fetchRoutesWithNewBeta once after routes load" passes | PASS |
+| AC-181: `RouteCard` imported from `src/components/RouteCard` (correct path) | PASS |
+| AC-181: `hasNewBetaVideo` prop declared and wired | PASS |
+| AC-181: RouteCard renders "New Beta" badge when prop is true | PASS |
+| AC-181: `home.routeCard.newBeta` in EN + zh-TW locales | PASS |
+| AC-181: 60s TTL in-memory cache keyed by gymId | PASS |
+| AC-181: cache cleared between tests via `clearNewBetaCacheForTesting()` | PASS |
+| AC-181: fetchNewBeta called with all visible route IDs (no N+1) | PASS |
+| AC-181: test "renders 'New Beta' badge" passes | PASS |
+| Pre-existing gap: log-before-throw in pre-Rev-35 service functions | LOW — route to Engineer |
+| `npx tsc --noEmit` — 0 errors | PASS |
+| `npm test` mod-route-catalog — 103 tests, 5 suites, 0 failures | PASS |
+| Full suite — 511 pass, 1 fail (pre-existing beta-video-service, not mod-route-catalog) | PASS (module scope) |
+| AC-020 through AC-047 regression | PASS |
+| AC-125 through AC-130 regression | PASS |
+| Photo signed URL, sticky top bar, safe area insets regression | PASS |
+| No gold-plating | PASS |
+
+**Overall verdict: PASS. All three Rev 35 ACs (AC-179, AC-180, AC-181) verified correct. One pre-existing low-severity gap (log-before-throw) carried forward for Engineer follow-up. No regressions. MOD-003 ready for checkpoint review.**
