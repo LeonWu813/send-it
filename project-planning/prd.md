@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [TRIVIAL] — Revision 34
+**Status**: [SUBSTANTIVE] — Revision 36
 **Date**: 2026-10-13
-**Revision**: 34
+**Revision**: 36
 
 ---
 
@@ -45,7 +45,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 - User-editable grade overrides are out of scope for Phase 1 — the gym's posted grade is the source of truth.
 - Per-user grade systems other than V-scale are out of scope for Phase 1 — all Phase 1 gyms are forced to V-scale mapping.
 - A user-editable free-text route name is out of scope for Phase 1 — a route's display name is composed automatically from its grade and hold color (with optional section label), not entered by the submitter.
-- A dedicated saved-routes surface on the Profile or Home tab is out of scope for Phase 1 — saved routes are surfaced only in the browse flow (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list); a saved-routes list view is backlog for a later phase.
+- A dedicated saved-routes list surface on the Profile tab is out of scope for Phase 1 — on the Profile tab saved routes are surfaced only in the browse flow (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list); a dedicated saved-routes list view on the Profile tab is backlog for a later phase. (A Projecting Routes section does appear on the Home tab in Phase 1 — see MOD-012 / AC-177.)
 - A "project" ascent style is out of scope — Phase 1 supports exactly three ascent styles (flash, top, attempt); the historical `project` value is removed from the UI and the database enum.
 - A public/shared send-record visibility toggle is out of scope for Phase 1 — all sends are private (`is_private = true`).
 - Cities other than Taipei and New Taipei are out of scope for Phase 1 (Taoyuan, Hsinchu, Taichung, Kaohsiung, Yilan, Tainan are backlog for a later phase).
@@ -129,7 +129,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to follow other users and see their sends and beta videos in a chronological feed,
 **so that** I can keep up with what my friends and local strong climbers are doing.
 
-**Note (Phase 1)**: the chronological activity feed UI is deferred to Phase 2 (AC-159). Phase 1 ships follow/unfollow and surfaces followed climbers on the Home screen (US-020) and their beta videos on profile grids (US-023, AC-163), but not a dedicated feed screen.
+**Note (Phase 1)**: the chronological activity feed UI is deferred to Phase 2 (AC-159). Phase 1 ships follow/unfollow and surfaces a Following activity section on the Home screen (US-020, AC-182) — user rows showing followed climbers' new beta-video counts — plus their beta videos on profile grids (US-023, AC-163), but not a dedicated feed screen.
 
 **Acceptance Criteria**: AC-050, AC-051, AC-159
 
@@ -141,7 +141,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to tap a like button (single reaction) on the video,
 **so that** the uploader knows their beta helped.
 
-**Acceptance Criteria**: AC-052, AC-053
+**Acceptance Criteria**: AC-052, AC-053, AC-186
 
 ---
 
@@ -151,7 +151,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to receive a push notification when someone likes my video, subject to my notification preferences,
 **so that** I get feedback on my contributions.
 
-**Acceptance Criteria**: AC-054, AC-055, AC-056, AC-058, AC-171, AC-172, AC-173
+**Acceptance Criteria**: AC-054, AC-055, AC-056, AC-058, AC-171, AC-172, AC-173, AC-184
 
 ---
 
@@ -250,10 +250,10 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 ### US-020: See my saved gyms and followed climbers on a Home screen
 
 **As a** climber connected to the local scene,
-**I want** a Home screen that shows announcement banners, my saved gyms, and the climbers I follow,
-**so that** I have a single landing surface that surfaces the gyms and people most relevant to me.
+**I want** a Home screen that shows an announcement banner, my saved gyms, my projecting routes, and the activity of the climbers I follow,
+**so that** I have a single landing surface that surfaces the gyms, routes, and people most relevant to me.
 
-**Acceptance Criteria**: AC-110, AC-111, AC-112, AC-113, AC-114, AC-115, AC-123, AC-124, AC-150, AC-153
+**Acceptance Criteria**: AC-110, AC-111, AC-112, AC-113, AC-114, AC-115, AC-150, AC-153, AC-174, AC-175, AC-176, AC-177, AC-178, AC-181, AC-182, AC-183
 
 ---
 
@@ -326,7 +326,7 @@ The data flow for the two most important loops:
 
 ### MOD-001: Auth & Profile
 
-**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). There is no home gym concept — saved gyms live in MOD-012.
+**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). The notification bell is no longer in the ProfileScreen header — it moves to the global app-level header owned by MOD-012 (AC-184), which wires to MOD-007's NotificationInboxScreen. There is no home gym concept — saved gyms live in MOD-012.
 
 **User Stories**: US-001, US-011, US-012, US-022
 
@@ -346,7 +346,7 @@ The data flow for the two most important loops:
 
 ### MOD-003: Route Catalog
 
-**Purpose**: Own the route submission match-before-create flow, the standardized `gym + grade + hold color` match key, the composed route display name (grade + color + optional section label), route detail pages, the route status lifecycle (`active` / `pending` / `retired` / `rejected`), submitter-only pending visibility and withdrawal, the fixed hold/tape color enum, and the saved-route bookmark interaction (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list). Admin approval/rejection/retirement is performed via Supabase Studio in Phase 1.
+**Purpose**: Own the route submission match-before-create flow, the standardized `gym + grade + hold color` match key, the composed route display name (grade + color + optional section label), route detail pages, the route status lifecycle (`active` / `pending` / `retired` / `rejected`), submitter-only pending visibility and withdrawal, the fixed hold/tape color enum, the saved-route bookmark interaction (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list), the per-user route-visit tracking upsert on route detail open (`user_route_visits`, AC-179), and the "new beta video" tag logic and rendering on route cards in the gym route list (AC-180/AC-181). Admin approval/rejection/retirement is performed via Supabase Studio in Phase 1.
 
 **User Stories**: US-003, US-006, US-021
 
@@ -386,7 +386,7 @@ The data flow for the two most important loops:
 
 ### MOD-007: Notifications
 
-**Purpose**: Own the device token registration, notification preference toggles, the Edge Function that fans out beta-video-like events to APNs push, and the in-app notification inbox. Own the `NotificationInboxScreen` (a list of the current user's in-app notifications, most recent first), reached via a bell icon placed in MOD-001's ProfileScreen header (AC-171). On inbox mount, batch-mark all of the current user's unread notifications as read in a single update (AC-172). Own the unread-count badge rendered on that bell icon, which reflects the current user's unread-notification count and clears when the inbox is opened (AC-173). Tapping a beta-video-like entry in the inbox navigates to the actor's UserProfileScreen (MOD-006), resolved from the notification's existing `actor_user_id` column (AC-058, revised).
+**Purpose**: Own the device token registration, notification preference toggles, the Edge Function that fans out beta-video-like events to APNs push, and the in-app notification inbox. Own the `NotificationInboxScreen` (a list of the current user's in-app notifications, most recent first), reached via the notification bell in MOD-012's global app-level header (AC-184; the bell was formerly in MOD-001's ProfileScreen header, AC-171 revised). On inbox mount, batch-mark all of the current user's unread notifications as read in a single update (AC-172). Own the unread-count badge rendered on the global-header bell, which reflects the current user's unread-notification count and clears when the inbox is opened (AC-173 revised; the badge is rendered on MOD-012's global header per AC-184). Tapping a beta-video-like entry in the inbox navigates to the actor's UserProfileScreen (MOD-006), resolved from the notification's existing `actor_user_id` column (AC-058, revised).
 
 **User Stories**: US-009, US-010
 
@@ -436,11 +436,11 @@ The data flow for the two most important loops:
 
 ### MOD-012: Home
 
-**Purpose**: Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders three sections — a static banner strip, the user's saved gyms strip, and the climbers the user follows — and provides navigation from those sections into the gym detail and user profile surfaces.
+**Purpose**: Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders four sections in order — (1) a single admin-managed Events Banner (AC-112/AC-174), (2) the user's Saved Gyms strip (AC-113/AC-114/AC-115), (3) the user's Projecting Routes section sourced from `saved_routes` with V-grade filter tabs (AC-177/AC-178), and (4) a Following activity section showing followed climbers' new beta-video counts (AC-182) — and provides navigation from those sections into the gym route list, route detail, and user profile surfaces. **Tech-Lead-assigned cross-cutting ownership (pending review)**: MOD-012 is the proposed owner of (a) the global app-level header rendered on all screens except the fullscreen beta-video reel viewer (AC-133) and auth/signed-out screens — bell on the left wiring to MOD-007's inbox, settings on the right (AC-184); (b) the shared route card component with a fixed small square `photo_url` thumbnail, consumed by the Home Projecting section, RouteListScreen, and the profile send-history section (AC-183); and (c) the swipe left-to-right back gesture on all screens that have a back icon (AC-185). Final ownership of (a), (b), and (c) is assigned by the Tech Lead in architecture review.
 
 **User Stories**: US-020, US-019
 
-**Dependencies**: MOD-001, MOD-002, MOD-006
+**Dependencies**: MOD-001, MOD-002, MOD-003 (saved_routes / route-visit data and route detail navigation for the Projecting Routes section, AC-177/AC-178; shared route card thumbnail source `photo_url`, AC-183), MOD-006 (followed-climbers activity for the Following section, AC-182), MOD-007 (NotificationInboxScreen + unread-count for the global-header bell, AC-184)
 
 ---
 
@@ -556,7 +556,7 @@ The data flow for the two most important loops:
 
 **AC-046** (new): The route detail screen (RouteDetailScreen) shall display a bookmark toggle that reflects whether the route is in the current user's saved routes list and, when tapped, shall add or remove the route from the user's `saved_routes` list and update the toggle state immediately (optimistic update). The route detail screen is the only save/unsave action point for routes.
 
-**AC-047** (new): The gym route list (RouteListScreen) shall display a read-only saved indicator on route entries that are in the current user's saved routes list; no indicator is shown for unsaved routes. The list indicator is read-only — tapping it performs no save/unsave action (tapping the route entry navigates to its detail screen per AC-042). No saved-routes list surface is provided on the Profile or Home tab in Phase 1.
+**AC-047** (new): The gym route list (RouteListScreen) shall display a read-only saved indicator on route entries that are in the current user's saved routes list; no indicator is shown for unsaved routes. The list indicator is read-only — tapping it performs no save/unsave action (tapping the route entry navigates to its detail screen per AC-042).
 
 **AC-125** (new): The route detail screen shall display the gym's name as a subtitle directly beneath the route display-name title. The route detail screen shall not render a separate "岩館" (gym) section label or header; the gym name appears only as the subtitle.
 
@@ -688,6 +688,8 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-163** (new, MOD-006 + MOD-005): The `UserProfileScreen` (the other-user profile overlay reached via `handleSelectClimber`) shall display a 3-column `BetaVideoGrid` (AC-160) below the stats section (AC-149), showing all beta videos by that user fetched via `fetchBetaVideosByUser` (AC-162). Tapping a cell shall open `BetaVideoReelViewer` cycling through that user's videos, starting at the tapped index. In this context the viewer is passed `reelContext = 'profile'` (AC-164): the poster-identity row is visible but NOT tappable (no navigation on tap). This grid is subject to the target user's privacy setting (AC-063): a `followers_only` profile requested by a non-follower shows the hidden/403 state (AC-064) rather than the grid. MOD-006 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer`.
 
+**AC-186** (new, Rev 36, MOD-006, Phase 1 — deferred): The system shall provide a batched like-info RPC `get_like_info_batch(beta_video_ids uuid[])` that, for the current user, returns in a single round-trip the per-video like count and the current user's own like state (liked / not liked) for each supplied beta-video id, so that a list or grid of beta videos can resolve all like counts and like states without issuing one query per video (eliminating the per-card N+1 like-info lookups). The RPC is `SECURITY INVOKER` and remains subject to the existing beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154, beta-video privacy AC-158); it does not expose like info for videos the caller cannot see. The single-video like affordance and its idempotent one-like-per-video semantics (AC-052) are unchanged — this AC adds only a batched read path for like info. **Phase 1 status — deferred**: `get_like_info_batch` is introduced now for the data-access/caching convention (§10) and performance of beta-video grids, but its implementation and wiring are deferred within Phase 1; callers continue to use the existing per-video like-info path until the batched RPC is implemented, at which point it supersedes the per-card lookups with zero change to AC-052 behavior. **This is a new Postgres RPC and requires Tech Lead architecture review** (RPC signature/return shape, the visibility-composition inside the RPC, and the `SECURITY INVOKER` + RLS interaction) before Doc-Sync/Engineering implements it.
+
 > **Implementation note (MOD-006 feed query)**: The activity feed must be served by a `SECURITY INVOKER` Postgres RPC that explicitly composes Follow ∩ (¬Block, symmetric) ∩ privacy (followers-only visibility), not by a raw client-side table `SELECT`. RLS remains the security fence; the RPC performs the composition. This is a requirement, not an option, for MOD-006. **Phase 1 status (AC-159)**: the feed UI (`FeedScreen.tsx`) and this `get_activity_feed` RPC are deferred to Phase 2 — they remain in the codebase as dead code and are never imported or rendered in Phase 1.
 
 ---
@@ -704,11 +706,11 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-058** (revised, Rev 32): The system shall navigate a user from a beta-video-like entry in the in-app notification inbox to the **UserProfileScreen of the actor** (the user who liked the video) when the user taps the entry, resolving the notification's existing `actor_user_id` column directly — no additional query is required, as `actor_user_id` is already present on the `Notification` row (see §9 Data Model). The destination is MOD-006's `UserProfileScreen` (the other-user profile overlay, AC-064), subject to the actor's privacy setting (AC-063). This supersedes the prior AC-058 behavior of navigating to the liked video's route detail screen. No changes to MOD-003 or MOD-005 are required.
 
-**AC-171** (revised, Rev 33): The system shall present a bell icon in the top-left of the `ProfileScreen` header (the MOD-001 Profile tab surface). Tapping the bell shall push a new `NotificationInboxScreen` (owned by MOD-007) that lists the current user's in-app notifications, most recent first. The `NotificationInboxScreen` and its contents are owned by MOD-007; the bell entry point is placed in MOD-001's ProfileScreen header and wired to navigate to MOD-007's inbox screen.
+**AC-171** (revised, Rev 35): The system shall present a notification bell in the global app-level header (left position, AC-184), on every screen where that header is shown. Tapping the bell shall push a new `NotificationInboxScreen` (owned by MOD-007) that lists the current user's in-app notifications, most recent first. The `NotificationInboxScreen` and its contents are owned by MOD-007; the bell entry point now lives in MOD-012's global header (AC-184), not in MOD-001's ProfileScreen header (this supersedes the Rev 33 placement in the ProfileScreen header). The bell is wired to navigate to MOD-007's inbox screen.
 
 **AC-172** (new, Rev 32): When `NotificationInboxScreen` mounts, the system shall mark all of the current user's unread notifications as read in a single batch update — all `Notification` rows where `recipient_user_id` equals the current user and `is_read = false` are set to `is_read = true`. Tapping an individual notification row shall not separately change that row's read state; the batch mark-read on inbox mount is the sole read-state transition in Phase 1.
 
-**AC-173** (new, Rev 32): The bell icon in the ProfileScreen header (AC-171) shall display an unread-count badge when the current user has one or more unread notifications (`Notification` rows where `recipient_user_id` equals the current user and `is_read = false`). The badge value shall equal the number of unread rows. The badge shall disappear when the inbox is opened and the batch mark-read (AC-172) completes.
+**AC-173** (revised, Rev 35): The notification bell in the global app-level header (AC-184, AC-171 revised) shall display an unread-count badge when the current user has one or more unread notifications (`Notification` rows where `recipient_user_id` equals the current user and `is_read = false`). The badge value shall equal the number of unread rows. The badge shall disappear when the inbox is opened and the batch mark-read (AC-172) completes. (This supersedes the Rev 32 placement of the badge on the ProfileScreen-header bell.)
 
 > **Implementation note (MOD-007 push idempotency)**: The notification/push fan-out Edge Function must be invoked by a Postgres trigger on `Reaction` INSERT (via `pg_net`/webhook), never triggered from the client. The function must be idempotent: a unique constraint on `Notification(recipient_user_id, actor_user_id, type, target_id)` guarantees a second trigger fire (double-tap / client retry) cannot create a duplicate notification row or a duplicate push. This is a requirement for the MOD-007 spec.
 
@@ -774,19 +776,43 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-110** (new): The system shall present a persistent bottom tab bar with three icon-only tabs: Home (house icon), Gyms (climb icon), and Profile (person icon). The Home tab is the default tab after login.
 
-**AC-111** (new): The Home screen shall render three sections in order: Banners, Saved Gyms, and Following Climbers.
+**AC-111** (revised, Rev 35): The Home screen shall render four sections in the following order: (1) Events Banner (AC-112), (2) Saved Gyms (AC-113), (3) Projecting Routes (AC-177), and (4) Following activity (AC-182). Any section with no content applies its own empty-state or hidden behavior as defined in its AC; the ordering of the sections that do render is fixed as listed.
 
-**AC-112** (new): The Banners section shall display up to 3 static, hardcoded banner cards in a horizontal scroll. If no banners are defined, the section shall be hidden.
+**AC-112** (revised, Rev 35): The Events Banner section shall display exactly one banner at a time — a single, admin-managed banner whose content is sourced per AC-174. If no active banner is defined, the section shall be hidden.
 
 **AC-113** (new): The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002).
 
-**AC-114** (new): Tapping a gym in the Saved Gyms strip shall navigate to the Gyms tab (Phase 1: switches to the Gyms tab; deep-link to a specific gym's detail screen is a future enhancement).
+**AC-114** (revised, Rev 35): Tapping a gym in the Saved Gyms strip shall navigate the user directly to that gym's RouteListScreen (MOD-003), passing the gym context (gym ID and gym name). This supersedes the prior tab-switch-only behavior (Phase 1 originally switched to the Gyms tab without a deep link).
 
 **AC-115** (new): When the current user has no saved gyms, the Saved Gyms section shall display the prompt: "Tap the bookmark on any gym to save it."
 
-**AC-123** (new): The Following Climbers section shall display a horizontal scroll strip of the climbers the current user follows (sourced from MOD-006), each showing the climber's avatar and display name. Tapping a climber shall navigate to that climber's profile.
+**AC-123** (removed, Rev 35): The former Following Climbers horizontal strip is replaced by the Following activity section (AC-182). This AC ID is retired and intentionally not reused.
 
-**AC-124** (new): When the current user follows no one, the Following Climbers section shall display an appropriate empty state.
+**AC-124** (removed, Rev 35): The former Following Climbers empty-state criterion is superseded by the Following activity section's empty-state behavior (AC-182). This AC ID is retired and intentionally not reused.
+
+**AC-174** (new, Rev 35): The Events Banner content (AC-112) shall be sourced from an admin-managed store — either the `app_settings` table or a dedicated admin banner table — with row-level security that allows read access to all authenticated users and write access to admins only. The banner content is created and edited by the admin via Supabase Studio in Phase 1; there is no in-app banner-authoring UI. **This introduces an admin-managed content source and requires Tech Lead architecture review** (table choice — `app_settings` vs. dedicated banner table — schema, read-all / write-admin-only RLS, and owning module) before Doc-Sync/Engineering implements it.
+
+**AC-175** (new, Rev 35): The Saved Gyms section (AC-113) shall order the user's saved gyms by most-recently-viewed first. Ordering is derived from the user's own view/visit activity and shall not use GPS or device location. When recency data is unavailable for a saved gym, that gym shall still appear in the strip (ordered after gyms that do have recency data).
+
+**AC-176** (new, Rev 35): Tapping a gym in the Saved Gyms strip shall navigate the user directly to that gym's RouteListScreen (MOD-003), passing the gym context (gym ID and gym name). (This is the same navigation contract as the revised AC-114; AC-176 states it as a standalone criterion for the Saved Gyms interaction.)
+
+**AC-177** (new, Rev 35): The Home screen shall render a Projecting Routes section sourced from the current user's `saved_routes` (MOD-003). The section shall provide V-grade filter tabs that filter the displayed projecting routes by grade. Each projecting route shall be shown using the shared route card (AC-183). When the user has no saved routes, the section shall display an appropriate empty state.
+
+**AC-178** (new, Rev 35): Tapping a projecting route card in the Home Projecting Routes section (AC-177) shall navigate the user to that route's detail screen (RouteDetailScreen, MOD-003), passing the route identifier.
+
+**AC-179** (new, Rev 35): When the current user opens a route's detail screen (RouteDetailScreen, MOD-003), the system shall upsert a row into a `user_route_visits` table keyed on `(user_id, route_id)`, setting `last_viewed_at` to the current time. This per-user route-visit record backs the most-recently-viewed ordering (AC-175, via the route's gym) and the "new beta video" tag logic (AC-180). **This introduces a new `user_route_visits` table and requires Tech Lead architecture review** (table placement/ownership, composite-key upsert pattern, read/write-own-rows-only RLS, grants, and the cross-module query that reads it) before Doc-Sync/Engineering implements it.
+
+**AC-180** (new, Rev 35): The system shall determine whether a route has a "new beta video" for the current user by comparing the route's beta videos' `created_at` against the current user's `user_route_visits.last_viewed_at` for that route (AC-179): a route qualifies for the tag when at least one of its visible beta videos has `created_at` greater than the user's `last_viewed_at`, OR when the user has no `user_route_visits` row for that route at all (never visited). The set of "visible beta videos" respects the existing beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154, and beta-video privacy AC-158). **This logic reads `user_route_visits` (AC-179) and performs a cross-module query against beta videos (MOD-005); it requires Tech Lead architecture review** to assign the owning module for the tag computation and to specify the query shape, consistent with the AC-179 table review. **Clarifying note (Rev 36, visibility-filter scope — Option B)**: the "visible beta videos" set used by this tag computation is scoped per the current viewing user: a beta video counts toward the "new beta video" tag only when it would be visible to that specific user under the full beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154 evaluated for this viewer, and beta-video privacy AC-158 evaluated for this viewer-vs-poster follower relationship). A route therefore does not qualify for the tag on the strength of a beta video the current user cannot see. This is a scope clarification only — it does not change AC-180's qualification logic (newer `created_at` than `last_viewed_at`, or no visit row) beyond fixing which videos are in scope for the comparison, and it remains subject to the same Tech Lead architecture review as the rest of AC-180.
+
+**AC-181** (new, Rev 35): The system shall render a "new beta video" tag on route cards that qualify per AC-180. The tag shall appear on the shared route card (AC-183) wherever that card surfaces a route — specifically the Home screen's Projecting Routes section (AC-177) and the gym route list (RouteListScreen, MOD-003). When a route does not qualify (AC-180), no tag is rendered.
+
+**AC-182** (new, Rev 35): The Home screen shall render a Following activity section listing the climbers the current user follows (sourced from MOD-006). Each entry is a user row showing the climber's avatar, `display_name`, a "X new beta video(s)" count, and a relative timestamp of the most recent new beta video. Tapping a row shall navigate the user to that climber's `UserProfileScreen` (MOD-006). When the current user follows no one (or no followed climber has new beta videos, per the section's defined behavior), the section shall display an appropriate empty state. This section replaces the former Following Climbers strip (AC-123/AC-124, removed).
+
+**AC-183** (new, Rev 35): The system shall provide a shared route card component that renders a route with a fixed small square thumbnail on the right sourced from the route's existing `photo_url` field (no schema change). The shared route card shall be used in the Home screen's Projecting Routes section (AC-177), the gym route list (RouteListScreen, MOD-003), and the profile send-history section (MOD-008). The card also renders the "new beta video" tag when the route qualifies (AC-181). **This is a shared cross-module component and requires Tech Lead architecture review to assign the owning module** (and the consuming modules' import contract) before Doc-Sync/Engineering implements it.
+
+**AC-184** (new, Rev 35): The system shall render a global app-level header on all screens EXCEPT the fullscreen beta-video reel viewer (AC-133) and the auth/signed-out screens. The header shall contain the notification bell on the left (wired to MOD-007's `NotificationInboxScreen` per AC-171, carrying the unread-count badge per AC-173) and a settings control on the right (navigating to MOD-010's SettingsScreen). **This is an app-level, cross-cutting UI surface and requires Tech Lead architecture review to assign the owning module** and specify where the header mounts relative to the tab shell and each navigator, before Doc-Sync/Engineering implements it.
+
+**AC-185** (new, Rev 35): The system shall support a swipe left-to-right back gesture on every screen that displays a back icon; the gesture shall perform the same navigation-pop action as tapping that screen's back control. This is a behavioral requirement only — the implementation library/approach is deferred to the Tech Lead and recorded in `production.md`. **This is a cross-cutting navigation behavior and requires Tech Lead architecture review to assign the owning module** and choose the gesture implementation approach before Doc-Sync/Engineering implements it.
 
 ---
 
@@ -820,6 +846,21 @@ SavedRoute  (join table — a user's bookmarked routes)
  - user_id (FK User, ON DELETE CASCADE), route_id (FK Route, ON DELETE CASCADE),
    created_at
  - PK: (user_id, route_id)
+
+UserRouteVisits  (per-user route-visit tracking — NEW, requires Tech Lead review)
+ - user_id (FK User, ON DELETE CASCADE), route_id (FK Route, ON DELETE CASCADE),
+   last_viewed_at (timestamptz)
+ - PK: (user_id, route_id)
+   -- Upserted on route detail open (AC-179): on open, set last_viewed_at = now()
+   --   for (current user, route). Backs the Home "new beta video" tag (AC-180:
+   --   a route qualifies when a visible beta video's created_at > last_viewed_at,
+   --   or when no visit row exists for that (user, route)) and the most-recently-
+   --   viewed Saved Gyms ordering (AC-175, via the route's gym).
+   -- NEW table — requires a migration AND Tech Lead architecture review
+   --   (table placement/ownership, composite-key upsert, own-rows-only RLS,
+   --   grants, and the cross-module read against beta videos for AC-180).
+   -- RLS: own-rows-only — an authenticated user may read and write only rows
+   --   where user_id = auth.uid().
 
 GymRequest
  - id, requested_by_user_id, name, city, google_maps_url (nullable),
@@ -960,6 +1001,7 @@ Block  (App Store Guideline 1.2 requirement)
 - All tables are guarded by Supabase Row-Level Security policies.
 - **`User.beta_video_privacy` is a new column (requires a migration).** It is an enum `public` (default) | `followers_only`, independent from `privacy_setting`. It governs beta-video visibility only (AC-156/AC-158): when `followers_only`, a poster's beta videos are visible only to the poster and their followers; when `public`, to all users. MOD-001 owns the write via a public service function (consumed by MOD-010's SettingsScreen, AC-157). The AC-158 filter reads this value from the poster's user record (via the existing `fetchBetaVideosForRoute` poster join, AC-144) and composes it with the `Follow` relationship across every beta-video listing surface (route-detail grid, fullscreen viewer set, activity feed), in addition to the reported-video (AC-142) and blocked-user (AC-154) exclusions. The migration adds the column with a `public` default so existing rows backfill to the current (public) behavior.
 - `SavedGym` is the join table backing the multi-gym saved list (it replaces the removed single `User.home_gym_id`). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved gyms.
+- `UserRouteVisits` is a **new** per-user route-visit table (AC-179) with composite PK `(user_id, route_id)` and a `last_viewed_at` timestamp, upserted when the user opens a route detail screen. It backs the Home "new beta video" tag (AC-180 — a route qualifies when a visible beta video's `created_at` is newer than the user's `last_viewed_at`, or when no visit row exists) and the most-recently-viewed Saved Gyms ordering (AC-175, derived via each saved gym's routes). **This is a new table and requires Tech Lead architecture review before Doc-Sync/Engineering implements it** — table placement/ownership (candidate: MOD-003), composite-key upsert pattern, own-rows-only SELECT/INSERT/UPDATE RLS (`user_id = auth.uid()`), explicit grants, and the owning module + query shape for the AC-180 cross-module read against beta videos (MOD-005). Mirror the confirmed `saved_gyms` / `saved_routes` RLS design (own-rows-only, dual `ON DELETE CASCADE`).
 - `SavedRoute` is the join table backing the saved-routes bookmark (US-021, AC-046/AC-047). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved routes. `route_id` is `ON DELETE CASCADE` so a saved-route row disappears if the underlying route is deleted (e.g. a withdrawn pending route). **This is a new join table and requires Tech Lead architecture review (table placement/ownership, RLS policy set, grants) before Doc-Sync/Engineering implements it** — mirror the confirmed `saved_gyms` design (composite PK, dual `ON DELETE CASCADE`, own-rows-only SELECT/INSERT/DELETE RLS, no UPDATE, explicit grants).
 - **`Ascent.is_private` is always `true` in Phase 1** (AC-132): the system sets it on every ascent insert; it is not user-controllable and there is no "set as private" toggle in the log-send form. The column is retained in the schema (no migration) so a public/shared visibility toggle can be introduced in Phase 2.
 - A route's **display name is composed, not stored** (AC-045): it is derived at display time from `grade` + `color_tag` (+ `section_label` when present), e.g. "V3 Blue" / "V3 Blue (Cave)". There is no free-text route-name column and no user-editable route name.
@@ -997,6 +1039,7 @@ Block  (App Store Guideline 1.2 requirement)
 - **File upload to Supabase Storage**: all uploads of local device files (photos, videos, any binary asset) must use `expo-file-system`'s `File.bytes()` to obtain a `Uint8Array` and pass it directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`. The `fetch(uri) + response.blob()` pattern is prohibited: in React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes. Reference implementations: `mod-beta-video/beta-video-service.ts` (video) and `mod-route-catalog/route-service.ts` (photo).
 - **Log the raw Supabase error before throwing (service functions)**: any Supabase data-access function (service files, RPC wrappers, storage helpers) that catches a Supabase `error` and throws a user-facing `Error` must first call `console.error('[functionName] error:', error)` so the raw Supabase/PostgREST diagnostic is visible in device/Metro logs. The user-facing string stays generic; the raw error goes to the console only, never to the user. Reference: `mod-beta-video/beta-video-service.ts` (`uploadBetaVideo`, `fetchBetaVideosByUser`).
 - **Manual PostgREST verification for new/modified embedded joins**: whenever an engineer adds or modifies an embedded join in a `.select()` string — especially a nested embed, and most especially an FK-hinted embed nested inside another embed — they must exercise the string against the live or local Supabase instance (Studio SQL Editor or a raw PostgREST request) before marking the AC done. A `.select()` embed string is an untyped query DSL that neither TypeScript nor a mocked Supabase client can validate — mocked unit tests short-circuit before PostgREST parses the string and cannot substitute for this step. Prefer a single disambiguated outer FK hint or a server-side RPC over more than one level of nested FK-hinted embed.
+- **Data-access & caching conventions (batched reads + client cache)**: for any list or grid that renders N items each needing the same per-item lookup (e.g. per-beta-video like count + the current user's like state), prefer a single batched server-side RPC that resolves all N items in one round-trip over issuing one query per item (the per-card N+1 pattern). The batched RPC stays `SECURITY INVOKER` and composes the same visibility rules the single-item path enforces, so RLS remains the security fence and a batched read never widens visibility. Reference contract: the batched like-info RPC `get_like_info_batch(beta_video_ids uuid[])` (AC-186) returns per-video like count + the caller's own like state for a supplied id set. On the client, like counts and like state fetched this way may be held in a short-lived in-memory cache keyed by `beta_video_id` and reused across the surfaces that render the same video within a session (route-detail grid, reel viewer, profile grids), invalidated on the user's own like/unlike action (AC-052) so the optimistic update stays authoritative; the cache is advisory for read performance only and is never the source of truth for a write. This convention is introduced in Rev 36; the batched RPC itself is deferred within Phase 1 (AC-186) and requires Tech Lead architecture review before implementation.
 - **Reused `expo-video` `VideoView` source swaps (iOS)**: when a single persistent `VideoView`/`VideoPlayer` swaps sources via `replaceAsync` rather than remounting, (1) drive the load *cover* down on `onFirstFrameRender` (first composited frame), not on `statusChange: readyToPlay` (buffer-only, fires before the frame paints), and (2) render the `VideoView` at `opacity: 0` while loading so the previously-decoded frame held by `AVPlayerLayer` cannot bleed through — iOS has no `useExoShutter` equivalent (that prop is Android-only). Keep the `statusChange: error` path wired to the error UI so the cover never hangs.
 - **Soft-launch timeframe**: No date target set. Phase 1 ships when Phase 1 acceptance criteria pass and the App Store submission is approved.
 
