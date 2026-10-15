@@ -3007,3 +3007,218 @@ All ACs that passed in the 2026-10-14 QA run remain passing based on source insp
 
 - AC-187 implementation bug → `engineer-mod-route-catalog`
 - Test-runner AsyncStorage mock missing → `engineer-mod-localization-theme`
+
+---
+
+## QA Run — Regression — 2026-10-15
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-10-15
+**Workflow**: regression-test (re-verification after engineer fixed AC-187 inline duplicate warning + implemented AC-189/AC-190/AC-047 Rev 39/AC-181 Rev 39 RouteCard redesign wiring)
+**Overall verdict**: PASS — AC-187 fix verified; all five scoped items pass; no regressions on previously passing ACs; full test suite passes.
+
+---
+
+### Context: Items Being Re-Verified
+
+The previous QA run (2026-10-15, at bottom of this file) found one implementation bug:
+
+**AC-187 (previously FAIL)**: spec requires a pre-submit inline notice updating reactively as grade/color chips change, derived client-side from the gym's already-fetched active route list; the prior implementation used a post-submit `Alert.alert` after `onSuccess()` navigation with a server-side `check_route_duplicate` RPC. I18n key path was also wrong (`routes.submit.duplicateWarning.*` instead of `routes.duplicateWarning.*`).
+
+New items also added by the engineer in the same engineering session (separate from the bug fix):
+- **AC-189**: `fetchBetaVideoCounts` RPC wrapper + `count_beta_videos_by_routes` migration + RouteListScreen wiring
+- **AC-190**: `hasSend`/`sendStyle` derived from `fetchUserAchievements`, passed to RouteCard
+- **AC-047 (Rev 39)**: interactive bookmark toggle with optimistic update on RouteListScreen
+- **AC-181 (Rev 39)**: `hasNewBetaVideo` prop removed from RouteCard; `fetchRoutesWithNewBeta` retained
+
+The test-runner AsyncStorage mock infrastructure bug (previously reported as a cross-project regression from mod-localization-theme) was separately resolved: all 5 test suites now load and run cleanly.
+
+---
+
+### Automated Test Run
+
+- Command: `npx jest src/modules/mod-route-catalog --watchAll=false`
+- Result: **110 tests passed, 0 failed across 5 suites**
+  - `route-service.test.ts`: PASS
+  - `RouteSubmitScreen.test.tsx`: PASS
+  - `RouteListScreen.test.tsx`: PASS
+  - `RouteDetailScreen.test.tsx`: PASS
+  - `SendHistoryDetailScreen.test.tsx`: PASS
+- Exit code: 0
+- TypeScript: `npx tsc --noEmit` exits 0 — no type errors
+
+---
+
+### REGRESSION PASS — AC-187 (previously FAIL)
+
+**Original failure**: spec requires a pre-submit inline notice derived client-side from the already-fetched active route list; prior implementation used a post-submit `Alert.alert` + server-side `check_route_duplicate` RPC.
+
+**Verification**:
+
+1. **Inline JSX notice (not Alert)**: `RouteSubmitScreen.tsx` lines 426–438 render `{isDuplicate ? (<View style={styles.duplicateNotice}>...) : null}`. This is inline JSX, not `Alert.alert`. The `Alert` at lines 224 and 238 are for pending-approval notification and submission errors, not duplicate detection. No `check_route_duplicate` RPC call exists anywhere in the submission path. REGRESSION PASS.
+
+2. **Reactive to grade/color chip changes — no button press required**: `isDuplicate` is derived via `useMemo(() => { ... }, [activeRoutes, selectedGrade, selectedColor])` at lines 116–121. It recomputes on every `selectedGrade` or `selectedColor` state change (chip tap). No explicit button press or submit needed for the warning to appear or disappear. REGRESSION PASS.
+
+3. **Client-side derivation from fetched active route list**: `activeRoutes` is populated on mount via a `useEffect` firing `listRoutes(gymId, { grade: null, colorTag: null })` at lines 103–113. The `isDuplicate` check at line 118–120 does `activeRoutes.some((r) => r.grade === selectedGrade && r.color_tag === selectedColor)` — purely client-side, no additional DB call per chip change. REGRESSION PASS.
+
+4. **Correct i18n keys**: Lines 429 and 431–433 use `t('routes.duplicateWarning.title')` and `t('routes.duplicateWarning.body', { grade: selectedGrade, color: t(...) })`. Both keys confirmed present in `locales/en/common.json` (lines 170–173: `routes.duplicateWarning.title` = "Possible Duplicate", `routes.duplicateWarning.body` = "An active {{grade}} {{color}} route already exists at this gym.") and `locales/zh-TW/common.json` (lines 170–173: matching zh-TW). REGRESSION PASS.
+
+5. **Submit button remains enabled regardless of isDuplicate**: The button's `disabled` prop at line 447 is `!photoUri || isSubmitting` — `isDuplicate` does not appear in the disabled condition. The warning is advisory only and never blocks submission. REGRESSION PASS.
+
+6. **Test coverage**: `RouteSubmitScreen.test.tsx` contains three dedicated AC-187 tests verifying: (a) notice renders when active route matches the selected grade/color, (b) notice absent when selection does not match, (c) notice disappears when grade chip changes away from a matching value. All three pass in the 110-test suite. REGRESSION PASS.
+
+**AC-187: REGRESSION PASS**
+
+---
+
+### PASS — AC-189 (new: count_beta_videos_by_routes RPC + fetchBetaVideoCounts + RouteListScreen wiring)
+
+**Migration** (`supabase/migrations/20261015000004_mod_003_count_beta_videos_by_routes.sql`):
+
+1. File exists at the expected path: PASS
+2. Function signature: `CREATE OR REPLACE FUNCTION public.count_beta_videos_by_routes(route_ids uuid[])` RETURNS `TABLE(route_id uuid, beta_count bigint)` — matches spec (AC-189 Rev 40). PASS
+3. SECURITY INVOKER + `SET search_path = public`: both present at lines 19–22. PASS
+4. Visibility fence — three-part predicate body cloned from `routes_with_new_beta`:
+   - **AC-142** (reported-video exclusion): `AND (bv.is_reported = FALSE OR bv.report_dismissed = TRUE)` at line 31. PASS
+   - **AC-158** (followers-only privacy): `AND (u.beta_video_privacy = 'public' OR EXISTS (...follows...) OR bv.user_id = auth.uid())` at lines 33–40. PASS
+   - **AC-154** (symmetric block filter): `AND bv.user_id NOT IN (SELECT blocked_user_id ... UNION SELECT blocker_user_id ...)` at lines 42–46. PASS
+5. Recency clause dropped; `COUNT(*) GROUP BY bv.route_id` present at lines 25–27 and 47. PASS
+6. Grants: `REVOKE ALL ON FUNCTION ... FROM PUBLIC` + `GRANT EXECUTE ... TO authenticated` at lines 50–51. PASS
+7. No client-side `.in('route_id', ids)` count anywhere — all counting goes through the RPC. PASS
+
+**`fetchBetaVideoCounts` in `route-service.ts`** (lines 362–378):
+
+1. Exported as `fetchBetaVideoCounts(routeIds: string[]): Promise<Record<string, number>>`. PASS
+2. Calls `supabase.rpc('count_beta_videos_by_routes', { route_ids: routeIds })` at line 366. PASS
+3. Returns `{}` on error (non-fatal, `console.error` logged): lines 369–372. PASS
+4. Returns `{}` when `data` is null (null-safety): `(data ?? [])` at line 374. PASS
+5. Maps `{ route_id, beta_count }` rows to `Record<string, number>`: lines 373–376. PASS
+6. Fast-path: returns `{}` immediately when `routeIds.length === 0` (line 365). PASS
+
+**RouteListScreen wiring** (AC-189):
+
+1. `fetchBetaVideoCounts` imported at line 39. PASS
+2. `betaCountMap: Record<string, number>` state declared at line 143. PASS
+3. Called once after routes load via `Promise.all([fetchUserAchievements(...), fetchBetaVideoCounts(...)])` at lines 258–261 — one batched call per load, no N+1. PASS
+4. `betaVideoCount={betaCountMap[item.id] ?? 0}` passed to `<RouteCard>` at line 336. PASS
+5. Test "AC-189: calls fetchBetaVideoCounts once after routes load" and "AC-189: passes betaVideoCount to RouteCard when count > 0" both pass in the 110-test suite. PASS
+
+**AC-189: PASS**
+
+---
+
+### PASS — AC-190 (new: hasSend/sendStyle derived from fetchUserAchievements, passed to RouteCard)
+
+**RouteListScreen** (lines 311–341):
+
+1. `achievement` derived per route from `achievements[item.id]` at line 311. PASS
+2. `hasSend = achievement === 'flash' || achievement === 'top'` at line 317 — 'attempt' does not count as a send, matching spec (Q1 decision). PASS
+3. `sendStyle: 'flash' | 'top' | null` ternary at lines 318–319 — flash takes priority; null when no qualifying achievement. PASS
+4. `hasSend={hasSend}` and `sendStyle={sendStyle}` passed to `<RouteCard>` at lines 337–338. PASS
+5. `fetchUserAchievements(routeIds)` fetched once after routes load, in the same `Promise.all` as `fetchBetaVideoCounts` (line 259) — one batched call, no N+1. PASS
+6. `fetchUserAchievements` is imported from `../../mod-send-logging/send-service` (line 37) — public service function only, no MOD-004 internals. PASS
+
+**AC-190: PASS**
+
+---
+
+### PASS — AC-047 (Rev 39: interactive bookmark toggle with optimistic update on RouteListScreen)
+
+**`handleBookmarkToggle` in RouteListScreen** (lines 169–195):
+
+1. Optimistic update: `setSavedRouteIds(prev => ...)` fires synchronously, updating local state before the async service call. PASS
+2. Unsave path: removes routeId from the Set, calls `void unsaveRoute(routeId).catch(...)`, reverts by adding routeId back on error (lines 175–180). PASS
+3. Save path: adds routeId to the Set, calls `void saveRoute(routeId).catch(...)`, reverts by deleting routeId on error (lines 183–190). PASS
+4. `isSaved={savedRouteIds.has(item.id)}` and `onBookmarkToggle={() => handleBookmarkToggle(item.id)}` passed to `<RouteCard>` at lines 339–340. PASS
+5. `saveRoute` and `unsaveRoute` imported from `route-service` (line 43–44). PASS
+6. No `hasNewBetaVideo` prop passed (AC-181, separate verification below). PASS
+7. Tests "AC-047 Rev 39: calls unsaveRoute when bookmark icon is tapped on a saved route" and "AC-047 Rev 39: calls saveRoute when bookmark icon is tapped on an unsaved route" both pass. PASS
+
+**AC-047 (Rev 39): PASS**
+
+---
+
+### PASS — AC-181 (Rev 39: hasNewBetaVideo prop NOT passed from RouteListScreen to RouteCard)
+
+1. `renderRouteCard` in RouteListScreen (lines 309–343): the `<RouteCard>` at line 333 receives `betaVideoCount`, `hasSend`, `sendStyle`, `isSaved`, and `onBookmarkToggle` — `hasNewBetaVideo` is not in the prop list. PASS
+2. `RouteCard.tsx` prop comment at line 18: "- hasNewBetaVideo prop and 'New Beta' chip (AC-181)" confirms the prop was removed from the component interface. The prop does not appear in `RouteCardProps`. PASS
+3. `fetchRoutesWithNewBeta` is still imported from `route-service` at line 40 and called in `fetchNewBeta` (lines 218–243) — retained for AC-175 most-recently-viewed ordering. The backing infrastructure is intact. PASS
+4. `newBetaRouteIds` state is still maintained (line 148) but is not passed to `RouteCard`. PASS
+5. Test "AC-181 (Rev 39): does NOT render a 'New Beta' chip even when route qualifies" passes. PASS
+
+**AC-181 (Rev 39): PASS**
+
+---
+
+### Regression — Previously Passing ACs
+
+**AC-020 (Rev 37 — single-page submit, no match-before-create)**: `findMatchingActiveRoutes` absent from `RouteSubmitScreen.tsx`; `handleAddRoute()` calls `uploadRoutePhoto` then `submitRoute` directly; no step state machine. PASS.
+
+**AC-021 (photo required)**: Button `disabled={!photoUri || isSubmitting}`; inline `photoRequiredHint` when `!photoUri && !photoError`; `handleAddRoute` validation guard at lines 190–195. PASS.
+
+**AC-022 (color enum)**: `ROUTE_COLORS` — 9-value readonly tuple; `renderColorSelector` maps over it exclusively. PASS.
+
+**AC-023 (V-scale grades)**: `ROUTE_GRADES` — 12-value VB/V0–V10; `renderGradeSelector` maps exclusively. PASS.
+
+**AC-024b (no retire button)**: `RouteDetailScreen.tsx` has no retire button. PASS.
+
+**AC-025/026/027/028/029 (approval gate, RLS, withdrawal)**: Migrations unmodified by this engineering session. PASS.
+
+**AC-040 (grade + color filter chips; no status filter)**: `RouteListScreen` chip rendering unchanged; no status tabs. PASS.
+
+**AC-041 (active routes only)**: `listRoutes()` always applies `.eq('status', 'active')`. PASS.
+
+**AC-042 (tap route → detail)**: `RouteNavigator` + `onSelectRoute` wiring unchanged. PASS.
+
+**AC-043 (pre-fill from filter state)**: `initialGrade` / `initialColorTag` props and `useState` initializers unchanged. PASS.
+
+**AC-045 (route display name)**: `formatRouteName` helper and `routeNameRow` in RouteDetailScreen unchanged; RouteListScreen feeds `name: routeName` to `RouteCard.route.name`. PASS.
+
+**AC-046 (bookmark toggle on RouteDetailScreen; achievement icons)**: `handleBookmarkToggle`, `isSaved` optimistic update, `saveRoute`/`unsaveRoute` in RouteDetailScreen unchanged. `fetchUserAchievements([routeId])` still called after route load. PASS.
+
+**AC-125/126/127/128/129/130 (RouteDetailScreen redesign)**: RouteDetailScreen source unchanged by the Rev 39/40 engineering session. PASS.
+
+**AC-179 (upsertRouteVisit on RouteDetailScreen mount)**: `upsertRouteVisit` import and fire-and-forget call in mount `useEffect` in RouteDetailScreen unchanged. PASS.
+
+**AC-180 (fetchRoutesWithNewBeta service retained)**: `fetchRoutesWithNewBeta` still exported from `route-service.ts`; `routes_with_new_beta` migration unchanged. PASS.
+
+**AC-185 (SwipeBackWrapper wired)**: SwipeBackWrapper wrapping on RouteDetailScreen (all three render paths), RouteSubmitScreen, and SendHistoryDetailScreen unchanged. PASS.
+
+**Photo signed URL**: `getPhotoSignedUrl` + `photoUri` state in RouteDetailScreen unchanged. PASS.
+
+**Saved routes sort to top (RouteListScreen)**: `sortedRoutes` useMemo unchanged. PASS.
+
+**Safe area insets**: All screens use the correct pattern. PASS.
+
+**i18n key parity (routeCard.* namespace)**: `routeCard.betaCount`, `routeCard.saved`, `routeCard.unsaved`, `routeCard.flashSend`, `routeCard.topSend` all present in both `locales/en/common.json` and `locales/zh-TW/common.json` (lines 311–317 in both files). The obsolete `home.routeCard.newBeta` key is absent from both locale files — confirmed by grep returning no output. PASS.
+
+**No gold-plating**: No features beyond the specified ACs. PASS.
+
+---
+
+### Summary
+
+| Item | Previous result | This run result |
+|------|----------------|-----------------|
+| AC-187: inline reactive duplicate warning (not Alert; no button press; correct i18n keys; submit enabled) | FAIL | REGRESSION PASS |
+| AC-189: `count_beta_videos_by_routes` migration (SECURITY INVOKER; AC-142/154/158 fence; COUNT GROUP BY) | N/A (new) | PASS |
+| AC-189: `fetchBetaVideoCounts` wrapper (calls RPC; returns Record; {} on error/null) | N/A (new) | PASS |
+| AC-189: RouteListScreen calls `fetchBetaVideoCounts` once after routes load; passes `betaVideoCount` to RouteCard | N/A (new) | PASS |
+| AC-190: `hasSend`/`sendStyle` derived from `fetchUserAchievements`; passed to RouteCard | N/A (new) | PASS |
+| AC-047 (Rev 39): `handleBookmarkToggle` optimistic update; `isSaved`/`onBookmarkToggle` passed to RouteCard | N/A (new) | PASS |
+| AC-181 (Rev 39): `hasNewBetaVideo` prop NOT passed to RouteCard from RouteListScreen | N/A (new) | PASS |
+| `npx tsc --noEmit` — 0 errors | PASS (AsyncStorage blocker in screen tests) | PASS |
+| `npx jest src/modules/mod-route-catalog --watchAll=false` — 110 tests, 5 suites | FAIL (AsyncStorage blocker: 4/5 suites failed to load) | PASS (110/110) |
+| AC-020/021/022/023/024b (submit flow) | PASS | PASS |
+| AC-025–029 (approval gate, RLS, withdrawal) | PASS | PASS |
+| AC-040/041/042/043 (list, filter, nav, pre-fill) | PASS | PASS |
+| AC-045 (route display name) | PASS | PASS |
+| AC-046 (bookmark toggle RouteDetail; achievement icons) | PASS | PASS |
+| AC-125–130 (RouteDetailScreen redesign) | PASS | PASS |
+| AC-179/180 (user_route_visits; fetchRoutesWithNewBeta) | PASS (source inspection) | PASS |
+| AC-185 (SwipeBackWrapper) | PASS | PASS |
+| i18n routeCard.* keys (all 5 present; home.routeCard.newBeta absent) | N/A | PASS |
+| Photo signed URL | PASS | PASS |
+| No gold-plating | PASS | PASS |
+
+**Overall verdict: PASS. AC-187 fix verified. All five scoped items (AC-187/189/190/047-Rev39/181-Rev39) pass. No regressions. 110/110 tests pass. MOD-003 ready for human QA.**

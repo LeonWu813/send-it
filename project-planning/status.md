@@ -3,12 +3,13 @@
 ## Last Action
 
 ```
-agent: engineer-mod-route-catalog
-mode: implementation
+agent: qa-mod-route-catalog
+mode: regression
 module: mod-route-catalog (MOD-003)
 result: success
+commit: aa0d672
 timestamp: 2026-10-15T00:00:00Z
-summary: Rev 39/40 RouteCard redesign MOD-003 side — AC-189 (count_beta_videos_by_routes SECURITY INVOKER RPC migration + fetchBetaVideoCounts wrapper), AC-190 (hasSend/sendStyle derived from fetchUserAchievements), AC-047 Rev 39 (interactive bookmark toggle with optimistic update via saveRoute/unsaveRoute), AC-181 Rev 39 (New Beta chip no longer rendered; fetchRoutesWithNewBeta retained for AC-175). RouteListScreen wires all new RouteCard props. 110 tests pass, 0 errors, i18n OK.
+summary: Regression pass — AC-187 fix verified (inline reactive duplicate warning, not Alert; correct i18n keys; submit button enabled); AC-189/190/047-Rev39/181-Rev39 all pass; 110 tests pass, 0 errors.
 ```
 
 
