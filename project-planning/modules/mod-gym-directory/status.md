@@ -941,3 +941,112 @@ Console warnings: pre-existing `act(...)` warnings from `@expo/vector-icons` Ico
 ### Overall Verdict
 
 **QA PASS** — All 6 `console.error` sites verified present and correctly placed immediately before their `throw`. No other logic changed. TypeScript compilation clean (exit 0, 0 errors). 44/44 MOD-002 tests pass. All existing ACs confirmed with no regressions. Shared Convention gap from AC-176 QA pass is resolved.
+
+---
+
+## QA Results — Regression (GymListScreen, GymDetailScreen, RequestGymScreen safe-area fix)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-10-15
+**Scope**: Safe-area inset fix — `useSafeAreaInsets()` removed and `makeStyles(theme, 0)` applied to all three screens (GymListScreen, GymDetailScreen, RequestGymScreen). Regression of all existing ACs (AC-004, AC-005, AC-006, AC-070, AC-120, AC-121, AC-122). TypeScript and automated test suite.
+
+---
+
+### Fix Verification — All Three Screens
+
+**GymListScreen.tsx (line 52): `makeStyles(theme, 0)` used**
+
+REGRESSION PASS. No `useSafeAreaInsets` import in the import block (lines 15–33). No `insets` variable or `useSafeAreaInsets()` call anywhere in the file. Line 52: `const styles = makeStyles(theme, 0)`. The `makeStyles` function's `topInset` parameter applies only to `root.paddingTop` (a GymListScreen-specific style); with `topInset = 0` it evaluates to `theme.spacing.md`, correct beneath the global AppHeader.
+
+**GymDetailScreen.tsx (line 53): `makeStyles(theme, 0)` used**
+
+REGRESSION PASS. No `useSafeAreaInsets` import in the import block (lines 14–32). No `insets` call anywhere. Line 53: `const styles = makeStyles(theme, 0)`. No double margin.
+
+**RequestGymScreen.tsx (line 43): `makeStyles(theme, 0)` used**
+
+REGRESSION PASS. No `useSafeAreaInsets` import in the import block (lines 12–29). No `insets` call anywhere. Line 43: `const styles = makeStyles(theme, 0)`. No double margin.
+
+All three changes are strictly scoped — no logic, service, state, or navigation code was altered.
+
+---
+
+### TypeScript — `npx tsc --noEmit`
+
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+### Automated Test Suite — mod-gym-directory
+
+Command: `npx jest src/modules/mod-gym-directory --watchAll=false --passWithNoTests`
+
+**Passing suites**: `gym-service.test.ts` — 17 tests, all PASS.
+
+**Failing suites**: `GymDetailScreen.test.tsx`, `GymListScreen.test.tsx`, `RequestGymScreen.test.tsx` — all fail to run with `[@RNC/AsyncStorage]: NativeModule: AsyncStorage is null`.
+
+**Root cause analysis — pre-existing, not caused by the safe-area fix**:
+
+The failing suites import screen files that import `src/lib/theme.ts`. Commit `8d4c6e4` (2026-10-15 10:34:16) added `import AsyncStorage from '@react-native-async-storage/async-storage'` to `theme.ts` so `ThemeProvider` can load a persisted theme override on mount. The Jest config (`package.json` `"jest"` block) has no mock for `@react-native-async-storage/async-storage`, so any test suite that transitively imports `theme.ts` through a screen component fails with the `NativeModule: AsyncStorage is null` error.
+
+The safe-area fix commits were made at 09:32:17 (2026-10-15), over one hour BEFORE the `theme.ts` AsyncStorage commit (10:34:16). The screen test failures are therefore not caused by the safe-area fix. The gym-service.test.ts suite (which imports only the service, not any screen/theme) continues to pass with 17/17.
+
+The 3 screen test suite failures are pre-existing relative to the safe-area fix under review. The last passing run for all 4 MOD-002 suites was QA Results — Regression (console.error convention fix) dated 2026-10-14, which recorded 44/44 tests passing. The `theme.ts` AsyncStorage change post-dates that run and is the cause.
+
+**Classification**: The screen test failures are a new test-infrastructure regression introduced by the `theme.ts` AsyncStorage change in `8d4c6e4`, not by the safe-area fix. They must be addressed by adding an `@react-native-async-storage/async-storage` mock to the project's Jest config or `__mocks__/` directory. This is not a bug in the safe-area fix itself.
+
+---
+
+### Acceptance Criteria — Regression (Code Inspection)
+
+Safe-area inset removal touches only the `useSafeAreaInsets()` call and the `makeStyles` second argument. No logic paths for any AC were altered. Regression verified by code inspection for all existing ACs:
+
+**PASS AC-004**: GymListScreen and GymDetailScreen render logic (name, city/district helpers, photo, bilingual display) unchanged. City filter chips, text search — all unchanged.
+
+**PASS AC-005**: "View Routes" button in `GymDetailScreen.tsx` (calls `onViewRoutes`), GymNavigator `routes` view state — all unchanged. Back-navigation target (`onBackToGym`) unchanged.
+
+**PASS AC-006**: GymListScreen tap-to-navigate (`onSelectGym`) unchanged.
+
+**PASS AC-070**: RequestGymScreen form logic, `submitGymRequest()` call, and success/error state unchanged.
+
+**PASS AC-120**: GymDetailScreen bookmark icon state (`isSaved`, `fetchSavedGymIds` in `Promise.all`) unchanged.
+
+**PASS AC-121**: Optimistic bookmark toggle (`handleBookmarkToggle`, `saveGym`, `unsaveGym`, revert on error) unchanged.
+
+**PASS AC-122**: GymListScreen read-only saved indicator (`savedGymIds.has(item.id)`) unchanged. `sortedGyms` memo unchanged.
+
+**No hardcoded hex colors** — PASS. No hex literals introduced by the fix.
+
+**No inline string literals** — PASS. No JSX string literals introduced.
+
+**Supabase singleton** — PASS. No new `createClient()` calls.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| GymListScreen.tsx: `useSafeAreaInsets` absent, `makeStyles(theme, 0)` | PASS |
+| GymDetailScreen.tsx: `useSafeAreaInsets` absent, `makeStyles(theme, 0)` | PASS |
+| RequestGymScreen.tsx: `useSafeAreaInsets` absent, `makeStyles(theme, 0)` | PASS |
+| TypeScript (tsc --noEmit) — 0 errors | PASS |
+| gym-service.test.ts — 17/17 tests pass | PASS |
+| GymDetailScreen.test.tsx — suite fails to run (pre-existing AsyncStorage mock gap) | PRE-EXISTING |
+| GymListScreen.test.tsx — suite fails to run (pre-existing AsyncStorage mock gap) | PRE-EXISTING |
+| RequestGymScreen.test.tsx — suite fails to run (pre-existing AsyncStorage mock gap) | PRE-EXISTING |
+| AC-004 regression (code inspection) | PASS |
+| AC-005 regression (code inspection) | PASS |
+| AC-006 regression (code inspection) | PASS |
+| AC-070 regression (code inspection) | PASS |
+| AC-120 regression (code inspection) | PASS |
+| AC-121 regression (code inspection) | PASS |
+| AC-122 regression (code inspection) | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Supabase singleton convention | PASS |
+
+**Overall verdict: PASS** — the safe-area fix is correct and introduced no regressions. The screen test suite failures are a pre-existing test-infrastructure issue (missing `@react-native-async-storage/async-storage` Jest mock, introduced by commit `8d4c6e4` which post-dates the safe-area fix). Route to engineer to add the AsyncStorage mock to the Jest configuration.
+
+**MOD-002 GymListScreen/GymDetailScreen/RequestGymScreen safe-area fix — QA PASS.**

@@ -823,3 +823,129 @@ All three AC-163 scenarios confirmed by code inspection and by the 3 new passing
 **All other ACs**: No regressions. 60/60 mod-social-feed tests pass. 514/515 full-suite tests pass (1 pre-existing MOD-005 failure — `fetchBetaVideosByUser route_name` expectation in `beta-video-service.test.ts` — present since before this QA run, unrelated to MOD-006). TypeScript clean (0 errors).
 
 **MOD-006 is QA PASS.**
+
+---
+
+## QA Results — Regression (FollowersListScreen, FollowingListScreen safe-area fix)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-social-feed
+**Date**: 2026-10-15
+**Scope**: Safe-area inset fix — `useSafeAreaInsets()` removed and `makeStyles(theme, 0)` applied to FollowersListScreen and FollowingListScreen. Regression of all existing ACs (AC-050, AC-051, AC-052, AC-053, AC-146, AC-147, AC-148, AC-149, AC-150, AC-151, AC-152, AC-153, AC-159, AC-163). TypeScript and automated test suite.
+
+---
+
+### Fix Verification — Both Screens
+
+**FollowersListScreen.tsx (line 125): `makeStyles(theme, 0)` used**
+
+REGRESSION PASS. No `useSafeAreaInsets` in the import block (lines 16–34). No `insets` variable or call anywhere in the file. Line 125: `const styles = makeStyles(theme, 0)`. The `makeStyles` function signature (line 220) has `topInset: number`; `navBar.paddingTop: topInset + theme.spacing.md` evaluates to `theme.spacing.md` with `topInset = 0`, correct beneath the global AppHeader.
+
+**FollowingListScreen.tsx (line 126): `makeStyles(theme, 0)` used**
+
+REGRESSION PASS. No `useSafeAreaInsets` in the import block (lines 17–35). No `insets` call anywhere. Line 126: `const styles = makeStyles(theme, 0)`. Same analysis applies — `navBar.paddingTop` evaluates to `theme.spacing.md`.
+
+Both changes are strictly scoped — no logic, service, state, navigation, or blocked-user-filter code was altered.
+
+---
+
+### TypeScript — `npx tsc --noEmit`
+
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+### Automated Test Suite — mod-social-feed
+
+Command: `npx jest src/modules/mod-social-feed --watchAll=false --passWithNoTests`
+
+**Passing suites**: `social-feed-service.test.ts` — 31 tests, all PASS.
+
+**Failing suites**: `UserProfileScreen.test.tsx`, `FeedScreen.test.tsx` — both fail to run with `[@RNC/AsyncStorage]: NativeModule: AsyncStorage is null`.
+
+**Root cause analysis — pre-existing, not caused by the safe-area fix**:
+
+The failing suites import screen files that import `src/lib/theme.ts`. Commit `8d4c6e4` (2026-10-15 10:34:16) added `import AsyncStorage from '@react-native-async-storage/async-storage'` to `theme.ts` so `ThemeProvider` can load a persisted theme override. The Jest config has no mock for `@react-native-async-storage/async-storage`, causing any test suite that transitively imports `theme.ts` through a screen component to fail with `NativeModule: AsyncStorage is null`.
+
+The safe-area fix commits for FollowersListScreen and FollowingListScreen were made at 09:32–09:35 (2026-10-15), over one hour BEFORE the `theme.ts` AsyncStorage commit (10:34:16). The screen test failures are not caused by the safe-area fix. The `social-feed-service.test.ts` suite (which imports only the service, not any screen/theme) continues to pass with 31/31.
+
+The 2 screen test suite failures are pre-existing relative to the safe-area fix under review. The last passing run for all MOD-006 suites was QA Run 5 (2026-10-13), which recorded 60/60 tests passing. The `theme.ts` AsyncStorage change post-dates that run and is the cause.
+
+**Classification**: Pre-existing test-infrastructure regression introduced by commit `8d4c6e4`, not by the safe-area fix. Fix requires adding an `@react-native-async-storage/async-storage` mock to `package.json` `"jest"` `"moduleNameMapper"` or `__mocks__/`. Route to engineer.
+
+---
+
+### Acceptance Criteria — Regression (Code Inspection)
+
+Safe-area inset removal touches only the `useSafeAreaInsets()` call and the `makeStyles` second argument. No logic paths for any AC were altered. Regression verified by code inspection for all existing ACs:
+
+**PASS AC-050**: FeedScreen (not modified by this fix). Unchanged.
+
+**PASS AC-051**: FeedScreen pull-to-refresh logic — not in the modified files.
+
+**PASS AC-052**: FeedScreen WorkoutCard — not in the modified files.
+
+**PASS AC-053**: FeedScreen empty-state — not in the modified files.
+
+**PASS AC-146**: FollowersListScreen — circular avatar (`borderRadius: theme.borderRadius.full`, size 48×48) and `displayName` text in `UserCard`. `onNavigateToUser` prop wiring unchanged. Blocked-user filter (`fetchBlockedUserIds`, both directions via `Set.has`) unchanged (lines 131–146).
+
+**PASS AC-147**: FollowingListScreen — same card layout as AC-146 (shared `UserCard` structure), `fetchFollowingList`, tap-to-navigate, blocked-user filter — all unchanged (lines 132–147).
+
+**PASS AC-148**: Follow/unfollow toggle — not in the modified files (UserProfileScreen).
+
+**PASS AC-149**: Follow counts — not in the modified files.
+
+**PASS AC-150**: Mutual follow — not in the modified files.
+
+**PASS AC-151**: Block user — not in the modified files (mod-moderation).
+
+**PASS AC-152**: Blocked user visibility — blocked-user filter in FollowersListScreen and FollowingListScreen uses `fetchBlockedUserIds()` and filters both directions (lines 134–139 in each). Unchanged by the fix.
+
+**PASS AC-153**: Feed blocked-user visibility — not in the modified files.
+
+**PASS AC-159**: SwipeBackWrapper — FollowersListScreen wraps root in `<SwipeBackWrapper onBack={onBack}>` (line 194), FollowingListScreen likewise (line 195). Unchanged.
+
+**PASS AC-163**: Route-card interaction on feed — not in the modified files.
+
+**AC-186 (deferred)**: No action required.
+
+**No hardcoded hex colors** — PASS. No hex literals introduced by the fix.
+
+**No inline string literals** — PASS. No JSX string literals introduced.
+
+**Supabase singleton** — PASS. No new `createClient()` calls.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| FollowersListScreen.tsx: `useSafeAreaInsets` absent, `makeStyles(theme, 0)` | PASS |
+| FollowingListScreen.tsx: `useSafeAreaInsets` absent, `makeStyles(theme, 0)` | PASS |
+| TypeScript (tsc --noEmit) — 0 errors | PASS |
+| social-feed-service.test.ts — 31/31 tests pass | PASS |
+| UserProfileScreen.test.tsx — fails to run (pre-existing AsyncStorage mock gap) | PRE-EXISTING |
+| FeedScreen.test.tsx — fails to run (pre-existing AsyncStorage mock gap) | PRE-EXISTING |
+| AC-050 regression (code inspection) | PASS |
+| AC-051 regression (code inspection) | PASS |
+| AC-052 regression (code inspection) | PASS |
+| AC-053 regression (code inspection) | PASS |
+| AC-146 regression (code inspection) | PASS |
+| AC-147 regression (code inspection) | PASS |
+| AC-148 regression (code inspection) | PASS |
+| AC-149 regression (code inspection) | PASS |
+| AC-150 regression (code inspection) | PASS |
+| AC-151 regression (code inspection) | PASS |
+| AC-152 regression (code inspection) | PASS |
+| AC-153 regression (code inspection) | PASS |
+| AC-159 regression (code inspection) | PASS |
+| AC-163 regression (code inspection) | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Supabase singleton convention | PASS |
+
+**Overall verdict: PASS** — the safe-area fix is correct and introduced no regressions. The screen test suite failures are a pre-existing test-infrastructure issue (missing `@react-native-async-storage/async-storage` Jest mock, introduced by commit `8d4c6e4` which post-dates the safe-area fix). Route to engineer to add the AsyncStorage mock to the Jest configuration.
+
+**MOD-006 FollowersListScreen/FollowingListScreen safe-area fix — QA PASS.**

@@ -1733,3 +1733,122 @@ PASS. The fix is narrowly scoped: one import line removed, one `const` removed, 
 | No new dependencies | PASS |
 
 **Result: READY FOR QA**
+
+---
+
+## QA Run 8 — Regression — 2026-10-15 (EditProfileScreen safe-area inset fix)
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification after safe-area inset fix — `useSafeAreaInsets()` removed from `EditProfileScreen.tsx`, `makeStyles` called with `0`)
+**Scope**: EditProfileScreen safe-area fix primary verification; full regression of all previously passing ACs (AC-001, AC-063, AC-116, AC-117, AC-118, AC-145, AC-156, AC-157, AC-164, AC-167, AC-184); TypeScript; automated suite
+
+---
+
+### 1. Fix Verification — EditProfileScreen Safe-Area Inset
+
+**Item 1: `useSafeAreaInsets` import absent from `EditProfileScreen.tsx`**
+
+REGRESSION PASS. Full read of `src/modules/mod-auth-profile/screens/EditProfileScreen.tsx` confirmed. The import block (lines 11–29) lists: `expo-image-picker`, React, `react-i18next`, React Native primitives (`ActivityIndicator`, `Image`, `KeyboardAvoidingView`, `Platform`, `Pressable`, `ScrollView`, `StyleSheet`, `Text`, `TextInput`, `View`), `useTheme`, `uploadAvatar`/`upsertProfile`, and types. No `react-native-safe-area-context` import present. No `useSafeAreaInsets` reference anywhere in the file.
+
+**Item 2: `useSafeAreaInsets()` call absent**
+
+REGRESSION PASS. The function body (lines 38–271) calls only: `useTranslation`, `useTheme`, `makeStyles(theme, 0)`, `useState` (×6), `useEffect`. No hook call to `useSafeAreaInsets()` or any `insets` variable. Grep for `insets`, `useSafeAreaInsets`, `safe-area-context` in the file returns zero matches.
+
+**Item 3: `makeStyles(theme, 0)` is used**
+
+REGRESSION PASS. Line 46: `const styles = makeStyles(theme, 0);` — the literal `0` is the second argument. The `makeStyles` function (line 274) signature accepts `topInset: number`; it is consumed only in `scrollContent.paddingTop: topInset + theme.spacing.md` (line 281), which evaluates to `0 + theme.spacing.md = theme.spacing.md`. No double margin below the global AppHeader.
+
+**Item 4: All EditProfileScreen logic, form fields, and privacy setting unchanged**
+
+REGRESSION PASS. The fix is strictly scoped to removing three lines (import, const, and argument). All form state (`displayName`, `bio`, `privacySetting`, `avatarUri`, `isUploadingAvatar`, `isSaving`, `errorMessage`), handlers (`handlePickAvatar`, `handleSave`), and JSX (avatar picker, display name field, bio field, privacy toggle, error text, action buttons) are confirmed unchanged by reading the full file.
+
+---
+
+### 2. TypeScript — `npx tsc --noEmit`
+
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+### 3. Automated Test Suite — mod-auth-profile
+
+Command: `npx jest src/modules/mod-auth-profile --watchAll=false --passWithNoTests`
+Result: 20 tests, 3 suites — all PASS
+Exit code: 0
+
+Suites:
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx` — PASS
+
+Note: `act()` warnings in test output are pre-existing infrastructure warnings from async state updates in `loadData` (follower counts + beta videos). Present since QA Run 6; not introduced by this fix.
+
+---
+
+### 4. Regression — All Previously Passing ACs
+
+**AC-001 (revised)** — PASS. `AuthNavigator.tsx` unchanged; session → children directly, no gym selection gate.
+
+**AC-063** — PASS. `EditProfileScreen.tsx` form and service call unchanged. `privacy_setting` column, `upsertProfile()`, and migration unaffected. Privacy toggle UI renders correctly (`public` / `followers_only` options, two `Pressable` elements, `accessibilityRole="radio"`).
+
+**AC-116** — PASS. `ProfileScreen.tsx` unchanged. Avatar, display name, bio rendered from `useSession().profile`.
+
+**AC-117** — PASS. Edit Profile `<Pressable>` in `ProfileScreen.tsx` present, wired to `onNavigateEditProfile`. `ProfileNavigator.tsx` transitions to `'editProfile'` view → `EditProfileScreen` rendered. `EditProfileScreen` exposes all four required fields: display name, bio, avatar, privacy setting.
+
+**AC-118** — PASS. `SendHistoryProfile` rendered via `listHeaderComponent`/`listFooterComponent` pattern unchanged.
+
+**AC-145** — PASS. Follower/following count `<Pressable>` elements in `ProfileScreen.tsx` unchanged. `fetchFollowerCounts` from `mod-social-feed` unchanged.
+
+**AC-156** — PASS. Migration `20260930000002_mod_001_beta_video_privacy.sql` unchanged. `updateBetaVideoPrivacy` in `auth-service.ts` unchanged.
+
+**AC-157** — PASS. `updateBetaVideoPrivacy` exported from module barrel unchanged.
+
+**AC-164** — PASS. `BetaVideoGrid`, `BetaVideoReelViewer`, `fetchBetaVideosByUser` integration in `ProfileScreen.tsx` unchanged.
+
+**AC-167** — PASS. No `signOut` import, no logout `<Pressable>` in `ProfileScreen.tsx`. Unchanged.
+
+**AC-184** — PASS. No bell `<Pressable>`, no settings gear `<Pressable>`, no `Ionicons` import in `ProfileScreen.tsx`. Unchanged.
+
+**No hardcoded hex colors** — PASS. No hex literals introduced. All styles in `EditProfileScreen.tsx` use `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.fontWeight.*`, `theme.borderRadius.*` tokens.
+
+**No inline string literals** — PASS. All `<Text>` in `EditProfileScreen.tsx` uses `t()` or placeholder text via `t()`.
+
+**Supabase singleton** — PASS. No new `createClient()` call sites.
+
+**Cross-module import rule** — PASS. `EditProfileScreen.tsx` imports only `uploadAvatar`/`upsertProfile` from `../auth-service` and types from `../types` — all internal to `mod-auth-profile`.
+
+---
+
+### 5. Summary
+
+| Item | Result |
+|------|--------|
+| `useSafeAreaInsets` import absent from EditProfileScreen.tsx | PASS |
+| `useSafeAreaInsets()` call absent | PASS |
+| `makeStyles(theme, 0)` used | PASS |
+| No other logic changed | PASS |
+| TypeScript (tsc --noEmit) — 0 errors | PASS |
+| mod-auth-profile test suite (20 tests, 3 suites) | PASS |
+| AC-001 regression | PASS |
+| AC-063 regression | PASS |
+| AC-116 regression | PASS |
+| AC-117 regression | PASS |
+| AC-118 regression | PASS |
+| AC-145 regression | PASS |
+| AC-156 regression | PASS |
+| AC-157 regression | PASS |
+| AC-164 regression | PASS |
+| AC-167 regression | PASS |
+| AC-184 regression | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Supabase singleton convention | PASS |
+| Cross-module import rule | PASS |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**MOD-001 EditProfileScreen safe-area fix — QA PASS.**
