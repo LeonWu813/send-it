@@ -24,8 +24,6 @@ import {
   View,
 } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import i18n from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
@@ -51,8 +49,7 @@ export default function GymDetailScreen({
 }: GymDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const [gym, setGym] = useState<Gym | null>(null);
   const [isLoading, setIsLoading] = useState(true);

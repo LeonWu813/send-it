@@ -23,8 +23,6 @@ import {
   View,
 } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme } from '../../../lib/theme';
 import { submitGymRequest } from '../gym-service';
 
@@ -41,8 +39,7 @@ export default function RequestGymScreen({
 }: RequestGymScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const [screenState, setScreenState] = useState<ScreenState>('form');
   const [name, setName] = useState('');
