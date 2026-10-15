@@ -52,8 +52,6 @@ import {
   View,
 } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme } from '../../../lib/theme';
 import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
@@ -63,7 +61,7 @@ import {
   summarizeAscents,
 } from '../../mod-send-logging/send-service';
 import type { AscentWithProfile } from '../../mod-send-logging/types';
-import { fetchSavedRouteIds, getPhotoSignedUrl, loadRoute, saveRoute, unsaveRoute } from '../route-service';
+import { fetchSavedRouteIds, getPhotoSignedUrl, loadRoute, saveRoute, unsaveRoute, upsertRouteVisit } from '../route-service';
 import type { Route, RouteColor } from '../types';
 
 /**
@@ -109,8 +107,7 @@ export default function RouteDetailScreen({
 }: RouteDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const [route, setRoute] = useState<Route | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -223,10 +220,15 @@ export default function RouteDetailScreen({
   // (unmounts on navigate-away, remounts on navigate-back), so a plain useEffect
   // fires on every mount — equivalent to useFocusEffect without requiring a
   // NavigationContainer ancestor (which this navigator does not provide).
+  //
+  // AC-179: fire-and-forget upsert of the user_route_visits row so that
+  // last_viewed_at is stamped whenever this screen opens. The upsert is
+  // non-blocking and non-critical — errors are swallowed inside upsertRouteVisit.
   useEffect(() => {
     void fetchRoute();
     void fetchMyAscents();
-  }, [fetchRoute, fetchMyAscents]);
+    upsertRouteVisit(routeId);
+  }, [fetchRoute, fetchMyAscents, routeId]);
 
   /**
    * AC-046: Optimistic bookmark toggle.

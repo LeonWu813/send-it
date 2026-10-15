@@ -31,8 +31,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme } from '../../../lib/theme';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import type { AscentStyle, AscentWithProfile } from '../../mod-send-logging';
@@ -66,8 +64,7 @@ export default function SendHistoryDetailScreen({
 }: SendHistoryDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const [ascents, setAscents] = useState<AscentWithProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);

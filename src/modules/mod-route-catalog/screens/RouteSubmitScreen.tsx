@@ -35,8 +35,6 @@ import {
   View,
 } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import {
@@ -75,8 +73,7 @@ export default function RouteSubmitScreen({
 }: RouteSubmitScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   // Form state — pre-filled from filter state if provided (AC-043)
   const [selectedGrade, setSelectedGrade] = useState<RouteGrade | null>(
