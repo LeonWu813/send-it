@@ -9,6 +9,7 @@
  *   not descriptive hex names (blue500, gray100, …).
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Appearance, ColorSchemeName } from 'react-native';
 
@@ -163,6 +164,22 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
     Appearance.getColorScheme() ?? 'unspecified',
   );
+
+  // Load persisted theme override on mount so the correct theme is applied from
+  // the first render rather than waiting for SettingsScreen to open.
+  useEffect(() => {
+    async function loadSavedOverride(): Promise<void> {
+      try {
+        const saved = await AsyncStorage.getItem('app_theme_override');
+        if (saved === 'light' || saved === 'dark' || saved === 'system') {
+          setOverride(saved);
+        }
+      } catch {
+        // ignore — default to system
+      }
+    }
+    void loadSavedOverride();
+  }, []);
 
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {

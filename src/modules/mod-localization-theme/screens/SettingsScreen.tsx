@@ -104,7 +104,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
 
       if (savedOverride !== null) {
         setSelectedOverride(savedOverride);
-        setOverride(savedOverride);
+        // setOverride is now handled by ThemeProvider on init — do not call here
       }
     }
 
