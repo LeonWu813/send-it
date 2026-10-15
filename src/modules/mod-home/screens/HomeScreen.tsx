@@ -91,8 +91,8 @@ interface SavedGymItem {
 interface ProjectingRoute {
   id: string;
   gym_id: string;
-  name: string;
   grade: RouteGrade;
+  color_tag: string;
   photo_url: string | null;
 }
 
@@ -291,7 +291,7 @@ export default function HomeScreen({
       // Step 2: Fetch route details for the saved route IDs.
       const { data: routeRows, error: routeError } = await supabase
         .from('routes')
-        .select('id, gym_id, name, grade, photo_url')
+        .select('id, gym_id, grade, color_tag, photo_url')
         .in('id', savedRouteIds)
         .eq('status', 'active');
 
@@ -364,8 +364,8 @@ export default function HomeScreen({
 
       const { data: betaRows, error: betaError } = await supabase
         .from('beta_videos')
-        .select('uploader_user_id, created_at')
-        .in('uploader_user_id', followedIds)
+        .select('user_id, created_at')
+        .in('user_id', followedIds)
         .gte('created_at', cutoff)
         .order('created_at', { ascending: false });
 
@@ -380,15 +380,15 @@ export default function HomeScreen({
         string,
         { count: number; latestAt: string }
       >();
-      for (const row of (betaRows as Array<{ uploader_user_id: string; created_at: string }>) ?? []) {
-        const existing = activityMap.get(row.uploader_user_id);
+      for (const row of (betaRows as Array<{ user_id: string; created_at: string }>) ?? []) {
+        const existing = activityMap.get(row.user_id);
         if (existing) {
           existing.count += 1;
           if (row.created_at > existing.latestAt) {
             existing.latestAt = row.created_at;
           }
         } else {
-          activityMap.set(row.uploader_user_id, { count: 1, latestAt: row.created_at });
+          activityMap.set(row.user_id, { count: 1, latestAt: row.created_at });
         }
       }
 
@@ -580,7 +580,7 @@ export default function HomeScreen({
                 key={route.id}
                 route={{
                   id: route.id,
-                  name: route.name,
+                  name: `${route.grade} ${t(`routeCatalog.colors.${route.color_tag}`)}`,
                   grade: route.grade,
                   photo_url: route.photo_url,
                 }}

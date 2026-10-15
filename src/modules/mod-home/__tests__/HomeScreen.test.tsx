@@ -320,8 +320,8 @@ describe('HomeScreen (Rev 36)', () => {
               {
                 id: 'route-001',
                 gym_id: 'gym-001',
-                name: 'Crimson Tide',
                 grade: 'V5',
+                color_tag: 'red',
                 photo_url: null,
               },
             ],
@@ -334,7 +334,7 @@ describe('HomeScreen (Rev 36)', () => {
 
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
       await waitFor(() => {
-        expect(screen.getByText('Crimson Tide')).toBeTruthy();
+        expect(screen.getByText('V5 Red')).toBeTruthy();
       });
     });
 
@@ -347,7 +347,7 @@ describe('HomeScreen (Rev 36)', () => {
         if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
         if (table === 'routes') {
           return makeQueryBuilder({
-            data: [{ id: 'route-001', gym_id: 'gym-001', name: 'Crimson Tide', grade: 'V5', photo_url: null }],
+            data: [{ id: 'route-001', gym_id: 'gym-001', grade: 'V5', color_tag: 'red', photo_url: null }],
             error: null,
           });
         }
@@ -374,7 +374,7 @@ describe('HomeScreen (Rev 36)', () => {
         if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
         if (table === 'routes') {
           return makeQueryBuilder({
-            data: [{ id: 'route-001', gym_id: 'gym-001', name: 'Crimson Tide', grade: 'V5', photo_url: null }],
+            data: [{ id: 'route-001', gym_id: 'gym-001', grade: 'V5', color_tag: 'red', photo_url: null }],
             error: null,
           });
         }
@@ -387,8 +387,8 @@ describe('HomeScreen (Rev 36)', () => {
         <HomeScreen {...DEFAULT_PROPS} onSelectRoute={mockOnSelectRoute} />,
         renderOptions(),
       );
-      await waitFor(() => screen.getByText('Crimson Tide'));
-      fireEvent.press(screen.getByTestId('route-card-Crimson Tide'));
+      await waitFor(() => screen.getByText('V5 Red'));
+      fireEvent.press(screen.getByTestId('route-card-V5 Red'));
       expect(mockOnSelectRoute).toHaveBeenCalledWith('route-001', 'gym-001');
     });
 
@@ -409,7 +409,7 @@ describe('HomeScreen (Rev 36)', () => {
         if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
         if (table === 'routes') {
           return makeQueryBuilder({
-            data: [{ id: 'route-001', gym_id: 'gym-001', name: 'Wave', grade: 'V3', photo_url: null }],
+            data: [{ id: 'route-001', gym_id: 'gym-001', grade: 'V3', color_tag: 'blue', photo_url: null }],
             error: null,
           });
         }
@@ -477,8 +477,8 @@ describe('HomeScreen (Rev 36)', () => {
         if (table === 'beta_videos') {
           return makeQueryBuilder({
             data: [
-              { uploader_user_id: 'user-002', created_at: new Date().toISOString() },
-              { uploader_user_id: 'user-002', created_at: new Date().toISOString() },
+              { user_id: 'user-002', created_at: new Date().toISOString() },
+              { user_id: 'user-002', created_at: new Date().toISOString() },
             ],
             error: null,
           });
@@ -503,7 +503,7 @@ describe('HomeScreen (Rev 36)', () => {
         if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
         if (table === 'beta_videos') {
           return makeQueryBuilder({
-            data: [{ uploader_user_id: 'user-002', created_at: new Date().toISOString() }],
+            data: [{ user_id: 'user-002', created_at: new Date().toISOString() }],
             error: null,
           });
         }
