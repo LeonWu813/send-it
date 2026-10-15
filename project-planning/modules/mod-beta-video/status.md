@@ -2,6 +2,34 @@
 
 ## Engineering Progress
 
+**Status**: Test fix — 2026-10-15 (fix pre-existing mock bug in fetchBetaVideosByUser test: routes join mock changed from `{ name: 'V5 Red' }` to `{ grade: 'V5', color_tag: 'red', gyms: { name: 'Sender Gym' } }` to match actual routes schema and service logic; all 106 tests pass)
+
+### Test Fix — fetchBetaVideosByUser route mock uses grade+color_tag instead of name — 2026-10-15
+
+**Root cause**: The `fetchBetaVideosByUser` test mocked the routes join as `routes: { name: 'V5 Red', gyms: { name: 'Sender Gym' } }`. The `routes` table has no `name` column — routes are identified by `grade` (e.g. `V5`) and `color_tag` (e.g. `red`). The production service at `beta-video-service.ts` reads `row.routes?.grade` and `row.routes?.color_tag` to build the display string. With the old mock, `row.routes?.grade` was `undefined`, which is `!= null` — so `grade != null` evaluated to `false` and `route_name` was set to `null`. This caused the assertion `expect(result[0].route_name).toBe('V5 Red')` to fail with `Received: null`.
+
+**Fix**: Changed the mock routes object in the `'AC-162: returns videos for the given user...'` test case from:
+```
+routes: { name: 'V5 Red', gyms: { name: 'Sender Gym' } }
+```
+to:
+```
+routes: { grade: 'V5', color_tag: 'red', gyms: { name: 'Sender Gym' } }
+```
+
+The assertion `expect(result[0].route_name).toBe('V5 Red')` is unchanged and now passes — the service computes `'V5 Red'` from `grade + capitalized(color_tag)`.
+
+**Self-check results**:
+- `npx tsc --noEmit`: **0 errors**. PASS.
+- `npx jest src/modules/mod-beta-video --watchAll=false`: **106 passed, 0 failures**. PASS.
+
+**Files modified**:
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — routes join mock corrected to use `grade` + `color_tag` instead of `name`
+
+**ACs addressed**: n/a (pre-existing test correctness fix)
+
+---
+
 **Status**: DB migration — 2026-10-15 (AC-188: add beta_videos.updated_at with BEFORE UPDATE trigger; seed pre-existing rows updated_at = created_at; BetaVideo TypeScript type updated; test fixtures updated)
 
 ### DB Migration — AC-188 beta_videos.updated_at column + BEFORE UPDATE trigger — 2026-10-15

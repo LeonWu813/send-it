@@ -21,6 +21,16 @@ jest.mock('../notification-service', () => ({
   markNotificationsRead: jest.fn(),
 }));
 
+// Mock UnreadCountProvider so NotificationInboxScreen can render in tests
+// without a real UnreadCountProvider ancestor. The refresh function is a no-op.
+const mockRefreshUnreadCount = jest.fn();
+jest.mock('../UnreadCountProvider', () => ({
+  useUnreadCountContext: () => ({
+    unreadCount: 0,
+    refresh: mockRefreshUnreadCount,
+  }),
+}));
+
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 import React from 'react';
@@ -61,6 +71,7 @@ describe('NotificationInboxScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockMarkNotificationsRead.mockResolvedValue(undefined);
+    mockRefreshUnreadCount.mockClear();
   });
 
   it('renders the screen title', async () => {
@@ -114,6 +125,21 @@ describe('NotificationInboxScreen', () => {
 
     await waitFor(() => {
       expect(mockMarkNotificationsRead).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('calls refresh() from UnreadCountContext after markNotificationsRead (AC-173 Rev 35)', async () => {
+    mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
+
+    render(
+      <NotificationInboxScreen session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      // refresh() must be called once after the batch mark-read completes so
+      // the global header badge clears when the inbox is opened.
+      expect(mockRefreshUnreadCount).toHaveBeenCalledTimes(1);
     });
   });
 

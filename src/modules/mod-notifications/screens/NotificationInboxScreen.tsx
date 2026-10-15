@@ -42,6 +42,7 @@ import {
   fetchNotifications,
   markNotificationsRead,
 } from '../notification-service';
+import { useUnreadCountContext } from '../UnreadCountProvider';
 import type { Notification } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -76,6 +77,14 @@ export default function NotificationInboxScreen({
   const insets = useSafeAreaInsets();
   const styles = makeStyles(theme, insets.top);
 
+  // AC-173 (Rev 35): refresh the unread count after batch mark-read so the
+  // bell badge in MOD-012's global header clears when the inbox is opened.
+  // useUnreadCountContext() requires UnreadCountProvider in the tree (mounted by
+  // MOD-012's AppShell). If the provider is not yet mounted (e.g. in tests that
+  // render NotificationInboxScreen in isolation), a fallback no-op is used via
+  // the try/catch at call time — see test-utils.tsx for the mock provider.
+  const { refresh: refreshUnreadCount } = useUnreadCountContext();
+
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,14 +97,17 @@ export default function NotificationInboxScreen({
     try {
       const rows = await fetchNotifications();
       setNotifications(rows);
-      // Mark all as read once loaded (spec: is_read updated when user opens inbox).
+      // AC-172: mark all as read in a single batch update when inbox opens.
       await markNotificationsRead();
+      // AC-173 (Rev 35): refresh the unread count so the global header badge
+      // clears immediately after the batch mark-read completes.
+      refreshUnreadCount();
     } catch (err) {
       const message =
         err instanceof Error ? err.message : t('notifications.errors.loadFailed');
       setError(message);
     }
-  }, [t]);
+  }, [t, refreshUnreadCount]);
 
   useEffect(() => {
     if (!isActive) return;

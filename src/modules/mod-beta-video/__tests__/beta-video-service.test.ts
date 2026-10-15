@@ -396,7 +396,7 @@ describe('fetchBetaVideosByUser', () => {
       is_reported: false,
       report_dismissed: false,
       users: { display_name: 'Test Climber', avatar_url: 'https://example.com/avatar.jpg' },
-      routes: { name: 'V5 Red', gyms: { name: 'Sender Gym' } },
+      routes: { grade: 'V5', color_tag: 'red', gyms: { name: 'Sender Gym' } },
     };
     const selectChain = {
       select: jest.fn().mockReturnThis(),
