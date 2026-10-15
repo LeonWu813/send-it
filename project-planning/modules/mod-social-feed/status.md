@@ -36,6 +36,25 @@
 - PASS — No hardcoded hex colors; no style changes
 - PASS — `BetaVideoReelViewer` (rendered at top level outside ScrollView) is unaffected — it renders with `visible={showReel}` which starts false; the privacy gate only prevents the grid and title from appearing, not the already-mounted reel viewer shell
 
+### AC-185 — SwipeBackWrapper Wired into Social Feed Screens (2026-10-15)
+
+**AC-185 DONE**: Wired `SwipeBackWrapper` (implemented at `src/components/SwipeBackWrapper.tsx` by MOD-012) into the three mod-social-feed screens that expose an `onBack` prop.
+
+**Changes**:
+- `FollowersListScreen.tsx`: Added `SwipeBackWrapper` import; outermost `<View style={styles.root}>` replaced with `<SwipeBackWrapper onBack={onBack}>` wrapping the existing root View. No `enabled` prop (defaults to true — no form submission or modal state in this screen).
+- `FollowingListScreen.tsx`: Same pattern as FollowersListScreen — `SwipeBackWrapper` wraps the root View. No `enabled` prop needed.
+- `UserProfileScreen.tsx`: Added `SwipeBackWrapper` import; applied to all three render paths:
+  - Loading spinner path: `<SwipeBackWrapper onBack={onBack}>` wraps `<View style={styles.centered}>` (no `enabled` override).
+  - Blocked-state path: `<SwipeBackWrapper onBack={onBack} enabled={!sheetVisible}>` wraps `<View style={styles.root}>` — gesture disabled when the action sheet modal is open.
+  - Normal path: `<SwipeBackWrapper onBack={onBack} enabled={!sheetVisible && !showReel}>` replaces the `<>` fragment — gesture disabled when the action sheet or BetaVideoReelViewer overlay is open, to avoid gesture conflicts.
+
+**Self-check (AC-185)**:
+- PASS — `npx tsc --noEmit` — 0 errors in mod-social-feed (pre-existing errors in mod-auth-profile and mod-route-catalog are unrelated and pre-date this change)
+- PASS — `npx jest --testPathPattern="mod-social-feed" --passWithNoTests` — 60/60 pass, no regressions
+- PASS — No new npm dependencies; `SwipeBackWrapper` uses RN core `PanResponder` per production.md convention
+- PASS — `enabled={false}` applied for modal-open states in `UserProfileScreen` (sheetVisible, showReel) to prevent gesture conflicts with overlays
+- PASS — Inner Views unchanged; only the outermost container replaced per task spec
+
 ### AC-186 — get_like_info_batch RPC and Service Wrapper (2026-10-13, deferred)
 
 **AC-186 DONE (deferred)**: Defined the `get_like_info_batch` Postgres RPC and its TypeScript service wrapper. The RPC and function are introduced now per the data-access/caching convention (§10) but are NOT wired into any UI path in Phase 1. FeedScreen.tsx remains dead code per AC-159. The existing per-video `fetchLikeInfo` path continues to be used by all active callers.
