@@ -54,6 +54,7 @@ import {
 } from '../../mod-moderation/moderation-service';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   fetchFollowerCounts,
   fetchIsFollowing,
@@ -298,9 +299,11 @@ export default function UserProfileScreen({
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      <SwipeBackWrapper onBack={onBack}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </SwipeBackWrapper>
     );
   }
 
@@ -312,60 +315,62 @@ export default function UserProfileScreen({
   // AC-153: blocked state rendering
   if (isProfileBlocked) {
     return (
-      <View style={styles.root}>
-        {/* Header row: back button + optional dots icon */}
-        <View style={styles.blockedHeader}>
-          <Pressable
-            style={styles.backButton}
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            hitSlop={8}
-          >
-            <Text style={styles.backButtonText}>{t('common.back')}</Text>
-          </Pressable>
-          {/* Three-dots icon only shown when isBlockedByMe (viewer can unblock) */}
-          {!isOwnProfile && isBlockedByMe && (
+      <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible}>
+        <View style={styles.root}>
+          {/* Header row: back button + optional dots icon */}
+          <View style={styles.blockedHeader}>
             <Pressable
-              style={styles.dotsButton}
-              onPress={() => { setSheetVisible(true); }}
+              style={styles.backButton}
+              onPress={onBack}
               accessibilityRole="button"
-              accessibilityLabel="More options"
+              accessibilityLabel={t('common.back')}
               hitSlop={8}
             >
-              <Ionicons name="ellipsis-vertical" size={22} color={theme.colors.textPrimary} />
+              <Text style={styles.backButtonText}>{t('common.back')}</Text>
             </Pressable>
+            {/* Three-dots icon only shown when isBlockedByMe (viewer can unblock) */}
+            {!isOwnProfile && isBlockedByMe && (
+              <Pressable
+                style={styles.dotsButton}
+                onPress={() => { setSheetVisible(true); }}
+                accessibilityRole="button"
+                accessibilityLabel="More options"
+                hitSlop={8}
+              >
+                <Ionicons name="ellipsis-vertical" size={22} color={theme.colors.textPrimary} />
+              </Pressable>
+            )}
+          </View>
+
+          {/* Blocked state message */}
+          <View style={styles.centered}>
+            <Text style={styles.profileUnavailableText}>
+              {t('moderation.profileUnavailable')}
+            </Text>
+          </View>
+
+          {/* Bottom action sheet (Modal) */}
+          {!isOwnProfile && (
+            <ActionSheet
+              visible={sheetVisible}
+              onClose={() => { setSheetVisible(false); setSheetError(null); }}
+              isBlockedByMe={isBlockedByMe}
+              sheetLoading={sheetLoading}
+              sheetError={sheetError}
+              onReport={() => { void handleReport(); }}
+              onBlockToggle={() => { void handleBlockToggle(); }}
+              theme={theme}
+              insets={insets}
+              t={t}
+            />
           )}
         </View>
-
-        {/* Blocked state message */}
-        <View style={styles.centered}>
-          <Text style={styles.profileUnavailableText}>
-            {t('moderation.profileUnavailable')}
-          </Text>
-        </View>
-
-        {/* Bottom action sheet (Modal) */}
-        {!isOwnProfile && (
-          <ActionSheet
-            visible={sheetVisible}
-            onClose={() => { setSheetVisible(false); setSheetError(null); }}
-            isBlockedByMe={isBlockedByMe}
-            sheetLoading={sheetLoading}
-            sheetError={sheetError}
-            onReport={() => { void handleReport(); }}
-            onBlockToggle={() => { void handleBlockToggle(); }}
-            theme={theme}
-            insets={insets}
-            t={t}
-          />
-        )}
-      </View>
+      </SwipeBackWrapper>
     );
   }
 
   return (
-    <>
+    <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible && !showReel}>
       <ScrollView
         style={styles.root}
         contentContainerStyle={styles.contentContainer}
@@ -529,20 +534,24 @@ export default function UserProfileScreen({
               </>
             )}
 
-            {/* AC-163: Beta video grid — below stats section, hidden when profile is blocked */}
-            <View style={styles.videoSection}>
-              <Text style={styles.videoSectionTitle}>{t('betaVideo.userVideos')}</Text>
-              <BetaVideoGrid
-                videos={betaVideos}
-                onPressVideo={(index) => {
-                  setReelStartIndex(index);
-                  setShowReel(true);
-                }}
-                emptyState={
-                  <Text style={styles.videoSectionEmpty}>{t('betaVideo.noVideosYet')}</Text>
-                }
-              />
-            </View>
+            {/* AC-163: Beta video grid — below stats section.
+                Subject to AC-063/AC-064 privacy gating: hidden/403 state for
+                followers_only profiles when the viewer is not a follower. */}
+            {profile.privacy_setting === 'followers_only' && !isFollowing ? null : (
+              <View style={styles.videoSection}>
+                <Text style={styles.videoSectionTitle}>{t('betaVideo.userVideos')}</Text>
+                <BetaVideoGrid
+                  videos={betaVideos}
+                  onPressVideo={(index) => {
+                    setReelStartIndex(index);
+                    setShowReel(true);
+                  }}
+                  emptyState={
+                    <Text style={styles.videoSectionEmpty}>{t('betaVideo.noVideosYet')}</Text>
+                  }
+                />
+              </View>
+            )}
           </>
         )}
       </ScrollView>
@@ -572,7 +581,7 @@ export default function UserProfileScreen({
           t={t}
         />
       )}
-    </>
+    </SwipeBackWrapper>
   );
 }
 

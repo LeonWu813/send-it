@@ -30,6 +30,7 @@ import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import { useTheme } from '../../../lib/theme';
 import { fetchFollowersList } from '../social-feed-service';
 import type { UserListItem } from '../types';
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -190,24 +191,26 @@ export default function FollowersListScreen({
   }
 
   return (
-    <View style={styles.root}>
-      {/* Navigation bar */}
-      <View style={styles.navBar}>
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.back')}
-        >
-          <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
-          <Text style={styles.backButtonText}>{t('settings.back')}</Text>
-        </Pressable>
-        <Text style={styles.navTitle}>{t('socialFeed.followers')}</Text>
-        <View style={styles.navSpacer} />
-      </View>
+    <SwipeBackWrapper onBack={onBack}>
+      <View style={styles.root}>
+        {/* Navigation bar */}
+        <View style={styles.navBar}>
+          <Pressable
+            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.back')}
+          >
+            <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
+            <Text style={styles.backButtonText}>{t('settings.back')}</Text>
+          </Pressable>
+          <Text style={styles.navTitle}>{t('socialFeed.followers')}</Text>
+          <View style={styles.navSpacer} />
+        </View>
 
-      {renderContent()}
-    </View>
+        {renderContent()}
+      </View>
+    </SwipeBackWrapper>
   );
 }
 
