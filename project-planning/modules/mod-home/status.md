@@ -268,6 +268,33 @@
 
 ---
 
+### Bugfix — stale AC-182 test assertion — 2026-10-15
+
+**Bug**: `HomeScreen.test.tsx` had two stale artifacts left over from before the AC-182 Rev 38 redesign (commit `1957fac`):
+
+1. Both `beta_videos` mock objects in the Following Activity tests used `created_at` as the field name, but the real `loadFollowingActivity` query (post Rev 38) selects and groups on `updated_at`. The mock data was structurally correct for the old design but silently incorrect for the new one.
+2. The "renders following-activity rows" test asserted `screen.getByText('2 new beta videos')` — the old count-based label. The new design displays the fixed i18n string `home.following.newUpload` ("new video upload") with no count.
+
+**Files changed:**
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — in the "renders following-activity rows" test: renamed both mock `created_at` fields to `updated_at`; replaced `getByText('2 new beta videos')` with `getByText('new video upload')`. In the "calls onSelectClimber" test: renamed mock `created_at` to `updated_at`.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx jest src/modules/mod-home --watchAll=false` | PASS — 39 tests, 3 suites, 0 failures |
+| `npx tsc --noEmit` | PASS — 0 errors |
+| Stale `'2 new beta videos'` assertion removed | PASS |
+| Mock field `created_at` → `updated_at` in both Following Activity tests | PASS |
+| `getByText('new video upload')` matches `home.following.newUpload` i18n value | PASS |
+| No production source files changed | PASS |
+
+**Commit**: 49795da
+
+**Result: READY FOR QA**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24
