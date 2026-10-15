@@ -25,7 +25,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import { useTheme } from '../../../lib/theme';
@@ -122,8 +121,7 @@ export default function FollowersListScreen({
 }: FollowersListScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
