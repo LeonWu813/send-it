@@ -262,6 +262,9 @@
     }
   },
   "home": {
+    "banner": {
+      "noEvents": "目前沒有活動"
+    },
     "banners": {
       "competition": "比賽",
       "newRoutes": "新路線",
@@ -274,7 +277,8 @@
     },
     "following": {
       "title": "追蹤中",
-      "empty": "追蹤攀岩者以查看他們的動態"
+      "empty": "追蹤攀岩者以查看他們的動態",
+      "newUpload": "新影片上傳"
     },
     "projectingRoutes": {
       "title": "目標路線",

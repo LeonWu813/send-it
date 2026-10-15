@@ -4,16 +4,18 @@
  *
  * Four sections in order (AC-111):
  *   1. Events Banner (AC-112, AC-174) — single admin-managed banner from
- *      `admin_banners WHERE is_active = true LIMIT 1`; hidden if none active.
+ *      `admin_banners WHERE is_active = true LIMIT 1`; placeholder card shown
+ *      when no active banner exists (section never hidden — AC-112 Rev 38).
  *   2. Saved Gyms (AC-113, AC-114, AC-115, AC-175, AC-176) — horizontal scroll
  *      strip ordered by most-recently-viewed via `user_route_visits` MAX
  *      `last_viewed_at` per gym; tapping navigates to RouteListScreen.
  *   3. Projecting Routes (AC-177, AC-178, AC-181) — sourced from `saved_routes`
  *      via MOD-003's fetchSavedRouteIds(); V-grade filter tabs; uses RouteCard
  *      with `hasNewBetaVideo` prop from `routes_with_new_beta` RPC (60s cache).
- *   4. Following Activity (AC-182) — followed user IDs via MOD-006's service;
- *      then beta_videos last 14 days grouped by uploader; avatar + display_name
- *      + "X new beta video(s)" + relative timestamp; tap → UserProfileScreen.
+ *   4. Following Activity (AC-182, Rev 38) — followed user IDs via MOD-006's
+ *      service; beta_videos grouped by uploader using updated_at (not created_at);
+ *      avatar + display_name + "new video upload" label + MAX(updated_at)
+ *      relative timestamp; no video count; tap → UserProfileScreen.
  *
  * Safe area:
  *   - Top inset NOT applied here — AppHeader (mounted by AppShell) owns the top.
@@ -103,8 +105,7 @@ interface FollowingActivity {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
-  newBetaVideoCount: number;
-  /** ISO timestamp of the most-recent qualifying beta video. */
+  /** ISO timestamp of the most-recent beta video activity (MAX updated_at). */
   latestAt: string | null;
 }
 
@@ -174,8 +175,10 @@ export default function HomeScreen({
   // ── Section 1: Admin Events Banner ────────────────────────────────────────
 
   const [activeBanner, setActiveBanner] = useState<AdminBanner | null>(null);
+  const [bannerLoading, setBannerLoading] = useState(true);
 
   const loadBanner = useCallback(async () => {
+    setBannerLoading(true);
     const { data, error } = await supabase
       .from('admin_banners')
       .select('id, title, body, image_url')
@@ -187,9 +190,11 @@ export default function HomeScreen({
     if (error) {
       console.error('[HomeScreen] loadBanner error:', error);
       setActiveBanner(null);
+      setBannerLoading(false);
       return;
     }
     setActiveBanner((data as AdminBanner | null) ?? null);
+    setBannerLoading(false);
   }, []);
 
   // ── Section 2: Saved Gyms ─────────────────────────────────────────────────
@@ -407,20 +412,18 @@ export default function HomeScreen({
         return;
       }
 
-      // Step 3: Group by uploader to get count + latest timestamp.
-      const activityMap = new Map<
-        string,
-        { count: number; latestAt: string }
-      >();
+      // Step 3: Group by uploader to get MAX updated_at per climber (AC-182/AC-188).
+      // Rows are already ordered by updated_at DESC, so the first row per user_id is
+      // already the latest — but we iterate all rows for correctness.
+      const activityMap = new Map<string, { latestAt: string }>();
       for (const row of (betaRows as Array<{ user_id: string; updated_at: string }>) ?? []) {
         const existing = activityMap.get(row.user_id);
         if (existing) {
-          existing.count += 1;
           if (row.updated_at > existing.latestAt) {
             existing.latestAt = row.updated_at;
           }
         } else {
-          activityMap.set(row.user_id, { count: 1, latestAt: row.updated_at });
+          activityMap.set(row.user_id, { latestAt: row.updated_at });
         }
       }
 
@@ -433,7 +436,6 @@ export default function HomeScreen({
             userId: u.id,
             displayName: u.display_name,
             avatarUrl: u.avatar_url,
-            newBetaVideoCount: entry.count,
             latestAt: entry.latestAt,
           };
         });
@@ -498,30 +500,40 @@ export default function HomeScreen({
       showsVerticalScrollIndicator={false}
     >
       {/* ── Section 1: Events Banner (AC-112, AC-174) ─────────────────── */}
-      {activeBanner !== null && (
-        <View style={[styles.section, styles.bannerSection]}>
-          <View style={styles.bannerCard}>
-            {activeBanner.image_url !== null ? (
-              <Image
-                source={{ uri: activeBanner.image_url }}
-                style={styles.bannerImage}
-                resizeMode="cover"
-                accessibilityLabel={activeBanner.title}
-              />
-            ) : (
-              <View style={styles.bannerImagePlaceholder} />
-            )}
-            <View style={styles.bannerOverlay}>
-              <Text style={styles.bannerTitle}>{activeBanner.title}</Text>
-              {activeBanner.body.length > 0 && (
-                <Text style={styles.bannerBody} numberOfLines={2}>
-                  {activeBanner.body}
-                </Text>
-              )}
-            </View>
+      {/* Section is NEVER hidden in Phase 1 (AC-112 Rev 38). When no active    */}
+      {/* banner exists (and loading is complete), a placeholder card is shown. */}
+      <View style={[styles.section, styles.bannerSection]}>
+        {!bannerLoading && activeBanner === null ? (
+          <View style={styles.bannerPlaceholderCard}>
+            <Text style={styles.bannerPlaceholderText}>
+              {t('home.banner.noEvents')}
+            </Text>
           </View>
-        </View>
-      )}
+        ) : (
+          activeBanner !== null && (
+            <View style={styles.bannerCard}>
+              {activeBanner.image_url !== null ? (
+                <Image
+                  source={{ uri: activeBanner.image_url }}
+                  style={styles.bannerImage}
+                  resizeMode="cover"
+                  accessibilityLabel={activeBanner.title}
+                />
+              ) : (
+                <View style={styles.bannerImagePlaceholder} />
+              )}
+              <View style={styles.bannerOverlay}>
+                <Text style={styles.bannerTitle}>{activeBanner.title}</Text>
+                {activeBanner.body.length > 0 && (
+                  <Text style={styles.bannerBody} numberOfLines={2}>
+                    {activeBanner.body}
+                  </Text>
+                )}
+              </View>
+            </View>
+          )
+        )}
+      </View>
 
       {/* ── Section 2: Saved Gyms (AC-113, AC-114, AC-115, AC-175, AC-176) */}
       <View style={styles.section}>
@@ -665,10 +677,8 @@ export default function HomeScreen({
                   <Text style={styles.activityName} numberOfLines={1}>
                     {item.displayName}
                   </Text>
-                  <Text style={styles.activityCount}>
-                    {t('home.followingActivity.newVideos', {
-                      count: item.newBetaVideoCount,
-                    })}
+                  <Text style={styles.activityLabel}>
+                    {t('home.following.newUpload')}
                   </Text>
                   {item.latestAt !== null && (
                     <Text style={styles.activityTime}>
@@ -726,6 +736,18 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       paddingHorizontal: theme.spacing.md,
     },
     // ── Banner ──────────────────────────────────────────────────────────────
+    bannerPlaceholderCard: {
+      marginHorizontal: theme.spacing.md,
+      height: 160,
+      borderRadius: theme.borderRadius.lg,
+      backgroundColor: theme.colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    bannerPlaceholderText: {
+      fontSize: theme.fontSize.sm,
+      color: theme.colors.textSecondary,
+    },
     bannerCard: {
       marginHorizontal: theme.spacing.md,
       height: 160,
@@ -848,7 +870,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       fontWeight: theme.fontWeight.semibold,
       color: theme.colors.textPrimary,
     },
-    activityCount: {
+    activityLabel: {
       fontSize: theme.fontSize.sm,
       color: theme.colors.textSecondary,
     },

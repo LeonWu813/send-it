@@ -262,6 +262,9 @@
     }
   },
   "home": {
+    "banner": {
+      "noEvents": "No active events"
+    },
     "banners": {
       "competition": "Competition",
       "newRoutes": "New Routes",
@@ -274,7 +277,8 @@
     },
     "following": {
       "title": "Following",
-      "empty": "Follow climbers to see their activity"
+      "empty": "Follow climbers to see their activity",
+      "newUpload": "new video upload"
     },
     "projectingRoutes": {
       "title": "Projecting",
