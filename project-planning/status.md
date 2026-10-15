@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
-mode: bugfix
-module: mod-home
+agent: doc-sync
+mode: delta
+module: n/a
 result: success
-commit: ad179db
-timestamp: 2026-10-15T00:00:00Z
+commit: 0e4a4cfd7a1d620830a477de9777eb244f2457a7
+timestamp: 2026-10-15T01:00:00Z
 ```
 
 
@@ -2647,6 +2647,58 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Passed   | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-15 — Delta Sync (Revision 38, [SUBSTANTIVE])
+
+**Sync type:** delta
+**PRD Revision:** 38
+**PM Update reference:** 2026-10-15 [SUBSTANTIVE] — Three human-QA product changes applied (PRD Revision 38): AC-112 (MOD-012 banner placeholder), AC-188 (new MOD-005 `beta_videos.updated_at`), AC-182 (MOD-012 Following section redesign).
+**Tech Lead review:** 2026-10-15 — Review approved AC-188 with correction (BEFORE UPDATE trigger, not literal ON CONFLICT SET; pre-existing row seeding) and AC-182 with clarification (four-point `created_at → updated_at` swap in existing batched-fetch + JS-group pattern; no SQL GROUP BY). No Proposed Shared Convention from this review.
+
+**Files modified:**
+
+- `project-planning/modules/mod-home/spec.md` — Last Synced from PRD Revision 36 → 38. Changes:
+  - Header: Last Synced from PRD Revision 36 → 38; Last Updated 2026-10-15.
+  - Purpose: Updated to describe Events Banner as showing a placeholder card when no active rows (never hidden), and Following activity section as showing one row per climber with `MAX(updated_at)` and fixed "new video upload" label.
+  - Context: AC-112 description updated (placeholder card, `home.banner.noEvents`, never hidden in Phase 1, supersedes Rev 35 "hidden" behavior). AC-182 description updated (no count, `home.following.newUpload`, `MAX(updated_at)` per climber, sequencing note re AC-188).
+  - AC-112 (revised, Rev 38): Full PRD text — when `admin_banners` returns no active rows, render a visible placeholder card (surface/gray card, centered "No active events" label in `theme.colors.textSecondary`, i18n key `home.banner.noEvents`). Section is never fully hidden in Phase 1. Supersedes Rev 35 "shall be hidden" behavior.
+  - AC-182 (revised, Rev 38): Full PRD text — one row per followed climber with at least one beta video; avatar, `display_name`, fixed "new video upload" label (i18n key `home.following.newUpload`), `MAX(updated_at)` timestamp; no video count. Sequencing note: AC-188 (MOD-005) must land before AC-182 (MOD-012 query change).
+  - Requirements: Updated AC-112 requirement (visible placeholder instead of hidden) and AC-182 requirement (no count, `updated_at`, `home.following.newUpload`).
+  - Input/Output Contract: "Follow list activity" input updated to say returns followed climbers with at least one beta video, with `MAX(updated_at)` per climber, per AC-182/AC-188.
+  - Key Implementation Notes — Admin banner: added explicit "NEVER hide the section" note; placeholder card rendering documented.
+  - Key Implementation Notes — Following activity: documented four-point `created_at → updated_at` swap (`.select`, `.gte` window filter — semantic load-bearing change, `.order`, JS grouping/row type). Existing batched-fetch + JS-group pattern preserved. AC-188 sequencing requirement noted.
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 29 → 38. Changes:
+  - Header: Last Synced from PRD Revision 29 → 38; Last Updated 2026-10-15.
+  - Purpose: Added `updated_at` column ownership and AC-188 (BEFORE UPDATE trigger, authoritative "last activity" timestamp, `MAX(updated_at)` used by AC-182).
+  - Context: Added `updated_at` column and BEFORE UPDATE trigger description; pre-existing row seeding; sequencing note.
+  - US-004 Acceptance Criteria list: Added AC-188.
+  - AC-188 (new, Rev 38): Full PRD text plus Tech Lead correction — PostgREST `.upsert()` cannot express a free-form `ON CONFLICT ... DO UPDATE SET updated_at = NOW()` clause; use a BEFORE UPDATE trigger (Option A, recommended). Pre-existing row seeding `updated_at := created_at` documented. Sequencing: AC-188 must land before AC-182.
+  - AC-166 (revised): Added `updated_at = NOW()` on replace, noting it is achieved via the BEFORE UPDATE trigger from AC-188, not a literal ON CONFLICT SET clause.
+  - Data Model BetaVideo: Added `updated_at (timestamptz NOT NULL DEFAULT now())` column with full comment block — trigger mechanism, pre-existing row seeding, AC-182 usage, Option A vs. Option B distinction.
+  - `BetaVideo` TypeScript interface additions: Added `updated_at: string` (ISO 8601 timestamptz).
+  - Input/Output Contract (upload outputs): Added `updated_at` (set to NOW() on insert via DEFAULT, bumped to NOW() on replace via BEFORE UPDATE trigger, AC-188).
+  - Key Implementation Notes: Added `updated_at` column and BEFORE UPDATE trigger note (AC-188) documenting: trigger approach, pre-existing row seed, PostgREST upsert limitation, migration recommendation.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — read-only.
+- `project-planning/production.md` — not in scope. Tech Lead explicitly stated no Proposed Shared Convention from the Rev 38 review (trigger pattern is single-table, premature to generalize). No shared convention change warranted.
+- All other module specs — not in scope for Rev 38 (only MOD-005 and MOD-012 ACs changed).
+- Agent wrappers — not in scope (no new module added, no dependency list change).
+- `project-planning/modules/mod-home/status.md`, `project-planning/modules/mod-beta-video/status.md` — owned by Engineer/QA agents, not touched.
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none — all PRD content (AC-112, AC-188, AC-182) was explicit enough to translate directly; Tech Lead corrections were clear and recorded in status.md Tech Lead Reviews.
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as all prior delta syncs. Check 4 FAIL (pre-existing script bug): awk range pattern does not match the bold `**US-NNN**` format used in spec Related User Stories sections; all US-IDs are present in each spec. Check 6 FAIL (pre-existing script bug): script over-matches non-phase-plan PRD content (gym seed data, milestone lines) as "phase names"; Phase Plan section in status.md is correctly written. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
 
 ### 2026-10-14 — Delta Sync (Revision 37, [SUBSTANTIVE] + [TRIVIAL])
 
