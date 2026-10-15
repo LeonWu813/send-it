@@ -28,6 +28,7 @@ import i18n from '../../../lib/i18n';
 import { useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
 import type { Gym } from '../types';
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 
 interface GymDetailScreenProps {
   gymId: string;
@@ -107,43 +108,48 @@ export default function GymDetailScreen({
 
   if (isLoading) {
     return (
-      <View style={styles.centeredContainer}>
-        <ActivityIndicator color={theme.colors.primary} size="large" />
-      </View>
+      <SwipeBackWrapper onBack={onBack} enabled={false}>
+        <View style={styles.centeredContainer}>
+          <ActivityIndicator color={theme.colors.primary} size="large" />
+        </View>
+      </SwipeBackWrapper>
     );
   }
 
   if (errorMessage || !gym) {
     return (
-      <View style={styles.centeredContainer}>
-        <Pressable
-          onPress={onBack}
-          style={styles.backLink}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-        <Text style={styles.errorText}>
-          {errorMessage ?? t('common.error')}
-        </Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={fetchGym}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.retry')}
-        >
-          <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-        </Pressable>
-      </View>
+      <SwipeBackWrapper onBack={onBack}>
+        <View style={styles.centeredContainer}>
+          <Pressable
+            onPress={onBack}
+            style={styles.backLink}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+          >
+            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+          </Pressable>
+          <Text style={styles.errorText}>
+            {errorMessage ?? t('common.error')}
+          </Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={fetchGym}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.retry')}
+          >
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+          </Pressable>
+        </View>
+      </SwipeBackWrapper>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.contentContainer}
-    >
+    <SwipeBackWrapper onBack={onBack}>
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={styles.contentContainer}
+      >
       {/* Header row: back navigation + bookmark toggle (AC-120, AC-121) */}
       <View style={styles.headerRow}>
         <Pressable
@@ -233,7 +239,8 @@ export default function GymDetailScreen({
           {t('gymDirectory.detail.viewRoutes')}
         </Text>
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </SwipeBackWrapper>
   );
 }
 

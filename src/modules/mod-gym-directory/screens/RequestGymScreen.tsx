@@ -23,6 +23,7 @@ import {
   View,
 } from 'react-native';
 
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { useTheme } from '../../../lib/theme';
 import { submitGymRequest } from '../gym-service';
 
@@ -78,31 +79,34 @@ export default function RequestGymScreen({
   // Success confirmation state
   if (screenState === 'success') {
     return (
-      <View style={styles.centeredContainer}>
-        <Text style={styles.successTitle}>
-          {t('gymDirectory.requestGym.successTitle')}
-        </Text>
-        <Text style={styles.successBody}>
-          {t('gymDirectory.requestGym.successBody')}
-        </Text>
-        <Pressable
-          style={styles.doneButton}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.done')}
-        >
-          <Text style={styles.doneButtonText}>{t('common.done')}</Text>
-        </Pressable>
-      </View>
+      <SwipeBackWrapper onBack={onBack}>
+        <View style={styles.centeredContainer}>
+          <Text style={styles.successTitle}>
+            {t('gymDirectory.requestGym.successTitle')}
+          </Text>
+          <Text style={styles.successBody}>
+            {t('gymDirectory.requestGym.successBody')}
+          </Text>
+          <Pressable
+            style={styles.doneButton}
+            onPress={onBack}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.done')}
+          >
+            <Text style={styles.doneButtonText}>{t('common.done')}</Text>
+          </Pressable>
+        </View>
+      </SwipeBackWrapper>
     );
   }
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.contentContainer}
-      keyboardShouldPersistTaps="handled"
-    >
+    <SwipeBackWrapper onBack={onBack} enabled={!isSubmitting}>
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
       {/* Back navigation */}
       <Pressable
         onPress={onBack}
@@ -193,7 +197,8 @@ export default function RequestGymScreen({
           </Text>
         )}
       </Pressable>
-    </ScrollView>
+      </ScrollView>
+    </SwipeBackWrapper>
   );
 }
 

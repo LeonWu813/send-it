@@ -2,6 +2,25 @@
 
 ## Engineering Progress
 
+### Implementation — 2026-10-15 (AC-185 — SwipeBackWrapper wired into GymDetailScreen and RequestGymScreen)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx` — imported `SwipeBackWrapper` from `../../../components/SwipeBackWrapper`; wrapped all three return branches: loading state with `<SwipeBackWrapper onBack={onBack} enabled={false}>` (gesture disabled while loading), error state with `<SwipeBackWrapper onBack={onBack}>` (back is interactive here), and the main `<ScrollView>` return with `<SwipeBackWrapper onBack={onBack}>`.
+- `src/modules/mod-gym-directory/screens/RequestGymScreen.tsx` — imported `SwipeBackWrapper` from `../../../components/SwipeBackWrapper`; wrapped the success confirmation `<View>` return with `<SwipeBackWrapper onBack={onBack}>`; wrapped the main `<ScrollView>` return with `<SwipeBackWrapper onBack={onBack} enabled={!isSubmitting}>` so the gesture is disabled while a submission is in-flight.
+
+**Design decisions:**
+- GymDetailScreen loading state: `enabled={false}` — firing `onBack` during a data fetch is not meaningful and could produce a confusing back navigation mid-load.
+- GymDetailScreen error state: `enabled={true}` (default) — the error state already shows an interactive back button; swipe-back is consistent with that intent.
+- RequestGymScreen submitting state: `enabled={!isSubmitting}` — disables the gesture while the async submit is in-flight, matching the disabled submit button behavior and preventing a back navigation that would abandon an in-progress request.
+- No changes to component logic, state, or styling — purely additive wrapper insertion.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Tests: `npx jest --testPathPattern="mod-gym-directory" --passWithNoTests` — 44/44 passed, 4 suites, exit code 0
+- Scope: changes limited to the two screen files; no logic, service, or test changes
+
+---
+
 ### Implementation — 2026-10-14 (Convention fix — console.error before throw in gym-service.ts)
 
 **Files modified:**
