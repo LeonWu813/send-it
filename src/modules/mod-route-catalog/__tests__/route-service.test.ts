@@ -46,6 +46,7 @@ function makeStorageBuilder(opts: {
 // ── Imports after mocks ───────────────────────────────────────────────────────
 import { supabase } from '../../../lib/supabase';
 import {
+  fetchBetaVideoCounts,
   fetchSavedRouteIds,
   getPhotoSignedUrl,
   listRoutes,
@@ -244,12 +245,8 @@ describe('submitRoute', () => {
     jest.clearAllMocks();
   });
 
-  it('calls submit_route RPC and returns the created Route with has_duplicate=false when no duplicate (AC-020/AC-187)', async () => {
-    // First call: submit_route succeeds
-    mockRpc
-      .mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never)
-      // Second call: check_route_duplicate returns false
-      .mockResolvedValueOnce({ data: false, error: null } as never);
+  it('calls submit_route RPC and returns the created Route (AC-020)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never);
 
     const result = await submitRoute({
       gym_id: 'gym-001',
@@ -259,7 +256,8 @@ describe('submitRoute', () => {
       section_label: null,
     });
 
-    expect(result).toEqual({ ...MOCK_ROUTE, has_duplicate: false });
+    expect(result).toEqual(MOCK_ROUTE);
+    expect(mockRpc).toHaveBeenCalledTimes(1);
     expect(mockRpc).toHaveBeenCalledWith('submit_route', {
       p_gym_id: 'gym-001',
       p_grade: 'V4',
@@ -267,20 +265,12 @@ describe('submitRoute', () => {
       p_photo_url: 'https://example.com/photo.jpg',
       p_section_label: null,
     });
-    expect(mockRpc).toHaveBeenCalledWith('check_route_duplicate', {
-      p_gym_id: 'gym-001',
-      p_grade: 'V4',
-      p_color_tag: 'blue',
-      p_exclude_route_id: 'route-001',
-    });
   });
 
-  it('returns has_duplicate=true when check_route_duplicate returns true (AC-187)', async () => {
-    mockRpc
-      .mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never)
-      .mockResolvedValueOnce({ data: true, error: null } as never);
+  it('does not call check_route_duplicate RPC — duplicate check is client-side (AC-187)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never);
 
-    const result = await submitRoute({
+    await submitRoute({
       gym_id: 'gym-001',
       grade: 'V4',
       color_tag: 'blue',
@@ -288,27 +278,15 @@ describe('submitRoute', () => {
       section_label: null,
     });
 
-    expect(result.has_duplicate).toBe(true);
+    // Only submit_route must be called — no check_route_duplicate RPC
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    const rpcNames = (mockRpc as jest.Mock).mock.calls.map(
+      (call: unknown[]) => call[0],
+    );
+    expect(rpcNames).not.toContain('check_route_duplicate');
   });
 
-  it('returns has_duplicate=false when check_route_duplicate RPC errors (non-blocking, AC-187)', async () => {
-    mockRpc
-      .mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never)
-      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST500', message: 'rpc error' } } as never);
-
-    const result = await submitRoute({
-      gym_id: 'gym-001',
-      grade: 'V4',
-      color_tag: 'blue',
-      photo_url: 'https://example.com/photo.jpg',
-      section_label: null,
-    });
-
-    // Duplicate check error must not throw — advisory only
-    expect(result.has_duplicate).toBe(false);
-  });
-
-  it('skips check_route_duplicate when route status is pending (AC-187)', async () => {
+  it('works for pending routes — no extra RPC call (AC-025)', async () => {
     const pendingRoute: Route = { ...MOCK_ROUTE, status: 'pending' };
     mockRpc.mockResolvedValueOnce({ data: pendingRoute, error: null } as never);
 
@@ -320,9 +298,8 @@ describe('submitRoute', () => {
       section_label: null,
     });
 
-    // Only one RPC call (submit_route); check_route_duplicate not called for pending
     expect(mockRpc).toHaveBeenCalledTimes(1);
-    expect(result.has_duplicate).toBe(false);
+    expect(result.status).toBe('pending');
   });
 
   it('throws a user-friendly error on submit_route RPC failure', async () => {
@@ -514,6 +491,58 @@ describe('saveRoute', () => {
     await expect(saveRoute('r-001')).rejects.toThrow(
       'Failed to save route. Please try again.',
     );
+  });
+});
+
+// ── fetchBetaVideoCounts ──────────────────────────────────────────────────────
+
+describe('fetchBetaVideoCounts', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns an empty object when routeIds array is empty', async () => {
+    const result = await fetchBetaVideoCounts([]);
+    expect(result).toEqual({});
+    expect(mockRpc).not.toHaveBeenCalled();
+  });
+
+  it('calls count_beta_videos_by_routes RPC and returns a route_id → count map', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [
+        { route_id: 'r-001', beta_count: 3 },
+        { route_id: 'r-002', beta_count: 1 },
+      ],
+      error: null,
+    } as never);
+
+    const result = await fetchBetaVideoCounts(['r-001', 'r-002', 'r-003']);
+
+    expect(mockRpc).toHaveBeenCalledWith('count_beta_videos_by_routes', {
+      route_ids: ['r-001', 'r-002', 'r-003'],
+    });
+    expect(result).toEqual({ 'r-001': 3, 'r-002': 1 });
+    // r-003 has no visible beta videos — absent from result (callers default to 0)
+    expect(result['r-003']).toBeUndefined();
+  });
+
+  it('returns empty object on RPC error (non-fatal)', async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'PGRST500', message: 'server error' },
+    } as never);
+
+    const result = await fetchBetaVideoCounts(['r-001']);
+
+    expect(result).toEqual({});
+  });
+
+  it('returns empty object when RPC returns null data', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null } as never);
+
+    const result = await fetchBetaVideoCounts(['r-001']);
+
+    expect(result).toEqual({});
   });
 });
 

@@ -82,20 +82,12 @@ export async function uploadRoutePhoto(
 }
 
 /**
- * Extended return type for submitRoute — adds has_duplicate advisory flag.
- * This flag is local to this service; it is not a column in the routes table.
- */
-export type RouteWithDuplicateFlag = Route & { has_duplicate: boolean };
-
-/**
  * Submit a new route via the submit_route SECURITY DEFINER RPC.
  *
- * Rev 37: duplicate routes are allowed by design (AC-020). The 23505 unique-
- * constraint error path is removed — the database no longer enforces uniqueness
- * on (gym_id, grade, color_tag). After a successful insert, calls the
- * check_route_duplicate RPC to determine whether another active route with the
- * same combo already exists. The caller uses the returned `has_duplicate` flag
- * to display a non-blocking soft warning (AC-187) without blocking navigation.
+ * Rev 37: duplicate routes are allowed by design (AC-020). There is no
+ * uniqueness pre-check and no post-submit duplicate RPC call. The caller
+ * detects duplicates client-side from the already-fetched active-route list
+ * and displays a non-blocking inline notice (AC-187) before the user submits.
  *
  * The RPC enforces:
  *   - Caller must be authenticated (auth.uid() derived server-side).
@@ -106,10 +98,10 @@ export type RouteWithDuplicateFlag = Route & { has_duplicate: boolean };
  * The photo must already be uploaded; pass the resulting URL as `input.photo_url`.
  *
  * @param input    Validated route submission payload.
- * @returns        The newly created Route row plus `has_duplicate` advisory flag.
+ * @returns        The newly created Route row.
  * @throws {Error} with a user-facing message on failure.
  */
-export async function submitRoute(input: RouteSubmitInput): Promise<RouteWithDuplicateFlag> {
+export async function submitRoute(input: RouteSubmitInput): Promise<Route> {
   const { data, error } = await supabase.rpc('submit_route', {
     p_gym_id: input.gym_id,
     p_grade: input.grade,
@@ -122,65 +114,7 @@ export async function submitRoute(input: RouteSubmitInput): Promise<RouteWithDup
     throw new Error('Failed to submit route. Please try again.');
   }
 
-  const route = data as Route;
-
-  // AC-187 (Rev 37): non-blocking duplicate advisory check.
-  // Call check_route_duplicate after a successful insert to see whether another
-  // active route with the same (gym_id, grade, color_tag) exists (excluding the
-  // just-inserted row). Errors are treated as "no duplicate" — this is advisory
-  // only and must never block the submission flow.
-  let has_duplicate = false;
-  if (route.status === 'active') {
-    const { data: dupData, error: dupError } = await supabase.rpc(
-      'check_route_duplicate',
-      {
-        p_gym_id: input.gym_id,
-        p_grade: input.grade,
-        p_color_tag: input.color_tag,
-        p_exclude_route_id: route.id,
-      },
-    );
-    if (!dupError) {
-      has_duplicate = dupData === true;
-    }
-  }
-
-  return { ...route, has_duplicate };
-}
-
-/**
- * Check whether an active route with the same grade and color already exists at the gym.
- *
- * AC-187 (Rev 37): called by RouteSubmitScreen before (or after) submission to determine
- * whether a non-blocking soft warning should be displayed. Returns true when at least one
- * active route with the same (gym_id, grade, color_tag) exists; false otherwise.
- *
- * Fail-open: on query error, returns false — the check is advisory only and must never
- * block the submission flow.
- *
- * @param gymId     UUID of the gym.
- * @param grade     V-scale grade string (e.g. 'V3').
- * @param colorTag  Hold/tape color enum value (e.g. 'blue').
- * @returns         true when a duplicate active route exists; false otherwise or on error.
- */
-export async function checkDuplicateActiveRoute(
-  gymId: string,
-  grade: string,
-  colorTag: string,
-): Promise<boolean> {
-  const { count, error } = await supabase
-    .from('routes')
-    .select('id', { count: 'exact', head: true })
-    .eq('gym_id', gymId)
-    .eq('grade', grade)
-    .eq('color_tag', colorTag)
-    .eq('status', 'active');
-
-  if (error) {
-    console.error('[checkDuplicateActiveRoute] error:', error);
-    return false; // fail-open: don't block submission on check failure
-  }
-  return (count ?? 0) > 0;
+  return data as Route;
 }
 
 /**
@@ -405,6 +339,42 @@ export function upsertRouteVisit(routeId: string): void {
   ).catch(() => {
     // Intentionally swallow — non-critical background write.
   });
+}
+
+// ── Beta video counts (AC-189) ───────────────────────────────────────────────
+
+/**
+ * Returns a map of route_id → visible beta video count for the given route IDs.
+ *
+ * Delegates to the `count_beta_videos_by_routes` SECURITY INVOKER RPC, which
+ * applies the full beta-video visibility fence (AC-142 reported-video exclusion,
+ * AC-154 blocked-user filter, AC-158 followers-only privacy) server-side.
+ * Called once per gym screen load — not per route card (no N+1).
+ *
+ * Routes with zero visible beta videos are absent from the RPC result; this
+ * function defaults them to 0 in the returned map.
+ *
+ * AC-189: betaVideoCount prop on the shared route card.
+ *
+ * @param routeIds  Array of route UUIDs to count beta videos for.
+ * @returns         Map of route_id → count. Returns {} on error (non-fatal).
+ */
+export async function fetchBetaVideoCounts(
+  routeIds: string[],
+): Promise<Record<string, number>> {
+  if (routeIds.length === 0) return {};
+  const { data, error } = await supabase.rpc('count_beta_videos_by_routes', {
+    route_ids: routeIds,
+  });
+  if (error) {
+    console.error('[fetchBetaVideoCounts] error:', error);
+    return {}; // non-fatal: fall back to zero counts
+  }
+  const result: Record<string, number> = {};
+  for (const row of (data ?? []) as { route_id: string; beta_count: number }[]) {
+    result[row.route_id] = row.beta_count;
+  }
+  return result;
 }
 
 // ── New-beta tag (AC-180) ─────────────────────────────────────────────────────

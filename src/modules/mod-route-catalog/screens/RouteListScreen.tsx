@@ -7,12 +7,12 @@
  *         No free-text search. No status filter for normal users.
  * AC-041: shows active routes only for normal users.
  * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
- * AC-046: achievement icons from MOD-004's fetchUserAchievements (cross-module read).
- * AC-047: read-only filled bookmark indicator on saved route cards.
- * AC-181: "new beta video" tag on route cards that qualify per AC-180.
- *         Uses shared RouteCard component (AC-183) which accepts hasNewBetaVideo prop.
- *         Tag set fetched once per gym screen load via fetchRoutesWithNewBeta (AC-180),
- *         backed by a 60-second in-memory cache keyed on gymId.
+ * AC-046/047: achievement icons and interactive bookmark via RouteCard props.
+ * AC-047: interactive bookmark toggle on route cards (isSaved + onBookmarkToggle).
+ * AC-181: new-beta tag chip removed (AC-181, Rev 39); fetchRoutesWithNewBeta retained
+ *         for AC-175 most-recently-viewed ordering.
+ * AC-189: betaVideoCount fetched via count_beta_videos_by_routes RPC, passed to RouteCard.
+ * AC-190: hasSend + sendStyle derived from fetchUserAchievements, passed to RouteCard.
  * US-006: browse currently active routes at a gym.
  */
 
@@ -35,7 +35,14 @@ import { useTheme } from '../../../lib/theme';
 import RouteCard from '../../../components/RouteCard';
 import type { RouteCardRoute } from '../../../components/RouteCard';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
-import { fetchSavedRouteIds, fetchRoutesWithNewBeta, listRoutes } from '../route-service';
+import {
+  fetchBetaVideoCounts,
+  fetchRoutesWithNewBeta,
+  fetchSavedRouteIds,
+  listRoutes,
+  saveRoute,
+  unsaveRoute,
+} from '../route-service';
 import type { RouteColor, RouteGrade, RouteListFilters, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
 
@@ -91,24 +98,8 @@ function formatRouteName(
   return sectionLabel ? `${base} (${sectionLabel})` : base;
 }
 
-/** Achievement icon config per ascent style. */
+/** Best ascent style for the current user on a route. */
 type AchievementStyle = 'flash' | 'top' | 'attempt';
-
-interface AchievementIconProps {
-  style: AchievementStyle;
-  theme: ReturnType<typeof useTheme>['theme'];
-}
-
-function AchievementIcon({ style, theme }: AchievementIconProps): React.JSX.Element {
-  switch (style) {
-    case 'flash':
-      return <Ionicons name="flash" size={16} color="#FFD700" />;
-    case 'top':
-      return <Ionicons name="checkmark-circle" size={16} color={theme.colors.success} />;
-    case 'attempt':
-      return <Ionicons name="ellipse-outline" size={16} color={theme.colors.textSecondary} />;
-  }
-}
 
 interface RouteListScreenProps {
   gymId: string;
@@ -142,15 +133,18 @@ export default function RouteListScreen({
   const [gradeFilter, setGradeFilter] = useState<RouteGrade | null>(null);
   const [colorFilter, setColorFilter] = useState<RouteColor | null>(null);
 
-  // AC-046: achievement icon map (route_id → best style)
+  // AC-046/190: achievement map (route_id → best ascent style for the current user)
   const [achievements, setAchievements] = useState<Record<string, AchievementStyle>>({});
 
-  // AC-047: set of saved route IDs (read-only filled bookmark indicator)
+  // AC-047: set of saved route IDs (interactive bookmark toggle, AC-046/047 Rev 39)
   const [savedRouteIds, setSavedRouteIds] = useState<Set<string>>(new Set());
 
-  // AC-181: set of route IDs that qualify for the "new beta video" tag (AC-180).
-  // Fetched once per gym screen load from the routes_with_new_beta RPC.
-  // Backed by a module-level 60-second in-memory cache keyed on gymId.
+  // AC-189: map of route_id → visible beta video count
+  const [betaCountMap, setBetaCountMap] = useState<Record<string, number>>({});
+
+  // AC-181 (retained for AC-175): set of route IDs that qualify for the new-beta tag.
+  // Chip no longer rendered (AC-181, Rev 39) but fetchRoutesWithNewBeta is retained for
+  // the most-recently-viewed Saved Gyms ordering (AC-175).
   const [newBetaRouteIds, setNewBetaRouteIds] = useState<Set<string>>(new Set());
 
   const filters: RouteListFilters = useMemo(
@@ -165,6 +159,39 @@ export default function RouteListScreen({
     } catch {
       // Saved indicator is best-effort — silently ignore failures
     }
+  }, []);
+
+  /**
+   * AC-047 (Rev 39): Optimistically toggle the saved state for a route.
+   * Updates savedRouteIds locally, then calls saveRoute/unsaveRoute.
+   * Reverts on error.
+   */
+  const handleBookmarkToggle = useCallback((routeId: string): void => {
+    setSavedRouteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(routeId)) {
+        next.delete(routeId);
+        // Fire async save; revert on failure
+        void unsaveRoute(routeId).catch(() => {
+          setSavedRouteIds((current) => {
+            const reverted = new Set(current);
+            reverted.add(routeId);
+            return reverted;
+          });
+        });
+      } else {
+        next.add(routeId);
+        // Fire async save; revert on failure
+        void saveRoute(routeId).catch(() => {
+          setSavedRouteIds((current) => {
+            const reverted = new Set(current);
+            reverted.delete(routeId);
+            return reverted;
+          });
+        });
+      }
+      return next;
+    });
   }, []);
 
   // Fix 1: saved routes sort to top, preserving relative order within each group.
@@ -222,20 +249,25 @@ export default function RouteListScreen({
       const data = await listRoutes(gymId, filters);
       setRoutes(data);
 
-      // AC-046: fetch achievements once after routes load; one call with all ids
+      // AC-046/189/190: fetch achievements and beta counts once after routes load;
+      // both are batched (one call per load, no N+1).
       if (data.length > 0) {
-        try {
-          const ach = await fetchUserAchievements(data.map((r) => r.id));
-          setAchievements(ach);
-        } catch {
-          // Achievement overlay is best-effort — silently ignore failures
-        }
+        const routeIds = data.map((r) => r.id);
 
-        // AC-181: fetch the "new beta" tag set for all visible routes.
-        // Fire in parallel after achievements — non-blocking, best-effort.
-        void fetchNewBeta(data.map((r) => r.id));
+        // Fetch achievements (AC-046/190) and beta counts (AC-189) in parallel.
+        const [ach, counts] = await Promise.all([
+          fetchUserAchievements(routeIds).catch(() => ({} as Record<string, AchievementStyle>)),
+          fetchBetaVideoCounts(routeIds).catch(() => ({} as Record<string, number>)),
+        ]);
+        setAchievements(ach);
+        setBetaCountMap(counts);
+
+        // AC-181 (retained for AC-175): fetch new-beta tag set.
+        // Fire in parallel after main fetches — non-blocking, best-effort.
+        void fetchNewBeta(routeIds);
       } else {
         setAchievements({});
+        setBetaCountMap({});
         setNewBetaRouteIds(new Set());
       }
     } catch {
@@ -278,8 +310,13 @@ export default function RouteListScreen({
     const routeName = formatRouteName(item.grade, item.color_tag, item.section_label, t);
     const achievement = achievements[item.id] as AchievementStyle | undefined;
     const isSaved = savedRouteIds.has(item.id);
-    // AC-181: check if this route qualifies for the "new beta video" tag (AC-180).
-    const hasNewBetaVideo = newBetaRouteIds.has(item.id);
+    const betaVideoCount = betaCountMap[item.id] ?? 0;
+
+    // Derive hasSend and sendStyle from the achievement map (AC-190).
+    // 'attempt' is not a send; only 'flash' and 'top' qualify.
+    const hasSend = achievement === 'flash' || achievement === 'top';
+    const sendStyle: 'flash' | 'top' | null =
+      achievement === 'flash' ? 'flash' : achievement === 'top' ? 'top' : null;
 
     // Build the RouteCardRoute shape expected by the shared RouteCard component.
     const cardRoute: RouteCardRoute = {
@@ -289,31 +326,19 @@ export default function RouteListScreen({
       photo_url: item.photo_url ?? null,
     };
 
-    // Wrap RouteCard with the saved indicator and achievement icon overlays so
-    // the shared card stays presentational (no service dependencies).
+    // RouteCard (Rev 39/40) handles bookmark icon and send badge natively via props.
+    // No overlay Views needed — the card is fully presentational and wired here.
     return (
       <View style={styles.cardWrapper}>
         <RouteCard
           route={cardRoute}
           onPress={() => onSelectRoute(item.id)}
+          betaVideoCount={betaVideoCount}
+          hasSend={hasSend}
+          sendStyle={sendStyle}
+          isSaved={isSaved}
+          onBookmarkToggle={() => handleBookmarkToggle(item.id)}
         />
-        {/* AC-046: achievement icon overlay — positioned at top-right of the card */}
-        {achievement ? (
-          <View style={styles.achievementOverlay}>
-            <AchievementIcon style={achievement} theme={theme} />
-          </View>
-        ) : null}
-        {/* AC-047: read-only saved bookmark indicator — no tap action */}
-        {isSaved ? (
-          <View style={styles.savedOverlay}>
-            <Ionicons
-              name="bookmark"
-              size={16}
-              color={theme.colors.warning}
-              accessibilityLabel={t('routeCatalog.bookmark.saved')}
-            />
-          </View>
-        ) : null}
       </View>
     );
   }

@@ -7,10 +7,13 @@
  * AC-040: grade + hold-color chip filters; no text search; no status filter.
  * AC-041: shows active routes only (no status filter for normal users).
  * AC-045: route cards show formatted name "{grade} {LocalizedColor} ({section_label}?)".
- * AC-046: achievement icons rendered on route cards (cross-module from MOD-004).
- * AC-047: read-only saved bookmark indicator on saved route cards.
- * AC-180/AC-181: fetchRoutesWithNewBeta called once after routes load; "new beta"
- *   tag rendered on qualifying route cards via RouteCard hasNewBetaVideo prop.
+ * AC-046/190: achievement icons (hasSend, sendStyle) wired to RouteCard via
+ *   fetchUserAchievements. RouteCard renders send badge natively.
+ * AC-047: interactive bookmark toggle on saved route cards via RouteCard isSaved /
+ *   onBookmarkToggle props. Optimistic update: saveRoute/unsaveRoute called.
+ * AC-180/AC-181: fetchRoutesWithNewBeta called once after routes load (retained for
+ *   AC-175 ordering); "new beta" chip no longer rendered on cards (AC-181, Rev 39).
+ * AC-189: betaVideoCount fetched via fetchBetaVideoCounts and passed to RouteCard.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -20,8 +23,15 @@ jest.mock('../../../lib/supabase', () => ({
 jest.mock('../route-service', () => ({
   listRoutes: jest.fn(),
   fetchSavedRouteIds: jest.fn(),
-  // AC-180: new-beta tag RPC wrapper
   fetchRoutesWithNewBeta: jest.fn(),
+  // AC-189: beta count RPC wrapper
+  fetchBetaVideoCounts: jest.fn(),
+  // AC-047 Rev 39: interactive bookmark toggle
+  saveRoute: jest.fn(),
+  unsaveRoute: jest.fn(),
+  // RouteCard (shared component) imports getPhotoSignedUrl from this module;
+  // mock it to prevent async state-update errors on unmounted components in tests.
+  getPhotoSignedUrl: jest.fn().mockResolvedValue('https://signed.url/photo.jpg'),
 }));
 
 jest.mock('../../mod-send-logging/send-service', () => ({
@@ -31,7 +41,14 @@ jest.mock('../../mod-send-logging/send-service', () => ({
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
-import { listRoutes, fetchSavedRouteIds, fetchRoutesWithNewBeta } from '../route-service';
+import {
+  listRoutes,
+  fetchSavedRouteIds,
+  fetchRoutesWithNewBeta,
+  fetchBetaVideoCounts,
+  saveRoute,
+  unsaveRoute,
+} from '../route-service';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import RouteListScreen, { clearNewBetaCacheForTesting } from '../screens/RouteListScreen';
 import type { RouteSummary } from '../types';
@@ -41,6 +58,9 @@ const mockListRoutes = listRoutes as jest.MockedFunction<typeof listRoutes>;
 const mockFetchSavedRouteIds = fetchSavedRouteIds as jest.MockedFunction<typeof fetchSavedRouteIds>;
 const mockFetchUserAchievements = fetchUserAchievements as jest.MockedFunction<typeof fetchUserAchievements>;
 const mockFetchRoutesWithNewBeta = fetchRoutesWithNewBeta as jest.MockedFunction<typeof fetchRoutesWithNewBeta>;
+const mockFetchBetaVideoCounts = fetchBetaVideoCounts as jest.MockedFunction<typeof fetchBetaVideoCounts>;
+const mockSaveRoute = saveRoute as jest.MockedFunction<typeof saveRoute>;
+const mockUnsaveRoute = unsaveRoute as jest.MockedFunction<typeof unsaveRoute>;
 
 const ACTIVE_ROUTES: RouteSummary[] = [
   {
@@ -77,10 +97,13 @@ describe('RouteListScreen', () => {
     jest.clearAllMocks();
     // Clear the module-level new-beta cache so each test gets a fresh fetch.
     clearNewBetaCacheForTesting();
-    // Default: no saved routes, no achievements, no new-beta routes
+    // Default: no saved routes, no achievements, no new-beta routes, no beta counts
     mockFetchSavedRouteIds.mockResolvedValue([]);
     mockFetchUserAchievements.mockResolvedValue({});
     mockFetchRoutesWithNewBeta.mockResolvedValue([]);
+    mockFetchBetaVideoCounts.mockResolvedValue({});
+    mockSaveRoute.mockResolvedValue(undefined);
+    mockUnsaveRoute.mockResolvedValue(undefined);
   });
 
   it('shows a loading indicator while routes are being fetched', () => {
@@ -301,7 +324,7 @@ describe('RouteListScreen', () => {
     expect(statusTabs).toHaveLength(0);
   });
 
-  it('AC-180/AC-181: calls fetchRoutesWithNewBeta once after routes load', async () => {
+  it('AC-180/AC-181: calls fetchRoutesWithNewBeta once after routes load (retained for AC-175)', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
@@ -312,20 +335,102 @@ describe('RouteListScreen', () => {
     });
   });
 
-  it('AC-181: renders "New Beta" badge on route card when route qualifies', async () => {
+  it('AC-181 (Rev 39): does NOT render a "New Beta" chip even when route qualifies', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
-    // r-001 qualifies for the new-beta tag
+    // r-001 qualifies for the new-beta tag — but chip is removed per AC-181, Rev 39
     mockFetchRoutesWithNewBeta.mockResolvedValueOnce(['r-001']);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // RouteCard renders the "New Beta" badge as a Text node with the home.routeCard.newBeta key.
-      const newBetaTexts = screen.queryAllByText(/New Beta/i).concat(
-        screen.queryAllByText(/新 Beta/),
-      );
-      expect(newBetaTexts.length).toBeGreaterThan(0);
+      // fetchRoutesWithNewBeta is still called (retained for AC-175 ordering)
+      expect(mockFetchRoutesWithNewBeta).toHaveBeenCalledWith(['r-001', 'r-002']);
     });
+
+    // "New Beta" chip text must NOT appear on any route card
+    const newBetaTexts = screen.queryAllByText(/New Beta/i).concat(
+      screen.queryAllByText(/新 Beta/),
+    );
+    expect(newBetaTexts.length).toBe(0);
+  });
+
+  it('AC-189: calls fetchBetaVideoCounts once after routes load', async () => {
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(mockFetchBetaVideoCounts).toHaveBeenCalledWith(['r-001', 'r-002']);
+    });
+  });
+
+  it('AC-189: passes betaVideoCount to RouteCard when count > 0', async () => {
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
+    // r-001 has 3 beta videos
+    mockFetchBetaVideoCounts.mockResolvedValueOnce({ 'r-001': 3 });
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // RouteCard renders "3 Beta Videos" (routeCard.betaCount i18n key)
+      const betaTexts = screen.queryAllByText(/3 Beta Videos/i).concat(
+        screen.queryAllByText(/3 條路線影片/),
+      );
+      expect(betaTexts.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('AC-047 Rev 39: calls unsaveRoute when bookmark icon is tapped on a saved route', async () => {
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
+    // r-001 is saved
+    mockFetchSavedRouteIds.mockResolvedValueOnce(['r-001']);
+    mockUnsaveRoute.mockResolvedValueOnce(undefined);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    // Wait for saved bookmark to appear (routeCard.saved / 已收藏)
+    await waitFor(() => {
+      const savedLabels = screen.queryAllByLabelText(/saved/i).concat(
+        screen.queryAllByLabelText('已收藏'),
+      );
+      expect(savedLabels.length).toBeGreaterThan(0);
+    });
+
+    // Press the saved bookmark to unsave
+    const savedBookmark = screen.queryAllByLabelText(/saved/i)[0] ??
+      screen.queryAllByLabelText('已收藏')[0];
+    if (savedBookmark) {
+      fireEvent.press(savedBookmark);
+      await waitFor(() => {
+        expect(mockUnsaveRoute).toHaveBeenCalledWith('r-001');
+      });
+    }
+  });
+
+  it('AC-047 Rev 39: calls saveRoute when bookmark icon is tapped on an unsaved route', async () => {
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
+    // no saved routes
+    mockFetchSavedRouteIds.mockResolvedValueOnce([]);
+    mockSaveRoute.mockResolvedValueOnce(undefined);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // Unsaved bookmark (routeCard.unsaved / 收藏)
+      const unsavedLabels = screen.queryAllByLabelText(/^save$/i).concat(
+        screen.queryAllByLabelText('收藏'),
+      );
+      expect(unsavedLabels.length).toBeGreaterThan(0);
+    });
+
+    const unsavedBookmark = screen.queryAllByLabelText(/^save$/i)[0] ??
+      screen.queryAllByLabelText('收藏')[0];
+    if (unsavedBookmark) {
+      fireEvent.press(unsavedBookmark);
+      await waitFor(() => {
+        expect(mockSaveRoute).toHaveBeenCalled();
+      });
+    }
   });
 
   it('applies grade filter when a grade chip is pressed', async () => {
