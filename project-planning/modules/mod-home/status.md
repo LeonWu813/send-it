@@ -3269,3 +3269,52 @@ No regressions introduced. TypeScript clean (0 errors). i18n check passes. 23/23
 **Note — test quality gap (AC-046/047 stopPropagation):** The bookmark test verifies `onBookmarkToggle` is called but does not assert that the card's outer `onPress` is NOT called on bookmark press. The implementation has the correct stopPropagation guard. This is a test coverage gap, not a missing implementation. Not routing to Engineer at this time — the implementation is correct and the behavioral assertion is difficult to verify in RNTL due to how nested Pressable events work in the test environment.
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip and Events Banner.
+
+---
+
+### Layout Redesign — RouteCard — 2026-10-15
+
+**Task**: Pure visual/layout redesign of `src/components/RouteCard.tsx`. No props added or removed. Three changes:
+
+1. **Thumbnail moves to LEFT**: Previously `[info flex-1] → [thumbnail 80×80]`. Now `[thumbnail 80×80] → [info flex-1 marginLeft:sm]`.
+2. **Send badge replaced by inline icon**: Removed `sendBadge` View pill and `sendBadgeText` styles. Added `nameRow` (flex row, flex-1, flexWrap) inside an `infoHeader`. When `hasSend`, an `Ionicons` icon (`flash` for flash style, `checkmark-circle` for top) appears inline after the route name at 16px. `FLASH_BADGE_COLOR = '#FFD700'` constant retained.
+3. **Bookmark moves to top-right via infoHeader**: Added `infoHeader` row (`flexDirection: 'row'`, `justifyContent: 'space-between'`, `alignItems: 'flex-start'`). Left side: `nameRow` with route name + optional send icon. Right side: bookmark `Pressable`. Below header: optional `gymName`, optional `betaCount`. Bookmark color updated: filled = `theme.colors.warning`, outline = `theme.colors.textSecondary`.
+
+**Resulting structure**:
+```
+Pressable (card, flexDirection: 'row')
+  ├── thumbnail / placeholder (80×80, LEFT)
+  └── View info (flex-1, marginLeft: sm)
+        ├── View infoHeader (row, space-between)
+        │     ├── View nameRow (row, flex-1)
+        │     │     ├── Text routeName
+        │     │     └── Ionicons flash/checkmark-circle (when hasSend)
+        │     └── Pressable bookmark (top-right)
+        ├── Text gymName (optional)
+        └── Text betaCount (optional, when > 0)
+```
+
+**Files changed:**
+- `src/components/RouteCard.tsx` — layout restructured as above; `sendBadge`/`sendBadgeText` styles removed; `infoHeader`/`nameRow`/`sendIcon` styles added; `info.marginRight` → `info.marginLeft`; bookmark color `theme.colors.primary` → `theme.colors.warning` (filled) / `theme.colors.textSecondary` (outline); send icon uses `testID="send-icon"`.
+- `src/components/__tests__/RouteCard.test.tsx` — send badge tests updated: old `getByText('Flash')` / `getByText('Top')` replaced by `getByTestId('send-icon')`; added negative assertions confirming "Flash" / "Top" text no longer appear; total test count: 25 (was 23 — 2 new negative text assertions); all 25 pass.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest src/components --watchAll=false` | PASS — 25 tests, 2 suites, 0 failures |
+| `npx jest src/modules/mod-home --watchAll=false` | PASS — 39 tests, 3 suites, 0 failures |
+| No props added or removed | PASS |
+| Thumbnail on LEFT side | PASS |
+| sendBadge pill and sendBadgeText styles removed | PASS |
+| Inline send Ionicons in nameRow (flash/checkmark-circle) | PASS |
+| infoHeader row: nameRow left, bookmark right | PASS |
+| Bookmark color: warning (filled) / textSecondary (outline) | PASS |
+| No hardcoded hex colors (FLASH_BADGE_COLOR = '#FFD700' retained as named constant) | PASS |
+| No inline string literals | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Commit**: 62ee9cc
+
+**Result: READY FOR QA**

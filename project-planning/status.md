@@ -3,13 +3,13 @@
 ## Last Action
 
 ```
-agent: qa-mod-home
-mode: regression
+agent: engineer-mod-home
+mode: implementation
 module: mod-home (MOD-012)
 result: success
-commit: d22c9a8
+commit: 62ee9cc
 timestamp: 2026-10-15T00:00:00Z
-summary: Regression pass — Rev 39/40 RouteCard redesign verified; AC-181/189/190/191/192/046/047 all pass; i18n OK; 23 RouteCard tests + 39 mod-home tests pass; 0 TypeScript errors.
+summary: RouteCard layout redesign — thumbnail to left, send badge pill replaced by inline Ionicons icon in nameRow, bookmark repositioned to top-right via infoHeader row (space-between). No props changed. 0 TypeScript errors. 25/25 src/components tests pass. 39/39 mod-home tests pass.
 ```
 
 
