@@ -52,6 +52,7 @@ import {
   View,
 } from 'react-native';
 
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { useTheme } from '../../../lib/theme';
 import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
@@ -271,35 +272,39 @@ export default function RouteDetailScreen({
 
   if (isLoading) {
     return (
-      <View style={styles.centeredContainer}>
-        <ActivityIndicator color={theme.colors.primary} size="large" />
-      </View>
+      <SwipeBackWrapper onBack={onBack}>
+        <View style={styles.centeredContainer}>
+          <ActivityIndicator color={theme.colors.primary} size="large" />
+        </View>
+      </SwipeBackWrapper>
     );
   }
 
   if (errorMessage || !route) {
     return (
-      <View style={styles.centeredContainer}>
-        <Pressable
-          onPress={onBack}
-          style={styles.backLink}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-        <Text style={styles.errorText}>
-          {errorMessage ?? t('common.error')}
-        </Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={fetchRoute}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.retry')}
-        >
-          <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-        </Pressable>
-      </View>
+      <SwipeBackWrapper onBack={onBack}>
+        <View style={styles.centeredContainer}>
+          <Pressable
+            onPress={onBack}
+            style={styles.backLink}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.back')}
+          >
+            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+          </Pressable>
+          <Text style={styles.errorText}>
+            {errorMessage ?? t('common.error')}
+          </Text>
+          <Pressable
+            style={styles.retryButton}
+            onPress={fetchRoute}
+            accessibilityRole="button"
+            accessibilityLabel={t('common.retry')}
+          >
+            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
+          </Pressable>
+        </View>
+      </SwipeBackWrapper>
     );
   }
 
@@ -315,6 +320,7 @@ export default function RouteDetailScreen({
   const addedDateLabel = t('routeCatalog.detail.addedDate', { date: addedDateStr });
 
   return (
+    <SwipeBackWrapper onBack={onBack} enabled={!isLogSendVisible}>
     <View style={styles.root}>
       {/* Sticky top bar — stays fixed above the scroll area (back + bookmark). */}
       <View style={styles.topBar}>
@@ -499,6 +505,7 @@ export default function RouteDetailScreen({
 
       </ScrollView>
     </View>
+    </SwipeBackWrapper>
   );
 }
 

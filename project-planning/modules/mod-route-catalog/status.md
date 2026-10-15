@@ -2,6 +2,34 @@
 
 ## Engineering Progress
 
+### AC-185 — Wire SwipeBackWrapper into RouteDetail, RouteSubmit, SendHistoryDetail screens (2026-10-15)
+
+**AC implemented:** AC-185 (swipe-back gesture wiring for mod-route-catalog screens).
+
+**Changes:**
+
+- `RouteDetailScreen.tsx`: Added `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'`. Wrapped all three render paths:
+  - Loading path: `<SwipeBackWrapper onBack={onBack}>` wraps the `centeredContainer` View.
+  - Error path: `<SwipeBackWrapper onBack={onBack}>` wraps the `centeredContainer` View.
+  - Main path: `<SwipeBackWrapper onBack={onBack} enabled={!isLogSendVisible}>` wraps the root View. Gesture disabled while `LogSendScreen` modal is open (`isLogSendVisible`) to prevent the outer swipe from conflicting with the modal overlay.
+
+- `RouteSubmitScreen.tsx`: Added `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'`. Wrapped the outermost `<ScrollView>` with `<SwipeBackWrapper onBack={onBack} enabled={!isSubmitting}>`. Gesture disabled while submission is in progress to prevent accidental navigation during the async submit.
+
+- `SendHistoryDetailScreen.tsx`: Added `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'`. Wrapped the outermost `<View style={styles.root}>` with `<SwipeBackWrapper onBack={onBack}>`. No `enabled` override — no blocking state identified.
+
+**Self-check (2026-10-15):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest --testPathPattern="mod-route-catalog" --passWithNoTests` — 90 tests pass across 4 suites (route-service, RouteSubmitScreen, RouteDetailScreen, SendHistoryDetailScreen). The 10 failures in `RouteListScreen.test.tsx` are pre-existing "Unable to find node on an unmounted component" environment rendering issues, unchanged from the previous self-check.
+- PASS: No logic changes — strictly import + JSX wrapper additions only.
+- PASS: No gold-plating — changes confined to the three specified screens and the AC-185 wiring.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — SwipeBackWrapper import + all three render paths wrapped
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — SwipeBackWrapper import + outermost ScrollView wrapped
+- `src/modules/mod-route-catalog/screens/SendHistoryDetailScreen.tsx` — SwipeBackWrapper import + outermost View wrapped
+
+---
+
 ### Rev 37 — Drop active unique index; add duplicate soft warning (AC-020/AC-029/AC-045/AC-187) (2026-10-15)
 
 **ACs implemented / changed:**

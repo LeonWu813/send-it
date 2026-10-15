@@ -35,6 +35,7 @@ import {
   View,
 } from 'react-native';
 
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import {
@@ -233,6 +234,7 @@ export default function RouteSubmitScreen({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
+    <SwipeBackWrapper onBack={onBack} enabled={!isSubmitting}>
     <ScrollView
       style={styles.root}
       contentContainerStyle={styles.contentContainer}
@@ -431,6 +433,7 @@ export default function RouteSubmitScreen({
         )}
       </Pressable>
     </ScrollView>
+    </SwipeBackWrapper>
   );
 }
 

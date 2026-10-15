@@ -31,6 +31,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { useTheme } from '../../../lib/theme';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import type { AscentStyle, AscentWithProfile } from '../../mod-send-logging';
@@ -120,6 +121,7 @@ export default function SendHistoryDetailScreen({
   }, [loadAscents]);
 
   return (
+    <SwipeBackWrapper onBack={onBack}>
     <View style={styles.root}>
       {/* Sticky top bar */}
       <View style={styles.topBar}>
@@ -209,6 +211,7 @@ export default function SendHistoryDetailScreen({
         </ScrollView>
       )}
     </View>
+    </SwipeBackWrapper>
   );
 }
 
