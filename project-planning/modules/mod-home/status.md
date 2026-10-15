@@ -2137,3 +2137,92 @@ All 15 acceptance criteria verified. Both QA Run 10 bugs are resolved:
 No regressions introduced. TypeScript clean (0 errors). i18n check passes. 52/52 mod-home tests pass. 511/512 full-suite tests pass (pre-existing `mod-beta-video` failure, unrelated to MOD-012, unchanged from QA Run 10).
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip and Events Banner.
+
+---
+
+### Bugfix — beta_videos column name + routes column name — 2026-10-14
+
+**Bugs fixed (human QA, PostgREST 42703 errors):**
+
+**Bug 1 — `beta_videos.uploader_user_id` does not exist (AC-182)**
+- Root cause: `loadFollowingActivity` queried `.select('uploader_user_id, created_at').in('uploader_user_id', followedIds)`. The `beta_videos` table stores the uploader as `user_id`, not `uploader_user_id`.
+- Fix: renamed every occurrence of `uploader_user_id` to `user_id` — the `.select()` string, the `.in()` filter, the type annotation `Array<{ uploader_user_id: string; ... }>`, and the two `row.uploader_user_id` references in the grouping loop.
+
+**Bug 2 — `routes.name` does not exist (AC-177)**
+- Root cause: `loadProjectingRoutes` queried `.select('id, gym_id, name, grade, photo_url')`. The `routes` table has no `name` column; routes are identified by `grade` and `color_tag` only.
+- Fix: removed `name` from the select string, added `color_tag` instead. Updated the `ProjectingRoute` interface (dropped `name: string`, added `color_tag: string`). At the `RouteCard` call-site, composed the display name as `` `${route.grade} ${t(`routeCatalog.colors.${route.color_tag}`)}` `` — matching the `formatRouteName` pattern used in `RouteListScreen` and `RouteDetailScreen`.
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — corrected both queries, updated `ProjectingRoute` interface, updated RouteCard call-site
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — updated route fixture data (`name` → `color_tag: 'red'`/`'blue'`), updated route-name assertions (`'Crimson Tide'` → `'V5 Red'`, `testID` updated accordingly), updated beta_videos fixture data (`uploader_user_id` → `user_id` in both relevant tests)
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 514/515 pass; 1 pre-existing mod-beta-video failure (unrelated, unchanged) |
+| Bug 1: `user_id` column name used in select, .in() filter, type annotation, and loop | PASS |
+| Bug 2: `name` removed from routes select; `color_tag` added; display name composed via i18n | PASS |
+| `ProjectingRoute` interface updated — no `name` field, has `color_tag` field | PASS |
+| RouteCard call-site composes name from grade + color_tag via t() | PASS |
+| Test fixtures updated to match corrected column names | PASS |
+| Test assertions updated to match composed route name (`'V5 Red'`) | PASS |
+| No hardcoded hex colors or inline string literals introduced | PASS |
+| No new dependencies outside tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Commit**: b1bf15b
+
+**Result: READY FOR QA RE-VERIFICATION**
+
+---
+
+### Bugfix — banner section gray bg, projecting routes gym+section_label, grade filter UI — 2026-10-14
+
+**Bugs fixed (human invocation, Issues 2 and 3):**
+
+**Fix 1 — Banner section gray background (Issue 2)**
+- The `bannerCard` had `backgroundColor: theme.colors.surface` but its outer `<View style={styles.section}>` had no background. The horizontal margin on `bannerCard` left the section background showing as `theme.colors.background` (the root scroll view color) rather than `surface`.
+- Fix: added a new `bannerSection` style (`backgroundColor: theme.colors.surface`) and applied it via `[styles.section, styles.bannerSection]` on the banner outer `<View>`. `bannerCard` styles unchanged.
+
+**Fix 2 — Projecting Routes: gym name + section_label in query and card (Issue 3 — data)**
+- The `.select()` string on routes only fetched `id, gym_id, grade, color_tag, photo_url`. No gym name or section_label was available for the route card.
+- Fix: updated select to `'id, gym_id, grade, color_tag, photo_url, section_label, gyms!routes_gym_id_fkey(name)'`. Added `section_label: string | null` and `gym_name: string | null` to the `ProjectingRoute` interface. Flattened `gym_name` from the gyms join in the data mapping (`row.gyms?.name ?? null`). Added a local `capitalize(s)` helper. Updated the `RouteCard` call-site: `name` now appends `section_label` in parentheses when non-null; `gymName` prop passes `route.gym_name ?? undefined`.
+- Removed `ROUTE_GRADES` from the import (became unused after Fix 3 removed `GRADE_TABS`); `RouteGrade` type import retained as a type-only import.
+
+**Fix 3 — Projecting Routes: grade filter tabs derived from data (Issue 3 — filter)**
+- `GRADE_TABS` was a fixed list `[ALL_GRADE_FILTER, ...ROUTE_GRADES]`, showing all possible grades even when none of the user's projecting routes had certain grades.
+- Fix: removed `GRADE_TABS` constant. Added `availableGrades` useMemo that derives visible grade tabs from `projectingRoutes` data: `[...new Set(projectingRoutes.map(r => r.grade))].sort()`, prepended with `ALL_GRADE_FILTER`. The grade tab render now uses `availableGrades`.
+- Updated `gradeTab` style: `borderRadius` changed from `theme.borderRadius.sm` to `theme.borderRadius.full`; added `borderWidth: 1, borderColor: theme.colors.border`. Updated `gradeTabActive`: added `borderColor: theme.colors.primary`. Matches `ProfileHistoryScreen`'s `tab`/`tabActive` tokens exactly.
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — all three fixes; `ROUTE_GRADES` import removed.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false --testPathPattern="mod-home"` | PASS — 38 tests, 3 suites, 0 failures |
+| `npm test -- --watchAll=false` | PASS — 514/515 pass; 1 pre-existing mod-beta-video failure (unrelated, unchanged) |
+| Fix 1: bannerSection style added with theme.colors.surface | PASS |
+| Fix 1: bannerCard styles unchanged | PASS |
+| Fix 2: select string includes section_label + gyms!routes_gym_id_fkey(name) | PASS |
+| Fix 2: ProjectingRoute interface has section_label + gym_name fields | PASS |
+| Fix 2: gym_name flattened from row.gyms?.name ?? null | PASS |
+| Fix 2: RouteCard name includes section_label in parentheses when non-null | PASS |
+| Fix 2: RouteCard gymName passes route.gym_name ?? undefined | PASS |
+| Fix 3: GRADE_TABS constant removed | PASS |
+| Fix 3: availableGrades useMemo derives from projectingRoutes data | PASS |
+| Fix 3: grade tab render uses availableGrades | PASS |
+| Fix 3: gradeTab has borderRadius.full, borderWidth:1, borderColor:border | PASS |
+| Fix 3: gradeTabActive has borderColor:primary, backgroundColor:primary | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| ROUTE_GRADES no longer imported (unused) | PASS |
+
+**Commit**: 3c1ff55
+
+**Result: READY FOR QA RE-VERIFICATION**
