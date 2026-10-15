@@ -14,6 +14,8 @@
  * AC-164: 3-column BetaVideoGrid below send history; tapping opens
  *          BetaVideoReelViewer with reelContext="profile".
  * AC-167: Logout control removed from ProfileScreen (moved to MOD-010 SettingsScreen).
+ * AC-184: Notification bell and settings gear removed from ProfileScreen header —
+ *          both controls now live on MOD-012's global app-level header.
  *
  * Scroll architecture: SendHistoryProfile owns the FlatList as the sole
  * scroll container. The profile header (avatar, name, bio, Edit Profile
@@ -24,7 +26,6 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -34,8 +35,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme } from '../../../lib/theme';
 import {
   BetaVideoGrid,
@@ -43,7 +42,6 @@ import {
   fetchBetaVideosByUser,
 } from '../../mod-beta-video';
 import type { BetaVideo } from '../../mod-beta-video';
-import { fetchUnreadNotificationCount } from '../../mod-notifications/notification-service';
 import { SendHistoryProfile } from '../../mod-profile-history';
 import { fetchFollowerCounts } from '../../mod-social-feed/social-feed-service';
 import { useSession } from '../hooks/useSession';
@@ -51,10 +49,6 @@ import { useSession } from '../hooks/useSession';
 interface ProfileScreenProps {
   session: Session;
   onNavigateEditProfile: () => void;
-  /** Callback to navigate to the Settings screen (AC-091, AC-092). */
-  onNavigateSettings?: () => void;
-  /** Callback to navigate to the Notifications inbox (AC-058). */
-  onNavigateNotifications?: () => void;
   /** True when the Profile tab is the active tab. Used to trigger refetch on
    *  tab focus (AC-062) — the keep-alive pattern means the component never
    *  remounts on tab switch, so we increment refetchKey when isActive flips
@@ -75,8 +69,6 @@ interface ProfileScreenProps {
 export default function ProfileScreen({
   session: _session,
   onNavigateEditProfile,
-  onNavigateSettings,
-  onNavigateNotifications,
   isActive = false,
   onNavigateToRoute,
   onNavigateToFollowers,
@@ -84,8 +76,7 @@ export default function ProfileScreen({
 }: ProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const { profile } = useSession();
 
@@ -93,10 +84,6 @@ export default function ProfileScreen({
   // On fetch failure, counts remain at 0 (non-critical display, no error banner).
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
-
-  // AC-173: unread notification count for the bell icon badge.
-  // 0 means no badge. Clears after the user opens the inbox (AC-172 batch mark-read).
-  const [unreadCount, setUnreadCount] = useState(0);
 
   // AC-164: beta video grid state.
   const [betaVideos, setBetaVideos] = useState<BetaVideo[]>([]);
@@ -116,22 +103,18 @@ export default function ProfileScreen({
   // on subsequent focus events without resetting counts/videos to empty.
   const hasLoadedOnce = useRef(false);
 
-  // AC-145 + AC-164 + AC-173: Memoised fetch — does NOT reset state before
-  // fetching so existing data stays visible during a silent background refresh
-  // (no flash). fetchUnreadNotificationCount silently returns 0 on error so the
-  // badge is non-blocking (AC-173).
+  // AC-145 + AC-164: Memoised fetch — does NOT reset state before fetching so
+  // existing data stays visible during a silent background refresh (no flash).
   const loadData = useCallback(async (): Promise<void> => {
     if (!profile?.id) return;
     const userId = profile.id;
-    const [counts, videos, unread] = await Promise.all([
+    const [counts, videos] = await Promise.all([
       fetchFollowerCounts(userId),
       fetchBetaVideosByUser(userId),
-      fetchUnreadNotificationCount(),
     ]);
     setFollowerCount(counts.follower_count);
     setFollowingCount(counts.following_count);
     setBetaVideos(videos);
-    setUnreadCount(unread);
     hasLoadedOnce.current = true;
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -148,57 +131,13 @@ export default function ProfileScreen({
     if (isActive && hasLoadedOnce.current) void loadData();
   }, [isActive, loadData]);
 
-  // ── Profile header (AC-116 + AC-117 + AC-145 + AC-171 + AC-173) ────────────
+  // ── Profile header (AC-116 + AC-117 + AC-145) ───────────────────────────────
   // Passed as listHeaderComponent to SendHistoryProfile so it scrolls with
   // the FlatList rather than requiring a wrapping ScrollView.
+  // AC-184: Notification bell and settings gear are NOT rendered here — they
+  //         live on MOD-012's global app-level header.
   const profileHeader = (
     <View style={styles.headerContainer}>
-      {/* Notifications bell icon with unread badge (AC-171, AC-173) */}
-      {onNavigateNotifications ? (
-        <Pressable
-          style={({ pressed }) => [
-            styles.notificationsButton,
-            pressed && styles.notificationsButtonPressed,
-          ]}
-          onPress={() => {
-            // Optimistically clear the badge when the inbox is opened.
-            // The actual is_read update happens server-side via AC-172 on
-            // NotificationInboxScreen mount. A refetch on tab re-focus will
-            // re-sync the count if the inbox was dismissed before the RPC
-            // completed.
-            setUnreadCount(0);
-            onNavigateNotifications();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={t('notifications.title')}
-        >
-          <Ionicons name="notifications-outline" size={24} color={theme.colors.textSecondary} />
-          {/* Unread badge (AC-173) — shown when count > 0 */}
-          {unreadCount > 0 ? (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>
-                {unreadCount > 99 ? '99+' : String(unreadCount)}
-              </Text>
-            </View>
-          ) : null}
-        </Pressable>
-      ) : null}
-
-      {/* Settings gear icon (top-right) */}
-      {onNavigateSettings ? (
-        <Pressable
-          style={({ pressed }) => [
-            styles.settingsButton,
-            pressed && styles.settingsButtonPressed,
-          ]}
-          onPress={onNavigateSettings}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.title')}
-        >
-          <Ionicons name="settings-outline" size={24} color={theme.colors.textSecondary} />
-        </Pressable>
-      ) : null}
-
       {/* Avatar + display name + bio (AC-116) */}
       <View style={styles.header}>
         {profile?.avatar_url ? (
@@ -331,58 +270,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: topInset + theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
       paddingBottom: theme.spacing.md,
-    },
-    // AC-171: bell icon positioned in the top-LEFT of the ProfileScreen header.
-    // Settings gear stays top-right. This is the user's original intended layout:
-    //   [screen left edge] — spacing.md — [bell 40px]  ...  [settings 40px] — spacing.md — [screen right edge]
-    notificationsButton: {
-      position: 'absolute',
-      top: topInset + theme.spacing.md,
-      left: theme.spacing.md,
-      width: 40,
-      height: 40,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: theme.borderRadius.full,
-      zIndex: 1,
-    },
-    notificationsButtonPressed: {
-      backgroundColor: theme.colors.surface,
-    },
-    // AC-173: unread notification count badge on the bell icon.
-    // Positioned in the top-right corner of the bell button.
-    unreadBadge: {
-      position: 'absolute',
-      top: 0,
-      right: 0,
-      minWidth: 16,
-      height: 16,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.error,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 3,
-    },
-    unreadBadgeText: {
-      fontSize: 10,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textInverse,
-      lineHeight: 14,
-    },
-    // Settings gear is at the top-right — the user's original intended position.
-    settingsButton: {
-      position: 'absolute',
-      top: topInset + theme.spacing.md,
-      right: theme.spacing.md,
-      width: 40,
-      height: 40,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: theme.borderRadius.full,
-      zIndex: 1,
-    },
-    settingsButtonPressed: {
-      backgroundColor: theme.colors.surface,
     },
     header: {
       alignItems: 'center',

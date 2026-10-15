@@ -1500,3 +1500,34 @@ The AC-184 change removed the `Ionicons` import and `fetchUnreadNotificationCoun
 **New regressions: 0**
 
 **MOD-001 Rev 35/AC-184 regression — QA PASS.**
+
+---
+
+## Engineering Progress — Bugfix — 2026-10-14 (double safe-area inset in ProfileScreen)
+
+**Issue**: `ProfileScreen.tsx` called `useSafeAreaInsets()` and passed `insets.top` to `makeStyles`, which then applied it as `paddingTop: topInset + theme.spacing.md` in `headerContainer`. However, the global `AppHeader` (mounted in `AppShell`, MOD-012) already consumes `insets.top` via `paddingTop: topInset + theme.spacing.sm`. The result was a visible double top margin on the Profile screen.
+
+**Fix applied — one file changed**: `src/modules/mod-auth-profile/screens/ProfileScreen.tsx`
+- Removed `import { useSafeAreaInsets } from 'react-native-safe-area-context';` — no longer needed after the fix.
+- Removed the `const insets = useSafeAreaInsets();` call.
+- Changed `makeStyles(theme, insets.top)` to `makeStyles(theme, 0)`.
+- The `paddingTop` line in `makeStyles` (`topInset + theme.spacing.md`) now evaluates to `0 + theme.spacing.md` = `theme.spacing.md` — correct breathing room beneath the global AppHeader.
+
+**Impact note**: `makeStyles`'s `topInset` parameter is only consumed by `headerContainer.paddingTop`. Setting it to `0` removes the double inset without affecting any other spacing, layout, or logic in the file.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors, exit 0 |
+| `npx jest --watchAll=false --testPathPattern="src/modules/mod-auth-profile"` | PASS — 20 tests, 3 suites, all pass |
+| `useSafeAreaInsets` import removed | PASS |
+| `insets.top` call removed | PASS |
+| `makeStyles` called with `0` instead of `insets.top` | PASS |
+| No other spacing, layout, or logic touched | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+| No new dependencies | PASS |
+| Pre-existing `act()` warnings in test output unchanged (infrastructure, not introduced by this fix) | PASS |
+
+**Result: READY FOR QA**
