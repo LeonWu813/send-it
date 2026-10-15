@@ -1531,3 +1531,130 @@ The AC-184 change removed the `Ionicons` import and `fetchUnreadNotificationCoun
 | Pre-existing `act()` warnings in test output unchanged (infrastructure, not introduced by this fix) | PASS |
 
 **Result: READY FOR QA**
+
+---
+
+## QA Run 7 — Regression — 2026-10-14 (double safe-area inset fix)
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification after bugfix — double top margin caused by `useSafeAreaInsets()` consuming `insets.top` in ProfileScreen while the global AppHeader in MOD-012 already consumed it)
+**Scope**: three-point code inspection of the specific fix; TypeScript gate; mod-auth-profile test suite; full regression of all previously passing ACs
+
+---
+
+### 1. TypeScript — `npx tsc --noEmit`
+
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+### 2. Automated Test Suite — mod-auth-profile
+
+Command: `npm test -- --watchAll=false --testPathPattern="mod-auth-profile"`
+Result: 20 tests, 3 suites — all PASS
+Exit code: 0
+
+Suites:
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx` — PASS
+
+Note: `act()` warnings in test output are pre-existing infrastructure warnings from async state updates in `loadData` (follower counts + beta videos). These were present before this fix (documented in QA Run 6) and are not introduced by the safe-area inset change. They do not affect test pass/fail results.
+
+---
+
+### 3. Code Inspection — Safe-Area Inset Fix
+
+**Item 1: `useSafeAreaInsets` import removed**
+
+PASS. Grep for `useSafeAreaInsets` and `safe-area-context` in `ProfileScreen.tsx` returns zero matches. The import `import { useSafeAreaInsets } from 'react-native-safe-area-context'` is confirmed absent. The import block (lines 28–49) lists: `@supabase/supabase-js`, React hooks (`useCallback`, `useEffect`, `useRef`, `useState`), `react-i18next`, `react-native` primitives, `useTheme`, `mod-beta-video` exports, `mod-profile-history`, `mod-social-feed`, `useSession`. No `react-native-safe-area-context` import remains anywhere in the file.
+
+**Item 2: `useSafeAreaInsets()` call removed**
+
+PASS. Grep for `useSafeAreaInsets`, `insets`, `insets.top` in `ProfileScreen.tsx` returns zero matches. The hook call that previously assigned `const insets = useSafeAreaInsets()` and then used `insets.top` as the second argument to `makeStyles` is fully removed. No reference to `insets` or any safe-area context hook call remains in the function body.
+
+**Item 3: `makeStyles(theme, 0)` is used**
+
+PASS. Line 79: `const styles = makeStyles(theme, 0);` — confirmed. The second argument is the literal `0`. The `makeStyles` function signature (line 263) is `function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number)`. The `topInset` parameter is consumed only in `headerContainer.paddingTop: topInset + theme.spacing.md` (line 273), which now evaluates to `0 + theme.spacing.md = theme.spacing.md`. This is the correct amount of breathing room beneath the global `AppHeader` that already accounts for `insets.top`. No other style in `makeStyles` references `topInset`.
+
+**No other logic changed**
+
+PASS. The fix is narrowly scoped: one import line removed, one `const` removed, one numeric argument changed from `insets.top` to `0`. All other behavior — `loadData`, `followerCount`/`followingCount`/`betaVideos` state, `profileHeader` JSX (AC-116/AC-117/AC-145), `profileFooter` JSX (AC-164), `SendHistoryProfile` integration (AC-118), `BetaVideoReelViewer` (AC-164), `refetchKey`/`isActive` effects (AC-062) — is unchanged. Confirmed by reading the full file: the fix touches only the three items above.
+
+---
+
+### 4. Regression — All Previously Passing ACs
+
+**AC-001 (revised)** — PASS. `AuthNavigator.tsx` unchanged; session → children directly, no gym selection gate.
+
+**AC-063** — PASS. `EditProfileScreen.tsx`, `upsertProfile()`, migration unchanged. `privacy_setting` column unaffected.
+
+**AC-116** — PASS. Avatar, display name, bio still rendered from `useSession().profile` in `profileHeader`. Unchanged.
+
+**AC-117** — PASS. Edit Profile `<Pressable>` present, wired to `onNavigateEditProfile`. Unchanged.
+
+**AC-118** — PASS. `SendHistoryProfile` rendered via `listHeaderComponent`/`listFooterComponent` pattern. Unchanged.
+
+**AC-145** — PASS. Both follower/following `<Pressable>` elements confirmed in `profileHeader`. `fetchFollowerCounts` import and state unchanged. Labels via `t('socialFeed.followers')` / `t('socialFeed.following')`.
+
+**AC-156** — PASS. Migration `20260930000002_mod_001_beta_video_privacy.sql` unchanged. `updateBetaVideoPrivacy` in `auth-service.ts` unchanged.
+
+**AC-157** — PASS. `updateBetaVideoPrivacy` exported from module barrel unchanged.
+
+**AC-164** — PASS. `profileFooter` with `BetaVideoGrid`, `BetaVideoReelViewer` (`reelContext="profile"`), `fetchBetaVideosByUser` call in `loadData` all unchanged.
+
+**AC-167** — PASS. No `signOut` import, no logout `<Pressable>`, no `isSigningOut` state. Unchanged from QA Run 6.
+
+**AC-184** — PASS. No bell `<Pressable>`, no settings gear `<Pressable>`, no `fetchUnreadNotificationCount` import, no `Ionicons` import. Unchanged from QA Run 6.
+
+**AC-062** — PASS. `refetchKey` state + `useEffect([isActive])` that increments it + `<SendHistoryProfile refetchKey={refetchKey}>` all present and unchanged.
+
+**Supabase singleton** — PASS. No new `createClient()` call sites.
+
+**No service_role key** — PASS. No new env var reads.
+
+**No hardcoded hex colors** — PASS. No hex literals introduced.
+
+**No inline string literals** — PASS. All `<Text>` content uses `t()` or runtime data values.
+
+**Cross-module import rule** — PASS. All cross-module imports (`mod-beta-video`, `mod-profile-history`, `mod-social-feed`) are authorized per spec Integration Points. No new cross-module import added.
+
+**ProfileNavigator public entry point** — PASS. `export default function ProfileNavigator` unchanged.
+
+---
+
+### 5. Summary
+
+| Item | Result |
+|------|--------|
+| TypeScript (tsc --noEmit) — 0 errors | PASS |
+| mod-auth-profile test suite (20 tests, 3 suites) | PASS |
+| `useSafeAreaInsets` import removed | PASS |
+| `useSafeAreaInsets()` call removed | PASS |
+| `makeStyles(theme, 0)` used (not `makeStyles(theme, insets.top)`) | PASS |
+| No other logic changed | PASS |
+| AC-001 regression | PASS |
+| AC-062 regression | PASS |
+| AC-063 regression | PASS |
+| AC-116 regression | PASS |
+| AC-117 regression | PASS |
+| AC-118 regression | PASS |
+| AC-145 regression | PASS |
+| AC-156 regression | PASS |
+| AC-157 regression | PASS |
+| AC-164 regression | PASS |
+| AC-167 regression | PASS |
+| AC-184 regression | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Supabase singleton convention | PASS |
+| Cross-module import rule | PASS |
+| ProfileNavigator public entry point | PASS |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**MOD-001 safe-area inset bugfix — QA PASS.**
