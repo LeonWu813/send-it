@@ -4,20 +4,20 @@
 **Module Name**: Route Catalog
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002
-**Last Synced from PRD Revision**: 36
-**Last Updated**: 2026-10-13
+**Last Synced from PRD Revision**: 37
+**Last Updated**: 2026-10-14
 
 ---
 
 ## Purpose
 
-Own the route submission (filter-first, single-page, direct-submit) flow, the 4-value status lifecycle (`active | pending | retired | rejected`), submitter-only pending visibility and withdrawal, admin-only approve/reject/retire via Supabase Studio (Phase 1), the forward-compatible admin identity design for Phase 1.5 in-app admin, the composed route display name (grade + color + optional section label), the saved-route bookmark interaction (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list), the per-user route-visit tracking upsert on route detail open (`user_route_visits`, AC-179), and the "new beta video" tag logic and rendering on route cards in the gym route list (AC-180/AC-181).
+Own the route submission flow (duplicates allowed by design — no database uniqueness constraint on `(gym_id, grade, color_tag)`; a non-blocking soft-warning on same-grade/same-color at the gym, AC-187), the composed route display name (grade + color + optional section label), route detail pages, the 4-value route status lifecycle (`active | pending | retired | rejected`), submitter-only pending visibility and withdrawal, the fixed hold/tape color enum, the saved-route bookmark interaction (a bookmark toggle on the route detail screen and a read-only saved indicator on the gym route list), the per-user route-visit tracking upsert on route detail open (`user_route_visits`, AC-179), and the "new beta video" tag logic and rendering on route cards in the gym route list (AC-180/AC-181). Admin approval/rejection/retirement is performed via Supabase Studio in Phase 1.
 
 ---
 
 ## Context
 
-Routes are user-submitted but admin-curated in terms of structure. The core data-quality mechanism is a filter-first, single-page submit flow: when a climber wants to add a new route, they first use the RouteListScreen grade and hold-color filter chips to check whether the route already exists. The filtered route list itself serves as the "does this route already exist?" check. An always-visible "Can't find it? Add a new route." CTA at the bottom of the route list opens a single-page submit screen with grade and color chips pre-filled from the active filter state. The submit screen contains grade chips, hold-color chips, an inline photo picker (preview on the same page), an optional section-label field, and an "Add Route" button that submits directly via the `submit_route` RPC. There is no separate client-side match-check step and no multi-step submission flow. Server-side duplicate protection keeps data clean: the `submit_route` RPC pre-check and the partial unique index on active routes (`UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`) enforce uniqueness at the database level. The fixed 9-color hold/tape enum and forced V-scale grade system reflect how climbers in Taiwan actually talk about routes. The `Route.match_key` is implemented as a Postgres `GENERATED ALWAYS AS ... STORED` column; uniqueness of active routes is enforced at the DB level by a partial unique index `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'` — this correctly allows retired or rejected routes to reuse the same key after a wall reset.
+Routes are user-submitted but admin-curated in terms of structure. The core data-quality mechanism is a filter-first, single-page submit flow: when a climber wants to add a new route, they first use the RouteListScreen grade and hold-color filter chips to check whether the route already exists. The filtered route list itself serves as the "does this route already exist?" check. An always-visible "Can't find it? Add a new route." CTA at the bottom of the route list opens a single-page submit screen with grade and color chips pre-filled from the active filter state. The submit screen contains grade chips, hold-color chips, an inline photo picker (preview on the same page), an optional section-label field, and an "Add Route" button that submits directly via the `submit_route` RPC. There is no separate client-side match-check step and no multi-step submission flow. **Duplicate routes are allowed by design (Rev 37)**: real gyms routinely set multiple same-grade, same-color routes at once (e.g. two red V5s on different walls), so a route is identified only by its `id`, and there is no database uniqueness constraint on `(gym_id, grade, color_tag)`. Data quality is kept with a non-blocking soft warning at submission (AC-187): when a route with the same grade + color already exists at that gym, the submit screen shows an inline notice suggesting the submitter add a section label to disambiguate, but the submitter may always proceed. The fixed 9-color hold/tape enum and forced V-scale grade system reflect how climbers in Taiwan actually talk about routes. There is no `match_key` column — it appeared in earlier planning docs but was never implemented in any migration.
 
 Route status follows a 4-value lifecycle: `active | pending | retired | rejected`. An auto-approve setting (stored in `app_settings`, defaults ON at Phase 1 launch) determines the initial status on submission: when auto-approve is ON, a submitted route is immediately `active`; when auto-approve is OFF, the route is created as `pending`. A `pending` route is visible only to the submitter (read-only) and does not appear in any other user's gym route list or match pool. `retired` and `rejected` routes are invisible to all normal users. Admin approval, rejection, and retirement are performed exclusively via Supabase Studio in Phase 1. The `submit_route` SECURITY DEFINER RPC handles all submission logic server-side (no direct INSERT by client).
 
@@ -37,7 +37,6 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 - Comments on routes (out of scope for Phase 1).
 - Retire/reset voting workflow (Phase 2).
 - In-app admin UI for route status management (approve / reject / retire) is out of scope for Phase 1 (planned for Phase 1.5); Supabase Studio is the admin surface for Phase 1.
-- Global (cross-user) one-pending-per-combo prevention is out of scope — only per-submitter enforcement is required.
 - A user-editable free-text route name is out of scope for Phase 1 — the display name is composed automatically from grade and hold color (with optional section label), not entered by the submitter.
 - A dedicated saved-routes list screen on the Profile tab is out of scope for Phase 1 — saved routes are surfaced in the browse flow (bookmark toggle on the route detail screen and read-only saved indicator on the gym route list) and in the Home screen Projecting Routes section (MOD-012, AC-177/AC-178), but not as a standalone saved-routes list view on the Profile tab.
 
@@ -55,7 +54,7 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 
 ## Acceptance Criteria Covered
 
-**AC-020** (revised): The system shall provide a single-page route submit screen containing grade chips, hold-color chips, an inline photo picker (image preview shown on the same page after selection), an optional section-label text field, and an "Add Route" button at the bottom that submits the route directly via the `submit_route` RPC. There shall be no client-side match-check step and no multi-step submission flow — the RouteListScreen grade + color filter serves as the "does this route already exist?" check before the user opens the submit screen. Server-side duplicate protection is unchanged: the `submit_route` RPC pre-check and the partial unique index on active routes (`UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`) enforce uniqueness at the database level, and the per-submitter partial unique index on pending routes prevents a user from holding two pending submissions for the same (gym_id, grade, color_tag) (AC-029).
+**AC-020** (revised, Rev 37): The system shall provide a single-page route submit screen containing grade chips, hold-color chips, an inline photo picker (image preview shown on the same page after selection), an optional section-label text field, and an "Add Route" button at the bottom that submits the route directly via the `submit_route` RPC. There shall be no client-side match-check step and no multi-step submission flow — the RouteListScreen grade + color filter serves as the "does this route already exist?" check before the user opens the submit screen. **Duplicate routes are allowed by design (Rev 37)**: the system shall NOT reject a submission on the grounds that a route with the same `(gym_id, grade, color_tag)` already exists. The `submit_route` RPC shall insert the route without any uniqueness pre-check or uniqueness failure, and there shall be no database uniqueness constraint or unique index on `(gym_id, grade, color_tag)` (the former active-only unique index is dropped; see the migration note in Key Implementation Notes). Data-quality disambiguation is handled by the non-blocking soft warning in AC-187, not by a hard constraint.
 
 **AC-021** (revised): The system shall block route submission when no photo is attached via the inline photo picker and shall show a validation message indicating the photo is required. The photo requirement is enforced both client-side (the "Add Route" button cannot submit without a photo) and server-side (the `submit_route` RPC rejects a submission with no photo).
 
@@ -73,7 +72,7 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 
 **AC-028** (new): The system shall never show `rejected` or `retired` routes to normal users.
 
-**AC-029** (new): The system shall allow a submitter to withdraw their own `pending` route, which deletes the row (the row is removed, not status-changed). The system shall prevent a user from having two `pending` submissions for the same (gym_id, grade, color_tag) simultaneously; a user cannot submit a new route with the same gym + grade + color while they already have a `pending` submission for that combination.
+**AC-029** (revised, Rev 37): The system shall allow a submitter to withdraw their own `pending` route, which deletes the row (the row is removed, not status-changed). The former restriction preventing a user from holding two `pending` submissions for the same `(gym_id, grade, color_tag)` is **removed** (Rev 37): because duplicates are now allowed by design (AC-020) and the per-submitter partial unique index on pending routes is dropped along with the active-only unique index, a user may submit more than one route with the same gym + grade + color. The soft warning (AC-187) applies to each such submission; the submitter may proceed.
 
 **AC-040** (revised): The system shall, on a gym detail page, filter the route list by grade and by hold color using chip selectors. There shall be no free-text search input and no status filter for normal users.
 
@@ -85,7 +84,7 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 
 **AC-043** (new): The system shall pre-fill the route submit screen's grade and color chips from the RouteListScreen filter state when the user opens the submit screen. RouteListScreen passes its current grade filter and color filter values as optional parameters to the submit screen; if a grade filter was active when the user tapped "Add Route", the corresponding grade chip shall be pre-selected, and if a color filter was active, the corresponding color chip shall be pre-selected. When a filter is unset, the corresponding chip shall open unselected. Pre-filled chips remain editable by the user before submission.
 
-**AC-045** (new): RouteListScreen cards and RouteDetailScreen title shall render the route display name as `{grade} {LocalizedColor}`, with ` ({section_label})` appended when `section_label` is non-null (e.g. "V3 Blue" or "V3 Blue (Cave)"). The color segment uses the i18n `routes.colors.<color_tag>` string. This is a display-composition rule; no display name is stored in the database.
+**AC-045** (new, amended Rev 37): RouteListScreen cards and RouteDetailScreen title shall render the route display name as `{grade} {LocalizedColor}`, with ` ({section_label})` appended when `section_label` is non-null (e.g. "V3 Blue" or "V3 Blue (Cave)"). The color segment uses the i18n `routes.colors.<color_tag>` string. This is a display-composition rule; no display name is stored in the database. **Ambiguous identical display names are permitted (Rev 37)**: because duplicate routes are allowed by design (AC-020), two same-grade/same-color routes at one gym with no section label render the same composed display name; this is accepted. `section_label` is the recommended disambiguator (the AC-187 soft warning nudges the submitter to supply one), and the route card's `photo_url` thumbnail (AC-183) further distinguishes same-named routes visually. The display name is NOT made unique and the submitter is never blocked for producing a duplicate name.
 
 **AC-046** (new): RouteDetailScreen shall display a bookmark icon toggling saved (filled) / unsaved (outline), reflecting whether the route is in the current user's `saved_routes` list. When tapped, the bookmark shall add or remove the route from the user's `saved_routes` list and update the toggle state immediately (optimistic update). RouteDetailScreen is the only save/unsave action point for routes.
 
@@ -109,6 +108,8 @@ US-021 ("Bookmark a route while browsing"): As a climber who wants to keep track
 **AC-180** (new, Rev 35): The system shall determine whether a route has a "new beta video" for the current user by comparing the route's beta videos' `created_at` against the current user's `user_route_visits.last_viewed_at` for that route (AC-179): a route qualifies for the tag when at least one of its visible beta videos has `created_at` greater than the user's `last_viewed_at`, OR when the user has no `user_route_visits` row for that route at all (never visited). The set of "visible beta videos" respects the existing beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154, and beta-video privacy AC-158). **This logic reads `user_route_visits` (AC-179) and performs a cross-module query against beta videos (MOD-005); it requires Tech Lead architecture review** to assign the owning module for the tag computation and to specify the query shape, consistent with the AC-179 table review. **Clarifying note (Rev 36, visibility-filter scope — Option B)**: the "visible beta videos" set used by this tag computation is scoped per the current viewing user: a beta video counts toward the "new beta video" tag only when it would be visible to that specific user under the full beta-video visibility rules (reported-video exclusion AC-142, blocked-user filter AC-154 evaluated for this viewer, and beta-video privacy AC-158 evaluated for this viewer-vs-poster follower relationship). A route therefore does not qualify for the tag on the strength of a beta video the current user cannot see. This is a scope clarification only — it does not change AC-180's qualification logic (newer `created_at` than `last_viewed_at`, or no visit row) beyond fixing which videos are in scope for the comparison, and it remains subject to the same Tech Lead architecture review as the rest of AC-180.
 
 **AC-181** (new, Rev 35): The system shall render a "new beta video" tag on route cards that qualify per AC-180. The tag shall appear on the shared route card (AC-183) wherever that card surfaces a route — specifically the Home screen's Projecting Routes section (AC-177) and the gym route list (RouteListScreen, MOD-003). When a route does not qualify (AC-180), no tag is rendered.
+
+**AC-187** (new, Rev 37): On the route submit screen (AC-020), when the current grade + color selection matches one or more existing `active` routes at the same gym, the system shall display a non-blocking inline notice near the submit control reading "此岩館已有相同難度與顏色的路線。如果這是不同的路線，請加上區域標籤以作區分；否則您可能正在建立重複路線。 / A {grade} {Color} route already exists at this gym. If this is a different route, add a section label to tell them apart — otherwise you may be creating a duplicate." (i18n keys `routes.duplicateWarning.title` / body, with `{grade}` and `{Color}` interpolated). The notice shall never disable the "Add Route" button or block submission — the submitter may always proceed. The notice shall update as the grade/color selection changes, and shall be hidden when no same-grade/same-color active route exists at the gym. The same-grade/same-color match count is determined client-side from the gym's already-fetched `active` route list on `(gym_id, grade, color_tag)` — no database uniqueness constraint is involved and no dedicated count RPC is needed. This is a client-side advisory check only — it is not a server-enforced gate, and a race in which two users submit the same grade + color concurrently is accepted (both routes are created, consistent with duplicates being allowed by design).
 
 ---
 
@@ -142,13 +143,16 @@ Route
  - id, gym_id (FK Gym), section_label (nullable), grade (V-scale enum),
    color_tag (enum: red|orange|yellow|green|blue|purple|pink|white|black — required),
    photo_url (required),
-   match_key (Postgres GENERATED ALWAYS AS (gym_id + grade + color_tag) STORED;
-   uniqueness enforced by a PARTIAL unique index
-   UNIQUE (gym_id, grade, color_tag) WHERE status = 'active',
-   so retired/rejected routes may reuse the same key after a wall reset),
    status (route_status enum: active | pending | retired | rejected),
    submitted_by_user_id (FK User),
    created_at, retired_at (nullable), retired_by_user_id (nullable, FK User)
+   -- Route identity is `id` ONLY (Rev 37). There is NO uniqueness constraint and
+   --   NO unique index on (gym_id, grade, color_tag) — duplicates are allowed by
+   --   design (AC-020). There is NO `match_key` column: it appeared in earlier
+   --   planning docs but was never implemented in any migration.
+   -- The non-unique partial index `routes_active_grade_color_idx ON public.routes
+   --   (gym_id, grade, color_tag) WHERE status = 'active'` exists solely to back
+   --   the AC-187 count query and is NOT a uniqueness guarantee.
    -- A route's display name is NOT a stored column. It is composed at display time
    -- from grade + color_tag (+ section_label when present), e.g. "V3 Blue" or
    -- "V3 Blue (Cave)" (AC-045). There is no free-text, user-editable route name.
@@ -158,14 +162,13 @@ Route
    --   pending  = awaiting admin approval; created by the system when
    --              auto-approve is OFF on submission. Visible only to the
    --              submitter (read-only). A submitter may withdraw a pending
-   --              route, which DELETES the row. A user cannot hold two pending
-   --              submissions for the same (gym_id, grade, color_tag).
+   --              route, which DELETES the row.
    --   retired  = route no longer on the wall (wall reset / removed).
    --              Admin-only, set via Supabase Studio. Never shown to normal users.
    --   rejected = admin-moderated off (bad data / inappropriate). Admin-only,
    --              set via Supabase Studio. Never shown to normal users.
    -- Auto-approve defaults ON at Phase 1 launch. Only 'active' routes participate
-   -- in the normal-user route list.
+   -- in the normal-user route list and in the AC-187 soft-warning duplicate count.
 
 SavedRoute  (join table — a user's bookmarked routes; MOD-003-owned)
  - user_id (UUID NOT NULL DEFAULT auth.uid(), FK users ON DELETE CASCADE)
@@ -232,7 +235,7 @@ All tables guarded by Supabase Row-Level Security policies.
 - Client calls `supabase.from('routes').delete().eq('id', routeId)` directly; enforced by RLS DELETE policy
 
 **Outputs (route withdrawal):**
-- `Route` row deleted (not status-changed); slot freed in the pending partial unique index, allowing resubmission
+- `Route` row deleted (not status-changed)
 
 **Inputs (bookmark toggle — AC-046):**
 - `route_id`, authenticated user session
@@ -244,7 +247,10 @@ All tables guarded by Supabase Row-Level Security policies.
 
 ## Key Implementation Notes
 
-- **match_key implementation**: `Route.match_key` is a Postgres `GENERATED ALWAYS AS (gym_id || grade || color_tag) STORED` column. Uniqueness is enforced by a **partial unique index**: `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`. This constraint lives at the database level — not only in application code — so concurrent submissions cannot create duplicates. The partial predicate allows historical retired and rejected routes to reuse the same key after a wall reset.
+- **Route identity is `id` only (Rev 37)**: There is no `match_key` column (it was specified in earlier planning docs but was never implemented in any migration — no such column exists in the database). There is no uniqueness constraint and no unique index on `(gym_id, grade, color_tag)`; the former active-only unique index `routes_active_unique_idx` is dropped by migration.
+- **`routes_active_grade_color_idx` is non-unique (Rev 37)**: The partial index `routes_active_grade_color_idx ON public.routes (gym_id, grade, color_tag) WHERE status = 'active'` is a plain (non-unique) index that exists solely to back the AC-187 count query. It is not a uniqueness guarantee.
+- **AC-187 count is client-side (Rev 37)**: The duplicate-warning count for AC-187 is derived client-side from the RouteListScreen's already-fetched active-route list (the same data loaded when the user filtered by grade + color). No dedicated count RPC is needed.
+- **`findMatchingActiveRoutes` is dead code (Rev 37)**: This function in `route-service.ts` is dead code from the removed match-before-create flow and must be deleted by the engineer.
 - **Fixed color enum**: The hold/tape color selector must be restricted to exactly: `{red, orange, yellow, green, blue, purple, pink, white, black}`. No free-text color input.
 - **V-scale forced**: Grade creation must only offer V-scale options (e.g., VB, V0–V17). No other grade system in Phase 1.
 - **Photo required via inline picker**: `photo_url` must be attached before route creation can proceed (AC-021). The photo is selected via an inline photo picker on the submit screen (preview shown on the same page after selection); the photo is uploaded to Supabase Storage and the resulting URL is stored in `Route.photo_url`. The "Add Route" button cannot submit without a photo (client-side enforcement); the `submit_route` RPC also rejects a submission with no photo (server-side enforcement).
@@ -257,7 +263,7 @@ All tables guarded by Supabase Row-Level Security policies.
 - **Achievement icon overlay (fetchUserAchievements)**: RouteListScreen calls `fetchUserAchievements(routeIds)` from MOD-004's public service once per screen load (not per row). Import only the public service function from MOD-004 — not internal screens, components, or the `ascents` table directly. MOD-004 must expose this function before MOD-003 QA handoff.
 - **Admin merges**: Near-duplicate route merges are performed by the admin via Supabase Studio. No in-app admin UI.
 - **Default filter**: The gym route list shows `active` routes only for normal users (AC-041). Users can apply grade and hold-color chip filters (AC-040). No status filter is surfaced to normal users.
-- **Approval-time active-uniqueness collision**: Because pending rows bypass the partial unique index (`WHERE status = 'active'`), two pending submissions for the same (gym_id, grade, color_tag) can coexist (from different users; per-submitter uniqueness is separately enforced). Approving the second one (`UPDATE status = 'active'`) will hit `routes_active_unique_idx` and raise a unique-violation in Studio. This is expected Phase 1 behavior, not a bug. The admin (Leon) can reject the duplicate in Studio.
+- **Near-duplicate admin merges (Rev 37)**: Because duplicate routes are allowed by design (no uniqueness constraint), the admin (Leon) merges genuine near-duplicates (routes that are actually the same route set in error) directly in Supabase Studio. There is no automatic collision when approving pending routes.
 
 ### RouteDetailScreen Composition (AC-125 / AC-126 / AC-127 / AC-128 / AC-129 / AC-130) — Tech Lead Decisions (Rev 14)
 
@@ -294,7 +300,7 @@ All tables guarded by Supabase Row-Level Security policies.
 Must be split into two migration files — one to ADD the new enum values, a second (separate transaction/timestamp) to use them. PG15 cannot add and use an enum value in the same transaction.
 
 - **Migration A** — enum values only: `ALTER TYPE route_status ADD VALUE IF NOT EXISTS 'pending'; ALTER TYPE route_status ADD VALUE IF NOT EXISTS 'rejected';` Use `IF NOT EXISTS` for idempotency on `supabase db reset`.
-- **Migration B** (separate file, later timestamp) — everything that uses the new values: `app_settings` table + seed, the `submit_route` RPC, the revised RLS policies, the new pending partial index, and the withdrawal DELETE policy.
+- **Migration B** (separate file, later timestamp) — everything that uses the new values: `app_settings` table + seed, the `submit_route` RPC, the revised RLS policies, and the withdrawal DELETE policy.
 - **Canary**: if Migration A and B are accidentally merged into one file, the symptom is `ERROR: unsafe use of new value "pending" of enum type route_status`. That error means the split was not done correctly.
 
 ### Admin Identity
@@ -303,13 +309,12 @@ Ship a `public.is_admin()` STABLE helper function that reads `COALESCE((auth.jwt
 
 ### `submit_route` RPC
 
-SECURITY DEFINER function. MUST derive caller identity from `auth.uid()` — do NOT accept `user_id` as a parameter (impersonation risk). Accepts: `p_gym_id`, `p_grade`, `p_color_tag`, `p_photo_url`, `p_section_label` (optional). Logic (in order):
+SECURITY DEFINER function. MUST derive caller identity from `auth.uid()` — do NOT accept `user_id` as a parameter (impersonation risk). Accepts: `p_gym_id`, `p_grade`, `p_color_tag`, `p_photo_url`, `p_section_label` (optional). Logic (in order) — **Rev 37: no uniqueness pre-check**:
 1. Derive `v_uid := auth.uid()`; raise exception if NULL.
 2. Validate `p_photo_url` is not NULL/empty; raise exception if missing.
 3. Read `app_settings` toggle: `SELECT (value = 'true') INTO v_auto FROM public.app_settings WHERE key = 'route_auto_approve'`; default to `true` if no row.
-4. Guard one-pending-per-combo per submitter; raise clean error before the index constraint fires.
-5. Compute `v_status`: `'active'` if `v_auto`, else `'pending'`.
-6. INSERT and RETURN the row.
+4. Compute `v_status`: `'active'` if `v_auto`, else `'pending'`.
+5. INSERT and RETURN the row. There is no uniqueness pre-check — duplicate routes are allowed by design (AC-020).
 
 `GRANT EXECUTE` to `authenticated` only; `REVOKE EXECUTE` from `anon` and `public`.
 
@@ -322,10 +327,6 @@ No client SELECT/INSERT/UPDATE/DELETE grants or policies — fully client-invisi
 ### Withdrawal
 
 Client calls `supabase.from('routes').delete().eq('id', routeId)`. Enforced by RLS DELETE policy (`submitted_by_user_id = auth.uid() AND status = 'pending'`). No RPC needed. Requires `GRANT DELETE ON public.routes TO authenticated`.
-
-### One-Pending-Per-Combo Constraint
-
-Enforced per submitter via a partial unique index: `CREATE UNIQUE INDEX routes_pending_unique_idx ON public.routes (gym_id, grade, color_tag, submitted_by_user_id) WHERE status = 'pending'`. Two different users may each have a pending submission for the same (gym, grade, color); only one pending row per (gym, grade, color, user) is prevented. Both the index (race-proof guarantee) and an explicit RPC pre-check (clean error UX) are required.
 
 ### Grant Changes (Migration B)
 
@@ -352,7 +353,6 @@ Enforced per submitter via a partial unique index: `CREATE UNIQUE INDEX routes_p
 - Comments on routes (Phase 1 — out of scope entirely).
 - Retire/reset voting workflow (Phase 2).
 - In-app admin UI for route status management (approve / reject / retire) — Phase 1.5; Supabase Studio is the Phase 1 admin surface.
-- Global (cross-user) one-pending-per-combo prevention — only per-submitter enforcement is in scope.
 - A user-editable free-text route name — the display name is composed automatically from grade and hold color (with optional section label).
 - A dedicated saved-routes list surface on the Profile or Home tab (Phase 1 only surfaces saved routes in the browse flow).
 - Cities outside Taipei and New Taipei for Phase 1 seeding.

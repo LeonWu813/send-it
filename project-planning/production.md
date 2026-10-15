@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 36 (2026-10-13)
-**Last Updated**: 2026-10-13
+**Last synced from PRD**: rev 37 (2026-10-14)
+**Last Updated**: 2026-10-14
 
 ---
 
@@ -56,7 +56,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 |---------|------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------|
 | MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD (name/avatar/bio/privacy), Profile tab surface with send history; no bell/settings in ProfileScreen header (moved to MOD-012 global header). |
 | MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form, and saved-gym bookmark toggle (add/remove from saved_gyms). |
-| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission with match-before-create, 4-value status lifecycle, per-user route-visit tracking (user_route_visits), routes_with_new_beta RPC, new-beta tag on route cards. |
+| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission (duplicates allowed by design — no uniqueness constraint; non-blocking soft-warning AC-187), 4-value status lifecycle, per-user route-visit tracking (user_route_visits), routes_with_new_beta RPC, new-beta tag on route cards. |
 | MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override; ascent style restricted to {flash, top, attempt}.     |
 | MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection (≤60 sec, 45 MB native-file size gate, no client-side compression), thumbnail, storage upload, inline playback, reel viewer, report flow.             |
 | MOD-006 | mod-social-feed        | Social Graph & Feed          | Follow/unfollow, chronological activity feed via SECURITY INVOKER RPC, beta-video like reactions.        |
@@ -155,9 +155,14 @@ Accepted upload containers are **MP4 (`.mp4`) and QuickTime (`.mov`)**. Rejectio
 
 All uploads of local device files (photos, videos, any binary asset) must use `expo-file-system`'s `File.bytes()` to obtain a `Uint8Array` and pass it directly to `supabase.storage.from(bucket).upload(path, uint8Array, { contentType })`. The `fetch(uri) + response.blob()` pattern is prohibited: in React Native / Expo SDK 57+, `Response.blob()` routes data through the native blob store via base64 encoding, causing silent upload failures for real-world file sizes. Reference implementations: `mod-beta-video/beta-video-service.ts` (video) and `mod-route-catalog/route-service.ts` (photo).
 
-### match_key Implementation
+### Route Identity and Duplicate Detection
 
-`Route.match_key` is a Postgres `GENERATED ALWAYS AS (gym_id || grade || color_tag) STORED` column. Uniqueness of active routes is enforced at the database level by a **partial unique index** `UNIQUE (gym_id, grade, color_tag) WHERE status = 'active'`. The partial predicate correctly allows historical retired routes to reuse the same key after a wall reset without colliding.
+- Routes are identified only by `id` (UUID). No uniqueness constraint on `(gym_id, grade, color_tag)` exists in the database — two active routes with identical grade and color at the same gym are valid by design.
+- The non-unique partial index `routes_active_grade_color_idx ON public.routes (gym_id, grade, color_tag) WHERE status = 'active'` exists solely to back the AC-187 duplicate-warning count query. It is not a uniqueness guarantee.
+- `match_key` was specified in earlier planning docs but was **never implemented** in any migration. No such column exists. Do not reference it.
+- Duplicate detection is a **non-blocking soft warning** (AC-187): when the submit screen detects ≥1 active route at the gym with the selected grade+color, show a non-blocking inline notice suggesting `section_label`. Never disable or block Add Route.
+- The AC-187 count is derived **client-side** from the already-fetched active-route list — no dedicated count RPC is needed.
+- `findMatchingActiveRoutes` in `route-service.ts` is dead code from the removed match-before-create flow (Rev 37) and must be deleted by the engineer.
 
 ### Notification Pattern
 

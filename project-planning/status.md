@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 92dbd05d7145119f8b427c87112bcc48719c44af
+commit: e78d0b68e9a9a122406597abd466cb139cd08293
 timestamp: 2026-10-14T00:00:00Z
 ```
 
@@ -2474,6 +2474,53 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Passed   | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-14 — Delta Sync (Revision 37, [SUBSTANTIVE] + [TRIVIAL])
+
+**Sync type:** delta (two back-to-back PM Update entries synced together)
+**PRD Revisions:** 37
+**PM Update references:**
+- 2026-10-14 [SUBSTANTIVE] — Route uniqueness model redesigned: duplicates allowed by design (PRD Revision 37)
+- 2026-10-14 [TRIVIAL] — Rev 37 follow-up: Route identity + duplicate detection Shared Convention added to `prd.md` §10
+
+**Files modified:**
+
+- `project-planning/production.md` — Last Synced from PRD Revision 36 → 37. Header updated (date: 2026-10-14). Module Index MOD-003 one-liner updated (removed "match-before-create", replaced with "duplicates allowed by design — no uniqueness constraint; non-blocking soft-warning AC-187"). Deleted stale `### match_key Implementation` section entirely. Replaced with new `### Route Identity and Duplicate Detection` section documenting: id-only route identity, no uniqueness constraint, `routes_active_grade_color_idx` as non-unique backing index for AC-187 only, `match_key` never implemented, AC-187 as non-blocking soft warning derived client-side from the already-fetched route list, `findMatchingActiveRoutes` as dead code to be deleted.
+
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced from PRD Revision 36 → 37. Changes:
+  - Purpose: replaced "route submission with match-before-create" language with "route submission flow (duplicates allowed by design — no database uniqueness constraint; non-blocking soft-warning AC-187)"; removed `match_key` reference.
+  - Context: replaced "Server-side duplicate protection keeps data clean" paragraph and `match_key` description with Rev 37 model (id-only identity, no uniqueness constraint, AC-187 soft warning, no `match_key` column).
+  - Non-goals (Context section): removed stale "Global (cross-user) one-pending-per-combo prevention" bullet.
+  - AC-020: revised to Rev 37 — `submit_route` RPC no longer rejects on duplicate; no uniqueness pre-check; the former active-only unique index is dropped; AC-187 handles data quality.
+  - AC-029: revised to Rev 37 — per-submitter pending uniqueness restriction removed; a user may submit multiple routes with the same gym + grade + color.
+  - AC-045: amended to note ambiguous identical display names are now permitted; `section_label` is the recommended disambiguator; never blocks submission.
+  - AC-187: added (new, Rev 37) — non-blocking inline soft warning when same-grade/same-color active route exists at gym; bilingual string with i18n keys; never disables Add Route; count derived client-side from already-fetched route list; no dedicated count RPC.
+  - Data Model (Route): removed `match_key` generated-column line and the partial-unique-index line; replaced with correct Rev 37 description: id-only identity, no `match_key` column (never implemented), `routes_active_grade_color_idx` as non-unique index for AC-187 count only; removed "A user cannot hold two pending submissions..." from the pending route_status comment.
+  - `submit_route` RPC: removed step 4 (one-pending-per-combo guard); RPC now inserts without a uniqueness pre-check.
+  - Removed `### One-Pending-Per-Combo Constraint` section (corollary of dropped constraint).
+  - Migration B note: removed "the new pending partial index" reference.
+  - Input/Output Contract — route withdrawal outputs: removed "slot freed in the pending partial unique index" clause.
+  - Key Implementation Notes: replaced `match_key implementation` bullet with four new bullets: id-only identity (no `match_key`, former index dropped), `routes_active_grade_color_idx` is non-unique, AC-187 count is client-side, `findMatchingActiveRoutes` is dead code.
+  - Replaced stale "Approval-time active-uniqueness collision" note with "Near-duplicate admin merges (Rev 37)" note.
+  - Out of Scope: removed stale "Global (cross-user) one-pending-per-combo prevention" bullet.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — read-only.
+- All other module specs — not in scope for Rev 37 (AC-187 lives in MOD-003; no other module's ACs or dependencies changed in Rev 37).
+- Agent wrappers — not in scope (no new module added, no dependency list change).
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none — all PRD content was explicit enough to translate directly.
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script failures confirmed by running verify-sync.sh against the baseline (before this sync's changes) via `git stash`. Checks 1, 2, 3, 5 PASS. Check 4 FAIL (pre-existing script bug — awk range exits immediately on macOS). Check 6 FAIL (pre-existing script bug — over-matches non-phase-plan PRD content). No new structural issues introduced by this delta.
 
 ### 2026-10-13 — Delta Sync (Revisions 35+36, [SUBSTANTIVE])
 
