@@ -3,13 +3,13 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
-mode: fix
-module: mod-home
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: 49795da
+commit: aba292c9641f5b108674ce4aaa26bbbb3164d4c0
 timestamp: 2026-10-15T00:00:00Z
-summary: fixed stale AC-182 test assertion — replaced '2 new beta videos' with 'new video upload'; updated beta_videos mock fields from created_at to updated_at in two Following Activity tests; 39/39 tests pass, 0 tsc errors
+summary: Rev 39 RouteCard architecture review — AC-189 needs a new visibility-scoped count_beta_videos_by_routes SECURITY INVOKER RPC (clone of routes_with_new_beta, COUNT GROUP BY); AC-190 reuses existing fetchUserAchievements (no new backend); AC-046/047 approved (no RLS concern); AC-192 approved (resizeMode=cover, no perf issue); AC-181/191 consistency flagged (breaking hasNewBetaVideo removal across 3 consumers, keep grade field for a11y); 1 Proposed Shared Convention
 ```
 
 
@@ -324,6 +324,100 @@ summary: fixed stale AC-182 test assertion — replaced '2 new beta videos' with
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-15 — change (Rev 39: RouteCard redesign — AC-189 batched beta-count, AC-190 batched has-send, AC-046/047 wired bookmark, AC-191 hidden grade, AC-192 80×80 thumbnail)
+
+**Context**: Architecture review of the four flagged Rev 39 questions before Doc-Sync/Engineering proceeds. Read-only investigation across `prd.md` (Rev 39 block + AC-046/047/181/183/189/190/191/192), `src/components/RouteCard.tsx`, `route-service.ts`, `beta-video-service.ts`, `send-service.ts`, the three RouteCard consumers (RouteListScreen MOD-003, HomeScreen MOD-012, ProfileHistoryScreen MOD-008), and the `20261013000002_mod_003_user_route_visits.sql` migration (the canonical visibility-composition reference). Advisory only — **no source, migration, or spec files were edited**.
+
+**Baseline architectural facts that frame every item below**:
+- The shared route card (`src/components/RouteCard.tsx`, AC-183) is **purely presentational** and takes all data + callbacks as props. All three consumers already follow the **batched-fetch-once-per-screen** pattern: fetch all visible route IDs' auxiliary data once, then pass per-card via a `Set`/`Record` lookup in the render function. There is **no per-card fetching today** and none should be introduced (§10 batched-reads convention; `get_like_info_batch` / `routes_with_new_beta` reference contracts).
+- RouteListScreen (MOD-003) already fetches, once per screen load: `fetchSavedRouteIds()` (saved state), `fetchRoutesWithNewBeta(routeIds)` (chip — being removed), and **`fetchUserAchievements(routeIds)` from MOD-004** (per-route best ascent style). HomeScreen (MOD-012) already fetches `fetchSavedRouteIds()`. ProfileHistoryScreen (MOD-008) passes `hasNewBetaVideo={false}` statically.
+
+---
+
+**Q1 — AC-189 batched `betaVideoCount` fetch. Verdict: NEW BATCHED SECURITY INVOKER RPC REQUIRED — approach (a), not (b).**
+
+No existing service or RPC returns beta-video counts grouped by route_id (confirmed: grep of `src/` and `supabase/migrations/` found none; `fetchBetaVideosForRoute` is single-route and `routes_with_new_beta` returns a boolean-membership subset, not counts).
+
+**This is approach (a): a new `count_beta_videos_by_routes(route_ids uuid[])` SECURITY INVOKER RPC returning `TABLE(route_id uuid, count bigint)`. Do NOT use approach (b) (a client-side `.in('route_id', ids)` + JS `reduce`).** The reason is load-bearing and is the RLS concern the question asks about:
+
+- **AC-189's count MUST respect the same per-viewer beta-video visibility rules as every other beta-video read** — reported-video exclusion (AC-142), blocked-user filter in both directions (AC-154), and followers-only privacy (AC-158). A route showing "3 Beta Videos" when the current viewer can only actually open 1 of them (because 2 are from a followers-only poster they don't follow, or from a blocked user, or reported) is a visibility leak and a user-visible inconsistency against the route-detail grid.
+- Approach (b) cannot compose AC-158/AC-154 correctly client-side: `beta_videos` has RLS, but the blocked-user and followers-only predicates are relationship joins (`follows`, `blocks`) that a bare `.in()` select does not apply — the client would either over-count (counting videos it then filters out) or have to re-fetch the full visibility context per route. The canonical pattern for exactly this is already in the codebase: **`routes_with_new_beta` composes AC-142 + AC-154 + AC-158 verbatim server-side over a `route_ids[]` array under `SECURITY INVOKER`** (migration `20261013000002`, lines 61–94). `count_beta_videos_by_routes` should be **the same function body with `SELECT route_id, COUNT(*) ... GROUP BY route_id` instead of `SELECT DISTINCT route_id`**, dropping only the `user_route_visits` / `created_at > last_viewed_at` recency clause (counts are not recency-scoped). This keeps the count and the "new beta" membership in lockstep on the same visibility fence.
+- **N+1 risk**: eliminated by design — one RPC call per screen with all visible route IDs, exactly like `fetchRoutesWithNewBeta`. The new MOD-003 service wrapper mirrors `fetchRoutesWithNewBeta`'s signature: `fetchBetaVideoCounts(routeIds: string[]): Promise<Record<string, number>>`, returning `{}` on empty input and non-fatally on error (count subtitle simply does not render — consistent with AC-189 "when === 0, no subtitle"). Callers pass the `Record` to the card via a lookup, same as the existing Set lookups.
+- **Grants / security**: `REVOKE EXECUTE ... FROM PUBLIC; GRANT EXECUTE ... TO authenticated;` and `SET search_path = public`, identical to `routes_with_new_beta`.
+- **Ownership**: the RPC and its service wrapper belong to **MOD-003 (route-catalog)**, next to `fetchRoutesWithNewBeta` — it is a route-keyed read the card consumers already import from `route-service.ts`. (It reads `beta_videos`, a MOD-005 table, but via the same cross-module-read-through-an-owning-service pattern already established by `routes_with_new_beta`, which also reads `beta_videos`. No module-boundary change.)
+
+**Q1 net**: new `count_beta_videos_by_routes` SECURITY INVOKER RPC (clone of `routes_with_new_beta`'s visibility body, `COUNT(*) GROUP BY route_id`, drop the recency clause) + a `fetchBetaVideoCounts` wrapper in MOD-003 `route-service.ts`. Requires a migration. Batched, one call per screen. **Blocking item**: the count must be visibility-scoped per viewer — a plain `.in()` reduce is not acceptable.
+
+---
+
+**Q2 — AC-190 batched `hasSend` / `sendStyle`. Verdict: NO NEW BACKEND — reuse the EXISTING `fetchUserAchievements`.**
+
+A batched, own-user-scoped service that returns the current user's best ascent style per route **already exists and is already consumed by RouteListScreen**: `fetchUserAchievements(routeIds: string[]): Promise<Record<string, 'flash' | 'top' | 'attempt'>>` in `src/modules/mod-send-logging/send-service.ts` (lines 94–128). It:
+- resolves `auth.uid()` and applies an explicit `.eq('user_id', user.id)` defense-in-depth predicate (RLS's `select_own_or_public` OR-clause would otherwise leak other users' public sends — this is already handled correctly, lines 99–112),
+- does one `.in('route_id', routeIds)` query (no N+1, one call per screen),
+- reduces client-side with precedence `flash > top > attempt` (lines 116–127).
+
+AC-190's derivation maps directly onto this result:
+- `hasSend = style === 'flash' || style === 'top'` (an `'attempt'` result, or no entry, means `hasSend = false`),
+- `sendStyle = style === 'flash' ? 'flash' : style === 'top' ? 'top' : null`.
+
+The PRD's "flash takes priority over top if both exist" is **already enforced** by `fetchUserAchievements`'s precedence map, so the caller needs no additional priority logic — it just reads the single best style. **A plain PostgREST `.in()` would be insufficient here for the same reason the existing function adds the explicit `user_id` filter** (the RLS OR-clause exposes other users' public sends); reusing `fetchUserAchievements` inherits that already-correct scoping. Do **not** add a new RPC or a new service surface for AC-190 — that would duplicate a solved problem and risk the two paths disagreeing.
+
+- **RouteListScreen (MOD-003)**: already calls `fetchUserAchievements` — zero new fetch; derive `hasSend`/`sendStyle` from the existing `achievements` record in `renderRouteCard`.
+- **HomeScreen (MOD-012)**: does **not** currently call `fetchUserAchievements` — the Projecting Routes section must add one batched call with its visible route IDs (one call, alongside the existing `fetchSavedRouteIds`). This is the only new wiring for Q2, and it is a reuse of MOD-004's existing exported service, not a new backend surface.
+- **ProfileHistoryScreen (MOD-008)**: send-history rows are by definition the user's own sends; whether to show the badge there is a product/display choice (currently passes everything statically). Flagging — not a blocker; default to passing `hasSend`/`sendStyle` derived from the history data it already has, or `false` if the section intentionally omits it. Confirm with the human/PM if the badge should appear on the profile send-history card.
+
+**Q2 net**: reuse `fetchUserAchievements` (MOD-004) — already batched, already correctly user-scoped, already enforces flash>top priority. Only new work: HomeScreen adds one batched call for its Projecting routes; both screens derive the two props client-side. No RPC, no migration.
+
+---
+
+**Q3 — AC-046/047 wired bookmark. Verdict: APPROVED — no RLS concern, no new backend.**
+
+Correct as stated. `fetchSavedRouteIds()` already returns all saved route IDs in one call (RLS-scoped to `auth.uid()`, no N+1 — route-service.ts lines 260–270) and RouteListScreen already calls it. `saveRoute` / `unsaveRoute` already exist and are RLS-protected (own-rows-only INSERT/DELETE on `saved_routes`, lines 281–311).
+
+- **No RLS concern with client-side insert into `saved_routes`**: confirmed. The `saved_routes` INSERT/DELETE policies are own-rows-only (`user_id = auth.uid()`), and `saved_gyms`/`saved_routes` already follow this exact pattern in production (gym bookmark AC-121). Client-side insert is the established, correct path — no SECURITY DEFINER RPC needed.
+- The card stays presentational (takes `isSaved` + `onBookmarkToggle`); RouteListScreen owns the `saveRoute`/`unsaveRoute` calls and the optimistic local-state update, reverting on throw (both services already `throw` on error specifically so the caller can revert — see their doc comments). This matches the gym-bookmark optimistic pattern already shipped (AC-121).
+- **One caller note**: RouteListScreen's `fetchSavedRouteIds` result is currently held as a `Set` for the (read-only) saved indicator; for AC-047 it becomes the source of the optimistic `isSaved` state. The optimistic toggle must update that local `Set`/state immediately and revert on service throw — standard, but flag it so the Engineer wires the revert (the services are designed for it).
+
+**Q3 net**: approved as described. No RLS issue, no new backend, no migration. Pure wiring of existing services through the card's new `isSaved`/`onBookmarkToggle` props with optimistic update + revert-on-throw.
+
+---
+
+**Q4 — AC-192 thumbnail 48×48 → 80×80. Verdict: APPROVED — no caching/perf concern; `resizeMode="cover"` stays correct.**
+
+- **Caching/perf**: none at Phase-1 scale. The thumbnail source is a 1-hour **signed URL** generated per card via `getPhotoSignedUrl(route.photo_url)` in a `useEffect` (RouteCard.tsx lines 64–74) — this is a `createSignedUrl` round-trip per visible card, which is the existing behavior and is **unchanged by the size bump** (enlarging the rendered `<Image>` box does not change how many URLs are signed or how the bytes are fetched). The underlying stored image is a full route photo, so rendering it at 80×80 instead of 48×48 only changes the downscale target — RN's `Image` handles this natively; no higher-resolution asset is needed and no new fetch is added.
+  - **Pre-existing observation, NOT a Rev 39 blocker (noted for completeness, not for action here)**: the per-card `createSignedUrl` in the card's `useEffect` is itself a per-item network call — technically an N+1 on signing. It predates Rev 39 and the size bump does not worsen it. If the route lists ever grow large it would be the lever to batch (sign once per screen and pass the signed URL as a prop). Not in scope for this review; flagging only so it is on record and not mistaken for something the Rev 39 change introduces.
+- **`resizeMode="cover"` is still correct** for 80×80: the box is still square, the source is a non-square photo, and "cover" fills the square by cropping overflow (the desired thumbnail behavior — no letterboxing). No change needed. The `borderRadius` token and the matching `thumbnailPlaceholder` box must both move to 80×80 together so the loading placeholder matches the final thumbnail footprint.
+
+**Q4 net**: approved. Width/height (and the placeholder box) to 80×80, `resizeMode="cover"` unchanged, no caching/perf regression, no new fetch.
+
+---
+
+**AC-191 (hidden grade) + AC-181 (chip removed) — consistency checks (not questions asked, but load-bearing for the Engineer and found during review)**:
+- **AC-191**: keep `grade: string` on the `RouteCardRoute` interface (it is used in the `accessibilityLabel`: `` `${route.name} ${route.grade}` ``, RouteCard.tsx line 81) — only the visible `<Text style={styles.grade}>` (lines 88, 140–145) is removed. Deleting the field would break the a11y label; the AC is explicit that the field is retained. Confirmed consistent.
+- **AC-181**: removing the `hasNewBetaVideo` prop is a **breaking signature change** on a shared component with three consumers. All three currently pass it: RouteListScreen (`hasNewBetaVideo={hasNewBetaVideo}`, line 299), HomeScreen (`hasNewBetaVideo={newBetaRouteIds.has(route.id)}`, line 638), ProfileHistoryScreen (`hasNewBetaVideo={false}`, line 253). All three call sites, plus the `newBetaBadge`/`newBetaText` styles and the `home.routeCard.newBeta` i18n key, must be removed in the same change or TypeScript will error. **Retain** `fetchRoutesWithNewBeta` and `user_route_visits` (AC-175 ordering still uses them) — RouteListScreen's `fetchRoutesWithNewBeta` call and `newBetaRouteIds` Set become dead for the card but the service itself stays exported; the Engineer should remove the now-unused `newBetaRouteIds` plumbing from RouteListScreen/HomeScreen render paths while leaving the service function intact. Flag to confirm RouteListScreen doesn't need the fetch at all anymore (it was only feeding the chip) — likely removable from that screen's load path, but the service export stays for MOD-012's Saved Gyms ordering.
+- **i18n**: `home.routeCard` currently has only `newBeta` + `thumbnailAlt`. Per the Rev 39 PM entry the Engineer adds `betaCount`, `saved`, `unsaved`, `flashSend`, `topSend` and removes `newBeta`, in **both** `locales/en` and `locales/zh-TW`. Note the PRD text (AC-189) references the key as `routeCard.betaCount` while the existing keys live under the `home.routeCard` namespace — the actual key is `home.routeCard.betaCount` (the `useTranslation('common')` + `home.*` nesting). Engineer should place all five under the existing `home.routeCard` object, not a new top-level `routeCard` namespace, to match `thumbnailAlt`'s existing location.
+
+---
+
+**Verdicts summary**:
+- **AC-189** — **NEW RPC REQUIRED (blocking design point)**: `count_beta_videos_by_routes(route_ids uuid[])` SECURITY INVOKER, a clone of `routes_with_new_beta`'s visibility body with `COUNT(*) GROUP BY route_id` and the recency clause dropped; MOD-003-owned wrapper `fetchBetaVideoCounts`. Must be visibility-scoped per viewer (AC-142/154/158) — a plain client `.in()` reduce is rejected because it cannot compose AC-154/AC-158. Requires a migration.
+- **AC-190** — **NO NEW BACKEND**: reuse MOD-004's existing `fetchUserAchievements` (already batched, already correctly user-scoped, already enforces flash>top). HomeScreen adds one batched call; both screens derive `hasSend`/`sendStyle` client-side.
+- **AC-046/047** — **APPROVED**: existing `fetchSavedRouteIds`/`saveRoute`/`unsaveRoute`, no RLS concern, client-side insert is correct, optimistic + revert-on-throw. No migration.
+- **AC-192** — **APPROVED**: 80×80 box + placeholder, `resizeMode="cover"` unchanged, no caching/perf regression.
+- **AC-191 / AC-181** — consistency confirmed: keep `grade` field (a11y), remove visible grade `<Text>`; `hasNewBetaVideo` removal is a breaking signature change requiring all three consumers + styles + `newBeta` i18n key updated together; retain `fetchRoutesWithNewBeta`/`user_route_visits` for AC-175.
+
+**Sequencing for Doc-Sync / Engineering**: the AC-189 migration (`count_beta_videos_by_routes`) must land before or with the MOD-003/MOD-012 card wiring that reads it. AC-190/046/047/191/192 need no migration. The `hasNewBetaVideo` removal (AC-181) must be done atomically across RouteCard + all three consumers to keep `tsc` green.
+
+**No new module, no new dependency edge.** AC-189's RPC reads `beta_videos` (MOD-005) through a MOD-003-owned service, identical to the existing `routes_with_new_beta` cross-module-read pattern — no Module Breakdown change. The AC-183 shared-card ownership (MOD-012) is consistent with the existing proposal; the card's new props do not change that.
+
+**Proposed Shared Conventions** (for Doc-Sync to carry into `production.md`): see the dedicated block below under "Proposed Shared Conventions (Rev 39)".
+
+**Proposed Shared Conventions (Rev 39)**:
+- **Per-route beta-video aggregates (count, "new" membership, and any future per-route beta rollup) are computed by a batched `SECURITY INVOKER` RPC over a `route_ids uuid[]` array that composes the full beta-video visibility fence (AC-142 reported-exclusion, AC-154 symmetric block filter, AC-158 followers-only privacy) verbatim server-side — never by a client-side `.in('route_id', ids)` select + JS aggregation.** The reference contracts are `routes_with_new_beta` (membership) and `count_beta_videos_by_routes` (count); both share the same visibility body so a route's count and its "new" state can never disagree on which videos are visible to the current viewer. A client-side aggregate is rejected because it cannot apply the `follows`/`blocks` relationship predicates and would leak or miscount followers-only / blocked / reported videos.
+
+---
 
 ### Review — 2026-10-15 — change (Rev 38: AC-188 `beta_videos.updated_at` migration + AC-182 `MAX(updated_at)` Home Following query)
 
