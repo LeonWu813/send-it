@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 37 (2026-10-14)
-**Last Updated**: 2026-10-14
+**Last synced from PRD**: rev 38 (2026-10-15)
+**Last Updated**: 2026-10-15
 
 ---
 

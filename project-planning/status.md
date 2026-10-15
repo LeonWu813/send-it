@@ -7,8 +7,8 @@ agent: doc-sync
 mode: delta
 module: n/a
 result: success
-commit: 0e4a4cfd7a1d620830a477de9777eb244f2457a7
-timestamp: 2026-10-15T01:00:00Z
+commit: TBD
+timestamp: 2026-10-15T02:00:00Z
 ```
 
 
@@ -2681,10 +2681,10 @@ The column drop touches **migrations, one service function, types, the onboardin
   - Key Implementation Notes: Added `updated_at` column and BEFORE UPDATE trigger note (AC-188) documenting: trigger approach, pre-existing row seed, PostgREST upsert limitation, migration recommendation.
 
 - `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+- `project-planning/production.md` — Header updated: `**Last synced from PRD**` rev 37 → rev 38; `**Last Updated**` 2026-10-14 → 2026-10-15. No Shared Conventions added (Tech Lead explicitly stated no Proposed Shared Convention from the Rev 38 review).
 
 **Files not touched:**
 - `project-planning/prd.md` — read-only.
-- `project-planning/production.md` — not in scope. Tech Lead explicitly stated no Proposed Shared Convention from the Rev 38 review (trigger pattern is single-table, premature to generalize). No shared convention change warranted.
 - All other module specs — not in scope for Rev 38 (only MOD-005 and MOD-012 ACs changed).
 - Agent wrappers — not in scope (no new module added, no dependency list change).
 - `project-planning/modules/mod-home/status.md`, `project-planning/modules/mod-beta-video/status.md` — owned by Engineer/QA agents, not touched.
