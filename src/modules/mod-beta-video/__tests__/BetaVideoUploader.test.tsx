@@ -72,6 +72,7 @@ const MOCK_VIDEO: BetaVideo = {
   duration_seconds: 30,
   caption: null,
   created_at: '2026-09-24T10:00:00Z',
+  updated_at: '2026-09-24T10:00:00Z',
   is_reported: false,
   report_dismissed: false,
   display_name: null,

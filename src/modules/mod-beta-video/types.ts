@@ -16,6 +16,14 @@ export interface BetaVideo {
   duration_seconds: number;
   caption: string | null;
   created_at: string;
+  /**
+   * Authoritative "last activity" / "last changed" timestamp for a beta video (AC-188, Rev 38).
+   * Set to NOW() on INSERT via DEFAULT. Bumped to NOW() on every UPDATE via a BEFORE UPDATE
+   * trigger — covers any write path (PostgREST upsert, RPC, Studio edit). created_at is
+   * never changed on replace; updated_at is the timestamp to use wherever "when was this
+   * video last changed" is needed (e.g. AC-182 Home Following MAX(updated_at) query).
+   */
+  updated_at: string;
   /** True when any user has filed a one-tap report via report_beta_video() RPC (AC-140). */
   is_reported: boolean;
   /** True when an admin has dismissed the report via Supabase Studio (AC-143). */

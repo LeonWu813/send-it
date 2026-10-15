@@ -104,6 +104,7 @@ function makeVideo(id: string, index: number, overrides?: Partial<BetaVideo>): B
     duration_seconds: 30,
     caption: `Caption ${index}`,
     created_at: `2026-09-${String(25 - index).padStart(2, '0')}T10:00:00Z`,
+    updated_at: `2026-09-${String(25 - index).padStart(2, '0')}T10:00:00Z`,
     is_reported: false,
     report_dismissed: false,
     display_name: `Climber ${index}`,

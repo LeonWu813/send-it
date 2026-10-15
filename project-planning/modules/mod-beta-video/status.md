@@ -2,6 +2,42 @@
 
 ## Engineering Progress
 
+**Status**: DB migration — 2026-10-15 (AC-188: add beta_videos.updated_at with BEFORE UPDATE trigger; seed pre-existing rows updated_at = created_at; BetaVideo TypeScript type updated; test fixtures updated)
+
+### DB Migration — AC-188 beta_videos.updated_at column + BEFORE UPDATE trigger — 2026-10-15
+
+**What changed**:
+
+**Migration file**: `supabase/migrations/20261015000002_mod_005_beta_videos_updated_at.sql`
+
+1. `ALTER TABLE public.beta_videos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` — gives INSERT-time value for new rows.
+2. `UPDATE public.beta_videos SET updated_at = created_at` — seeds pre-existing rows so they reflect their true creation time rather than the migration-run timestamp.
+3. `CREATE OR REPLACE FUNCTION public.set_beta_videos_updated_at()` — BEFORE UPDATE trigger function that sets `NEW.updated_at = NOW()` on every row update, regardless of write path (PostgREST upsert, RPC, or Studio).
+4. `CREATE TRIGGER beta_videos_set_updated_at BEFORE UPDATE ON public.beta_videos FOR EACH ROW EXECUTE FUNCTION public.set_beta_videos_updated_at()` — attaches the trigger.
+
+**Tech Lead Option A** (BEFORE UPDATE trigger) used as recommended. The AC-188 spec note `ON CONFLICT ... DO UPDATE SET updated_at = NOW()` describes semantics only — PostgREST `.upsert()` cannot express a free-form DO UPDATE SET clause, so the trigger is the correct approach.
+
+**Type change**: `updated_at: string` added to the `BetaVideo` interface in `types.ts` (ISO 8601 timestamptz, non-optional, AC-188 field).
+
+**Test fixture updates**: `updated_at` added to all `BetaVideo` literal fixtures in `beta-video-service.test.ts`, `BetaVideoReelViewer.test.tsx`, `BetaVideoSection.test.tsx`, and `BetaVideoUploader.test.tsx`. Fixtures use the same timestamp as `created_at` (reflecting the seeded state).
+
+**No source code changes to service layer**: `uploadBetaVideo` uses PostgREST upsert; the BEFORE UPDATE trigger handles the `updated_at` bump server-side automatically. The `.select()` list in `uploadBetaVideo` does not need `updated_at` (AC-182's query is a separate fetch).
+
+**Self-check results**:
+- `npx tsc --noEmit`: **0 errors**. PASS.
+
+**Files modified**:
+- `supabase/migrations/20261015000002_mod_005_beta_videos_updated_at.sql` — new migration (ADD COLUMN, UPDATE seed, trigger function, trigger)
+- `src/modules/mod-beta-video/types.ts` — `updated_at: string` added to `BetaVideo` interface
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` — `updated_at` added to `MOCK_VIDEO_ROW`
+- `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx` — `updated_at` added to `makeVideo` factory
+- `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx` — `updated_at` added to `MOCK_VIDEO`, `MOCK_VIDEO_2`, `REPLACED_VIDEO`, `BLOCKED_VIDEO`
+- `src/modules/mod-beta-video/__tests__/BetaVideoUploader.test.tsx` — `updated_at` added to `MOCK_VIDEO`
+
+**ACs addressed**: AC-188
+
+---
+
 **Status**: UX enhancement — 2026-10-06 (BetaVideoReelViewer: metadata overlay (avatar, name, route, like, report) now visible during video buffering; loading background moved inside Animated.View as Layer 2 below Layer 4 metadata; ActivityIndicator repositioned to ~40% from top inside Layer 4)
 
 **Status**: Behavioral fix — 2026-10-05 (AC-039/AC-133 previous-video flash: VideoView opacity-hidden during source swap; overlay cleared on onFirstFrameRender instead of readyToPlay)
