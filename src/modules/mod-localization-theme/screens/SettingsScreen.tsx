@@ -51,6 +51,7 @@ import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
 import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile/auth-service';
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   loadLanguage,
   loadThemeOverride,
@@ -188,7 +189,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   }
 
   return (
-    <View style={styles.root}>
+    <SwipeBackWrapper onBack={onBack}>
       {/* Navigation bar */}
       <View style={styles.navBar}>
         <Pressable
@@ -270,29 +271,6 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
           </View>
         </View>
 
-        {/* Privacy section — Beta Video Privacy toggle (AC-157) */}
-        <View style={styles.section}>
-          <View style={styles.optionGroup}>
-            <View style={styles.settingRow}>
-              <View style={styles.settingRowContent}>
-                <Text style={styles.optionLabel}>{t('settings.betaVideoPrivacy')}</Text>
-                <Text style={styles.settingRowSubtext}>
-                  {betaVideoPrivacy === 'followers_only'
-                    ? t('settings.betaVideoPrivacySubtextFollowersOnly')
-                    : t('settings.betaVideoPrivacySubtextPublic')}
-                </Text>
-              </View>
-              <Switch
-                value={betaVideoPrivacy === 'followers_only'}
-                onValueChange={(value) => { void handleBetaVideoPrivacyToggle(value); }}
-                disabled={!privacyFetched || privacyLoading}
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor={theme.colors.background}
-              />
-            </View>
-          </View>
-        </View>
-
         {/* Account section — Blocked Accounts navigation row (AC-155) */}
         <View style={styles.section}>
           <View style={styles.optionGroup}>
@@ -308,6 +286,29 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
               <Text style={styles.optionLabel}>{t('settings.blockedAccounts')}</Text>
               <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
             </Pressable>
+          </View>
+        </View>
+
+        {/* Privacy section — Beta Video Privacy toggle (AC-157) */}
+        <View style={styles.section}>
+          <View style={styles.optionGroup}>
+            <View style={styles.settingRow}>
+              <View style={styles.settingRowContent}>
+                <Text style={styles.optionLabel}>{t('settings.betaVideoPrivacy')}</Text>
+                <Text style={styles.settingRowSubtext}>
+                  {betaVideoPrivacy === 'followers_only'
+                    ? t('settings.betaVideoPrivacyFollowersOnly')
+                    : t('settings.betaVideoPrivacyPublic')}
+                </Text>
+              </View>
+              <Switch
+                value={betaVideoPrivacy === 'followers_only'}
+                onValueChange={(value) => { void handleBetaVideoPrivacyToggle(value); }}
+                disabled={!privacyFetched || privacyLoading}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                thumbColor={theme.colors.background}
+              />
+            </View>
           </View>
         </View>
 
@@ -333,17 +334,13 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
           )}
         </Pressable>
       </ScrollView>
-    </View>
+    </SwipeBackWrapper>
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
     navBar: {
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.md,
@@ -383,6 +380,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     scrollView: {
       flex: 1,
+      backgroundColor: theme.colors.background,
     },
     scrollContent: {
       paddingHorizontal: theme.spacing.lg,

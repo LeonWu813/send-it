@@ -2,6 +2,36 @@
 
 ## Engineering Progress
 
+### Swipe-back wiring — 2026-10-15 (AC-185)
+
+**Wire SwipeBackWrapper into SettingsScreen and BlockedAccountsScreen**
+
+Per AC-185, both screens that expose an `onBack` prop now use `SwipeBackWrapper` (owned by MOD-012, located at `src/components/SwipeBackWrapper`) as the outermost JSX element in their `return` statement, enabling the left-edge swipe-back gesture.
+
+`src/modules/mod-localization-theme/screens/SettingsScreen.tsx`:
+- [pass] Import added: `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'`
+- [pass] Root `<View style={styles.root}>` replaced with `<SwipeBackWrapper onBack={onBack}>`; closing `</View>` replaced with `</SwipeBackWrapper>`
+- [pass] `styles.root` style entry removed (now unused — `SwipeBackWrapper` provides `flex: 1` via its own container)
+- [pass] `backgroundColor: theme.colors.background` moved onto `scrollView` style to preserve full-screen background coverage
+- [pass] No `enabled` prop used — gesture is active unconditionally (no scroll-conflict risk; the nav bar area where the swipe would originate has no horizontally-scrolling child)
+
+`src/modules/mod-localization-theme/screens/BlockedAccountsScreen.tsx`:
+- [pass] Import added: `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'`
+- [pass] Root `<View style={styles.root}>` replaced with `<SwipeBackWrapper onBack={onBack}>`; closing `</View>` replaced with `</SwipeBackWrapper>`
+- [pass] `root` style entry removed from `makeStyles` (now unused)
+- [pass] No `enabled` prop used — gesture is active unconditionally
+
+**Self-check**
+- [pass] `npx tsc --noEmit` — all TS errors are pre-existing in unrelated modules (`mod-auth-profile` test file, `ProfileNavigator`, `mod-route-catalog`); 0 new errors introduced by this change
+- [pass] `npx jest --testPathPattern="mod-localization-theme" --passWithNoTests` — exit 0 (no tests in this module, passes with `--passWithNoTests`)
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+- [pass] `enabled` prop omitted — default `true` is correct for both screens
+
+**Files modified**
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+- `src/modules/mod-localization-theme/screens/BlockedAccountsScreen.tsx`
+
 ### Integration fix — 2026-10-13 (cross-module import violation: MOD-012 AppShell.tsx)
 
 **Fix: public re-export for SettingsScreen at module root**

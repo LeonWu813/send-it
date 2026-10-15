@@ -35,6 +35,7 @@ import {
 } from '../../mod-moderation/moderation-service';
 import type { BlockedUser } from '../../mod-moderation/moderation-service';
 import { useTheme } from '../../../lib/theme';
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -238,7 +239,7 @@ export default function BlockedAccountsScreen({
   }
 
   return (
-    <View style={styles.root}>
+    <SwipeBackWrapper onBack={onBack}>
       {/* Navigation bar */}
       <View style={styles.navBar}>
         <Pressable
@@ -255,7 +256,7 @@ export default function BlockedAccountsScreen({
       </View>
 
       {renderContent()}
-    </View>
+    </SwipeBackWrapper>
   );
 }
 
@@ -264,10 +265,6 @@ export default function BlockedAccountsScreen({
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
   return StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
     navBar: {
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.md,
