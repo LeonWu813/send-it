@@ -37,6 +37,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { useTheme } from '../../../lib/theme';
 import {
   fetchNotifications,
@@ -153,75 +154,77 @@ export default function NotificationInboxScreen({
   }
 
   return (
-    <View style={styles.root}>
-      {/* Navigation bar with back button */}
-      {onBack !== undefined && (
-        <View style={styles.navBar}>
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back') ?? 'Back'}
-          >
-            <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
-            <Text style={styles.backButtonText}>{t('common.back') ?? 'Back'}</Text>
-          </Pressable>
-          <Text style={styles.navTitle}>{t('notifications.title')}</Text>
-          <View style={styles.navSpacer} />
-        </View>
-      )}
+    <SwipeBackWrapper onBack={onBack ?? (() => {})} enabled={onBack !== undefined}>
+      <View style={styles.root}>
+        {/* Navigation bar with back button */}
+        {onBack !== undefined && (
+          <View style={styles.navBar}>
+            <Pressable
+              style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.back') ?? 'Back'}
+            >
+              <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
+              <Text style={styles.backButtonText}>{t('common.back') ?? 'Back'}</Text>
+            </Pressable>
+            <Text style={styles.navTitle}>{t('notifications.title')}</Text>
+            <View style={styles.navSpacer} />
+          </View>
+        )}
 
-    <ScrollView
-      style={styles.scrollView}
-      contentContainerStyle={
-        onBack !== undefined ? styles.contentContainerWithNav : styles.contentContainer
-      }
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => void handleRefresh()}
-          tintColor={theme.colors.primary}
-        />
-      }
-    >
-      {/* Screen title — only shown when there is no nav bar (standalone mount) */}
-      {onBack === undefined && (
-        <Text style={styles.screenTitle}>{t('notifications.title')}</Text>
-      )}
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={
+            onBack !== undefined ? styles.contentContainerWithNav : styles.contentContainer
+          }
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => void handleRefresh()}
+              tintColor={theme.colors.primary}
+            />
+          }
+        >
+          {/* Screen title — only shown when there is no nav bar (standalone mount) */}
+          {onBack === undefined && (
+            <Text style={styles.screenTitle}>{t('notifications.title')}</Text>
+          )}
 
-      {/* Error banner */}
-      {error !== null && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable
-            onPress={() => void handleRefresh()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.retry')}
-          >
-            <Text style={styles.retryText}>{t('common.retry')}</Text>
-          </Pressable>
-        </View>
-      )}
+          {/* Error banner */}
+          {error !== null && (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{error}</Text>
+              <Pressable
+                onPress={() => void handleRefresh()}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.retry')}
+              >
+                <Text style={styles.retryText}>{t('common.retry')}</Text>
+              </Pressable>
+            </View>
+          )}
 
-      {/* Empty state */}
-      {error === null && notifications.length === 0 && (
-        <Text style={styles.emptyText}>{t('notifications.empty')}</Text>
-      )}
+          {/* Empty state */}
+          {error === null && notifications.length === 0 && (
+            <Text style={styles.emptyText}>{t('notifications.empty')}</Text>
+          )}
 
-      {/* Notification list */}
-      {notifications.map((item) => (
-        <NotificationRow
-          key={item.id}
-          item={item}
-          styles={styles}
-          theme={theme}
-          t={t}
-          onPress={handleNotificationPress}
-        />
-      ))}
-    </ScrollView>
-    </View>
+          {/* Notification list */}
+          {notifications.map((item) => (
+            <NotificationRow
+              key={item.id}
+              item={item}
+              styles={styles}
+              theme={theme}
+              t={t}
+              onPress={handleNotificationPress}
+            />
+          ))}
+        </ScrollView>
+      </View>
+    </SwipeBackWrapper>
   );
 }
 
