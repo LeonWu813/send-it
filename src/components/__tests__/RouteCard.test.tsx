@@ -4,18 +4,21 @@
  * Verifies:
  *   - Route name and optional gymName are rendered.
  *   - Grade label is NOT rendered in the card UI (AC-191).
- *   - 80×80 thumbnail is rendered when photo_url is provided (AC-192).
- *   - Placeholder is rendered when photo_url is null.
+ *   - 80×80 thumbnail is rendered on the LEFT when photo_url is provided (AC-192).
+ *   - Placeholder is rendered on the LEFT when photo_url is null.
  *   - Beta count subtitle is rendered when betaVideoCount > 0 (AC-189).
  *   - Beta count subtitle is NOT rendered when betaVideoCount === 0.
- *   - Flash send badge is rendered when hasSend + sendStyle 'flash' (AC-190).
- *   - Top send badge is rendered when hasSend + sendStyle 'top' (AC-190).
- *   - Send badge is NOT rendered when hasSend is false.
+ *   - Flash send icon is rendered when hasSend + sendStyle 'flash' (AC-190).
+ *   - Top send icon is rendered when hasSend + sendStyle 'top' (AC-190).
+ *   - Send icon is NOT rendered when hasSend is false.
  *   - Bookmark icon (outline) is rendered when isSaved is false (AC-046/047).
  *   - Bookmark icon (filled) is rendered when isSaved is true (AC-046/047).
  *   - onBookmarkToggle is called when bookmark is pressed; onPress is NOT called.
  *   - onPress is called when the card is pressed.
  *   - hasNewBetaVideo prop no longer exists — no "New Beta" badge rendered (AC-181).
+ *   - sendBadge pill replaced by inline icon next to route name (layout redesign).
+ *   - Thumbnail is on the LEFT side; info is on the RIGHT side (layout redesign).
+ *   - Bookmark uses warning color when saved, textSecondary when unsaved (redesign).
  */
 
 // ── Module mocks (must appear before imports) ─────────────────────────────────
@@ -140,39 +143,58 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
     expect(screen.queryByText(/Beta Videos/)).toBeNull();
   });
 
-  // ── AC-190: send badges ────────────────────────────────────────────────────
+  // ── AC-190: send icon (inline, next to route name) ─────────────────────────
+  // The old sendBadge pill (text "Flash" / "Top") has been replaced by an
+  // inline Ionicons icon in the nameRow. Tests use testID="send-icon" to assert
+  // presence/absence of the icon element.
 
-  it('renders the Flash send badge when hasSend + sendStyle flash (AC-190)', () => {
+  it('renders the send icon when hasSend + sendStyle flash (AC-190)', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="flash" />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('Flash')).toBeTruthy();
+    expect(screen.getByTestId('send-icon')).toBeTruthy();
   });
 
-  it('renders the Top send badge when hasSend + sendStyle top (AC-190)', () => {
+  it('renders the send icon when hasSend + sendStyle top (AC-190)', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="top" />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('Top')).toBeTruthy();
+    expect(screen.getByTestId('send-icon')).toBeTruthy();
   });
 
-  it('does not render a send badge when hasSend is false (AC-190)', () => {
+  it('does not render the send icon when hasSend is false (AC-190)', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend={false} />,
       { wrapper: TestProviders },
     );
-    expect(screen.queryByText('Flash')).toBeNull();
-    expect(screen.queryByText('Top')).toBeNull();
+    expect(screen.queryByTestId('send-icon')).toBeNull();
   });
 
-  it('does not render a send badge when hasSend is omitted (AC-190)', () => {
+  it('does not render the send icon when hasSend is omitted (AC-190)', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
       { wrapper: TestProviders },
     );
+    expect(screen.queryByTestId('send-icon')).toBeNull();
+  });
+
+  // Old text-based send badge assertions — verify the old "Flash"/"Top" text
+  // no longer appears (pill removed; icon only now).
+  it('does not render "Flash" text (send icon replaced old pill badge)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="flash" />,
+      { wrapper: TestProviders },
+    );
     expect(screen.queryByText('Flash')).toBeNull();
+  });
+
+  it('does not render "Top" text (send icon replaced old pill badge)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="top" />,
+      { wrapper: TestProviders },
+    );
     expect(screen.queryByText('Top')).toBeNull();
   });
 

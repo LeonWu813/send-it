@@ -9,14 +9,19 @@
  * Import path (all consumers): `src/components/RouteCard`
  * Per the App-Level Shared Presentational Components convention in production.md.
  *
- * Layout (AC-192):
- *   Left side  — route name + beta-count subtitle (AC-189) + send badge (AC-190)
- *               + bookmark icon (AC-046/047)
- *   Right side — 80×80 photo_url thumbnail (Image or placeholder)
+ * Layout (AC-192, redesigned):
+ *   Left  — 80×80 photo_url thumbnail (Image or placeholder)
+ *   Right — info View (flex-1, marginLeft gap)
+ *             ├── infoHeader row (space-between)
+ *             │     ├── nameRow (route name + send icon when hasSend)
+ *             │     └── bookmark Pressable (top-right)
+ *             ├── gymName (optional)
+ *             └── betaCount subtitle (when betaVideoCount > 0, AC-189)
  *
  * Removed (Rev 39):
  *   - hasNewBetaVideo prop and "New Beta" chip (AC-181)
  *   - grade label text (AC-191) — grade field kept on interface for a11y
+ *   - sendBadge pill (replaced by inline Ionicons icon next to route name)
  *
  * Pure presentational — all data + callbacks are props.
  * No hardcoded colors — all styling via theme tokens.
@@ -65,7 +70,7 @@ export interface RouteCardProps {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/** Gold color for flash send badge — matches MOD-004's flash badge color. */
+/** Gold color for flash send icon — matches MOD-004's flash badge color. */
 const FLASH_BADGE_COLOR = '#FFD700';
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -104,12 +109,60 @@ export default function RouteCard({
       accessibilityRole="button"
       accessibilityLabel={route.name}
     >
-      {/* Left: route info */}
-      <View style={styles.info}>
-        <Text style={styles.routeName} numberOfLines={2}>
-          {route.name}
-        </Text>
+      {/* Left: thumbnail (80×80, AC-192) */}
+      {signedPhotoUrl !== null ? (
+        <Image
+          source={{ uri: signedPhotoUrl }}
+          style={styles.thumbnail}
+          resizeMode="cover"
+          accessibilityLabel={t('home.routeCard.thumbnailAlt', { name: route.name })}
+        />
+      ) : (
+        <View style={styles.thumbnailPlaceholder} />
+      )}
 
+      {/* Right: route info */}
+      <View style={styles.info}>
+        {/* Header row: name+sendIcon on left, bookmark on right */}
+        <View style={styles.infoHeader}>
+          <View style={styles.nameRow}>
+            <Text style={styles.routeName} numberOfLines={2}>
+              {route.name}
+            </Text>
+            {hasSend && (
+              <Ionicons
+                name={sendStyle === 'flash' ? 'flash' : 'checkmark-circle'}
+                size={16}
+                color={sendStyle === 'flash' ? FLASH_BADGE_COLOR : theme.colors.success}
+                style={styles.sendIcon}
+                testID="send-icon"
+              />
+            )}
+          </View>
+
+          {/* Bookmark icon (AC-046/047) */}
+          <Pressable
+            onPress={(e) => {
+              // stopPropagation prevents the card's outer onPress from firing (AC-046/047).
+              // The event object may be absent in test environments; guard accordingly.
+              if (e != null && typeof (e as unknown as { stopPropagation?: () => void }).stopPropagation === 'function') {
+                (e as unknown as { stopPropagation: () => void }).stopPropagation();
+              }
+              onBookmarkToggle?.();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={isSaved ? t('routeCard.saved') : t('routeCard.unsaved')}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={isSaved ? 'bookmark' : 'bookmark-outline'}
+              size={18}
+              color={isSaved ? theme.colors.warning : theme.colors.textSecondary}
+            />
+          </Pressable>
+        </View>
+
+        {/* gymName (optional) */}
         {route.gymName !== undefined && (
           <Text style={styles.gymName} numberOfLines={1}>
             {route.gymName}
@@ -122,61 +175,7 @@ export default function RouteCard({
             {t('routeCard.betaCount', { count: betaVideoCount })}
           </Text>
         )}
-
-        {/* Send badge (AC-190) */}
-        {hasSend && (
-          <View
-            style={[
-              styles.sendBadge,
-              {
-                backgroundColor:
-                  sendStyle === 'flash'
-                    ? FLASH_BADGE_COLOR
-                    : theme.colors.success,
-              },
-            ]}
-          >
-            <Text style={styles.sendBadgeText}>
-              {sendStyle === 'flash'
-                ? t('routeCard.flashSend')
-                : t('routeCard.topSend')}
-            </Text>
-          </View>
-        )}
-
-        {/* Bookmark icon (AC-046/047) */}
-        <Pressable
-          onPress={(e) => {
-            // stopPropagation prevents the card's outer onPress from firing (AC-046/047).
-            // The event object may be absent in test environments; guard accordingly.
-            if (e != null && typeof (e as unknown as { stopPropagation?: () => void }).stopPropagation === 'function') {
-              (e as unknown as { stopPropagation: () => void }).stopPropagation();
-            }
-            onBookmarkToggle?.();
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={isSaved ? t('routeCard.saved') : t('routeCard.unsaved')}
-          hitSlop={8}
-        >
-          <Ionicons
-            name={isSaved ? 'bookmark' : 'bookmark-outline'}
-            size={18}
-            color={theme.colors.primary}
-          />
-        </Pressable>
       </View>
-
-      {/* Right: thumbnail (80×80, AC-192) */}
-      {signedPhotoUrl !== null ? (
-        <Image
-          source={{ uri: signedPhotoUrl }}
-          style={styles.thumbnail}
-          resizeMode="cover"
-          accessibilityLabel={t('home.routeCard.thumbnailAlt', { name: route.name })}
-        />
-      ) : (
-        <View style={styles.thumbnailPlaceholder} />
-      )}
     </Pressable>
   );
 }
@@ -194,39 +193,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       paddingVertical: theme.spacing.sm,
       marginBottom: theme.spacing.sm,
     },
-    info: {
-      flex: 1,
-      marginRight: theme.spacing.sm,
-    },
-    routeName: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      marginBottom: 2,
-    },
-    gymName: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginBottom: 2,
-    },
-    betaCount: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginBottom: 2,
-    },
-    sendBadge: {
-      alignSelf: 'flex-start',
-      borderRadius: theme.borderRadius.sm,
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
-      marginTop: theme.spacing.xs,
-      marginBottom: theme.spacing.xs,
-    },
-    sendBadgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
     thumbnail: {
       width: 80,
       height: 80,
@@ -237,6 +203,40 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       height: 80,
       borderRadius: theme.borderRadius.sm,
       backgroundColor: theme.colors.border,
+    },
+    info: {
+      flex: 1,
+      marginLeft: theme.spacing.sm,
+    },
+    infoHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
+    nameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+      flexWrap: 'wrap',
+    },
+    routeName: {
+      fontSize: theme.fontSize.md,
+      fontWeight: theme.fontWeight.semibold,
+      color: theme.colors.textPrimary,
+      marginBottom: 2,
+    },
+    sendIcon: {
+      marginLeft: 4,
+    },
+    gymName: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginBottom: 2,
+    },
+    betaCount: {
+      fontSize: theme.fontSize.xs,
+      color: theme.colors.textSecondary,
+      marginBottom: 2,
     },
   });
 }
