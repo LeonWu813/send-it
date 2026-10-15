@@ -7,7 +7,7 @@ agent: qa-mod-home
 mode: regression
 module: mod-home
 result: bugs-found
-commit: b455407fc7cb79127755e76f9a4db4e0c0d8b790
+commit: 0fa75a4b9ebc6f7566b68775106008ef96d07f3c
 timestamp: 2026-10-15T00:00:00Z
 ```
 
