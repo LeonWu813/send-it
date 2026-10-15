@@ -186,7 +186,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     card: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       backgroundColor: theme.colors.surface,
       borderRadius: theme.borderRadius.md,
       paddingHorizontal: theme.spacing.md,
