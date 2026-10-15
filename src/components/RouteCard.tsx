@@ -204,6 +204,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     info: {
       flex: 1,
       marginLeft: theme.spacing.sm,
+      justifyContent: 'center',
     },
     bookmarkButton: {
       alignSelf: 'flex-start',
@@ -212,7 +213,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     nameRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      flex: 1,
       flexWrap: 'wrap',
     },
     routeName: {
