@@ -9,6 +9,10 @@
  * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
  * AC-046: achievement icons from MOD-004's fetchUserAchievements (cross-module read).
  * AC-047: read-only filled bookmark indicator on saved route cards.
+ * AC-181: "new beta video" tag on route cards that qualify per AC-180.
+ *         Uses shared RouteCard component (AC-183) which accepts hasNewBetaVideo prop.
+ *         Tag set fetched once per gym screen load via fetchRoutesWithNewBeta (AC-180),
+ *         backed by a 60-second in-memory cache keyed on gymId.
  * US-006: browse currently active routes at a gym.
  */
 
@@ -27,13 +31,36 @@ import {
   View,
 } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme } from '../../../lib/theme';
+import RouteCard from '../../../components/RouteCard';
+import type { RouteCardRoute } from '../../../components/RouteCard';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
-import { fetchSavedRouteIds, listRoutes } from '../route-service';
+import { fetchSavedRouteIds, fetchRoutesWithNewBeta, listRoutes } from '../route-service';
 import type { RouteColor, RouteGrade, RouteListFilters, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
+
+// ── New-beta tag in-memory cache (AC-181) ─────────────────────────────────────
+//
+// Keyed on gymId. TTL: 60 seconds. Fetched once per gym screen load; not per
+// route card. Cache is module-level so it survives filter changes within the
+// same screen session but resets on sign-out / process restart.
+const NEW_BETA_CACHE_TTL_MS = 60_000;
+
+interface NewBetaCacheEntry {
+  routeIds: Set<string>;
+  fetchedAt: number;
+}
+
+const newBetaCache = new Map<string, NewBetaCacheEntry>();
+
+/**
+ * Clears the module-level new-beta cache. Exported for test teardown only —
+ * do not call in production code paths.
+ * @internal
+ */
+export function clearNewBetaCacheForTesting(): void {
+  newBetaCache.clear();
+}
 
 /** Map each RouteColor enum value to a React Native named color string. */
 const COLOR_SWATCH: Record<RouteColor, string> = {
@@ -105,8 +132,7 @@ export default function RouteListScreen({
 }: RouteListScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -121,6 +147,11 @@ export default function RouteListScreen({
 
   // AC-047: set of saved route IDs (read-only filled bookmark indicator)
   const [savedRouteIds, setSavedRouteIds] = useState<Set<string>>(new Set());
+
+  // AC-181: set of route IDs that qualify for the "new beta video" tag (AC-180).
+  // Fetched once per gym screen load from the routes_with_new_beta RPC.
+  // Backed by a module-level 60-second in-memory cache keyed on gymId.
+  const [newBetaRouteIds, setNewBetaRouteIds] = useState<Set<string>>(new Set());
 
   const filters: RouteListFilters = useMemo(
     () => ({ grade: gradeFilter, colorTag: colorFilter }),
@@ -151,6 +182,39 @@ export default function RouteListScreen({
     return [...saved, ...unsaved];
   }, [routes, savedRouteIds]);
 
+  /**
+   * Fetches the "new beta" tag set for this gym's visible routes.
+   * Respects a 60-second in-memory cache keyed on gymId so the RPC is not
+   * called on every filter chip change — only on the first load per TTL window.
+   * AC-181: one call per gym screen load, not per route card.
+   */
+  const fetchNewBeta = useCallback(async (routeIds: string[]): Promise<void> => {
+    if (routeIds.length === 0) {
+      setNewBetaRouteIds(new Set());
+      return;
+    }
+
+    const cached = newBetaCache.get(gymId);
+    const now = Date.now();
+    if (cached && now - cached.fetchedAt < NEW_BETA_CACHE_TTL_MS) {
+      // Use the cached result — do not re-fetch within the TTL window.
+      setNewBetaRouteIds(cached.routeIds);
+      return;
+    }
+
+    try {
+      // fetchRoutesWithNewBeta accepts ALL currently visible route IDs so the
+      // RPC resolves the full set in a single round-trip (no N+1).
+      const ids = await fetchRoutesWithNewBeta(routeIds);
+      const idSet = new Set(ids);
+      newBetaCache.set(gymId, { routeIds: idSet, fetchedAt: now });
+      setNewBetaRouteIds(idSet);
+    } catch {
+      // New-beta tag is best-effort — silently ignore failures.
+      setNewBetaRouteIds(new Set());
+    }
+  }, [gymId]);
+
   const fetchRoutes = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
@@ -166,15 +230,20 @@ export default function RouteListScreen({
         } catch {
           // Achievement overlay is best-effort — silently ignore failures
         }
+
+        // AC-181: fetch the "new beta" tag set for all visible routes.
+        // Fire in parallel after achievements — non-blocking, best-effort.
+        void fetchNewBeta(data.map((r) => r.id));
       } else {
         setAchievements({});
+        setNewBetaRouteIds(new Set());
       }
     } catch {
       setErrorMessage(t('routes.errors.loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, [gymId, filters, t]);
+  }, [gymId, filters, t, fetchNewBeta]);
 
   useEffect(() => {
     void fetchRoutes();
@@ -209,41 +278,44 @@ export default function RouteListScreen({
     const routeName = formatRouteName(item.grade, item.color_tag, item.section_label, t);
     const achievement = achievements[item.id] as AchievementStyle | undefined;
     const isSaved = savedRouteIds.has(item.id);
+    // AC-181: check if this route qualifies for the "new beta video" tag (AC-180).
+    const hasNewBetaVideo = newBetaRouteIds.has(item.id);
 
+    // Build the RouteCardRoute shape expected by the shared RouteCard component.
+    const cardRoute: RouteCardRoute = {
+      id: item.id,
+      name: routeName,
+      grade: item.grade,
+      photo_url: item.photo_url ?? null,
+    };
+
+    // Wrap RouteCard with the saved indicator and achievement icon overlays so
+    // the shared card stays presentational (no service dependencies).
     return (
-      <Pressable
-        style={({ pressed }) => [
-          styles.card,
-          pressed && styles.cardPressed,
-        ]}
-        onPress={() => onSelectRoute(item.id)}
-        accessibilityRole="button"
-        accessibilityLabel={routeName}
-      >
-        <View style={styles.cardHeader}>
-          {/* AC-045: formatted route name + AC-046: achievement icon directly beside name */}
-          <View style={styles.routeNameRow}>
-            <Text style={styles.routeName} numberOfLines={1} testID="route-name">
-              {routeName}
-            </Text>
-            {achievement ? (
-              <AchievementIcon style={achievement} theme={theme} />
-            ) : null}
+      <View style={styles.cardWrapper}>
+        <RouteCard
+          route={cardRoute}
+          onPress={() => onSelectRoute(item.id)}
+          hasNewBetaVideo={hasNewBetaVideo}
+        />
+        {/* AC-046: achievement icon overlay — positioned at top-right of the card */}
+        {achievement ? (
+          <View style={styles.achievementOverlay}>
+            <AchievementIcon style={achievement} theme={theme} />
           </View>
-          {/* AC-047: read-only saved bookmark indicator (no tap action) */}
-          {isSaved ? (
+        ) : null}
+        {/* AC-047: read-only saved bookmark indicator — no tap action */}
+        {isSaved ? (
+          <View style={styles.savedOverlay}>
             <Ionicons
               name="bookmark"
               size={16}
               color={theme.colors.warning}
               accessibilityLabel={t('routeCatalog.bookmark.saved')}
             />
-          ) : null}
-        </View>
-        <Text style={styles.dateText}>
-          {new Date(item.created_at).toLocaleDateString()}
-        </Text>
-      </Pressable>
+          </View>
+        ) : null}
+      </View>
     );
   }
 
@@ -469,6 +541,27 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     listContent: {
       paddingBottom: theme.spacing.md,
     },
+    // AC-181: wrapper around RouteCard to allow overlay positioning.
+    cardWrapper: {
+      marginHorizontal: theme.spacing.lg,
+      marginBottom: theme.spacing.sm,
+      position: 'relative',
+    },
+    // AC-046: achievement icon pinned to the top-right corner of the card.
+    achievementOverlay: {
+      position: 'absolute',
+      top: theme.spacing.sm,
+      right: theme.spacing.md + 48 + theme.spacing.sm, // right of thumbnail
+      zIndex: 1,
+    },
+    // AC-047: saved bookmark indicator pinned to the top-right corner of the card.
+    savedOverlay: {
+      position: 'absolute',
+      top: theme.spacing.sm,
+      right: theme.spacing.sm,
+      zIndex: 1,
+    },
+    // Legacy card styles kept for any remaining inline card rendering paths.
     card: {
       backgroundColor: theme.colors.surface,
       borderRadius: theme.borderRadius.lg,
