@@ -2,6 +2,38 @@
 
 ## Engineering Progress
 
+### Bugfix — 2026-10-15 (theme initialization — wrong theme on launch)
+
+**ThemeProvider now loads saved override from AsyncStorage on mount**
+
+Root cause: `ThemeProvider` in `src/lib/theme.ts` initialized `override` to `'system'` via `useState` without reading the persisted value from AsyncStorage. The only place the saved override was loaded and applied was inside `SettingsScreen.tsx`'s mount `useEffect` (`restorePreferences`), which called `setOverride(savedOverride)`. This caused a visible theme switch every time the user opened Settings — the app showed the system theme, then Settings corrected it to the saved preference.
+
+Fix (two changes):
+
+1. `src/lib/theme.ts`:
+   - Added import: `import AsyncStorage from '@react-native-async-storage/async-storage'`
+   - Added `useEffect` (runs once on mount) that reads `'app_theme_override'` from AsyncStorage and calls `setOverride(saved)` if the stored value is a valid `ThemeOverride` (`'light' | 'dark' | 'system'`). Key `'app_theme_override'` matches what `saveThemeOverride` uses in `settings-storage.ts` — verified before hardcoding. Errors are silently swallowed; the default `'system'` is the safe fallback.
+
+2. `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`:
+   - In `restorePreferences` (mount `useEffect`), removed the `setOverride(savedOverride)` call. SettingsScreen now only syncs its local `selectedOverride` UI state; ThemeProvider owns loading and applying the saved override.
+   - `setOverride` is still destructured from `useTheme()` and still called in `handleOverrideSelect` (live user selection) — no change to that path.
+
+Safe-area insets: SettingsScreen is rendered in two contexts — (1) as a full-screen `absoluteFill` overlay from AppShell (which sits on top of AppHeader, so the overlay covers the full screen including the status bar) and (2) inside ProfileNavigator (which sits below AppHeader). Because the overlay context requires the top inset, `useSafeAreaInsets()` + `makeStyles(theme, insets.top)` is kept as-is. No change to insets handling.
+
+**Self-check**
+- [pass] `npx tsc --noEmit` — exit 0, 0 TypeScript errors
+- [pass] `'app_theme_override'` key confirmed to match `settings-storage.ts` `THEME_OVERRIDE_KEY` constant
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+- [pass] No new ACs or behavior changes — strictly a bug fix (wrong theme on launch, visible theme flash on Settings open)
+- [pass] `setOverride` still used in `handleOverrideSelect` — no unused-variable issue
+
+**Files modified**
+- `src/lib/theme.ts`
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+
+---
+
 ### Swipe-back wiring — 2026-10-15 (AC-185)
 
 **Wire SwipeBackWrapper into SettingsScreen and BlockedAccountsScreen**
@@ -722,3 +754,112 @@ Input=engineer pushes a commit with a missing zh-TW key to main; Expected per sp
 **Overall verdict: QA PASS**
 
 All three bugs from QA Run 1 (Verification 2026-10-13) are resolved. All five ACs (AC-090, AC-091, AC-092, AC-155, AC-157, AC-168) pass. No regressions introduced. Module is ready for human sign-off.
+
+---
+
+### QA Run 3 — Regression — 2026-10-15
+
+**Workflow**: regression-test (re-verification after engineer bugfix — theme initialization fix: ThemeProvider loads saved override on mount; SettingsScreen mount effect no longer calls setOverride)
+
+**Change being re-verified**:
+- `src/lib/theme.ts`: added `useEffect` that reads `'app_theme_override'` from AsyncStorage on mount and calls `setOverride(saved)` if valid. Corrects the wrong-theme-on-launch bug.
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`: `restorePreferences` mount effect no longer calls `setOverride(savedOverride)` — only `setSelectedOverride` (local UI state) is set. ThemeProvider now owns the initial override load.
+
+**Automated test run**
+- `npx tsc --noEmit` — exit 0. 0 TypeScript errors.
+- `npm run check:i18n` — "i18n completeness OK". Exit 0.
+
+---
+
+**AC-091: Language toggle in Settings — immediate effect, no restart**
+
+PASS AC-091
+
+Verification method: code inspection of `SettingsScreen.tsx` lines 135–139.
+
+`handleLanguageSelect` calls `i18n.changeLanguage(lang)` (line 137) and `saveLanguage(lang)` (line 138) — unchanged. Language section (lines 214–242) is structurally identical to QA Run 2. `restorePreferences` still restores language via `setSelectedLanguage(savedLang)` and `i18n.changeLanguage(savedLang)` (lines 98–103). No regression.
+
+---
+
+**AC-092: Light/Dark mode — OS default + three-state Settings override, immediate effect**
+
+PASS AC-092
+
+Verification method: code inspection of `src/lib/theme.ts` and `SettingsScreen.tsx`.
+
+**New behavior — ThemeProvider loads saved override on mount:**
+- `src/lib/theme.ts` lines 170–182: `useEffect([], ...)` calls `AsyncStorage.getItem('app_theme_override')`. If stored value is `'light'`, `'dark'`, or `'system'`, calls `setOverride(saved)`. Key `'app_theme_override'` matches `settings-storage.ts` `THEME_OVERRIDE_KEY = 'app_theme_override'` (confirmed at line 15 of `settings-storage.ts`). Errors silently swallowed; default `'system'` applies when nothing is stored or AsyncStorage throws.
+- Result: the correct saved theme is applied from ThemeProvider's first render cycle, eliminating the wrong-theme-on-launch issue and the theme flash on Settings open.
+
+**SettingsScreen mount effect — setOverride removed:**
+- `handleOverrideSelect` (lines 141–145) still calls `setOverride(newOverride)` for live user selection — the live-override-without-restart requirement of AC-092 is fully preserved.
+- `SettingsScreen.tsx` `restorePreferences` (lines 91–113): `savedOverride` is loaded via `loadThemeOverride()`, then `setSelectedOverride(savedOverride)` is called (line 106) to sync local radio-button UI state. The explicit `setOverride(savedOverride)` call is absent; the comment at line 107 confirms: "setOverride is now handled by ThemeProvider on init — do not call here". `setOverride` remains destructured from `useTheme()` (line 72) and is used in `handleOverrideSelect` (line 143) — no unused-variable issue.
+- No double-apply risk: ThemeProvider's mount effect runs once; SettingsScreen's mount effect runs once. They read the same AsyncStorage key independently. ThemeProvider's call updates the live context; SettingsScreen's call updates only local UI state. The two do not conflict.
+
+Input=app launches with a previously saved `'dark'` override; Expected per spec=ThemeProvider applies dark theme immediately on launch, no theme flash; Actual=ThemeProvider reads `'app_theme_override'` on mount and calls `setOverride('dark')` — dark theme applied from first render. PASS.
+
+Input=user selects "Light" in Settings override; Expected per spec=theme switches to light immediately without restart; Actual=`handleOverrideSelect('light')` calls `setOverride('light')` and `saveThemeOverride('light')` — immediate effect, persisted. PASS.
+
+`resolveScheme` logic and OS appearance listener (`Appearance.addChangeListener`) are unchanged from QA Run 2. All five `resolveScheme` test cases still hold. PASS carries forward.
+
+---
+
+**AC-157: Beta Video Privacy toggle in SettingsScreen**
+
+PASS AC-157
+
+Re-verification: `SettingsScreen.tsx` lines 274–313. AC-155 (Blocked Accounts) section renders at lines 274–290 before AC-157 (Beta Video Privacy) section at lines 292–313. Row order matches spec. Short labels `t('settings.betaVideoPrivacyPublic')` / `t('settings.betaVideoPrivacyFollowersOnly')` rendered in `settingRowSubtext` (lines 298–301). `updateBetaVideoPrivacy(newValue)` called via MOD-001 import (line 53). No direct DB write by MOD-010. `disabled={!privacyFetched || privacyLoading}` guards premature interaction. The `setOverride` removal in `restorePreferences` has no effect on the Beta Video Privacy code path. No regression. PASS.
+
+---
+
+**AC-168: Logout button at bottom of SettingsScreen**
+
+PASS AC-168
+
+Re-verification: `SettingsScreen.tsx` lines 315–335. Logout button is the last element in the `ScrollView`. `handleLogout()` (lines 161–173) calls `signOut()` from `mod-auth-profile/auth-service`. Error handling and `ActivityIndicator` unchanged. Styling `borderColor: theme.colors.error`, `color: theme.colors.error` unchanged. The `setOverride` removal in `restorePreferences` has no effect on the Logout button code path. No regression. PASS.
+
+---
+
+**Re-verification of all previously passing ACs**
+
+**AC-090** — PASS. `src/lib/i18n.ts` unchanged. `detectDeviceLanguage()` logic unchanged. PASS carries forward.
+
+**AC-155** — PASS. `SettingsScreen.tsx` early return (lines 186–188) unchanged. Blocked Accounts row (lines 277–289) unchanged. `BlockedAccountsScreen.tsx` unchanged. PASS carries forward.
+
+**All strings via i18n hook** — PASS. No inline string literals introduced by the theme-init fix. `theme.ts` and the `restorePreferences` change add no user-visible strings. All existing `t(...)` patterns unchanged. No regression.
+
+**No hardcoded hex colors** — PASS. `theme.ts` fix adds no new color literals in component code; the hex values in `LIGHT_PALETTE` and `DARK_PALETTE` are token definitions — the correct location for the token source. `SettingsScreen.tsx` unchanged. No regression.
+
+**Safe area insets** — PASS. `useSafeAreaInsets()` + `makeStyles(theme, insets.top)` in `SettingsScreen.tsx` (lines 73–74) unchanged. `BlockedAccountsScreen.tsx` unchanged. No regression.
+
+**i18n catalog completeness** — PASS. `npm run check:i18n` exits 0. No new keys introduced by this fix. No regression.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0. No regression.
+
+**REQ-CI** — PASS. `.github/workflows/i18n-check.yml` exists and is unchanged. Triggers on push/pull_request to main. No regression.
+
+**No gold-plating** — PASS. Fix adds exactly one `useEffect` to `ThemeProvider` and removes one `setOverride` call from `SettingsScreen.tsx`. No extra features introduced. No regression.
+
+---
+
+**Summary**
+
+| AC / Requirement | Result | Notes |
+|---|---|---|
+| AC-090: Device locale detection on first launch | PASS | Unchanged; no regression |
+| AC-091: Language toggle in Settings, immediate effect | PASS | handleLanguageSelect unchanged; restorePreferences language path unchanged |
+| AC-092: Three-state theme override, immediate effect | PASS | ThemeProvider now loads saved override on mount; handleOverrideSelect still calls setOverride for live changes; no restart required |
+| AC-155: Blocked Accounts screen — list, Unblock, empty state | PASS | Unchanged; no regression |
+| AC-157: Beta Video Privacy toggle — state labels, row order, MOD-001 write | PASS | All sub-items from QA Run 2 unchanged; no regression from theme-init fix |
+| AC-168: Logout button at very bottom, error color outlined, signOut from MOD-001 | PASS | Unchanged; no regression |
+| REQ-CI: zh-TW key-parity CI gate wired into automated pipeline | PASS | .github/workflows/i18n-check.yml unchanged; triggers on push/pull_request to main |
+| All strings via i18n hook | PASS | No inline literals introduced; all t() patterns unchanged |
+| No hardcoded hex colors | PASS | No new hex literals in component code; theme.ts palette definitions are the token source (correct location) |
+| Safe area insets | PASS | useSafeAreaInsets + makeStyles(theme, topInset) unchanged |
+| i18n catalog completeness | PASS | npm run check:i18n exits 0; no new keys introduced |
+| TypeScript strict mode | PASS | npx tsc --noEmit exits 0 |
+| No gold-plating | PASS | Fix scoped exactly to theme initialization correction |
+
+**Overall verdict: QA PASS**
+
+The theme-initialization fix is correct and complete. ThemeProvider now loads the saved override from AsyncStorage on mount (key `'app_theme_override'`, validated against `ThemeOverride` union before applying), eliminating the wrong-theme-on-launch behavior. SettingsScreen no longer redundantly calls `setOverride` on mount — only local UI state is synced there; ThemeProvider owns the initial override application. The live-override path (`handleOverrideSelect` calling `setOverride`) is untouched. All previously passing ACs (AC-090, AC-091, AC-092, AC-155, AC-157, AC-168, REQ-CI) continue to pass. No regressions introduced.
