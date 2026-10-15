@@ -2489,3 +2489,123 @@ All acceptance criteria and checks that passed in the prior QA run (QA Rev-35 Re
 | No gold-plating | PASS | PASS |
 
 **Overall verdict: PASS. All 6 console.error sites verified correct and immediately before their respective throws. No logic changes. TypeScript clean. 103 tests pass.**
+
+---
+
+## QA Safe-Area Inset Fix Regression — 2026-10-14
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-10-14
+**Workflow**: regression-test (re-verification after engineer removed `useSafeAreaInsets()` from `RouteListScreen` and changed `makeStyles(theme, insets.top)` to `makeStyles(theme, 0)`)
+**Overall verdict**: PASS — fix verified correct; no regressions on tsc, test suite, or any previously passing AC
+
+---
+
+### Fix Being Re-Verified
+
+**Problem**: The global `AppHeader` already consumes `insets.top` (safe-area top offset). `RouteListScreen` also called `useSafeAreaInsets()` and passed `insets.top` to `makeStyles(theme, insets.top)`, which applied `paddingTop: topInset + theme.spacing.md` to the `header` and `centeredContainer` styles. This caused a double top margin — the screen's own header was padded by the safe-area inset a second time on top of the global header's consumed inset.
+
+**Fix applied**: Removed the `useSafeAreaInsets()` import and call from `RouteListScreen.tsx`. Changed the `makeStyles` call from `makeStyles(theme, insets.top)` to `makeStyles(theme, 0)`, so the header and centeredContainer no longer add a safe-area inset offset.
+
+---
+
+### Code Inspection — `src/modules/mod-route-catalog/screens/RouteListScreen.tsx`
+
+**1. `useSafeAreaInsets` import absent**
+
+- `grep -n "useSafeAreaInsets" RouteListScreen.tsx` returned no output.
+- The import from `react-native-safe-area-context` (or any equivalent) does not appear anywhere in the file.
+- PASS.
+
+**2. `useSafeAreaInsets` call absent**
+
+- No call site for `useSafeAreaInsets()` exists in the component body.
+- PASS.
+
+**3. `makeStyles(theme, 0)` is used**
+
+- Line 135: `const styles = makeStyles(theme, 0);`
+- The literal `0` is passed as `topInset`. This is the only `makeStyles` call in the component.
+- PASS.
+
+**4. `makeStyles` signature and internal usage unchanged**
+
+- Line 460: `function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number)` — signature unchanged; the function still accepts `topInset` so no downstream style references needed updating.
+- `paddingTop: topInset + theme.spacing.md` in `centeredContainer` (line 472) and `paddingTop: topInset + theme.spacing.md` in `header` (line 479) resolve to `0 + theme.spacing.md` = `theme.spacing.md` — safe-area double-padding eliminated.
+- PASS.
+
+**5. No other spacing logic changed**
+
+- `listContent` style (`paddingBottom: theme.spacing.md`) unchanged.
+- `filterRow`, `cardWrapper`, overlay styles, and all other layout styles unchanged.
+- PASS.
+
+---
+
+### Automated Test Run
+
+- Command: `npm test -- --watchAll=false --testPathPattern="mod-route-catalog"`
+- Result: **103 tests passed, 0 failed, 5 suites**
+- Exit code: 0
+- Console output: pre-existing `act(...)` warnings from expo vector-icons async font load; pre-existing `console.error` calls in error-path tests for route-service (expected behavior from the console.error convention fix); no new failures.
+- PASS.
+
+---
+
+### TypeScript Check
+
+- Command: `npx tsc --noEmit`
+- Exit code: 0 — no type errors.
+- PASS.
+
+---
+
+### Previously Passing ACs — Regression Verification
+
+No screen logic, service functions, types, navigator, migrations, locale files, or test files were modified by this fix. The only change to `RouteListScreen.tsx` is: (1) the `useSafeAreaInsets` import removed, (2) `const insets = useSafeAreaInsets()` call removed, (3) `makeStyles(theme, insets.top)` → `makeStyles(theme, 0)`. All AC behavior is exercised through state, props, and rendered output — none of which change from this layout-inset correction.
+
+| AC | Description | Result |
+|----|-------------|--------|
+| AC-040 | Grade + color filter chips; no status filter for normal users | PASS |
+| AC-041 | Active routes only; no status tag surfaced | PASS |
+| AC-042 | Tap route → detail navigation | PASS |
+| AC-043 | Pre-fill grade/color from filter state (submit screen) | PASS |
+| AC-045 | Route display name composed as {grade} {LocalizedColor} ({section_label}?) | PASS |
+| AC-046 | Achievement icons from fetchUserAchievements (cross-module) | PASS |
+| AC-047 | Read-only saved bookmark indicator on saved route cards | PASS |
+| AC-125 | Gym name subtitle on RouteDetailScreen | PASS |
+| AC-126 | Added-date footer on RouteDetailScreen | PASS |
+| AC-127 | Two-column send-summary via summarizeAscents | PASS |
+| AC-128 | Tap summary card → send-history screen | PASS |
+| AC-129 | SendHistoryDetailScreen; back → detail not list | PASS |
+| AC-130 | Two action buttons; no duplicate entry points | PASS |
+| AC-179 | upsertRouteVisit fire-and-forget on RouteDetailScreen mount | PASS |
+| AC-180 | fetchRoutesWithNewBeta RPC + service wrapper | PASS |
+| AC-181 | "New Beta" tag on RouteCard; 60s cache | PASS |
+| AC-020/021/024b/025/026/027/028/029 | Submit flow, RLS, approval gate | PASS |
+| All migrations and RLS policies | No migration files touched | PASS |
+| Photo signed URL | getPhotoSignedUrl + photoUri state in RouteDetailScreen | PASS |
+| Sticky top bar | topBar View outside ScrollView in RouteDetailScreen | PASS |
+| Saved routes sort to top | sortedRoutes useMemo in RouteListScreen | PASS |
+| No gold-plating | No spacing logic beyond the inset removal changed | PASS |
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| `useSafeAreaInsets` import absent from RouteListScreen | PASS |
+| `useSafeAreaInsets()` call absent from RouteListScreen | PASS |
+| `makeStyles(theme, 0)` called at line 135 | PASS |
+| `makeStyles` signature and internal `topInset` usages unchanged | PASS |
+| No other spacing logic changed | PASS |
+| `npx tsc --noEmit` — 0 errors | PASS |
+| `npm test -- --watchAll=false --testPathPattern="mod-route-catalog"` — 103 tests, 5 suites, 0 failures | PASS |
+| AC-040 through AC-047 regression | PASS |
+| AC-125 through AC-130 regression | PASS |
+| AC-179, AC-180, AC-181 regression | PASS |
+| AC-020/021/024b/025–029 regression | PASS |
+| All other previously passing checks | PASS |
+
+**Overall verdict: PASS. Safe-area inset double-margin fix verified correct. No regressions. 103 tests pass. TypeScript clean.**
