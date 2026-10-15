@@ -167,6 +167,10 @@
   },
   "routes": {
     "noResults": "No routes found.",
+    "duplicateWarning": {
+      "title": "Possible Duplicate",
+      "body": "An active {{grade}} {{color}} route already exists at this gym."
+    },
     "status": {
       "active": "Active",
       "retired": "Retired"
@@ -296,7 +300,6 @@
       "daysAgo": "{{count}} days ago"
     },
     "routeCard": {
-      "newBeta": "New Beta",
       "thumbnailAlt": "Route photo for {{name}}"
     },
     "appHeader": {
@@ -304,6 +307,13 @@
       "bellA11yUnread": "Notifications, {{count}} unread",
       "settingsA11y": "Settings"
     }
+  },
+  "routeCard": {
+    "betaCount": "{{count}} Beta Videos",
+    "saved": "Saved",
+    "unsaved": "Save",
+    "flashSend": "Flash",
+    "topSend": "Top"
   },
   "betaVideo": {
     "sectionTitle": "BETA VIDEOS",

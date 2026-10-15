@@ -17,25 +17,39 @@
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 jest.mock('../../mod-route-catalog/route-service');
 jest.mock('../../mod-social-feed/social-feed-service');
+jest.mock('../../mod-send-logging');
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
     from: jest.fn(),
     rpc: jest.fn(),
   },
 }));
-// Shallow-mock RouteCard so tests assert on props, not RouteCard internals.
+// Shallow-mock RouteCard so HomeScreen tests assert on props, not RouteCard internals.
+// Updated for Rev 39/40: accepts betaVideoCount, hasSend, sendStyle, isSaved, onBookmarkToggle.
+// hasNewBetaVideo is removed (AC-181 Rev 39).
 jest.mock('../../../components/RouteCard', () => {
   const React = require('react');
   const { Text, Pressable } = require('react-native');
   return {
     __esModule: true,
-    default: ({ route, onPress, hasNewBetaVideo }: { route: { name: string; grade: string }; onPress: () => void; hasNewBetaVideo?: boolean }) =>
+    default: ({
+      route,
+      onPress,
+      hasSend,
+      sendStyle,
+    }: {
+      route: { name: string; grade: string };
+      onPress: () => void;
+      hasSend?: boolean;
+      sendStyle?: 'flash' | 'top' | null;
+    }) =>
       React.createElement(
         Pressable,
         { onPress, testID: `route-card-${route.name}`, accessibilityRole: 'button' },
         React.createElement(Text, null, route.name),
         React.createElement(Text, null, route.grade),
-        hasNewBetaVideo ? React.createElement(Text, null, 'New Beta') : null,
+        hasSend && sendStyle === 'flash' ? React.createElement(Text, null, 'Flash') : null,
+        hasSend && sendStyle === 'top' ? React.createElement(Text, null, 'Top') : null,
       ),
   };
 });
@@ -48,6 +62,7 @@ import type { Session } from '@supabase/supabase-js';
 import HomeScreen, { clearNewBetaCacheForTests } from '../screens/HomeScreen';
 import * as routeService from '../../mod-route-catalog/route-service';
 import * as socialFeedService from '../../mod-social-feed/social-feed-service';
+import * as sendLogging from '../../mod-send-logging';
 import { supabase } from '../../../lib/supabase';
 import { renderOptions } from '../test-utils';
 
@@ -55,8 +70,17 @@ import { renderOptions } from '../test-utils';
 const mockFetchSavedRouteIds = routeService.fetchSavedRouteIds as jest.MockedFunction<
   typeof routeService.fetchSavedRouteIds
 >;
+const mockSaveRoute = routeService.saveRoute as jest.MockedFunction<
+  typeof routeService.saveRoute
+>;
+const mockUnsaveRoute = routeService.unsaveRoute as jest.MockedFunction<
+  typeof routeService.unsaveRoute
+>;
 const mockFetchFollowing = socialFeedService.fetchFollowing as jest.MockedFunction<
   typeof socialFeedService.fetchFollowing
+>;
+const mockFetchUserAchievements = sendLogging.fetchUserAchievements as jest.MockedFunction<
+  typeof sendLogging.fetchUserAchievements
 >;
 const mockFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
 const mockRpc = supabase.rpc as jest.MockedFunction<typeof supabase.rpc>;
@@ -100,7 +124,10 @@ function makeQueryBuilder(result: { data: unknown; error: null | object }): any 
 /** Sets up supabase.from() to return sensible defaults for all tables. */
 function setupDefaultMocks() {
   mockFetchSavedRouteIds.mockResolvedValue([]);
+  mockSaveRoute.mockResolvedValue(undefined);
+  mockUnsaveRoute.mockResolvedValue(undefined);
   mockFetchFollowing.mockResolvedValue([]);
+  mockFetchUserAchievements.mockResolvedValue({});
   mockRpc.mockResolvedValue({ data: [], error: null } as never);
 
   mockFrom.mockImplementation((table: string) => {
@@ -338,7 +365,9 @@ describe('HomeScreen (Rev 36)', () => {
       });
     });
 
-    it('renders "New Beta" badge on qualifying routes (AC-181)', async () => {
+    it('does not render a "New Beta" chip on any route card (AC-181 Rev 39)', async () => {
+      // Rev 39 removed the "New Beta" chip from RouteCard entirely.
+      // Even when the routes_with_new_beta RPC returns results, no chip appears.
       mockFetchSavedRouteIds.mockResolvedValue(['route-001']);
       mockFrom.mockImplementation((table: string) => {
         if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
@@ -353,16 +382,18 @@ describe('HomeScreen (Rev 36)', () => {
         }
         return makeQueryBuilder({ data: [], error: null });
       });
-      // RPC returns route-001 as having new beta.
+      // RPC returns route-001 as having new beta — but the chip must still not appear.
       mockRpc.mockResolvedValue({
         data: [{ route_id: 'route-001' }],
         error: null,
       } as never);
 
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      // Wait for the route card to render, then confirm no "New Beta" text appears.
       await waitFor(() => {
-        expect(screen.getByText('New Beta')).toBeTruthy();
+        expect(screen.getByText('V5 Red')).toBeTruthy();
       });
+      expect(screen.queryByText('New Beta')).toBeNull();
     });
 
     it('calls onSelectRoute when a route card is pressed (AC-178)', async () => {

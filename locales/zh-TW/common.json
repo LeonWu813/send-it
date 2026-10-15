@@ -167,6 +167,10 @@
   },
   "routes": {
     "noResults": "找不到路線。",
+    "duplicateWarning": {
+      "title": "可能重複",
+      "body": "這個健身房已有一條 {{grade}} {{color}} 的現役路線。"
+    },
     "status": {
       "active": "開放中",
       "retired": "已退場"
@@ -296,7 +300,6 @@
       "daysAgo": "{{count}} 天前"
     },
     "routeCard": {
-      "newBeta": "新 Beta",
       "thumbnailAlt": "{{name}} 的路線照片"
     },
     "appHeader": {
@@ -304,6 +307,13 @@
       "bellA11yUnread": "通知，{{count}} 則未讀",
       "settingsA11y": "設定"
     }
+  },
+  "routeCard": {
+    "betaCount": "{{count}} 條路線影片",
+    "saved": "已收藏",
+    "unsaved": "收藏",
+    "flashSend": "閃送",
+    "topSend": "完攀"
   },
   "betaVideo": {
     "sectionTitle": "BETA 影片",

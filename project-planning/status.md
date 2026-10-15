@@ -3,13 +3,12 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
-module: n/a
+agent: engineer-mod-home
+mode: implementation
+module: mod-home (MOD-012)
 result: success
-commit: e4e9f6c7d43eb3cd0b66366bb59be0be5ce83fa1
 timestamp: 2026-10-15T00:00:00Z
-summary: Rev 40 delta sync — RouteCard redesign (AC-181/189/190/191/192), count_beta_videos_by_routes RPC, bookmark wiring (AC-046/047), Per-route beta-video aggregates Shared Convention; updated production.md, mod-route-catalog/spec.md, mod-home/spec.md, mod-beta-video/spec.md, mod-send-logging/spec.md, and engineer-mod-home/route-catalog agent wrappers.
+summary: Rev 39/40 RouteCard redesign — implemented AC-181 (chip removed), AC-189 (betaCount subtitle), AC-190 (send badge flash/top), AC-191 (grade label hidden), AC-192 (80x80 thumbnail), AC-046/047 (bookmark wired). Updated RouteCard.tsx, RouteCard.test.tsx (23 tests), HomeScreen.tsx (fetchUserAchievements + saveRoute/unsaveRoute wiring), HomeScreen.test.tsx (39 tests), locale files (routeCard namespace), RouteListScreen.tsx and ProfileHistoryScreen.tsx (hasNewBetaVideo cleanup). npx tsc --noEmit: 0 errors. All tests pass.
 ```
 
 

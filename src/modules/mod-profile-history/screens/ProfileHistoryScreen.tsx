@@ -250,7 +250,6 @@ export default function ProfileHistoryScreen({
               gymName: item.gym_name,
             }}
             onPress={() => onNavigateToRoute?.(item.route_id, item.gym_id)}
-            hasNewBetaVideo={false}
           />
         );
       }}

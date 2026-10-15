@@ -296,7 +296,6 @@ export default function RouteListScreen({
         <RouteCard
           route={cardRoute}
           onPress={() => onSelectRoute(item.id)}
-          hasNewBetaVideo={hasNewBetaVideo}
         />
         {/* AC-046: achievement icon overlay — positioned at top-right of the card */}
         {achievement ? (

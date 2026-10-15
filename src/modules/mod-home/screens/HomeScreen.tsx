@@ -1,6 +1,7 @@
 /**
  * HomeScreen — Tab 1 content (AC-111 rev, AC-112, AC-113, AC-114, AC-115,
- *   AC-174, AC-175, AC-176, AC-177, AC-178, AC-181, AC-182).
+ *   AC-174, AC-175, AC-176, AC-177, AC-178, AC-181, AC-182, AC-189, AC-190,
+ *   AC-191, AC-192).
  *
  * Four sections in order (AC-111):
  *   1. Events Banner (AC-112, AC-174) — single admin-managed banner from
@@ -11,7 +12,10 @@
  *      `last_viewed_at` per gym; tapping navigates to RouteListScreen.
  *   3. Projecting Routes (AC-177, AC-178, AC-181) — sourced from `saved_routes`
  *      via MOD-003's fetchSavedRouteIds(); V-grade filter tabs; uses RouteCard
- *      with `hasNewBetaVideo` prop from `routes_with_new_beta` RPC (60s cache).
+ *      with betaVideoCount (placeholder 0 until fetchBetaVideoCounts lands in
+ *      MOD-003), hasSend/sendStyle from fetchUserAchievements (MOD-004),
+ *      isSaved/onBookmarkToggle from saveRoute/unsaveRoute (MOD-003).
+ *      hasNewBetaVideo chip removed (AC-181 Rev 39).
  *   4. Following Activity (AC-182, Rev 38) — followed user IDs via MOD-006's
  *      service; beta_videos grouped by uploader using updated_at (not created_at);
  *      avatar + display_name + "new video upload" label + MAX(updated_at)
@@ -22,7 +26,9 @@
  *   - Bottom inset handled by AppShell's TabBar.
  *
  * Cross-module imports (allowed per spec Integration Points):
- *   - fetchSavedRouteIds(), routes_with_new_beta RPC from mod-route-catalog
+ *   - fetchSavedRouteIds(), saveRoute(), unsaveRoute(), routes_with_new_beta RPC
+ *     from mod-route-catalog
+ *   - fetchUserAchievements() from mod-send-logging (AC-190)
  *   - fetchFollowing() from mod-social-feed (for followed user list)
  *   - RouteCard from src/components/RouteCard (app-level shared component)
  */
@@ -42,8 +48,9 @@ import {
 import RouteCard from '../../../components/RouteCard';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
-import { fetchSavedRouteIds } from '../../mod-route-catalog/route-service';
+import { fetchSavedRouteIds, saveRoute, unsaveRoute } from '../../mod-route-catalog/route-service';
 import type { RouteGrade } from '../../mod-route-catalog/types';
+import { fetchUserAchievements } from '../../mod-send-logging';
 import { fetchFollowing } from '../../mod-social-feed/social-feed-service';
 import type { FollowingUser } from '../../mod-social-feed/types';
 
@@ -292,6 +299,16 @@ export default function HomeScreen({
   const [projectingLoading, setProjectingLoading] = useState(true);
   const [newBetaRouteIds, setNewBetaRouteIds] = useState<Set<string>>(new Set());
   const [selectedGrade, setSelectedGrade] = useState<GradeFilter>(ALL_GRADE_FILTER);
+  /**
+   * Per-route achievement map: route_id → 'flash' | 'top' | 'attempt' (AC-190).
+   * Fetched once per load via MOD-004's fetchUserAchievements.
+   */
+  const [achievementMap, setAchievementMap] = useState<Record<string, 'flash' | 'top' | 'attempt'>>({});
+  /**
+   * Set of saved route IDs for the Projecting Routes section (AC-046/047).
+   * Used to derive isSaved per card. Mutated optimistically on bookmark toggle.
+   */
+  const [savedProjectingIds, setSavedProjectingIds] = useState<Set<string>>(new Set());
 
   const loadProjectingRoutes = useCallback(async () => {
     setProjectingLoading(true);
@@ -302,6 +319,8 @@ export default function HomeScreen({
       if (savedRouteIds.length === 0) {
         setProjectingRoutes([]);
         setNewBetaRouteIds(new Set());
+        setAchievementMap({});
+        setSavedProjectingIds(new Set());
         return;
       }
 
@@ -337,10 +356,29 @@ export default function HomeScreen({
       }));
       setProjectingRoutes(routes);
 
-      // Step 3: Call routes_with_new_beta RPC (with in-memory cache, ~60s TTL).
-      // Cache is keyed by BOTH the route-id set AND time (AC-180/AC-181).
-      // A stale cache from a previous load with a different route-id set must not
-      // bleed into this render — check routeIdsKey first, then the TTL.
+      // All projecting routes are saved routes — initialize savedProjectingIds
+      // from the saved route IDs that are still active (AC-046/047).
+      const activeRouteIds = routes.map((r) => r.id);
+      setSavedProjectingIds(new Set(activeRouteIds.filter((id) => savedRouteIds.includes(id))));
+
+      // Step 3: Fetch user achievements for send badges (AC-190).
+      // Batched once for all visible routes via MOD-004's fetchUserAchievements.
+      if (activeRouteIds.length > 0) {
+        try {
+          const achievements = await fetchUserAchievements(activeRouteIds);
+          setAchievementMap(achievements);
+        } catch (achieveErr) {
+          // Non-fatal: send badges not shown on failure.
+          console.error('[HomeScreen] fetchUserAchievements error:', achieveErr);
+          setAchievementMap({});
+        }
+      } else {
+        setAchievementMap({});
+      }
+
+      // Step 4: Call routes_with_new_beta RPC (with in-memory cache, ~60s TTL).
+      // Retained for AC-175 Saved Gyms ordering — not used for the card chip
+      // (chip removed per AC-181 Rev 39). Cache keyed by route-id set + time.
       const now = Date.now();
       const currentRouteIdsKey = savedRouteIds.slice().sort().join(',');
       if (
@@ -624,20 +662,60 @@ export default function HomeScreen({
           <Text style={styles.emptyText}>{t('home.projectingRoutes.emptyFiltered')}</Text>
         ) : (
           <View style={styles.routeList}>
-            {filteredRoutes.map((route) => (
-              <RouteCard
-                key={route.id}
-                route={{
-                  id: route.id,
-                  name: `${route.grade} ${capitalize(route.color_tag)}${route.section_label ? ` (${route.section_label})` : ''}`,
-                  grade: route.grade,
-                  photo_url: route.photo_url,
-                  gymName: route.gym_name ?? undefined,
-                }}
-                onPress={() => onSelectRoute(route.id, route.gym_id)}
-                hasNewBetaVideo={newBetaRouteIds.has(route.id)}
-              />
-            ))}
+            {filteredRoutes.map((route) => {
+              const achievement = achievementMap[route.id];
+              const hasSend = achievement === 'flash' || achievement === 'top';
+              const sendStyle: 'flash' | 'top' | null =
+                achievement === 'flash' ? 'flash' :
+                achievement === 'top' ? 'top' :
+                null;
+              return (
+                <RouteCard
+                  key={route.id}
+                  route={{
+                    id: route.id,
+                    name: `${route.grade} ${capitalize(route.color_tag)}${route.section_label ? ` (${route.section_label})` : ''}`,
+                    grade: route.grade,
+                    photo_url: route.photo_url,
+                    gymName: route.gym_name ?? undefined,
+                  }}
+                  onPress={() => onSelectRoute(route.id, route.gym_id)}
+                  // TODO: replace with fetchBetaVideoCounts once MOD-003 migration is shipped (AC-189)
+                  betaVideoCount={0}
+                  hasSend={hasSend}
+                  sendStyle={sendStyle}
+                  isSaved={savedProjectingIds.has(route.id)}
+                  onBookmarkToggle={() => {
+                    const isCurrentlySaved = savedProjectingIds.has(route.id);
+                    // Optimistic update.
+                    setSavedProjectingIds((prev) => {
+                      const next = new Set(prev);
+                      if (isCurrentlySaved) {
+                        next.delete(route.id);
+                      } else {
+                        next.add(route.id);
+                      }
+                      return next;
+                    });
+                    // Persist to backend; revert on failure.
+                    const persist = isCurrentlySaved
+                      ? unsaveRoute(route.id)
+                      : saveRoute(route.id);
+                    persist.catch(() => {
+                      setSavedProjectingIds((prev) => {
+                        const revert = new Set(prev);
+                        if (isCurrentlySaved) {
+                          revert.add(route.id);
+                        } else {
+                          revert.delete(route.id);
+                        }
+                        return revert;
+                      });
+                    });
+                  }}
+                />
+              );
+            })}
           </View>
         )}
       </View>

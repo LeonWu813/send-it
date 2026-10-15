@@ -1,18 +1,35 @@
 /**
- * Tests for RouteCard (AC-183).
+ * Tests for RouteCard (AC-183, Rev 39/40).
  *
  * Verifies:
- *   - Route name, grade, and optional gymName are rendered.
- *   - 48×48 thumbnail is rendered when photo_url is provided.
+ *   - Route name and optional gymName are rendered.
+ *   - Grade label is NOT rendered in the card UI (AC-191).
+ *   - 80×80 thumbnail is rendered when photo_url is provided (AC-192).
  *   - Placeholder is rendered when photo_url is null.
- *   - "New Beta" badge is rendered when hasNewBetaVideo is true.
- *   - "New Beta" badge is NOT rendered when hasNewBetaVideo is false/omitted.
+ *   - Beta count subtitle is rendered when betaVideoCount > 0 (AC-189).
+ *   - Beta count subtitle is NOT rendered when betaVideoCount === 0.
+ *   - Flash send badge is rendered when hasSend + sendStyle 'flash' (AC-190).
+ *   - Top send badge is rendered when hasSend + sendStyle 'top' (AC-190).
+ *   - Send badge is NOT rendered when hasSend is false.
+ *   - Bookmark icon (outline) is rendered when isSaved is false (AC-046/047).
+ *   - Bookmark icon (filled) is rendered when isSaved is true (AC-046/047).
+ *   - onBookmarkToggle is called when bookmark is pressed; onPress is NOT called.
  *   - onPress is called when the card is pressed.
+ *   - hasNewBetaVideo prop no longer exists — no "New Beta" badge rendered (AC-181).
  */
+
+// ── Module mocks (must appear before imports) ─────────────────────────────────
+
+// RouteCard imports getPhotoSignedUrl from route-service, which transitively
+// imports supabase and throws if env vars are absent. Mock the whole module so
+// the component tests can run without a real Supabase instance.
+jest.mock('../../modules/mod-route-catalog/route-service', () => ({
+  getPhotoSignedUrl: jest.fn().mockResolvedValue('https://example.com/signed.jpg'),
+}));
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 
 import RouteCard from '../RouteCard';
 import { TestProviders } from '../../modules/mod-home/test-utils';
@@ -28,14 +45,22 @@ const BASE_ROUTE = {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('RouteCard (AC-183)', () => {
-  it('renders the route name and grade', () => {
+describe('RouteCard (AC-183, Rev 39/40)', () => {
+  it('renders the route name', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
       { wrapper: TestProviders },
     );
     expect(screen.getByText('Crimson Tide')).toBeTruthy();
-    expect(screen.getByText('V5')).toBeTruthy();
+  });
+
+  it('does NOT render the grade label text in the card UI (AC-191)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
+      { wrapper: TestProviders },
+    );
+    // Grade is retained on the interface for a11y but must not be visible.
+    expect(screen.queryByText('V5')).toBeNull();
   });
 
   it('renders gymName when provided', () => {
@@ -57,19 +82,22 @@ describe('RouteCard (AC-183)', () => {
     expect(screen.queryByText('MegaSTONE')).toBeNull();
   });
 
-  it('renders the thumbnail image when photo_url is provided', () => {
+  it('renders the thumbnail image when photo_url is provided (AC-192 — 80×80)', async () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
       { wrapper: TestProviders },
     );
-    // Image with the route photo_url should be present.
-    const images = screen.UNSAFE_queryAllByType(
-      require('react-native').Image,
-    );
-    const thumbnail = images.find(
-      (img) => img.props.source?.uri === BASE_ROUTE.photo_url,
-    );
-    expect(thumbnail).toBeTruthy();
+    // getPhotoSignedUrl is mocked to resolve to a signed URL asynchronously.
+    // Wait for the state update that sets signedPhotoUrl.
+    await waitFor(() => {
+      const images = screen.UNSAFE_queryAllByType(
+        require('react-native').Image,
+      );
+      const thumbnail = images.find(
+        (img) => img.props.source?.uri === 'https://example.com/signed.jpg',
+      );
+      expect(thumbnail).toBeTruthy();
+    });
   });
 
   it('renders a placeholder when photo_url is null', () => {
@@ -86,29 +114,116 @@ describe('RouteCard (AC-183)', () => {
     expect(uriImage).toBeUndefined();
   });
 
-  it('renders the "New Beta" badge when hasNewBetaVideo is true (AC-181)', () => {
+  // ── AC-189: betaVideoCount ─────────────────────────────────────────────────
+
+  it('renders the beta count subtitle when betaVideoCount > 0 (AC-189)', () => {
     render(
-      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasNewBetaVideo />,
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} betaVideoCount={3} />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('New Beta')).toBeTruthy();
+    expect(screen.getByText('3 Beta Videos')).toBeTruthy();
   });
 
-  it('does not render the "New Beta" badge when hasNewBetaVideo is false', () => {
+  it('does not render the beta count subtitle when betaVideoCount === 0 (AC-189)', () => {
     render(
-      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasNewBetaVideo={false} />,
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} betaVideoCount={0} />,
       { wrapper: TestProviders },
     );
-    expect(screen.queryByText('New Beta')).toBeNull();
+    expect(screen.queryByText(/Beta Videos/)).toBeNull();
   });
 
-  it('does not render the "New Beta" badge when hasNewBetaVideo is omitted', () => {
+  it('does not render the beta count subtitle when betaVideoCount is omitted (AC-189)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
+      { wrapper: TestProviders },
+    );
+    expect(screen.queryByText(/Beta Videos/)).toBeNull();
+  });
+
+  // ── AC-190: send badges ────────────────────────────────────────────────────
+
+  it('renders the Flash send badge when hasSend + sendStyle flash (AC-190)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="flash" />,
+      { wrapper: TestProviders },
+    );
+    expect(screen.getByText('Flash')).toBeTruthy();
+  });
+
+  it('renders the Top send badge when hasSend + sendStyle top (AC-190)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="top" />,
+      { wrapper: TestProviders },
+    );
+    expect(screen.getByText('Top')).toBeTruthy();
+  });
+
+  it('does not render a send badge when hasSend is false (AC-190)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend={false} />,
+      { wrapper: TestProviders },
+    );
+    expect(screen.queryByText('Flash')).toBeNull();
+    expect(screen.queryByText('Top')).toBeNull();
+  });
+
+  it('does not render a send badge when hasSend is omitted (AC-190)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
+      { wrapper: TestProviders },
+    );
+    expect(screen.queryByText('Flash')).toBeNull();
+    expect(screen.queryByText('Top')).toBeNull();
+  });
+
+  // ── AC-046/047: bookmark ───────────────────────────────────────────────────
+
+  it('renders the bookmark button with unsaved accessibility label when isSaved is false (AC-046/047)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} isSaved={false} />,
+      { wrapper: TestProviders },
+    );
+    // The bookmark Pressable has accessibilityLabel={t('routeCard.unsaved')} = "Save".
+    expect(screen.getByLabelText('Save')).toBeTruthy();
+  });
+
+  it('renders the bookmark button with saved accessibility label when isSaved is true (AC-046/047)', () => {
+    render(
+      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} isSaved />,
+      { wrapper: TestProviders },
+    );
+    // The bookmark Pressable has accessibilityLabel={t('routeCard.saved')} = "Saved".
+    expect(screen.getByLabelText('Saved')).toBeTruthy();
+  });
+
+  it('calls onBookmarkToggle when the bookmark icon is pressed (AC-046/047)', () => {
+    const mockToggle = jest.fn();
+    const mockOnPress = jest.fn();
+    render(
+      <RouteCard
+        route={BASE_ROUTE}
+        onPress={mockOnPress}
+        isSaved={false}
+        onBookmarkToggle={mockToggle}
+      />,
+      { wrapper: TestProviders },
+    );
+    fireEvent.press(screen.getByLabelText('Save'));
+    expect(mockToggle).toHaveBeenCalledTimes(1);
+  });
+
+  // ── AC-181: "New Beta" chip removed ────────────────────────────────────────
+
+  it('never renders a "New Beta" badge (AC-181 — chip removed)', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
       { wrapper: TestProviders },
     );
     expect(screen.queryByText('New Beta')).toBeNull();
+    expect(screen.queryByText('新 Beta')).toBeNull();
   });
+
+  // ── Card interaction ───────────────────────────────────────────────────────
 
   it('calls onPress when the card is pressed', () => {
     const mockOnPress = jest.fn();
@@ -116,15 +231,17 @@ describe('RouteCard (AC-183)', () => {
       <RouteCard route={BASE_ROUTE} onPress={mockOnPress} />,
       { wrapper: TestProviders },
     );
-    fireEvent.press(screen.getByRole('button'));
+    // Press the card itself via its accessibilityLabel (route name, AC-191).
+    fireEvent.press(screen.getByLabelText('Crimson Tide'));
     expect(mockOnPress).toHaveBeenCalledTimes(1);
   });
 
-  it('renders the card as an accessible button', () => {
+  it('renders the card as an accessible button with route name as label (AC-191)', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByRole('button')).toBeTruthy();
+    // The card Pressable uses route.name (not grade) as accessibilityLabel (AC-191).
+    expect(screen.getByLabelText('Crimson Tide')).toBeTruthy();
   });
 });
