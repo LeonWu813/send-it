@@ -149,6 +149,41 @@ export async function submitRoute(input: RouteSubmitInput): Promise<RouteWithDup
 }
 
 /**
+ * Check whether an active route with the same grade and color already exists at the gym.
+ *
+ * AC-187 (Rev 37): called by RouteSubmitScreen before (or after) submission to determine
+ * whether a non-blocking soft warning should be displayed. Returns true when at least one
+ * active route with the same (gym_id, grade, color_tag) exists; false otherwise.
+ *
+ * Fail-open: on query error, returns false — the check is advisory only and must never
+ * block the submission flow.
+ *
+ * @param gymId     UUID of the gym.
+ * @param grade     V-scale grade string (e.g. 'V3').
+ * @param colorTag  Hold/tape color enum value (e.g. 'blue').
+ * @returns         true when a duplicate active route exists; false otherwise or on error.
+ */
+export async function checkDuplicateActiveRoute(
+  gymId: string,
+  grade: string,
+  colorTag: string,
+): Promise<boolean> {
+  const { count, error } = await supabase
+    .from('routes')
+    .select('id', { count: 'exact', head: true })
+    .eq('gym_id', gymId)
+    .eq('grade', grade)
+    .eq('color_tag', colorTag)
+    .eq('status', 'active');
+
+  if (error) {
+    console.error('[checkDuplicateActiveRoute] error:', error);
+    return false; // fail-open: don't block submission on check failure
+  }
+  return (count ?? 0) > 0;
+}
+
+/**
  * Withdraw (delete) a user's own pending route.
  *
  * The RLS DELETE policy enforces that only the submitter of their own
