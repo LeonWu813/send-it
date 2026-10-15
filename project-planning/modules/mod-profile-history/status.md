@@ -463,3 +463,85 @@ Input [grade='V3', color_tag='blue', section_label='Cave'] produces routeName='V
 AC-183 regression test: all items verified. No regressions introduced by the AC-183 patch. All pre-existing ACs (AC-060, AC-061, AC-062, AC-064) continue to pass.
 
 QA PASS — mod-profile-history AC-183 regression verified.
+
+---
+
+## QA Run 4 — Regression — 2026-10-14
+
+**QA verdict: PASS**
+**Mode**: regression-test (i18n fix — grade filter tab hardcoded 'All' replaced with t('home.projectingRoutes.allGrades'))
+**Tester**: qa-mod-profile-history
+
+---
+
+### Verification targets
+
+This run verifies one specific regression item: the engineer replaced a hardcoded `'All'` string in the grade filter tab with `t('home.projectingRoutes.allGrades')` using the existing `useTranslation('common')` hook in `ProfileHistoryScreen.tsx`.
+
+---
+
+### Automated checks
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false --testPathPattern="mod-profile-history"` | PASS — 27/27 tests, 0 failures |
+
+---
+
+### Item 1 — Hardcoded 'All' string removed
+
+`ProfileHistoryScreen.tsx` line 200: `grep -n "'All'"` returns no results. The hardcoded string literal `'All'` is absent from the screen file.
+
+PASS.
+
+---
+
+### Item 2 — t('home.projectingRoutes.allGrades') in use
+
+`ProfileHistoryScreen.tsx` line 200:
+```
+{tab === 'all' ? t('home.projectingRoutes.allGrades') : tab}
+```
+
+The `useTranslation('common')` hook is already declared at line 88 (`const { t } = useTranslation('common');`). The key is accessed via the existing `t` reference. No new hook import or instantiation was added — the fix correctly piggybacks on the already-present hook.
+
+PASS.
+
+---
+
+### Item 3 — Key exists in both locale files
+
+`locales/en/common.json` line 277: `"allGrades": "All"` — under `home.projectingRoutes` (confirmed: `"home"` at line 260, `"projectingRoutes"` at line 275, `"allGrades"` at line 277).
+
+`locales/zh-TW/common.json` line 277: `"allGrades": "全部"` — identical structure under `home.projectingRoutes`.
+
+Both locale files have the key. The i18n resolution path `t('home.projectingRoutes.allGrades')` with namespace `'common'` is valid in both English and Traditional Chinese.
+
+PASS.
+
+---
+
+### Item 4 — Previously-passing ACs re-verified (no regressions)
+
+The i18n fix touches only the grade-tab label rendering at line 200. No data-fetch, filter logic, privacy gate, stats calculation, or component structure was changed.
+
+**AC-060** — PASS. FilterBar and server-side filtering logic unmodified.
+
+**AC-061** — PASS. StatsPanel rendering unmodified.
+
+**AC-062** — PASS. `useEffect` refetch chain (lines 135–137) unmodified.
+
+**AC-064** — PASS. Privacy visibility gate (lines 121–125 and 157–164) unmodified.
+
+**AC-183** — PASS. `SharedRouteCard` import (line 33), `renderItem` (lines 233–255), and route display name composition (lines 237–241) unmodified.
+
+All 27 tests pass — no regressions.
+
+---
+
+### Handoff
+
+i18n regression test: all items verified. No regressions introduced. All pre-existing ACs (AC-060, AC-061, AC-062, AC-064, AC-183) continue to pass.
+
+QA PASS — mod-profile-history i18n fix regression verified.
