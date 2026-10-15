@@ -19,7 +19,7 @@
  * All user-facing strings via i18n hook.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Image,
@@ -30,6 +30,7 @@ import {
 } from 'react-native';
 
 import { useTheme } from '../lib/theme';
+import { getPhotoSignedUrl } from '../modules/mod-route-catalog/route-service';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -58,6 +59,20 @@ export default function RouteCard({
   const { theme } = useTheme();
   const styles = makeStyles(theme);
 
+  const [signedPhotoUrl, setSignedPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (route.photo_url !== null) {
+      getPhotoSignedUrl(route.photo_url)
+        .then(setSignedPhotoUrl)
+        .catch(() => {
+          // Silently keep signedPhotoUrl as null — placeholder is shown.
+        });
+    } else {
+      setSignedPhotoUrl(null);
+    }
+  }, [route.photo_url]);
+
   return (
     <Pressable
       style={styles.card}
@@ -85,9 +100,9 @@ export default function RouteCard({
       </View>
 
       {/* Right: thumbnail */}
-      {route.photo_url !== null ? (
+      {signedPhotoUrl !== null ? (
         <Image
-          source={{ uri: route.photo_url }}
+          source={{ uri: signedPhotoUrl }}
           style={styles.thumbnail}
           resizeMode="cover"
           accessibilityLabel={t('home.routeCard.thumbnailAlt', { name: route.name })}
