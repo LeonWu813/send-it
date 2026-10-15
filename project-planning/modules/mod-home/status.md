@@ -214,6 +214,60 @@
 
 ---
 
+### Rev 38 — AC-112 + AC-182 — 2026-10-15
+
+**Task**: Implement two Rev 38 acceptance criteria — AC-112 (banner placeholder when admin_banners is empty) and AC-182 (following section redesign: updated_at swap + static label, no count).
+
+**AC-112 changes:**
+
+- Added `bannerLoading: boolean` state (initialized `true`; set `false` after `loadBanner` resolves in both success and error paths).
+- Changed the Events Banner render from `{activeBanner !== null && ...}` (hidden when no banner) to an unconditional `<View style={[styles.section, styles.bannerSection]}>`. When `!bannerLoading && activeBanner === null`, renders a placeholder card: `bannerPlaceholderCard` (height 160, `theme.colors.surface` background, centered text) with `t('home.banner.noEvents')` in `theme.colors.textSecondary`. When a banner is present, the real banner card renders as before. Section is NEVER hidden in Phase 1.
+- Added `bannerPlaceholderCard` and `bannerPlaceholderText` style entries to `makeStyles`.
+- Added i18n key `home.banner.noEvents`: `"No active events"` (EN) / `"目前沒有活動"` (zh-TW).
+
+**AC-182 changes (four-point updated_at swap — all four were already correct in the prior commit's query; this commit removes the vestigial count display):**
+
+1. `.select('user_id, updated_at')` — already present (was confirmed correct in prior wiring commit).
+2. `.gte('updated_at', cutoff)` — already present.
+3. `.order('updated_at', { ascending: false })` — already present.
+4. JS grouping: tracks only `{ latestAt: string }` — removed the `count` field from `activityMap`.
+
+- Removed `newBetaVideoCount: number` from `FollowingActivity` interface.
+- Grouping comment updated to describe MAX(updated_at) per climber.
+- Activity list builder no longer sets `newBetaVideoCount`.
+- UI: replaced `t('home.followingActivity.newVideos', { count })` with `t('home.following.newUpload')` static label; renamed style key from `activityCount` to `activityLabel`.
+- Added i18n key `home.following.newUpload`: `"new video upload"` (EN) / `"新影片上傳"` (zh-TW).
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx`
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| AC-112: banner section always renders (unconditional `<View>`) | PASS |
+| AC-112: placeholder card shown when `!bannerLoading && activeBanner === null` | PASS |
+| AC-112: placeholder uses `theme.colors.surface` background + `textSecondary` text | PASS |
+| AC-112: placeholder height matches banner card (160) | PASS |
+| AC-112: `home.banner.noEvents` key present in EN and zh-TW | PASS |
+| AC-182: `updated_at` in `.select()` | PASS (was already present) |
+| AC-182: `.gte('updated_at', cutoff)` | PASS (was already present) |
+| AC-182: `.order('updated_at', { ascending: false })` | PASS (was already present) |
+| AC-182: JS grouping uses `row.updated_at` and `existing.latestAt` only (no count) | PASS |
+| AC-182: `newBetaVideoCount` removed from `FollowingActivity` interface | PASS |
+| AC-182: UI renders `t('home.following.newUpload')` — no count | PASS |
+| AC-182: `home.following.newUpload` key present in EN and zh-TW | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24
