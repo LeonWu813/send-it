@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-home
-mode: regression
-module: mod-home
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: 36c990598e9ee987ea2cd73892096f9823d2d3bb
+commit: ac51ff68d5fc1cda1e0a8bc2ec63b01939ec0ea9
 timestamp: 2026-10-14T00:00:00Z
 ```
 
@@ -321,6 +321,122 @@ timestamp: 2026-10-14T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-14 — blocker (device-QA batch: 5 reported issues — safe-area audit, swipe-back, RouteCard UI, Home banner placeholder, Following section redesign)
+
+**Context**: Human QA on device surfaced 5 issues. This is a read-only investigation across screens, components, migrations, and specs. Advisory only — **no source, migration, or spec files were edited**. Each item below gives the exact file/line, the confirmed root cause, the proposed change (before/after where load-bearing), and an explicit "needs human confirmation" flag where a product/design decision (not just a bug fix) is involved. After the human confirms, the fixes route to the owning `engineer-mod-*` agent (resolve each from the Module Map); items that change user-facing behavior beyond a bug fix must route through PM first (flagged inline).
+
+**Architectural fact that drives Issues 1 (and frames the exempt list)**: `AppShell.tsx` (MOD-012) renders a single global `AppHeader` **once**, above the three-tab content area (lines 193–197, 199–239). `AppHeader` consumes `insets.top` via its `topInset` prop and applies it as `paddingTop: topInset + spacing.sm` (AppHeader.tsx line 119). Therefore **any screen rendered inside the tab content area (below AppHeader) must NOT apply `insets.top` itself** — doing so double-pads. The canonical fix already applied to RouteListScreen and ProfileScreen is: **remove the `useSafeAreaInsets()` call entirely and pass `makeStyles(theme, 0)`** (confirmed in RouteListScreen.tsx line 135 + commits `462ee80`, `9c80392`, `620f5b9`, `491a12c`). Screens that do NOT render below AppHeader are exempt and must KEEP their own `insets.top`: (a) auth screens (outside AppShell — mounted by AuthNavigator before AppShell), (b) the fullscreen reel viewer (renders as an overlay above AppShell), (c) **full-screen overlays mounted by AppShell** (climber-profile, notifications, settings) — these are `absoluteFill` views that cover AppHeader, so they own their top inset, and (d) screens presented inside a native `<Modal presentationStyle="pageSheet">` (slides over everything including AppHeader).
+
+---
+
+#### Issue 1 — Safe-area inset double-padding: full audit of every screen under `src/modules/`
+
+I mapped the mount context of every screen that calls `useSafeAreaInsets()` and uses the top inset. The deciding question for each is **"does it render below the global AppHeader?"** — if yes, it has the double-pad bug and needs `makeStyles(theme, 0)` + removal of the `useSafeAreaInsets()` call; if it's one of the exempt categories above, it must keep `insets.top`.
+
+**A. Already fixed (reference — no action):**
+- `mod-route-catalog/screens/RouteListScreen.tsx` — fixed (`makeStyles(theme, 0)`, line 135).
+- `mod-auth-profile/screens/ProfileScreen.tsx` — fixed (no longer calls `useSafeAreaInsets()`).
+
+**B. AFFECTED — below AppHeader, need the fix (remove `useSafeAreaInsets()`; pass `makeStyles(theme, 0)`):**
+
+| File | insets call | styles call | topInset applied at | Mount path (why it's below AppHeader) |
+|---|---|---|---|---|
+| `mod-gym-directory/screens/GymListScreen.tsx` | line 54 | line 55 | lines 279, 286 | Gyms tab → GymNavigator |
+| `mod-gym-directory/screens/GymDetailScreen.tsx` | line 54 | line 55 | lines 251, 260 | Gyms tab → GymNavigator |
+| `mod-gym-directory/screens/RequestGymScreen.tsx` | line 44 | line 45 | lines 211, 220 | Gyms tab → GymNavigator |
+| `mod-route-catalog/screens/RouteDetailScreen.tsx` | line 112 | line 113 | lines 525 (topBar), 543 | Gyms tab → GymNavigator → RouteNavigator |
+| `mod-route-catalog/screens/RouteSubmitScreen.tsx` | line 78 | line 79 | line 433 | Gyms tab → RouteNavigator (inline, not a modal) |
+| `mod-route-catalog/screens/SendHistoryDetailScreen.tsx` | line 69 | line 70 | line 228 | Gyms tab → RouteNavigator (inline) |
+| `mod-auth-profile/screens/EditProfileScreen.tsx` | line 48 | line 49 | line 284 | Profile tab → ProfileNavigator (`view==='editProfile'`) |
+| `mod-social-feed/screens/FollowersListScreen.tsx` | line 125 | line 126 | line 226 | Profile tab → ProfileNavigator (`view==='followers'`) |
+| `mod-social-feed/screens/FollowingListScreen.tsx` | line 126 | line 127 | line 227 | Profile tab → ProfileNavigator (`view==='following'`) |
+
+For each: the fix is identical to RouteListScreen — delete the `const insets = useSafeAreaInsets();` line and its import, and change `makeStyles(theme, insets.top)` → `makeStyles(theme, 0)`. The `makeStyles(theme, topInset)` signatures can stay as-is (topInset just becomes 0), which keeps the diff minimal and the tests stable.
+
+**C. EXEMPT — must KEEP `insets.top` (do NOT change):**
+
+| File | insets used | Why exempt |
+|---|---|---|
+| `mod-auth-profile/screens/SignInScreen.tsx` | top (line 51/52) | Auth — mounted by AuthNavigator, outside AppShell |
+| `mod-auth-profile/screens/SignUpScreen.tsx` | top (line 37/38) | Auth — outside AppShell |
+| `mod-beta-video/components/BetaVideoReelViewer.tsx` | top+bottom (lines 823, 834, 846) | Fullscreen reel overlay above AppShell (AC-133) |
+| `mod-social-feed/screens/UserProfileScreen.tsx` | top (line 101/102) + bottom (610) | Rendered as an AppShell `absoluteFill` overlay (climber profile, AC-182) that covers AppHeader |
+| `mod-localization-theme/screens/SettingsScreen.tsx` | top (line 72/73) | Rendered as an AppShell `absoluteFill` overlay (settings, AC-184) that covers AppHeader |
+| `mod-localization-theme/screens/BlockedAccountsScreen.tsx` | top (line 148/149) | Child of SettingsScreen overlay (SettingsScreen.tsx line 187) — same overlay stack, covers AppHeader |
+| `mod-notifications/screens/NotificationInboxScreen.tsx` | top (line 77/78) | Rendered via NotificationsNavigator inside the AppShell notifications overlay (AC-184) that covers AppHeader |
+| `mod-notifications/screens/NotificationPreferenceScreen.tsx` | top (line 49/50) | Same notifications-overlay stack |
+| `mod-send-logging/screens/LogSendScreen.tsx` | top (line 62/63) | Rendered inside `<Modal presentationStyle="pageSheet">` from RouteDetailScreen.tsx line 462–475 — slides over AppHeader |
+| `mod-moderation/screens/OtherUserProfileScreen.tsx` | top (line 65/66) | Not mounted by any navigator today (only test refs) — if later wired as an overlay it stays exempt; if wired below AppHeader it would need the fix. See note D. |
+| `mod-send-logging/screens/RouteSearchScreen.tsx` | top (line 44/45) | Not mounted by any navigator today (only test refs). See note D. |
+| `mod-moderation/components/ReportSheet.tsx` | **bottom only** (line 55/56) | Uses `insets.bottom`, not top — not a double-pad candidate |
+| `mod-home/components/TabBar.tsx` | **bottom only** | `insets.bottom` from AppShell — correct |
+
+**D. Special cases found during the audit (flag for human decision):**
+- **`mod-social-feed/screens/FeedScreen.tsx`** (insets line 55/56, topInset line 342) — per the file's own header and `social-feed-service.ts` line 393, **FeedScreen is dead code (AC-159) and is not mounted anywhere**. No user-visible bug today. Recommend: fix it for consistency only if/when it is ever revived, OR leave as-is. **No action needed for this QA pass.**
+- **`mod-profile-history/screens/ProfileHistoryScreen.tsx`** — already handles this correctly with a context-aware guard: `const topInsetForStyles = extraListHeader !== undefined ? 0 : insets.top;` (line 93). When embedded (the only live path, inside ProfileScreen/UserProfileScreen) it passes 0; standalone it would pass the inset. **No action needed** — this is the existing precedent for the dual-context pattern.
+- **Unmounted screens (`OtherUserProfileScreen`, `RouteSearchScreen`)** — currently referenced only by tests, not by any navigator. Their inset handling has no user-visible effect today. **Recommend deferring** until they are wired in; whoever wires them must pick the inset value based on the mount context (below-header → 0; overlay/modal → inset). Flagging so it isn't silently wrong later.
+
+**Needs human confirmation (Issue 1)**: confirm the 9 screens in group B are the intended scope and that groups C/D should be left untouched. Also confirm the dual-mount reality below is acceptable (it affects whether C stays exempt):
+
+> **Architectural note — dual-mount screens (SettingsScreen, NotificationInbox/Preference):** these are reached ONLY as AppShell overlays today. The ProfileNavigator still contains `view==='settings'` (line 92) and `view==='notifications'` (line 95–104) branches, but after AC-184 moved the bell/settings controls to the global AppHeader, **ProfileScreen no longer triggers those branches** — they are now dead/unreachable (ProfileScreen only fires `onNavigateEditProfile`, `onNavigateToFollowers`, `onNavigateToFollowing`). So keeping `insets.top` in SettingsScreen/NotificationInbox is correct for the live overlay path. If you ever re-expose those ProfileNavigator branches (below AppHeader), those screens would then need the ProfileHistoryScreen-style dual-context guard rather than a hard `insets.top`. **This is a latent trap worth recording in the spec**, but not a bug today. Recommend a PM/Doc-Sync note; not an engineering fix.
+
+---
+
+#### Issue 2 — SwipeBackWrapper not triggering navigation back
+
+**Root cause (primary): `SwipeBackWrapper` is not used by any screen.** A full-codebase search (`grep -rn SwipeBackWrapper src`, excluding its own file and `__tests__`) returns **zero consumers**. The component and its test exist (`src/components/SwipeBackWrapper.tsx`, `src/components/__tests__/SwipeBackWrapper.test.tsx`), but no screen imports or wraps with it. On device it can't trigger back navigation because it is never mounted. AC-185 (swipe-to-go-back on every screen with a back icon) is effectively unimplemented at the integration layer.
+
+**Secondary latent bugs in the implementation itself** (will matter once it's wired in — fix these at the same time):
+1. **Stale closure on `enabled` and `onBack`.** `panResponder` is created once via `useRef(PanResponder.create({...})).current` (lines 65–106) and never recreated. Its callbacks capture the **first-render** values of `enabled` (line 72) and `onBack` (line 102). If a consumer passes an inline `onBack` (as AppShell/navigators do — e.g. `onBack={() => setView('profile')}`), later identities are ignored; and toggling `enabled` after mount has no effect. Proposed fix: hold `onBack`/`enabled` in refs updated each render (an effect that writes `onBackRef.current = onBack`), and have the PanResponder callbacks read `onBackRef.current` / `enabledRef.current`. (Or memoize via `useMemo` keyed on stable deps — but the ref approach is safest with PanResponder.)
+2. **Edge-gate uses `touchStartXRef` set from a React `onTouchStart` synthetic (line 111–114) while the gate is read inside `onMoveShouldSetPanResponder` (line 78).** On a screen whose content is a `ScrollView`/`FlatList` (most of them), the inner scroll view can win the responder negotiation before the wrapper's move handler claims it, and the `onTouchStart` bubble ordering vs. PanResponder capture is not guaranteed. This is the classic reason PanResponder-based edge-swipe "works in isolation but not over a scroll view." Proposed fix direction: use `onMoveShouldSetPanResponderCapture` for the left-edge case so the wrapper can claim the gesture before a child scroll view, OR read the start-X from the PanResponder's own `gestureState`/`evt.nativeEvent` (e.g. `evt.nativeEvent.pageX - dx`) instead of a separately-wired `onTouchStart`. Keep the "primarily horizontal" gate (`dx > dy*2`, line 87) so vertical scrolls aren't stolen.
+
+**Needs human confirmation (Issue 2)**: the primary fix (wire `SwipeBackWrapper` into the back-enabled screens) is an **integration/implementation task spanning many modules** — decide scope: wrap at the navigator level (e.g. GymNavigator, RouteNavigator, ProfileNavigator each wrap their non-root views) vs. per-screen. Because AC-185 says "every screen that shows a back icon," this is MOD-012-owned cross-cutting work; recommend `engineer-mod-home` (MOD-012 owns the shared component) coordinates the wrapping, plus the two implementation fixes above. If the intended behavior differs from AC-185 as written, route through PM first.
+
+---
+
+#### Issue 3 — RouteCard UI (3 sub-issues)
+
+**Important framing finding:** the shared `src/components/RouteCard.tsx` (AC-183) is deliberately minimal — it renders only: left = route name + grade text + optional gymName, a "New Beta" badge (AC-181), and right = a 48×48 thumbnail (or placeholder). **It has NO send/flash/saved icons and no separate "V-grade tag"** (the grade is plain text on line 73). The send/flash/saved icons the reporter saw live in **`RouteListScreen.tsx`**, which wraps RouteCard with absolutely-positioned overlays (lines 294–318). So Issue 3c is a RouteListScreen concern, not a RouteCard concern. I cover both surfaces below.
+
+**3a — Thumbnail not displaying.** RouteCard renders `<Image source={{ uri: route.photo_url }}>` when `photo_url !== null` (lines 88–94), else a grey placeholder (line 96). The component is correct given its prop contract. The question is **what `photo_url` actually contains**. In HomeScreen's Projecting Routes, `photo_url` is passed straight from `routes.photo_url` (HomeScreen.tsx line 300 select, line 323 map, line 612 pass-through) with **no signed-URL resolution**. If `routes.photo_url` stores a **storage object path** (not a public/signed URL), `<Image uri>` cannot load it and the thumbnail silently fails — matching "thumbnail not displaying." Compare: `BetaVideoReelViewer` and the beta grid resolve storage paths before rendering; RouteCard callers do not. **Needs investigation/confirmation**: is `routes.photo_url` a public URL (public bucket) or a storage path requiring `getPublicUrl`/signed URL? If it's a path, the fix is in the **callers** (HomeScreen, RouteListScreen, send-history) — resolve the URL before building the `RouteCardRoute`, not inside the presentational card. I could not confirm the bucket's public/private status from the planning docs alone; this needs a device check or a look at the routes-photo bucket config. **Flagging rather than guessing the layer** (same discipline as the repeat-failure process).
+
+**3b — "V-grade tag randomly showing".** The only conditional tag RouteCard renders is the **"New Beta" badge**, gated by `hasNewBetaVideo` (line 80). In HomeScreen this is `hasNewBetaVideo={newBetaRouteIds.has(route.id)}` (line 616). The "randomness" is a **stale-cache bug** in HomeScreen's `newBetaCache`: it's a module-level singleton (`let newBetaCache` line 120) keyed **only on time**, not on the route-id set. Lines 332–337 reuse the cached Set whenever `now - populatedAt < 60s` **regardless of whether `savedRouteIds` changed since it was populated**. So if the saved-route set changes within the 60s TTL (navigate, save/unsave a route, pull-to-refresh), the previous set's "new beta" route IDs are applied to a different route list → the badge appears on the wrong/"random" routes. Proposed fix: key the cache on the exact route-id set (e.g. a sorted-join hash of `savedRouteIds`) and invalidate when the key differs, OR drop the time-only reuse and refetch when the set changes. (Note: RouteListScreen has its own, correctly gym-keyed `newBetaCache` at lines 47–54 — HomeScreen's is the buggy one.) **This is a real bug, HomeScreen (MOD-012) owned.**
+
+**3c — Icons (send/flash/saved) off.** These are RouteListScreen overlays, not RouteCard. `renderItem` wraps RouteCard with two absolutely-positioned overlays (lines 294–318): `achievementOverlay` (flash/top/attempt icon, styles lines 551–556) at `right: spacing.md + 48 + spacing.sm` (i.e. hard-coded to sit just left of RouteCard's 48px thumbnail), and `savedOverlay` (bookmark, styles lines 558–563) at `top: sm, right: sm` — which lands **on top of** RouteCard's 48×48 thumbnail (the thumbnail occupies the card's right edge). The overlays hard-code RouteCard's internal 48px thumbnail geometry; any change to the card layout silently misplaces them, and the saved bookmark overlapping the thumbnail is likely the "off" the reporter saw. Proposed direction: either (a) move the saved/achievement indicators **into RouteCard as first-class optional props** (e.g. `savedIndicator`, `achievementIcon`) so positioning is owned by the card and not duplicated/guessed by the caller, or (b) fix the overlay coordinates to a spot that doesn't overlap the thumbnail. Option (a) is the cleaner architecture and matches the "shared presentational component" intent of AC-183. **Needs human confirmation** on which surface the reporter meant and whether to refactor the indicators into RouteCard (a small shared-component API change — if it changes the card's documented contract, route the convention through PM/Doc-Sync; the code change itself is engineer-mod-home for RouteCard + engineer-mod-route-catalog for the caller).
+
+---
+
+#### Issue 4 — Home banner placeholder not showing
+
+**This is current-behavior-by-design, not a bug.** `HomeScreen.loadBanner` (lines 172–187) selects the single most-recent `is_active` banner via `.maybeSingle()`; when no rows match, `data` is null and `activeBanner` is set to null (line 186). The render gates the **entire** banner section on `{activeBanner !== null && (...)}` (line 491) — so with zero banner rows, the section is **omitted entirely**; there is no placeholder path. The placeholder `<View style={styles.bannerImagePlaceholder} />` (line 502) only renders when a banner row **exists but has a null `image_url`** — it's a missing-image placeholder, not a missing-banner placeholder. So "dummy banner not showing" with an empty `admin_banners` table is exactly what the code does today.
+
+**Needs human confirmation / product decision (route through PM)**: do you want (a) the current behavior (hide the whole section when there are no active banners — clean, no empty box), or (b) a visible placeholder/empty-state when `admin_banners` is empty? Option (b) is a **user-facing behavior change** (a new empty-state UI for the banner section), which per the review rules is a PRD-level decision, not a bug fix — so it should go PM → Doc-Sync → engineer, not straight to engineering. If you only intended to verify a seeded "dummy" banner shows up, the real check is whether a row with `is_active = true` actually exists in the remote `admin_banners` table (the query filters `is_active = true`); a row with `is_active = false` would be correctly hidden.
+
+---
+
+#### Issue 5 — Following section redesign
+
+**Current behavior (confirmed):** `loadFollowingActivity` (HomeScreen.tsx lines 368–438) queries `beta_videos` for followed users in the last 14 days (`select('user_id, created_at')`, lines 387–392), then **groups by `user_id` counting rows** (`existing.count += 1`, lines 405–415) and tracks the max `created_at` as `latestAt`. The render shows the **count** via `t('home.followingActivity.newVideos', { count })` (lines 658–662, i18n: "{{count}} new beta video(s)") plus a relative time. The desired redesign is: avatar + name + "new video upload" (no count) + most-recent upload date.
+
+**The "replacing a video counted as 2 uploads" hypothesis — investigated and REFUTED at the data layer.** `beta_videos` has a **UNIQUE (user_id, route_id)** constraint (migration `20260930000001_mod_005_beta_video_unique_per_route.sql` lines 16–17) and the upload service **upserts** with `onConflict: 'user_id,route_id'` (`beta-video-service.ts` lines 139–158). So replacing a video on the same route **updates the existing row in place — it does NOT create a second row.** The grouping counts distinct rows, and there is at most one row per (user, route). Therefore the count the reporter sees ("4") = **4 distinct routes** the user has beta on in the last 14 days, not double-counting. The "2 uploads" theory is not caused by duplicate rows.
+
+**BUT the audit surfaced a real, related data-model gap for the "most recent upload date" requirement.** The `beta_videos` table has `created_at DEFAULT NOW()` but **no `updated_at` column** (migration `20260924000005_mod_005_beta_video.sql` lines 25–34). The upsert payload (lines 147–156) does **not** include `created_at`, so on a conflict/replace Postgres leaves `created_at` at the **original** insert time. Consequence for the redesign: if you show "most recent upload date" from `created_at`, a **replaced** video will show the date of the *first* upload, not the replacement — which is arguably wrong for a "new video upload" indicator and is probably what made the reporter feel a replace was mis-counted/mis-dated. To show a true "most recently uploaded/updated" timestamp, you need either (a) add an `updated_at TIMESTAMPTZ` column (with a trigger or explicit set on upsert) and group on `MAX(updated_at)`, or (b) explicitly set `created_at = NOW()` in the upsert payload so a replace bumps the timestamp (simpler, but conflates "created" semantics). **This is a migration + service change (MOD-005, mod-beta-video) and a schema decision — flag for PM/Tech-Lead sign-off before engineering**, since adding a column / changing upsert semantics is past a trivial fix.
+
+**Proposed query + UI (for confirmation):**
+- *Query*: keep the single batched `beta_videos` query over followed users in the window, but group to **one row per user** keyed on `user_id`, selecting `MAX(<timestamp>)` as the latest upload. Drop the per-user count entirely (the redesign doesn't need it). If the `updated_at` decision above lands, group on `MAX(updated_at)`; until then, `MAX(created_at)` with the caveat that replaced videos keep their original date.
+- *Data shape*: `FollowingActivity` loses `newBetaVideoCount`; keeps `userId`, `displayName`, `avatarUrl`, `latestAt`.
+- *UI* (render block lines 633–669): avatar (unchanged, lines 642–651); name (line 655); replace the count line (lines 658–662) with a static i18n string "new video upload" (new key, e.g. `home.followingActivity.newUpload`); keep the relative date line (lines 663–667), ideally as an absolute-or-relative "most recent upload date" per the request. Remove the now-unused `newVideos`/`newVideos_other` plural keys if nothing else uses them.
+
+**Needs human confirmation / PM routing (Issue 5)**: this is a **user-facing redesign** (count → "new video upload" text), so per the review rules it is a PRD/spec change (likely a revision to AC-182), not a pure bug fix — route PM → Doc-Sync → `engineer-mod-home`. The `updated_at` schema decision is a separate MOD-005 change requiring a migration; decide (a) add `updated_at` vs (b) bump `created_at` on upsert vs (c) accept original-date semantics for replaced videos, before engineering starts.
+
+---
+
+**Summary of routing (after human confirmation):**
+- **Pure bug fixes → engineer directly** (resolve module from Module Map): Issue 1 group B (9 screens, `engineer-mod-gym-directory`, `engineer-mod-route-catalog`, `engineer-mod-auth-profile`, `engineer-mod-social-feed`); Issue 3b stale-cache (`engineer-mod-home`); Issue 2 implementation fixes + wiring (`engineer-mod-home` for the shared component, coordinated across navigators).
+- **Needs a product/PRD decision first → PM → Doc-Sync → engineer**: Issue 3c (RouteCard indicator API, if it changes the shared-component contract); Issue 4 option (b) empty-state placeholder; Issue 5 redesign (AC-182 change) + the MOD-005 `updated_at` schema decision.
+- **Needs a device/data check before fixing → human**: Issue 3a (is `routes.photo_url` a public URL or a storage path?); Issue 4 (does an `is_active = true` row actually exist in `admin_banners`?).
+- **No action this pass**: Issue 1 FeedScreen (dead code), ProfileHistoryScreen (already correct), unmounted screens (defer).
 
 ### Review — 2026-10-14 — change (Rev 37: route uniqueness redesign — drop the active-only unique index, remove the `submit_route` uniqueness pre-check, specify the AC-187 soft-warning count)
 
