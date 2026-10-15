@@ -2716,3 +2716,202 @@ No screen logic, service functions, types, navigator, migrations, locale files, 
 | All other previously passing checks | PASS |
 
 **Overall verdict: PASS. Safe-area inset double-margin fix verified correct. No regressions. 103 tests pass. TypeScript clean.**
+
+---
+
+## QA Regression — Rev 37 + AC-185 + AC-179/180/181 Test Coverage — 2026-10-15
+
+**QA agent**: qa-mod-route-catalog
+**Date**: 2026-10-15
+**Workflow**: regression-test (re-verification after: safe-area fix on RouteDetail/RouteSubmit/SendHistoryDetail; SwipeBackWrapper wired (AC-185, commit 2b33281); Rev 37 migration (dropped unique indexes, added grade-color index); `checkDuplicateActiveRoute` added; AC-187 duplicate soft-warning implementation)
+**Overall verdict**: FAIL — AC-187 implementation deviates from spec (pre-submit inline notice required; post-submit Alert delivered); cross-project test-runner infrastructure regression breaks 4 of 5 screen test suites (root cause in mod-localization-theme, not mod-route-catalog source)
+
+---
+
+### Automated Test Run
+
+- Command: `npx jest src/modules/mod-route-catalog --watchAll=false --passWithNoTests`
+- Result: **1 suite PASS (route-service.test.ts — 29 tests); 4 suites FAIL TO RUN** (RouteListScreen, RouteDetailScreen, RouteSubmitScreen, SendHistoryDetailScreen)
+- Root cause of suite failures: commit `8d4c6e4` (mod-localization-theme, 2026-10-15T10:34) added `import AsyncStorage from '@react-native-async-storage/async-storage'` to `src/lib/theme.ts`. This file is imported by every screen. The project has no Jest mock for `@react-native-async-storage/async-storage`, so the native module resolves null in Jest and throws `[@RNC/AsyncStorage]: NativeModule: AsyncStorage is null` on suite load. This is a **cross-project infrastructure regression** (23 of 35 suites project-wide fail to run); it is not a mod-route-catalog source bug.
+- Route the test-runner fix to: `engineer-mod-localization-theme` — add `__mocks__/@react-native-async-storage/async-storage.js` (mock the module) or add a `moduleNameMapper` entry in `jest.config` / `package.json` `jest` section.
+- TypeScript: `npx tsc --noEmit` — exit 0 — no type errors. PASS.
+
+**Prior baseline** (2026-10-14 QA run): 103 tests, 5 suites, 0 failures. That run predates commit `8d4c6e4`.
+
+---
+
+### Uncommitted Test Changes (AC-179/180/181 coverage)
+
+`git status` shows `RouteDetailScreen.test.tsx` and `RouteListScreen.test.tsx` are modified (working tree). These are the AC-179/180/181 test additions from the prior session:
+
+**RouteDetailScreen.test.tsx changes (AC-179)**:
+- Added `upsertRouteVisit: jest.fn()` to the route-service mock
+- Added `upsertRouteVisit` to the typed mock variable list
+- Added test: `'AC-179: calls upsertRouteVisit on mount (fire-and-forget visit tracking)'` — verifies `mockUpsertRouteVisit` called with `'route-001'` after screen loads
+
+**RouteListScreen.test.tsx changes (AC-180/181)**:
+- Added `fetchRoutesWithNewBeta: jest.fn()` to the route-service mock
+- Added `clearNewBetaCacheForTesting` import from RouteListScreen
+- Added `mockFetchRoutesWithNewBeta.mockResolvedValue([])` in `beforeEach`
+- Added `clearNewBetaCacheForTesting()` call in `beforeEach`
+- Updated existing `testID='route-name'` queries to `accessibilityLabel`-based queries (RouteCard does not use testID="route-name")
+- Added test: `'AC-180/AC-181: calls fetchRoutesWithNewBeta once after routes load'`
+- Added test: `'AC-181: renders "New Beta" badge on route card when route qualifies'`
+
+These tests cannot be executed because the suite fails to load (AsyncStorage null — see above). Test correctness is assessed by code inspection only.
+
+By inspection: the test additions are correct and consistent with the AC-179/180/181 implementation verified in the prior QA Rev-35 Results entry (2026-10-13). The `testID`→`accessibilityLabel` migration is correct given RouteCard's Pressable uses `accessibilityLabel`, not `testID="route-name"`.
+
+Since these tests pass the inspection gate and only fail to run due to an infrastructure regression that is outside mod-route-catalog's scope, they shall be committed per the invocation instruction.
+
+---
+
+### AC-187 — Duplicate Soft Warning (FAIL)
+
+**Spec requirement (AC-187)**:
+- Pre-submit **inline notice** near the submit control
+- Updates as the grade/color selection changes
+- Count derived **client-side from the gym's already-fetched active route list** — no dedicated count RPC
+- I18n keys: `routes.duplicateWarning.title` / body (with `{grade}` and `{Color}` interpolated)
+- Notice hidden when no same-grade/same-color active route exists; visible when ≥1 exists
+- Never disables or blocks the Add Route button
+
+**Tech Lead architecture decision (Option A)**: pass the gym's full active-route set to the submit screen once; compute `routes.filter(r => r.grade === selectedGrade && r.color_tag === selectedColor).length` reactively on chip change. No new service function, no new RPC.
+
+**Implementation (actual)**:
+- `submitRoute()` calls `check_route_duplicate` server-side RPC **after** a successful insert, returning `RouteWithDuplicateFlag` with `has_duplicate: boolean`
+- `RouteSubmitScreen.handleAddRoute()` calls `onSuccess(newRoute.id)` then shows a `setTimeout`-deferred `Alert.alert` when `newRoute.has_duplicate === true`
+- `checkDuplicateActiveRoute()` exported from `route-service.ts` — queries DB directly (not client-side list); not called by `RouteSubmitScreen`
+
+**Failures vs spec**:
+1. **Timing**: spec requires a pre-submit inline notice that updates as chips change. Implementation shows a post-submit Alert after navigation to the new route detail. The notice does NOT update as grade/color chips change.
+2. **Location**: spec says "inline notice near the submit control". Implementation shows a system `Alert.alert` modal after submit + navigation.
+3. **Mechanism**: spec says "client-side from the gym's already-fetched active route list — no dedicated count RPC". Implementation uses the server-side `check_route_duplicate` RPC (post-submit). The `checkDuplicateActiveRoute` function also queries the DB directly (server-side HEAD count).
+4. **i18n key path**: spec says `routes.duplicateWarning.title` / body. Implementation uses `routes.submit.duplicateWarning.title` / body. The key `routes.duplicateWarning` does not exist in either locale file.
+
+FAIL AC-187: Input=[grade='V3', color='blue', existing active V3/blue route at gym], Expected=[inline notice visible on RouteSubmitScreen before user taps "Add Route", updating on each chip change, using i18n key `routes.duplicateWarning.title`], Actual=[no inline notice pre-submission; post-submit `Alert.alert` shown after `onSuccess()` navigation, using `routes.submit.duplicateWarning.title`].
+
+This is the 1st failure on AC-187. Route to: Engineer.
+
+---
+
+### AC-020 (Rev 37) — Dead Code Removed; No Uniqueness Pre-Check
+
+- `findMatchingActiveRoutes` absent from `route-service.ts`: PASS (verified by grep — no such function)
+- `ROUTE_MATCH_SELECT` constant absent: PASS
+- `submitRoute` has no uniqueness pre-check (no `23505` error branch): PASS — confirmed by source inspection; submitRoute calls `submit_route` RPC and checks only for generic error
+- `RouteWithDuplicateFlag` type exported: PASS (visible in `route-service.ts`)
+
+**AC-020: PASS**
+
+---
+
+### AC-029 (Rev 37) — Per-Submitter Pending Index Dropped
+
+Migration `20261015000001_mod_003_drop_active_unique_idx.sql`:
+- `DROP INDEX IF EXISTS public.routes_active_unique_idx`: PASS
+- `DROP INDEX IF EXISTS public.routes_pending_unique_per_submitter`: PASS
+- `CREATE INDEX IF NOT EXISTS routes_active_grade_color_idx ON public.routes (gym_id, grade, color_tag) WHERE status = 'active'`: PASS (non-unique, confirmed — no UNIQUE keyword)
+- `check_route_duplicate` RPC: SECURITY INVOKER, correct REVOKE/GRANT (REVOKE FROM public, REVOKE FROM anon, GRANT TO authenticated): PASS
+
+Migration `20261015000003_mod_003_rev37_route_uniqueness.sql`:
+- Idempotent cleanup (IF EXISTS / IF NOT EXISTS guards on the same indexes): PASS
+
+**AC-029 (Rev 37): PASS**
+
+---
+
+### AC-185 — SwipeBackWrapper Wired (commit 2b33281)
+
+**RouteDetailScreen.tsx**:
+- `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'` at line 55: PASS
+- Loading render path: `<SwipeBackWrapper onBack={onBack}>` wraps centeredContainer: PASS (line 275)
+- Error render path: `<SwipeBackWrapper onBack={onBack}>` wraps centeredContainer: PASS (line 285)
+- Main render path: `<SwipeBackWrapper onBack={onBack} enabled={!isLogSendVisible}>` wraps root View: PASS (line 323) — gesture disabled while LogSend modal is open
+
+**RouteSubmitScreen.tsx**:
+- `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'` at line 38: PASS
+- `<SwipeBackWrapper onBack={onBack} enabled={!isSubmitting}>` wraps outermost ScrollView: PASS (line 237) — gesture disabled during submission
+
+**SendHistoryDetailScreen.tsx**:
+- `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'` at line 34: PASS
+- `<SwipeBackWrapper onBack={onBack}>` wraps outermost View: PASS (line 124)
+
+**AC-185: PASS**
+
+---
+
+### AC-179, AC-180, AC-181 — Regression (Previously Verified 2026-10-13)
+
+The route-service.test.ts suite (29 tests) runs clean. The screen-level tests cannot run due to the AsyncStorage infrastructure regression (separate issue). Source inspection confirms:
+
+- `upsertRouteVisit(routeId)` still present in `route-service.ts` (line 397): PASS
+- `upsertRouteVisit` called in `RouteDetailScreen.tsx` mount `useEffect`: confirmed at line 230 (per engineering progress notes); PASS
+- `fetchRoutesWithNewBeta(routeIds)` still present in `route-service.ts` (line 427): PASS
+- `RouteCard` import in `RouteListScreen.tsx` from `src/components/RouteCard`: PASS (per engineering notes + unchanged since 2026-10-13 QA pass)
+- `routes_with_new_beta` RPC + `user_route_visits` table in migration `20261013000002`: unchanged since prior QA PASS
+
+**AC-179, AC-180, AC-181: PASS (regression, source-inspection basis)**
+
+---
+
+### `checkDuplicateActiveRoute` Function
+
+AC-187 Key Implementation Notes say "AC-187 count is derived client-side from the already-fetched active-route list — no dedicated count RPC". The `checkDuplicateActiveRoute` function exported from `route-service.ts` runs a server-side `HEAD` count query against the DB. This function is exported but not called by `RouteSubmitScreen` (it does not appear in RouteSubmitScreen imports or body). It is dead exported code relative to AC-187's client-side-count requirement. Not a separate failure entry — it is part of the AC-187 implementation bug (the correct client-side approach was not implemented).
+
+---
+
+### Infrastructure Check — `.gitignore`
+
+- `.env` present on standalone line: PASS (unchanged from all prior QA runs)
+
+---
+
+### Previously Passing ACs — Regression Status
+
+All ACs that passed in the 2026-10-14 QA run remain passing based on source inspection. No mod-route-catalog source files other than `route-service.ts` (checkDuplicateActiveRoute addition) and the three screen files (SwipeBackWrapper wrapping + safe-area changes) were modified. The core logic (submit flow, route display, bookmarks, achievements, send history, navigator) is unchanged.
+
+| AC | Description | Result |
+|----|-------------|--------|
+| AC-020 (Rev 37) | Dead code removed; no uniqueness pre-check in submitRoute | PASS |
+| AC-021 | Photo required; button disabled without photo | PASS (source unchanged) |
+| AC-024b | No retire button for normal users | PASS (source unchanged) |
+| AC-025/026/027/028/029 (Rev 37) | Approval gate, RLS, withdrawal | PASS (migrations unchanged) |
+| AC-040 | Grade + color filter chips; no status filter for normal users | PASS (source unchanged) |
+| AC-041 | Active routes only; no status tag | PASS (source unchanged) |
+| AC-042 | Tap route → detail navigation | PASS (navigator unchanged) |
+| AC-043 | Pre-fill grade/color from filter state | PASS (source unchanged) |
+| AC-045 | Route display name composed {grade} {LocalizedColor} ({section_label}?) | PASS (source unchanged) |
+| AC-046 | Bookmark toggle; optimistic update; achievement icons | PASS (source unchanged) |
+| AC-047 | Read-only saved indicator on list | PASS (source unchanged) |
+| AC-125 | Gym name subtitle on RouteDetailScreen | PASS (source unchanged) |
+| AC-126 | Added-date footer on RouteDetailScreen | PASS (source unchanged) |
+| AC-127 | Two-column send-summary via summarizeAscents | PASS (source unchanged) |
+| AC-128 | Tap summary card → send-history screen | PASS (source unchanged) |
+| AC-129 | SendHistoryDetailScreen; back → detail not list | PASS (source unchanged) |
+| AC-130 | Two action buttons; no duplicate entry points | PASS (source unchanged) |
+| AC-179 | upsertRouteVisit fire-and-forget on RouteDetailScreen mount | PASS (source inspection) |
+| AC-180 | fetchRoutesWithNewBeta RPC + service wrapper | PASS (source inspection) |
+| AC-181 | "New Beta" tag on RouteCard; 60s cache | PASS (source inspection) |
+| AC-185 | SwipeBackWrapper wired to RouteDetail/Submit/SendHistoryDetail | PASS |
+| Photo signed URL | getPhotoSignedUrl + photoUri state | PASS (source unchanged) |
+| Sticky top bar | topBar View outside ScrollView in RouteDetailScreen | PASS (source unchanged) |
+| Safe area insets — RouteListScreen | makeStyles(theme, 0) — no double inset | PASS (source unchanged) |
+| Safe area insets — RouteDetail/Submit/SendHistory | useSafeAreaInsets removed; global AppHeader owns inset | PASS |
+| No gold-plating | No features beyond spec scope | PASS |
+
+---
+
+### Failure Summary
+
+| ID | Severity | Type | Description |
+|----|----------|------|-------------|
+| AC-187 | High | Implementation bug | Spec requires a pre-submit inline notice that updates as grade/color chips change, derived client-side from the gym's already-fetched active route list. Implementation delivers a post-submit `Alert.alert` after `onSuccess()` navigation, using a server-side `check_route_duplicate` RPC inside `submitRoute`. No inline notice exists. I18n key path also wrong: `routes.submit.duplicateWarning.*` used, spec requires `routes.duplicateWarning.*`. Route to: Engineer. |
+| Test-runner infrastructure | High | Cross-project regression (not mod-route-catalog) | 4 of 5 screen test suites fail to load because commit `8d4c6e4` (mod-localization-theme) added `import AsyncStorage` to `src/lib/theme.ts` without a Jest mock. Root cause is in mod-localization-theme; fix by adding `__mocks__/@react-native-async-storage/async-storage.js`. Route to: engineer-mod-localization-theme. |
+
+---
+
+### Routing
+
+- AC-187 implementation bug → `engineer-mod-route-catalog`
+- Test-runner AsyncStorage mock missing → `engineer-mod-localization-theme`
