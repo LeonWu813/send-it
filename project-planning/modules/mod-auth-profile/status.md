@@ -1661,6 +1661,52 @@ PASS. The fix is narrowly scoped: one import line removed, one `const` removed, 
 
 ---
 
+## Engineering Progress — Inspection — 2026-10-15 (double safe-area inset audit: EditProfileScreen + out-of-scope screens)
+
+**Task**: Audit and fix the double safe-area inset bug in three screens (`EditProfileScreen.tsx`, `FollowersListScreen.tsx`, `FollowingListScreen.tsx`). The global `AppHeader` in `AppShell` (MOD-012) already consumes `insets.top`; screens that also apply it cause a double top margin.
+
+**Findings**:
+
+1. `src/modules/mod-auth-profile/screens/EditProfileScreen.tsx` — **Already clean. No change needed.**
+   - No `useSafeAreaInsets` import.
+   - No `insets` call.
+   - Already calls `makeStyles(theme, 0)` (line 46).
+   - The `makeStyles` `topInset` parameter evaluates to `0 + theme.spacing.md` = correct padding beneath the global AppHeader.
+
+2. `src/modules/mod-social-feed/screens/FollowersListScreen.tsx` — **Bug confirmed. Outside write scope (mod-social-feed, MOD-006).**
+   - Line 28: `import { useSafeAreaInsets } from 'react-native-safe-area-context'`
+   - Line 125: `const insets = useSafeAreaInsets();`
+   - Line 126: `const styles = makeStyles(theme, insets.top);`
+   - Fix needed: remove import and call; change to `makeStyles(theme, 0)`.
+
+3. `src/modules/mod-social-feed/screens/FollowingListScreen.tsx` — **Bug confirmed. Outside write scope (mod-social-feed, MOD-006).**
+   - Line 29: `import { useSafeAreaInsets } from 'react-native-safe-area-context'`
+   - Line 126: `const insets = useSafeAreaInsets();`
+   - Line 127: `const styles = makeStyles(theme, insets.top);`
+   - Fix needed: remove import and call; change to `makeStyles(theme, 0)`.
+
+**Note on `insets.bottom`**: Neither `FollowersListScreen` nor `FollowingListScreen` uses `insets.bottom` — the import is exclusively for `insets.top`. Safe to remove the import entirely once changed to `makeStyles(theme, 0)`.
+
+**Note on `SignInScreen` and `SignUpScreen`**: Both auth screens in mod-auth-profile use `useSafeAreaInsets()` + `makeStyles(theme, insets.top)`. These screens render outside the `AppShell` (they are on the pre-auth path with no global AppHeader), so they are NOT subject to the double-inset bug and must not be changed.
+
+**No source code changes made in this pass** — `EditProfileScreen.tsx` was already correct; the two affected files are in MOD-006 (write-scope boundary).
+
+**Blocker**: `FollowersListScreen.tsx` and `FollowingListScreen.tsx` are owned by mod-social-feed (MOD-006). The double safe-area inset fix for those two files must be routed to engineer-mod-social-feed.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS (mod-auth-profile) — 0 errors in mod-auth-profile files. 1 pre-existing error in `mod-home/screens/HomeScreen.tsx` (`routeIdsKey` property missing) — outside scope, pre-existing, not introduced by this session. |
+| `EditProfileScreen.tsx` already uses `makeStyles(theme, 0)` | PASS — no change needed |
+| `useSafeAreaInsets` absent from `EditProfileScreen.tsx` | PASS — confirmed by grep |
+| Auth screens (`SignInScreen`, `SignUpScreen`) correctly retain `insets.top` (pre-auth, no global AppHeader) | PASS — not changed |
+| Out-of-scope files (`FollowersListScreen`, `FollowingListScreen`) identified and blocker logged | PASS |
+
+**Result: BLOCKER (out-of-scope files) — no mod-auth-profile source changes required**
+
+---
+
 ## Engineering Progress — Bugfix — 2026-10-15 (double safe-area inset in EditProfileScreen)
 
 **Issue**: `EditProfileScreen.tsx` called `useSafeAreaInsets()` and passed `insets.top` to `makeStyles`, applying `paddingTop: topInset + theme.spacing.md` in `scrollContent`. The global `AppHeader` (mounted in `AppShell`, MOD-012) already consumes `insets.top`, producing a visible double top margin on the Edit Profile screen. The same root cause as the `ProfileScreen.tsx` fix logged 2026-10-14.
