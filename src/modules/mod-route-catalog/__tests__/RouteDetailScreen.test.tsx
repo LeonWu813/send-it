@@ -24,6 +24,8 @@ jest.mock('../route-service', () => ({
   fetchSavedRouteIds: jest.fn(),
   saveRoute: jest.fn(),
   unsaveRoute: jest.fn(),
+  // AC-179: fire-and-forget visit upsert; mocked so tests don't fail on missing fn
+  upsertRouteVisit: jest.fn(),
 }));
 
 jest.mock('../../mod-send-logging/send-service', () => ({
@@ -56,7 +58,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react-nativ
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { loadRoute, getPhotoSignedUrl, fetchSavedRouteIds, saveRoute, unsaveRoute } from '../route-service';
+import { loadRoute, getPhotoSignedUrl, fetchSavedRouteIds, saveRoute, unsaveRoute, upsertRouteVisit } from '../route-service';
 import { fetchUserAchievements, fetchMyAscentsForRoute, deleteAscent, summarizeAscents } from '../../mod-send-logging/send-service';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
@@ -67,6 +69,7 @@ const mockGetPhotoSignedUrl = getPhotoSignedUrl as jest.MockedFunction<typeof ge
 const mockFetchSavedRouteIds = fetchSavedRouteIds as jest.MockedFunction<typeof fetchSavedRouteIds>;
 const mockSaveRoute = saveRoute as jest.MockedFunction<typeof saveRoute>;
 const mockUnsaveRoute = unsaveRoute as jest.MockedFunction<typeof unsaveRoute>;
+const mockUpsertRouteVisit = upsertRouteVisit as jest.MockedFunction<typeof upsertRouteVisit>;
 const mockFetchUserAchievements = fetchUserAchievements as jest.MockedFunction<typeof fetchUserAchievements>;
 const mockFetchMyAscentsForRoute = fetchMyAscentsForRoute as jest.MockedFunction<typeof fetchMyAscentsForRoute>;
 const mockDeleteAscent = deleteAscent as jest.MockedFunction<typeof deleteAscent>;
@@ -486,5 +489,18 @@ describe('RouteDetailScreen', () => {
       fireEvent.press(backButtons[0]);
       expect(DEFAULT_PROPS.onBack).toHaveBeenCalled();
     }
+  });
+
+  it('AC-179: calls upsertRouteVisit on mount (fire-and-forget visit tracking)', async () => {
+    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
+
+    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.queryAllByText(/V5/).length).toBeGreaterThan(0);
+    });
+
+    // upsertRouteVisit is called synchronously on mount with the route id.
+    expect(mockUpsertRouteVisit).toHaveBeenCalledWith('route-001');
   });
 });

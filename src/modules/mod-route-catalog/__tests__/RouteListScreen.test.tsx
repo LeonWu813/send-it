@@ -9,6 +9,8 @@
  * AC-045: route cards show formatted name "{grade} {LocalizedColor} ({section_label}?)".
  * AC-046: achievement icons rendered on route cards (cross-module from MOD-004).
  * AC-047: read-only saved bookmark indicator on saved route cards.
+ * AC-180/AC-181: fetchRoutesWithNewBeta called once after routes load; "new beta"
+ *   tag rendered on qualifying route cards via RouteCard hasNewBetaVideo prop.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -18,6 +20,8 @@ jest.mock('../../../lib/supabase', () => ({
 jest.mock('../route-service', () => ({
   listRoutes: jest.fn(),
   fetchSavedRouteIds: jest.fn(),
+  // AC-180: new-beta tag RPC wrapper
+  fetchRoutesWithNewBeta: jest.fn(),
 }));
 
 jest.mock('../../mod-send-logging/send-service', () => ({
@@ -27,15 +31,16 @@ jest.mock('../../mod-send-logging/send-service', () => ({
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
-import { listRoutes, fetchSavedRouteIds } from '../route-service';
+import { listRoutes, fetchSavedRouteIds, fetchRoutesWithNewBeta } from '../route-service';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
-import RouteListScreen from '../screens/RouteListScreen';
+import RouteListScreen, { clearNewBetaCacheForTesting } from '../screens/RouteListScreen';
 import type { RouteSummary } from '../types';
 import { renderOptions } from '../test-utils';
 
 const mockListRoutes = listRoutes as jest.MockedFunction<typeof listRoutes>;
 const mockFetchSavedRouteIds = fetchSavedRouteIds as jest.MockedFunction<typeof fetchSavedRouteIds>;
 const mockFetchUserAchievements = fetchUserAchievements as jest.MockedFunction<typeof fetchUserAchievements>;
+const mockFetchRoutesWithNewBeta = fetchRoutesWithNewBeta as jest.MockedFunction<typeof fetchRoutesWithNewBeta>;
 
 const ACTIVE_ROUTES: RouteSummary[] = [
   {
@@ -70,9 +75,12 @@ const DEFAULT_PROPS = {
 describe('RouteListScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // Default: no saved routes, no achievements
+    // Clear the module-level new-beta cache so each test gets a fresh fetch.
+    clearNewBetaCacheForTesting();
+    // Default: no saved routes, no achievements, no new-beta routes
     mockFetchSavedRouteIds.mockResolvedValue([]);
     mockFetchUserAchievements.mockResolvedValue({});
+    mockFetchRoutesWithNewBeta.mockResolvedValue([]);
   });
 
   it('shows a loading indicator while routes are being fetched', () => {
@@ -91,9 +99,12 @@ describe('RouteListScreen', () => {
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // AC-045: formatted name includes grade + localized color
-      const routeNames = screen.queryAllByTestId('route-name');
-      expect(routeNames.length).toBeGreaterThan(0);
+      // AC-045: formatted name includes grade — RouteCard renders these as Text nodes.
+      // Find by accessibilityLabel on the Pressable (RouteCard uses "{name} {grade}").
+      const routeCards = screen.queryAllByRole('button').filter(
+        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
+      );
+      expect(routeCards.length).toBeGreaterThan(0);
     });
   });
 
@@ -120,11 +131,10 @@ describe('RouteListScreen', () => {
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      const routeNames = screen.queryAllByTestId('route-name');
-      expect(routeNames.length).toBeGreaterThan(0);
-      // V3 Red route card should show "V3 Red" or "V3 紅色"
-      const firstName = routeNames[0].props.children as string;
-      expect(firstName).toMatch(/V3/);
+      // RouteCard renders the name as a Text node — find by text content.
+      // V3 Red route: formatted name "V3 Red" or "V3 紅色".
+      const v3Cards = screen.queryAllByText(/^V3/);
+      expect(v3Cards.length).toBeGreaterThan(0);
     });
   });
 
@@ -134,10 +144,9 @@ describe('RouteListScreen', () => {
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // r-002 has section_label: 'Cave' — formatted name should be "V5 Blue (Cave)" or "V5 藍色 (Cave)"
-      const routeNames = screen.queryAllByTestId('route-name');
-      const caveCard = routeNames.find((el) => (el.props.children as string).includes('Cave'));
-      expect(caveCard).toBeTruthy();
+      // r-002 has section_label: 'Cave' — formatted name should include "(Cave)".
+      const caveTexts = screen.queryAllByText(/Cave/);
+      expect(caveTexts.length).toBeGreaterThan(0);
     });
   });
 
@@ -176,19 +185,25 @@ describe('RouteListScreen', () => {
   });
 
   it('sorts saved routes to the top of the list, preserving relative order within each group', async () => {
-    // r-002 is saved; r-001 is not — r-002 should appear first in the sorted output
+    // r-002 is saved; r-001 is not — r-002 should appear first in the sorted output.
+    // RouteCard renders each card as a button with accessibilityLabel "{name} {grade}".
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
     mockFetchSavedRouteIds.mockResolvedValueOnce(['r-002']);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      const routeNames = screen.queryAllByTestId('route-name');
-      expect(routeNames.length).toBe(2);
-      // First card should be the saved route (r-002 = V5 Blue Cave)
-      expect((routeNames[0].props.children as string)).toMatch(/V5/);
-      // Second card should be the unsaved route (r-001 = V3 Red)
-      expect((routeNames[1].props.children as string)).toMatch(/V3/);
+      // Find route card buttons by their label — filter out chip checkboxes + CTA
+      const routeButtons = screen.queryAllByRole('button').filter(
+        (el) =>
+          el.props.accessibilityLabel?.includes('V3') ||
+          el.props.accessibilityLabel?.includes('V5'),
+      );
+      expect(routeButtons.length).toBe(2);
+      // r-002 (V5 Blue Cave) should appear first (it is saved).
+      expect(routeButtons[0].props.accessibilityLabel).toMatch(/V5/);
+      // r-001 (V3 Red) should appear second.
+      expect(routeButtons[1].props.accessibilityLabel).toMatch(/V3/);
     });
   });
 
@@ -197,9 +212,12 @@ describe('RouteListScreen', () => {
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
+    // Wait for routes to render; RouteCard uses accessibilityLabel on the Pressable.
     await waitFor(() => {
-      const routeNames = screen.queryAllByTestId('route-name');
-      expect(routeNames.length).toBeGreaterThan(0);
+      const routeCards = screen.queryAllByRole('button').filter(
+        (el) => el.props.accessibilityLabel?.includes('V3'),
+      );
+      expect(routeCards.length).toBeGreaterThan(0);
     });
 
     const routeCard = screen.queryAllByRole('button').find(
@@ -216,9 +234,12 @@ describe('RouteListScreen', () => {
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
+    // Wait for routes to render before looking for the CTA button.
     await waitFor(() => {
-      const routeNames = screen.queryAllByTestId('route-name');
-      expect(routeNames.length).toBeGreaterThan(0);
+      const routeCards = screen.queryAllByRole('button').filter(
+        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
+      );
+      expect(routeCards.length).toBeGreaterThan(0);
     });
 
     // CTA uses routeCatalog.addRoute i18n key
@@ -267,14 +288,44 @@ describe('RouteListScreen', () => {
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
+    // Wait for routes to render via RouteCard (accessibilityLabel on Pressable).
     await waitFor(() => {
-      const routeNames = screen.queryAllByTestId('route-name');
-      expect(routeNames.length).toBeGreaterThan(0);
+      const routeCards = screen.queryAllByRole('button').filter(
+        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
+      );
+      expect(routeCards.length).toBeGreaterThan(0);
     });
 
     // There should be no tab with accessibilityRole="tab"
     const statusTabs = screen.queryAllByRole('tab');
     expect(statusTabs).toHaveLength(0);
+  });
+
+  it('AC-180/AC-181: calls fetchRoutesWithNewBeta once after routes load', async () => {
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // fetchRoutesWithNewBeta should be called with all visible route IDs
+      expect(mockFetchRoutesWithNewBeta).toHaveBeenCalledWith(['r-001', 'r-002']);
+    });
+  });
+
+  it('AC-181: renders "New Beta" badge on route card when route qualifies', async () => {
+    mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
+    // r-001 qualifies for the new-beta tag
+    mockFetchRoutesWithNewBeta.mockResolvedValueOnce(['r-001']);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      // RouteCard renders the "New Beta" badge as a Text node with the home.routeCard.newBeta key.
+      const newBetaTexts = screen.queryAllByText(/New Beta/i).concat(
+        screen.queryAllByText(/新 Beta/),
+      );
+      expect(newBetaTexts.length).toBeGreaterThan(0);
+    });
   });
 
   it('applies grade filter when a grade chip is pressed', async () => {
@@ -284,9 +335,12 @@ describe('RouteListScreen', () => {
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
+    // Wait for initial routes to render via RouteCard.
     await waitFor(() => {
-      const routeNames = screen.queryAllByTestId('route-name');
-      expect(routeNames.length).toBeGreaterThan(0);
+      const routeCards = screen.queryAllByRole('button').filter(
+        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
+      );
+      expect(routeCards.length).toBeGreaterThan(0);
     });
 
     // The grade chips appear in the header — press V3 chip (not card grade text)
