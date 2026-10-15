@@ -396,10 +396,10 @@ export default function HomeScreen({
 
       const { data: betaRows, error: betaError } = await supabase
         .from('beta_videos')
-        .select('user_id, created_at')
+        .select('user_id, updated_at')
         .in('user_id', followedIds)
-        .gte('created_at', cutoff)
-        .order('created_at', { ascending: false });
+        .gte('updated_at', cutoff)
+        .order('updated_at', { ascending: false });
 
       if (betaError) {
         console.error('[HomeScreen] loadFollowingActivity beta_videos error:', betaError);
@@ -412,15 +412,15 @@ export default function HomeScreen({
         string,
         { count: number; latestAt: string }
       >();
-      for (const row of (betaRows as Array<{ user_id: string; created_at: string }>) ?? []) {
+      for (const row of (betaRows as Array<{ user_id: string; updated_at: string }>) ?? []) {
         const existing = activityMap.get(row.user_id);
         if (existing) {
           existing.count += 1;
-          if (row.created_at > existing.latestAt) {
-            existing.latestAt = row.created_at;
+          if (row.updated_at > existing.latestAt) {
+            existing.latestAt = row.updated_at;
           }
         } else {
-          activityMap.set(row.user_id, { count: 1, latestAt: row.created_at });
+          activityMap.set(row.user_id, { count: 1, latestAt: row.updated_at });
         }
       }
 

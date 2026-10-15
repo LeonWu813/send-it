@@ -2478,3 +2478,33 @@ All three fixes verified. No regressions introduced. All 15 ACs (AC-110 through 
 | TypeScript strict mode — no unguarded `any` | PASS |
 
 **Result: READY FOR QA RE-VERIFICATION**
+
+---
+
+### Bugfix — AC-182 — created_at → updated_at (4 points) in loadFollowingActivity — 2026-10-15
+
+**Bug (Tech Lead Rev 38 review):** `loadFollowingActivity` in `HomeScreen.tsx` queried `beta_videos` using `created_at` in all four relevant places. The spec (AC-182 revised, Rev 38) requires `MAX(updated_at)` per followed climber — a video replaced within the last 14 days should surface even if its original `created_at` is older than the 14-day cutoff. The existing batched-fetch + JS-group pattern was correct; only the column name needed to be swapped consistently.
+
+**Four changes applied (all in `loadFollowingActivity`, Step 2 and Step 3):**
+
+1. `.select('user_id, created_at')` → `.select('user_id, updated_at')` — selects the correct column from the database.
+2. `.gte('created_at', cutoff)` → `.gte('updated_at', cutoff)` — semantic point: filters by when a video was last replaced, not when it was first uploaded.
+3. `.order('created_at', { ascending: false })` → `.order('updated_at', { ascending: false })` — server-side ordering consistent with the column being fetched.
+4. JS grouping loop: typed row shape annotation `Array<{ user_id: string; created_at: string }>` → `Array<{ user_id: string; updated_at: string }>`; all three reads of `row.created_at` inside the loop → `row.updated_at` (comparison against `existing.latestAt`, assignment on first-seen, and comparison on subsequent rows).
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — four substitutions in `loadFollowingActivity` (Step 2 query and Step 3 JS group loop). No other logic changed.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors (pre-existing mod-beta-video errors confirmed present before this change; no new errors introduced) |
+| `npx jest --testPathPattern="mod-home\|HomeScreen" --passWithNoTests` | PASS — 39 tests, 3 suites, 0 failures |
+| All four created_at → updated_at substitutions applied consistently | PASS |
+| Batched-fetch + JS-group pattern preserved (no SQL GROUP BY rewrite) | PASS |
+| No changes to Step 1 (fetchFollowing), Step 4 (FollowingActivity build), or Step 3 (activityMap structure) | PASS |
+| No hardcoded hex colors or inline string literals introduced | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA RE-VERIFICATION**
