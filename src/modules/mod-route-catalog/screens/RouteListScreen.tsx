@@ -33,6 +33,7 @@ import {
 
 import { useTheme } from '../../../lib/theme';
 import RouteCard from '../../../components/RouteCard';
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import type { RouteCardRoute } from '../../../components/RouteCard';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import {
@@ -448,35 +449,37 @@ export default function RouteListScreen({
   }
 
   return (
-    <View style={styles.root}>
-      {/* Screen header */}
-      <View style={styles.header}>
-        {onBack ? (
-          <Pressable
-            onPress={onBack}
-            style={styles.backLink}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-          >
-            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-          </Pressable>
-        ) : null}
-        <Text style={styles.screenTitle}>{gymName}</Text>
-      </View>
+    <SwipeBackWrapper onBack={onBack ?? (() => {})}>
+      <View style={styles.root}>
+        {/* Screen header */}
+        <View style={styles.header}>
+          {onBack ? (
+            <Pressable
+              onPress={onBack}
+              style={styles.backLink}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.back')}
+            >
+              <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
+            </Pressable>
+          ) : null}
+          <Text style={styles.screenTitle}>{gymName}</Text>
+        </View>
 
-      <FlatList
-        data={sortedRoutes}
-        keyExtractor={(item) => item.id}
-        renderItem={renderRouteCard}
-        ListHeaderComponent={listHeader}
-        ListFooterComponent={addRouteCta}
-        contentContainerStyle={styles.listContent}
-        keyboardShouldPersistTaps="handled"
-        ListEmptyComponent={
-          <Text style={styles.emptyText}>{t('routeCatalog.noResults')}</Text>
-        }
-      />
-    </View>
+        <FlatList
+          data={sortedRoutes}
+          keyExtractor={(item) => item.id}
+          renderItem={renderRouteCard}
+          ListHeaderComponent={listHeader}
+          ListFooterComponent={addRouteCta}
+          contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={
+            <Text style={styles.emptyText}>{t('routeCatalog.noResults')}</Text>
+          }
+        />
+      </View>
+    </SwipeBackWrapper>
   );
 }
 

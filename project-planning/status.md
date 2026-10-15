@@ -3,13 +3,13 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
-mode: implementation
-module: mod-home (MOD-012)
+agent: engineer-mod-route-catalog
+mode: bugfix
+module: mod-route-catalog (MOD-003)
 result: success
-commit: 62ee9cc
+commit: 3d5a606
 timestamp: 2026-10-15T00:00:00Z
-summary: RouteCard layout redesign — thumbnail to left, send badge pill replaced by inline Ionicons icon in nameRow, bookmark repositioned to top-right via infoHeader row (space-between). No props changed. 0 TypeScript errors. 25/25 src/components tests pass. 39/39 mod-home tests pass.
+summary: AC-185 follow-up — added SwipeBackWrapper to RouteListScreen (main render path). Import + JSX wrapper only; onBack ?? (() => {}) fallback for optional prop. 0 TypeScript errors. 110/110 mod-route-catalog tests pass.
 ```
 
 

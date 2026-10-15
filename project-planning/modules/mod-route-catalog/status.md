@@ -2,6 +2,25 @@
 
 ## Engineering Progress
 
+### AC-185 follow-up — SwipeBackWrapper added to RouteListScreen (2026-10-15)
+
+**AC implemented:** AC-185 (swipe-back gesture wiring — RouteListScreen was missing the wrapper).
+
+**Change:**
+- `RouteListScreen.tsx`: Added `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'`. Wrapped the outermost `<View style={styles.root}>` in the main return path with `<SwipeBackWrapper onBack={onBack ?? (() => {})}>`. The `onBack` prop is optional (may be undefined) so a no-op fallback is passed to satisfy the required `onBack` prop on `SwipeBackWrapper`. The loading and error return paths render their own `centeredContainer` Views inside the same screen — they do not show a back icon and are not wrapped (the wrapper is only needed where the chevron-back is present).
+- No `enabled` override: the main route list uses a vertical `FlatList` with horizontal filter `ScrollView` chips. The swipe-back gesture starts from the left 20% of the screen and requires `dx > dy * 2`, so it will not steal vertical scrolls or horizontal chip swipes.
+
+**Self-check (2026-10-15):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest src/modules/mod-route-catalog --watchAll=false` — 110 tests pass across 5 suites. Zero failures.
+- PASS: Minimal change — import + JSX wrapper only; no logic changes.
+- PASS: No gold-plating — strictly confined to adding the SwipeBackWrapper to RouteListScreen.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — SwipeBackWrapper import + main render path wrapped
+
+---
+
 ### Rev 39/40 RouteCard redesign — AC-189/190/047 Rev 39 live data wiring (2026-10-15)
 
 **ACs implemented:**
