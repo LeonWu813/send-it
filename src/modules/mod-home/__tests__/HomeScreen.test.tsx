@@ -550,8 +550,8 @@ describe('HomeScreen (Rev 36)', () => {
         if (table === 'beta_videos') {
           return makeQueryBuilder({
             data: [
-              { user_id: 'user-002', created_at: new Date().toISOString() },
-              { user_id: 'user-002', created_at: new Date().toISOString() },
+              { user_id: 'user-002', updated_at: new Date().toISOString() },
+              { user_id: 'user-002', updated_at: new Date().toISOString() },
             ],
             error: null,
           });
@@ -562,7 +562,7 @@ describe('HomeScreen (Rev 36)', () => {
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
       await waitFor(() => {
         expect(screen.getByText('Alice Chen')).toBeTruthy();
-        expect(screen.getByText('2 new beta videos')).toBeTruthy();
+        expect(screen.getByText('new video upload')).toBeTruthy();
       });
     });
 
@@ -576,7 +576,7 @@ describe('HomeScreen (Rev 36)', () => {
         if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
         if (table === 'beta_videos') {
           return makeQueryBuilder({
-            data: [{ user_id: 'user-002', created_at: new Date().toISOString() }],
+            data: [{ user_id: 'user-002', updated_at: new Date().toISOString() }],
             error: null,
           });
         }
