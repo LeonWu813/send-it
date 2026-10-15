@@ -115,6 +115,12 @@ interface NewBetaCache {
   data: Set<string>;
   /** Timestamp when this cache entry was populated. */
   populatedAt: number;
+  /**
+   * Stable key derived from the route-id set this cache entry was computed for.
+   * Formed by sorting the route IDs and joining with ','.
+   * A cache hit is only valid when the current route-id set produces the same key.
+   */
+  routeIdsKey: string;
 }
 
 let newBetaCache: NewBetaCache | null = null;
@@ -327,13 +333,17 @@ export default function HomeScreen({
       setProjectingRoutes(routes);
 
       // Step 3: Call routes_with_new_beta RPC (with in-memory cache, ~60s TTL).
-      // Cache is keyed by the full set of route IDs in this load cycle (AC-180/AC-181).
+      // Cache is keyed by BOTH the route-id set AND time (AC-180/AC-181).
+      // A stale cache from a previous load with a different route-id set must not
+      // bleed into this render — check routeIdsKey first, then the TTL.
       const now = Date.now();
+      const currentRouteIdsKey = savedRouteIds.slice().sort().join(',');
       if (
         newBetaCache !== null &&
+        newBetaCache.routeIdsKey === currentRouteIdsKey &&
         now - newBetaCache.populatedAt < NEW_BETA_CACHE_TTL_MS
       ) {
-        // Cache still valid — reuse.
+        // Cache still valid for the same route-id set — reuse.
         setNewBetaRouteIds(newBetaCache.data);
       } else {
         const { data: rpcData, error: rpcError } = await supabase.rpc(
@@ -348,7 +358,7 @@ export default function HomeScreen({
           const ids = new Set<string>(
             ((rpcData as Array<{ route_id: string }>) ?? []).map((r) => r.route_id),
           );
-          newBetaCache = { data: ids, populatedAt: now };
+          newBetaCache = { data: ids, populatedAt: now, routeIdsKey: currentRouteIdsKey };
           setNewBetaRouteIds(ids);
         }
       }

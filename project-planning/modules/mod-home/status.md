@@ -2414,3 +2414,36 @@ No new regressions in adjacent logic.
 All three fixes verified. No regressions introduced. All 15 ACs (AC-110 through AC-185) pass. TypeScript clean (0 errors). 38/38 mod-home tests pass. 514/515 full-suite tests pass (1 pre-existing `mod-beta-video` failure, unrelated to MOD-012).
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip and Events Banner.
+
+---
+
+### Bugfix — newBetaCache keyed by route-id set to prevent stale badge bleeding — 2026-10-15
+
+**Bug (Tech Lead audit):** The module-level `newBetaCache` in `HomeScreen.tsx` was keyed by time only. When `loadProjectingRoutes` checked the cache, it verified the 60-second TTL but not whether the cached result was computed for the same route-id set. A stale cache from a previous load (for a different set of route IDs — e.g. after the user saves/removes routes, or across different user sessions) could bleed into a new render, causing the "New Beta" badge to appear on wrong RouteCards.
+
+**Root cause:** `NewBetaCache` interface had only `data: Set<string>` and `populatedAt: number`. The cache-hit check only compared `populatedAt` against `Date.now()`, with no check on whether the cached route-id set matched the current one.
+
+**Fix:** Added `routeIdsKey: string` to the `NewBetaCache` interface. Before each RPC call, compute `currentRouteIdsKey = savedRouteIds.slice().sort().join(',')`. A cache hit now requires both `routeIdsKey === currentRouteIdsKey` AND TTL still valid. When the cache is written, `routeIdsKey` is stored alongside `data` and `populatedAt`. The `clearNewBetaCacheForTests()` export is unchanged (nulls the variable — correct).
+
+**Impact note:** `newBetaCache` is a module-level singleton read only by `loadProjectingRoutes` and cleared by `clearNewBetaCache()` (on user-id change) and `clearNewBetaCacheForTests()`. Adding `routeIdsKey` to the interface makes the existing cache object more strict at the read path — no other code reads cache fields directly. The TTL path is unchanged; the new field only adds a guard that must also pass before returning cached data.
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — `NewBetaCache` interface: added `routeIdsKey: string` field. `loadProjectingRoutes`: compute `currentRouteIdsKey` before the cache check; cache-hit condition now requires `newBetaCache.routeIdsKey === currentRouteIdsKey` in addition to the TTL check; cache write includes `routeIdsKey: currentRouteIdsKey`.
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — added test `'does not reuse cache when the route-id set changes (cache key mismatch)'` in the Projecting Routes describe block. Renders twice with different route-id sets (route-001 then route-002); verifies the RPC is called again for the second render (cache miss — different key) and that "New Beta" badge does not appear for a route not in the new-beta set.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false --testPathPattern="mod-home"` | PASS — 39 tests, 3 suites, 0 failures (+1 new cache-key test) |
+| NewBetaCache.routeIdsKey field added to interface | PASS |
+| Cache hit requires routeIdsKey match AND TTL check | PASS |
+| Cache write stores routeIdsKey alongside data and populatedAt | PASS |
+| clearNewBetaCacheForTests() unchanged (nulls variable — correct) | PASS |
+| clearNewBetaCache() unchanged (nulls variable — correct) | PASS |
+| No hardcoded hex colors or inline string literals introduced | PASS |
+| No new dependencies outside tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA RE-VERIFICATION**

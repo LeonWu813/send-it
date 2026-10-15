@@ -423,6 +423,79 @@ describe('HomeScreen (Rev 36)', () => {
         });
       });
     });
+
+    it('does not reuse cache when the route-id set changes (cache key mismatch)', async () => {
+      // First render: route-set A = ['route-001'], RPC returns route-001 as new-beta.
+      // Render with isActive=false so only the mount effect fires (avoids double-call from
+      // the isActive focus-refetch effect, keeping the first-render RPC count predictable).
+      mockFetchSavedRouteIds.mockResolvedValue(['route-001']);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'routes') {
+          return makeQueryBuilder({
+            data: [{ id: 'route-001', gym_id: 'gym-001', grade: 'V3', color_tag: 'blue', photo_url: null }],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+      mockRpc.mockResolvedValue({
+        data: [{ route_id: 'route-001' }],
+        error: null,
+      } as never);
+
+      const { unmount } = render(
+        <HomeScreen {...DEFAULT_PROPS} isActive={false} />,
+        renderOptions(),
+      );
+      // Wait for the RPC to be called at least once — cache now primed for route-set A.
+      await waitFor(() => {
+        expect(mockRpc).toHaveBeenCalledWith('routes_with_new_beta', {
+          route_ids: ['route-001'],
+        });
+      });
+      const callsAfterFirstRender = mockRpc.mock.calls.length;
+      unmount();
+
+      // Second render: route-set B = ['route-002'] — different set, cache key changes.
+      // The RPC MUST be called again (not reusing the stale cache from set A).
+      jest.clearAllMocks();
+      setupDefaultMocks();
+      mockFetchSavedRouteIds.mockResolvedValue(['route-002']);
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'saved_gyms') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'user_route_visits') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'beta_videos') return makeQueryBuilder({ data: [], error: null });
+        if (table === 'routes') {
+          return makeQueryBuilder({
+            data: [{ id: 'route-002', gym_id: 'gym-001', grade: 'V4', color_tag: 'green', photo_url: null }],
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+      // RPC returns empty for route-set B — route-002 has no new beta.
+      mockRpc.mockResolvedValue({ data: [], error: null } as never);
+
+      render(
+        <HomeScreen {...DEFAULT_PROPS} isActive={false} />,
+        renderOptions(),
+      );
+      await waitFor(() => {
+        // RPC must have been called for route-set B (cache miss — different key).
+        expect(mockRpc).toHaveBeenCalledWith('routes_with_new_beta', {
+          route_ids: ['route-002'],
+        });
+        // 'New Beta' badge must NOT appear — route-002 is not in the new-beta set.
+        expect(screen.queryByText('New Beta')).toBeNull();
+      });
+      // Suppress unused variable warning — used to confirm first render completed.
+      expect(callsAfterFirstRender).toBeGreaterThanOrEqual(1);
+    });
   });
 
   // ── AC-182: Following Activity ─────────────────────────────────────────────
