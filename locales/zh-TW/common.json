@@ -203,6 +203,10 @@
         "takePhoto": "拍照",
         "choosePhoto": "從相簿選擇"
       },
+      "duplicateWarning": {
+        "title": "可能為重複路線",
+        "body": "此岩館已有相同難度與顏色的路線。如果這是不同的路線，請加上區域標籤以作區分；否則您可能正在建立重複路線。"
+      },
       "errors": {
         "gradeRequired": "請選擇難度。",
         "colorRequired": "請選擇岩點顏色。",

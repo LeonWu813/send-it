@@ -307,6 +307,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       created_at: '2026-09-23T10:00:00Z',
       retired_at: null,
       retired_by_user_id: null,
+      has_duplicate: false,
     });
 
     // When submitRoute IS called, the first argument must be an object (not a string userId)
@@ -330,6 +331,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       created_at: '2026-09-23T10:00:00Z',
       retired_at: null,
       retired_by_user_id: null,
+      has_duplicate: false,
     });
     mockLaunchImageLibraryAsync.mockResolvedValueOnce({
       canceled: false,

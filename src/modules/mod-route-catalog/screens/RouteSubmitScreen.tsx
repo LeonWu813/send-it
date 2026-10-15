@@ -201,8 +201,23 @@ export default function RouteSubmitScreen({
           [{ text: t('common.ok'), onPress: () => onBack() }],
         );
       } else {
-        // Auto-approve is ON (default Phase 1): navigate to the new active route.
+        // Auto-approve is ON (default Phase 1): navigate to the new active route first,
+        // then show the non-blocking duplicate soft warning if applicable (AC-187).
         onSuccess(newRoute.id);
+        if (newRoute.has_duplicate) {
+          // Show informational alert after navigation — does not block the user.
+          // The alert is deferred slightly so the navigation transition can begin.
+          setTimeout(() => {
+            Alert.alert(
+              t('routes.submit.duplicateWarning.title'),
+              t('routes.submit.duplicateWarning.body', {
+                grade: newRoute.grade,
+                color: t(`routeCatalog.colors.${newRoute.color_tag}`),
+              }),
+              [{ text: t('common.ok') }],
+            );
+          }, 300);
+        }
       }
     } catch (err) {
       const message =

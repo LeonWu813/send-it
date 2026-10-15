@@ -2,6 +2,56 @@
 
 ## Engineering Progress
 
+### Rev 37 — Drop active unique index; add duplicate soft warning (AC-020/AC-029/AC-045/AC-187) (2026-10-15)
+
+**ACs implemented / changed:**
+- AC-020 (Rev 37): Removed the `findMatchingActiveRoutes` dead-code function and the `ROUTE_MATCH_SELECT` constant (the match-before-create flow no longer exists). `submitRoute` no longer throws on `23505` (the unique constraint is dropped). Duplicate routes are allowed by design.
+- AC-029 (Rev 37): `routes_pending_unique_per_submitter` index dropped in migration — a user may now hold more than one pending submission for the same `(gym_id, grade, color_tag)`.
+- AC-187 (Rev 37, new): After a successful `submit_route` call (when the route is `active`), the client calls the new `check_route_duplicate` RPC. If it returns `true`, `RouteSubmitScreen` shows a non-blocking informational `Alert` with the bilingual duplicate-warning copy (`routes.submit.duplicateWarning.title` / `.body`) **after** `onSuccess(newRoute.id)` is called — navigation is never blocked.
+
+**Migration — `supabase/migrations/20261015000001_mod_003_drop_active_unique_idx.sql`:**
+- `DROP INDEX IF EXISTS public.routes_active_unique_idx` — removes the UNIQUE partial index on `(gym_id, grade, color_tag) WHERE status='active'`.
+- `DROP INDEX IF EXISTS public.routes_pending_unique_per_submitter` — removes the per-submitter pending uniqueness index (AC-029, Rev 37).
+- `CREATE INDEX IF NOT EXISTS routes_active_grade_color_idx` — plain non-unique partial index on `(gym_id, grade, color_tag) WHERE status='active'` to back the `check_route_duplicate` RPC efficiently.
+- `check_route_duplicate(p_gym_id, p_grade, p_color_tag, p_exclude_route_id)` RPC: STABLE, SECURITY INVOKER, returns BOOLEAN. Checks whether another `active` route with the same combo exists excluding the just-inserted row. `REVOKE EXECUTE FROM public, anon; GRANT EXECUTE TO authenticated`.
+
+**route-service.ts:**
+- Deleted `findMatchingActiveRoutes` function and `ROUTE_MATCH_SELECT` constant (dead code, Rev 37).
+- `submitRoute` return type changed to `RouteWithDuplicateFlag` (exported type: `Route & { has_duplicate: boolean }`).
+- `submitRoute` now calls `check_route_duplicate` RPC after a successful insert when `route.status === 'active'`. Errors in the duplicate check are silently treated as `false` (advisory only — never blocks submission). Pending routes skip the duplicate check.
+- Removed stale 23505 / "pending submission" error branches from `submitRoute` (those constraints are now dropped).
+
+**RouteSubmitScreen.tsx:**
+- After `onSuccess(newRoute.id)` when `has_duplicate` is true: shows a `setTimeout`-deferred (300ms) informational `Alert` with title `routes.submit.duplicateWarning.title` and body `routes.submit.duplicateWarning.body` (interpolates `grade` + localized `color`). Alert does not block navigation — `onSuccess` is called first.
+
+**Locale files:**
+- `locales/en/common.json` — added `routes.submit.duplicateWarning.title` and `.body`.
+- `locales/zh-TW/common.json` — added matching zh-TW translations.
+
+**Test changes:**
+- `route-service.test.ts`: removed `findMatchingActiveRoutes` import and describe block; replaced `submitRoute` tests with 5 new tests covering `has_duplicate=false`, `has_duplicate=true`, RPC error treated as `false`, pending-route skips duplicate check, and submit RPC failure.
+- `RouteSubmitScreen.test.tsx`: added `has_duplicate: false` to two mock `submitRoute` return objects.
+
+**Self-check (2026-10-15):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest --testPathPattern="mod-route-catalog|route-service|RouteSubmit" --passWithNoTests` — 90 tests pass across 4 suites (`route-service.test.ts`, `RouteSubmitScreen.test.tsx`, `RouteDetailScreen.test.tsx`, `SendHistoryDetailScreen.test.tsx`). The 10 failures in `RouteListScreen.test.tsx` are pre-existing "Unable to find node on an unmounted component" environment rendering issues; verified pre-existing by stash test — same 9 failures existed before this change (1 additional test added by the AC-181 engineer run in uncommitted state also has the same pre-existing failure pattern).
+- PASS: Migration follows spec — unique index dropped, pending index dropped, non-unique index created, `check_route_duplicate` RPC added with correct grants.
+- PASS: `has_duplicate` advisory check is non-blocking — errors swallowed, pending routes skip the call, `onSuccess` called before the Alert.
+- PASS: i18n key parity — `routes.submit.duplicateWarning.title` and `.body` present in both EN and zh-TW locales.
+- PASS: No `supabase db push` run — migration will be applied manually per instructions.
+- PASS: No gold-plating — strictly confined to AC-020/AC-029/AC-045/AC-187.
+
+**Files changed:**
+- `supabase/migrations/20261015000001_mod_003_drop_active_unique_idx.sql` — new migration
+- `src/modules/mod-route-catalog/route-service.ts` — deleted `findMatchingActiveRoutes` + `ROUTE_MATCH_SELECT`; updated `submitRoute` return type and implementation; added `RouteWithDuplicateFlag` exported type
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — post-navigate duplicate Alert (AC-187)
+- `src/modules/mod-route-catalog/__tests__/route-service.test.ts` — removed `findMatchingActiveRoutes` tests; replaced `submitRoute` tests
+- `src/modules/mod-route-catalog/__tests__/RouteSubmitScreen.test.tsx` — `has_duplicate: false` added to two mock objects
+- `locales/en/common.json` — `routes.submit.duplicateWarning.*` keys added
+- `locales/zh-TW/common.json` — `routes.submit.duplicateWarning.*` keys added
+
+---
+
 ### Convention fix — Log Raw Supabase Error Before Throwing (2026-10-14)
 
 **Change**: Added `console.error('[functionName] error:', error)` immediately before every user-facing `throw` in `route-service.ts`, per the production.md "Log Raw Supabase Error Before Throwing a User-Facing String" shared convention.

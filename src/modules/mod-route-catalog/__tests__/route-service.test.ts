@@ -47,7 +47,6 @@ function makeStorageBuilder(opts: {
 import { supabase } from '../../../lib/supabase';
 import {
   fetchSavedRouteIds,
-  findMatchingActiveRoutes,
   getPhotoSignedUrl,
   listRoutes,
   loadRoute,
@@ -110,57 +109,8 @@ const MOCK_ROUTE: Route = {
   retired_by_user_id: null,
 };
 
-// ── findMatchingActiveRoutes ──────────────────────────────────────────────────
-
-describe('findMatchingActiveRoutes', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('returns matching active routes when found', async () => {
-    const qb = makeQueryBuilder({ data: [MOCK_ROUTE_SUMMARY], error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
-
-    const result = await findMatchingActiveRoutes('gym-001', 'V4', 'blue');
-
-    expect(result).toEqual([MOCK_ROUTE_SUMMARY]);
-    expect(mockFrom).toHaveBeenCalledWith('routes');
-    expect(qb.eq).toHaveBeenCalledWith('gym_id', 'gym-001');
-    expect(qb.eq).toHaveBeenCalledWith('grade', 'V4');
-    expect(qb.eq).toHaveBeenCalledWith('color_tag', 'blue');
-    expect(qb.eq).toHaveBeenCalledWith('status', 'active');
-  });
-
-  it('returns an empty array when no matching active routes exist', async () => {
-    const qb = makeQueryBuilder({ data: [], error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
-
-    const result = await findMatchingActiveRoutes('gym-001', 'V4', 'blue');
-
-    expect(result).toEqual([]);
-  });
-
-  it('returns an empty array when data is null', async () => {
-    const qb = makeQueryBuilder({ data: null, error: null });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
-
-    const result = await findMatchingActiveRoutes('gym-001', 'V4', 'blue');
-
-    expect(result).toEqual([]);
-  });
-
-  it('throws a user-friendly error when Supabase returns an error', async () => {
-    const qb = makeQueryBuilder({
-      data: null,
-      error: { code: 'PGRST301', message: 'DB error' },
-    });
-    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
-
-    await expect(
-      findMatchingActiveRoutes('gym-001', 'V4', 'blue'),
-    ).rejects.toThrow('Failed to check for existing routes. Please try again.');
-  });
-});
+// findMatchingActiveRoutes was removed in Rev 37 — it was dead code from the
+// removed match-before-create flow. The describe block is deleted accordingly.
 
 // ── loadRoute ─────────────────────────────────────────────────────────────────
 
@@ -294,8 +244,12 @@ describe('submitRoute', () => {
     jest.clearAllMocks();
   });
 
-  it('calls submit_route RPC and returns the created Route', async () => {
-    mockRpc.mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never);
+  it('calls submit_route RPC and returns the created Route with has_duplicate=false when no duplicate (AC-020/AC-187)', async () => {
+    // First call: submit_route succeeds
+    mockRpc
+      .mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never)
+      // Second call: check_route_duplicate returns false
+      .mockResolvedValueOnce({ data: false, error: null } as never);
 
     const result = await submitRoute({
       gym_id: 'gym-001',
@@ -305,7 +259,7 @@ describe('submitRoute', () => {
       section_label: null,
     });
 
-    expect(result).toEqual(MOCK_ROUTE);
+    expect(result).toEqual({ ...MOCK_ROUTE, has_duplicate: false });
     expect(mockRpc).toHaveBeenCalledWith('submit_route', {
       p_gym_id: 'gym-001',
       p_grade: 'V4',
@@ -313,47 +267,65 @@ describe('submitRoute', () => {
       p_photo_url: 'https://example.com/photo.jpg',
       p_section_label: null,
     });
+    expect(mockRpc).toHaveBeenCalledWith('check_route_duplicate', {
+      p_gym_id: 'gym-001',
+      p_grade: 'V4',
+      p_color_tag: 'blue',
+      p_exclude_route_id: 'route-001',
+    });
   });
 
-  it('throws a duplicate-route error when the unique constraint is violated (23505)', async () => {
-    mockRpc.mockResolvedValueOnce({
-      data: null,
-      error: { code: '23505', message: 'unique constraint violation' },
-    } as never);
+  it('returns has_duplicate=true when check_route_duplicate returns true (AC-187)', async () => {
+    mockRpc
+      .mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never)
+      .mockResolvedValueOnce({ data: true, error: null } as never);
 
-    await expect(
-      submitRoute({
-        gym_id: 'gym-001',
-        grade: 'V4',
-        color_tag: 'blue',
-        photo_url: 'https://example.com/photo.jpg',
-        section_label: null,
-      }),
-    ).rejects.toThrow(
-      'An active route with this grade and color already exists at this gym.',
-    );
+    const result = await submitRoute({
+      gym_id: 'gym-001',
+      grade: 'V4',
+      color_tag: 'blue',
+      photo_url: 'https://example.com/photo.jpg',
+      section_label: null,
+    });
+
+    expect(result.has_duplicate).toBe(true);
   });
 
-  it('throws a pending-submission error when duplicate pending exists', async () => {
-    mockRpc.mockResolvedValueOnce({
-      data: null,
-      error: { code: 'P0001', message: 'You already have a pending submission for this route combination' },
-    } as never);
+  it('returns has_duplicate=false when check_route_duplicate RPC errors (non-blocking, AC-187)', async () => {
+    mockRpc
+      .mockResolvedValueOnce({ data: MOCK_ROUTE, error: null } as never)
+      .mockResolvedValueOnce({ data: null, error: { code: 'PGRST500', message: 'rpc error' } } as never);
 
-    await expect(
-      submitRoute({
-        gym_id: 'gym-001',
-        grade: 'V4',
-        color_tag: 'blue',
-        photo_url: 'https://example.com/photo.jpg',
-        section_label: null,
-      }),
-    ).rejects.toThrow(
-      'You already have a pending submission for this grade and color at this gym.',
-    );
+    const result = await submitRoute({
+      gym_id: 'gym-001',
+      grade: 'V4',
+      color_tag: 'blue',
+      photo_url: 'https://example.com/photo.jpg',
+      section_label: null,
+    });
+
+    // Duplicate check error must not throw — advisory only
+    expect(result.has_duplicate).toBe(false);
   });
 
-  it('throws a user-friendly error on unexpected RPC failure', async () => {
+  it('skips check_route_duplicate when route status is pending (AC-187)', async () => {
+    const pendingRoute: Route = { ...MOCK_ROUTE, status: 'pending' };
+    mockRpc.mockResolvedValueOnce({ data: pendingRoute, error: null } as never);
+
+    const result = await submitRoute({
+      gym_id: 'gym-001',
+      grade: 'V4',
+      color_tag: 'blue',
+      photo_url: 'https://example.com/photo.jpg',
+      section_label: null,
+    });
+
+    // Only one RPC call (submit_route); check_route_duplicate not called for pending
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(result.has_duplicate).toBe(false);
+  });
+
+  it('throws a user-friendly error on submit_route RPC failure', async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,
       error: { code: 'PGRST500', message: 'server error' },

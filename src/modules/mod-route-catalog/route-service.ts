@@ -32,45 +32,6 @@ const ROUTE_SUMMARY_SELECT =
 const ROUTE_DETAIL_SELECT =
   'id, gym_id, section_label, grade, color_tag, photo_url, status, submitted_by_user_id, created_at, retired_at, retired_by_user_id';
 
-/** Fields fetched for the match-before-create query. */
-const ROUTE_MATCH_SELECT =
-  'id, gym_id, section_label, grade, color_tag, photo_url, status, created_at';
-
-/**
- * Search for existing ACTIVE routes at a gym with a matching grade + color.
- *
- * This is the first step in the match-before-create flow (AC-020).
- * The caller presents any matches to the user before proceeding with creation.
- * Query is explicitly scoped to status = 'active' so pending/retired/rejected
- * routes are excluded from the match pool.
- *
- * @param gymId    UUID of the gym.
- * @param grade    V-scale grade to match.
- * @param colorTag Hold/tape color to match.
- * @returns        Array of matching active RouteSummary rows (may be empty).
- * @throws {Error} with a user-facing message on failure.
- */
-export async function findMatchingActiveRoutes(
-  gymId: string,
-  grade: RouteGrade,
-  colorTag: string,
-): Promise<RouteSummary[]> {
-  const { data, error } = await supabase
-    .from('routes')
-    .select(ROUTE_MATCH_SELECT)
-    .eq('gym_id', gymId)
-    .eq('grade', grade)
-    .eq('color_tag', colorTag)
-    .eq('status', 'active')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    throw new Error('Failed to check for existing routes. Please try again.');
-  }
-
-  return (data as RouteSummary[]) ?? [];
-}
-
 /**
  * Upload a route photo to Supabase Storage and return the public URL.
  *
@@ -121,11 +82,23 @@ export async function uploadRoutePhoto(
 }
 
 /**
+ * Extended return type for submitRoute — adds has_duplicate advisory flag.
+ * This flag is local to this service; it is not a column in the routes table.
+ */
+export type RouteWithDuplicateFlag = Route & { has_duplicate: boolean };
+
+/**
  * Submit a new route via the submit_route SECURITY DEFINER RPC.
+ *
+ * Rev 37: duplicate routes are allowed by design (AC-020). The 23505 unique-
+ * constraint error path is removed — the database no longer enforces uniqueness
+ * on (gym_id, grade, color_tag). After a successful insert, calls the
+ * check_route_duplicate RPC to determine whether another active route with the
+ * same combo already exists. The caller uses the returned `has_duplicate` flag
+ * to display a non-blocking soft warning (AC-187) without blocking navigation.
  *
  * The RPC enforces:
  *   - Caller must be authenticated (auth.uid() derived server-side).
- *   - One-pending-per-combo per submitter guard.
  *   - Auto-approve toggle: returns status='active' (auto-approve ON) or
  *     status='pending' (auto-approve OFF). The caller must check the returned
  *     status to display the correct confirmation copy.
@@ -133,10 +106,10 @@ export async function uploadRoutePhoto(
  * The photo must already be uploaded; pass the resulting URL as `input.photo_url`.
  *
  * @param input    Validated route submission payload.
- * @returns        The newly created Route row, including its status.
+ * @returns        The newly created Route row plus `has_duplicate` advisory flag.
  * @throws {Error} with a user-facing message on failure.
  */
-export async function submitRoute(input: RouteSubmitInput): Promise<Route> {
+export async function submitRoute(input: RouteSubmitInput): Promise<RouteWithDuplicateFlag> {
   const { data, error } = await supabase.rpc('submit_route', {
     p_gym_id: input.gym_id,
     p_grade: input.grade,
@@ -146,22 +119,33 @@ export async function submitRoute(input: RouteSubmitInput): Promise<Route> {
   });
 
   if (error) {
-    // Unique constraint violation = duplicate active route at this gym+grade+color
-    if (error.code === '23505') {
-      throw new Error(
-        'An active route with this grade and color already exists at this gym.',
-      );
-    }
-    // Duplicate pending submission for same combo
-    if (error.message?.includes('pending submission')) {
-      throw new Error(
-        'You already have a pending submission for this grade and color at this gym.',
-      );
-    }
     throw new Error('Failed to submit route. Please try again.');
   }
 
-  return data as Route;
+  const route = data as Route;
+
+  // AC-187 (Rev 37): non-blocking duplicate advisory check.
+  // Call check_route_duplicate after a successful insert to see whether another
+  // active route with the same (gym_id, grade, color_tag) exists (excluding the
+  // just-inserted row). Errors are treated as "no duplicate" — this is advisory
+  // only and must never block the submission flow.
+  let has_duplicate = false;
+  if (route.status === 'active') {
+    const { data: dupData, error: dupError } = await supabase.rpc(
+      'check_route_duplicate',
+      {
+        p_gym_id: input.gym_id,
+        p_grade: input.grade,
+        p_color_tag: input.color_tag,
+        p_exclude_route_id: route.id,
+      },
+    );
+    if (!dupError) {
+      has_duplicate = dupData === true;
+    }
+  }
+
+  return { ...route, has_duplicate };
 }
 
 /**
@@ -180,6 +164,7 @@ export async function withdrawRoute(routeId: string): Promise<void> {
     .eq('id', routeId);
 
   if (error) {
+    console.error('[withdrawRoute] error:', error);
     throw new Error('Failed to withdraw route. Please try again.');
   }
 }
@@ -240,6 +225,7 @@ export async function loadRoute(routeId: string): Promise<Route | null> {
     if (error.code === 'PGRST116') {
       return null;
     }
+    console.error('[loadRoute] error:', error);
     throw new Error('Failed to load route details. Please try again.');
   }
 
@@ -280,6 +266,7 @@ export async function listRoutes(
   const { data, error } = await query;
 
   if (error) {
+    console.error('[listRoutes] error:', error);
     throw new Error('Failed to load routes. Please try again.');
   }
 
@@ -328,6 +315,7 @@ export async function saveRoute(routeId: string): Promise<void> {
     .insert({ route_id: routeId });
 
   if (error) {
+    console.error('[saveRoute] error:', error);
     throw new Error('Failed to save route. Please try again.');
   }
 }
@@ -348,6 +336,67 @@ export async function unsaveRoute(routeId: string): Promise<void> {
     .eq('route_id', routeId);
 
   if (error) {
+    console.error('[unsaveRoute] error:', error);
     throw new Error('Failed to unsave route. Please try again.');
   }
+}
+
+// ── Route visit tracking (AC-179) ─────────────────────────────────────────────
+
+/**
+ * Upserts a visit row for the current user + route into `user_route_visits`,
+ * setting `last_viewed_at` to now().
+ *
+ * This is a fire-and-forget call — it is never awaited on the critical path.
+ * The RLS INSERT + UPDATE own-rows policies enforce that each user can only
+ * upsert their own rows.  Supabase's PostgREST upsert resolves the conflict
+ * on the composite PK (user_id, route_id).
+ *
+ * AC-179: backs the "new beta video" tag (AC-180) and most-recently-viewed
+ * ordering (AC-175, via the route's gym).
+ *
+ * Errors are intentionally swallowed — this is a non-critical background write.
+ *
+ * @param routeId UUID of the route that was opened.
+ */
+export function upsertRouteVisit(routeId: string): void {
+  void Promise.resolve(
+    supabase
+      .from('user_route_visits')
+      .upsert(
+        { route_id: routeId, last_viewed_at: new Date().toISOString() },
+        { onConflict: 'user_id,route_id' },
+      ),
+  ).catch(() => {
+    // Intentionally swallow — non-critical background write.
+  });
+}
+
+// ── New-beta tag (AC-180) ─────────────────────────────────────────────────────
+
+/**
+ * Returns the subset of `routeIds` for which the current user has at least one
+ * visible beta video newer than their `user_route_visits.last_viewed_at`, or
+ * for which no visit row exists at all (never visited).
+ *
+ * Delegates to the `routes_with_new_beta` SECURITY INVOKER RPC, which composes
+ * the full beta-video visibility rules (AC-142, AC-154, AC-158) server-side.
+ * Called once per gym screen load — not per route card (no N+1).
+ *
+ * AC-180: "new beta video" tag qualification logic.
+ *
+ * @param routeIds  Array of route UUIDs to check (all visible routes on screen).
+ * @returns         Array of route UUIDs that qualify for the "new beta" tag.
+ *                  Returns [] on error — non-fatal: tag simply does not appear.
+ */
+export async function fetchRoutesWithNewBeta(routeIds: string[]): Promise<string[]> {
+  if (routeIds.length === 0) return [];
+  const { data, error } = await supabase.rpc('routes_with_new_beta', {
+    route_ids: routeIds,
+  });
+  if (error) {
+    console.error('[fetchRoutesWithNewBeta] error:', error);
+    return []; // non-fatal: fall back to no tags
+  }
+  return (data ?? []).map((row: { route_id: string }) => row.route_id);
 }

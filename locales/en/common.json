@@ -203,6 +203,10 @@
         "takePhoto": "Take Photo",
         "choosePhoto": "Choose from Library"
       },
+      "duplicateWarning": {
+        "title": "Possible Duplicate Route",
+        "body": "A {{grade}} {{color}} route already exists at this gym. If this is a different route, add a section label to tell them apart — otherwise you may be creating a duplicate."
+      },
       "errors": {
         "gradeRequired": "Please select a grade.",
         "colorRequired": "Please select a hold color.",
