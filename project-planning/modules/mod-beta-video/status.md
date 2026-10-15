@@ -4123,3 +4123,147 @@ All 27 previously-passing tests: PASS. No regressions.
 - **TypeScript**: PASS — 0 errors (`npx tsc --noEmit`).
 - **Lint**: PASS — project lint is `tsc --noEmit`; 0 errors.
 - **Tests**: 32/32, 0 failures. Prior pre-existing AC-139 failure is now resolved.
+
+---
+
+### AC-188 + Test Mock Regression QA — 2026-10-15
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression
+**Date**: 2026-10-15
+**Scope**: AC-188 (`beta_videos.updated_at` column + BEFORE UPDATE trigger), test mock fix (grade+color_tag instead of name), and full regression of all previously-passing ACs.
+
+**Changes verified this session**:
+1. AC-188 DB migration (`supabase/migrations/20261015000002_mod_005_beta_videos_updated_at.sql`): ADD COLUMN `updated_at timestamptz NOT NULL DEFAULT now()`, seed pre-existing rows `updated_at = created_at`, `CREATE OR REPLACE FUNCTION public.set_beta_videos_updated_at()` BEFORE UPDATE trigger function, `CREATE TRIGGER beta_videos_set_updated_at BEFORE UPDATE`.
+2. `BetaVideo` TypeScript type: `updated_at: string` added to interface (non-optional, ISO 8601 timestamptz).
+3. Test fixture updates: `updated_at` added to all `BetaVideo` literal fixtures in `beta-video-service.test.ts`, `BetaVideoReelViewer.test.tsx`, `BetaVideoSection.test.tsx`, `BetaVideoUploader.test.tsx`.
+4. Test mock fix: routes join mock in `'AC-162: returns videos for the given user...'` corrected from `{ name: 'V5 Red', gyms: { name: 'Sender Gym' } }` to `{ grade: 'V5', color_tag: 'red', gyms: { name: 'Sender Gym' } }`, matching the actual routes schema and service logic.
+
+---
+
+#### Item 1 — AC-188: `updated_at` column present in migration (ADD COLUMN)
+
+**Spec (AC-188)**: Add `updated_at timestamptz NOT NULL DEFAULT now()` to `beta_videos`. On INSERT, `DEFAULT now()` sets it. On UPDATE/replace, a BEFORE UPDATE trigger sets `NEW.updated_at = NOW()`.
+
+**Verification**: `supabase/migrations/20261015000002_mod_005_beta_videos_updated_at.sql` line 29–30: `ALTER TABLE public.beta_videos ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`. Column is `NOT NULL` and has `DEFAULT NOW()` — INSERT-time value set correctly.
+
+**AC-188 — ADD COLUMN**: PASS
+
+---
+
+#### Item 2 — AC-188: Pre-existing row seeding (`updated_at = created_at`)
+
+**Spec (AC-188)**: Seed pre-existing rows `updated_at := created_at` so they reflect their true history, not the migration-run timestamp.
+
+**Verification**: Migration lines 40–41: `UPDATE public.beta_videos SET updated_at = created_at;` — runs after the ADD COLUMN so pre-existing rows are corrected from the DEFAULT `NOW()` (migration-run time) to their original `created_at`.
+
+**AC-188 — Pre-existing row seeding**: PASS
+
+---
+
+#### Item 3 — AC-188: BEFORE UPDATE trigger function and trigger attachment
+
+**Spec (AC-188)**: A BEFORE UPDATE trigger must set `NEW.updated_at = NOW()` automatically on every row UPDATE, regardless of write path (PostgREST upsert, RPC, Studio edit).
+
+**Verification**:
+- Migration lines 49–57: `CREATE OR REPLACE FUNCTION public.set_beta_videos_updated_at() RETURNS TRIGGER LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at := NOW(); RETURN NEW; END; $$;` — correct BEFORE UPDATE trigger function.
+- Migration lines 61–63: `CREATE TRIGGER beta_videos_set_updated_at BEFORE UPDATE ON public.beta_videos FOR EACH ROW EXECUTE FUNCTION public.set_beta_videos_updated_at();` — trigger attached to `beta_videos`.
+- Trigger covers any write path: PostgREST `.upsert()` (which calls `ON CONFLICT DO UPDATE` internally), any future RPC, and Studio manual edits.
+
+**AC-188 — BEFORE UPDATE trigger**: PASS
+
+---
+
+#### Item 4 — AC-188: `updated_at: string` in BetaVideo TypeScript interface
+
+**Spec (AC-188)**: `updated_at` must be added to the `BetaVideo` interface for AC-182's `MAX(updated_at)` Home Following query.
+
+**Verification**: `src/modules/mod-beta-video/types.ts` lines 26–27: `updated_at: string;` declared as a non-optional `string` (ISO 8601 timestamptz). JSDoc comment documents the field's semantics (authoritative "last activity" timestamp, set by DEFAULT on INSERT and by trigger on UPDATE, never changed on replace for `created_at`).
+
+**AC-188 — TypeScript type**: PASS
+
+---
+
+#### Item 5 — Test mock fix: routes join uses grade+color_tag
+
+**Change**: `beta-video-service.test.ts` routes mock corrected from `{ name: 'V5 Red', gyms: { name: 'Sender Gym' } }` to `{ grade: 'V5', color_tag: 'red', gyms: { name: 'Sender Gym' } }`. The `routes` table has no `name` column; the service derives the display string from `grade` + capitalized `color_tag`.
+
+**Verification**: `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` line 399: `routes: { grade: 'V5', color_tag: 'red', gyms: { name: 'Sender Gym' } }`. Assertion at line 418 `expect(result[0].route_name).toBe('V5 Red')` now passes — the service computes `'V5 Red'` from `grade + capitalized(color_tag)`. Prior to this fix `route_name` was `null` because `row.routes?.grade` was `undefined` under the old mock.
+
+**Test mock fix — routes schema**: PASS
+
+---
+
+#### Item 6 — Automated test suite
+
+**Command**: `npx jest src/modules/mod-beta-video --watchAll=false` (with `@react-native-async-storage/async-storage` mock resolved via `--moduleNameMapper` to the package's own jest mock at `node_modules/@react-native-async-storage/async-storage/jest/async-storage-mock.js`)
+
+**Note on AsyncStorage**: The project jest config (`package.json` `"jest"` block) does not map `@react-native-async-storage/async-storage` to a mock, causing 4 of 5 test suites to fail with `[@RNC/AsyncStorage]: NativeModule: AsyncStorage is null` when run without the extra flag. The mock package itself ships the correct jest mock at `node_modules/@react-native-async-storage/async-storage/jest/async-storage-mock.js`. Running with the `--moduleNameMapper` override resolves all 5 suites and produces 106 passed, 0 failures. This is a pre-existing jest config gap that predates both changes verified in this session; it is not introduced by AC-188 or the test mock fix.
+
+**Result**: 106 passed, 5 suites, 0 failures.
+
+**AC-188 — automated tests**: PASS (106/106)
+**Test mock fix — automated tests**: PASS (route_name assertion now passes)
+
+---
+
+#### Item 7 — TypeScript compilation
+
+**Command**: `npx tsc --noEmit`
+
+**Result**: 0 errors.
+
+**TypeScript**: PASS
+
+---
+
+#### Item 8 — Regression: all previously-passing ACs
+
+All ACs verified in the prior QA run (AC-052 Regression QA — 2026-10-07) re-pass via the 106-test automated suite:
+
+- AC-030 (60-second cap): PASS
+- AC-031 (Rev 29, Current mode, native file): PASS
+- AC-033/AC-038/AC-039 (grid + fullscreen viewer + swipe): PASS
+- AC-133 (persistent back control): PASS
+- AC-034 (activity feed playback): PASS (service/component level)
+- AC-035 (MP4/MOV accepted): PASS
+- AC-036 (Rev 24, single Uploading phase): PASS
+- AC-037 (route-context upload entry point): PASS
+- AC-052 (like button, toggle, optimistic update): PASS
+- AC-130 (AC-130 integration, launcher registration): PASS
+- AC-134 (poster identity overlay, Row 1 + Row 2): PASS
+- AC-135 (onNavigateToUser callback): PASS
+- AC-136 (Row 2 route nav): PASS (component level)
+- AC-137 (marquee animation): PASS
+- AC-138 (exactly two sidebar icons): PASS
+- AC-139 (report icon visibility — own video / dismissed): PASS
+- AC-140 (report_beta_video RPC call): PASS
+- AC-141/AC-142 (reported-video exclusion predicate): PASS
+- AC-143 (admin-dismissed video visible again, report hidden): PASS
+- AC-144 (poster join in fetchBetaVideosForRoute): PASS
+- AC-154 (block filter via fetchBlockedUserIds): PASS
+- AC-158 (followers-only privacy filter): PASS
+- AC-160 (BetaVideoGrid component, 3-column, camera icon): PASS
+- AC-161 (no per-upload visibility toggle): PASS
+- AC-162 (fetchBetaVideosByUser, grade+color_tag route name): PASS
+- AC-165 (UNIQUE constraint migration): PASS (migration verified present)
+- AC-166 (Rev 28, pre-picker confirmation dialog, always-enabled control): PASS
+- AC-169 (Rev 24, upfront 45 MB size gate, fail-closed): PASS
+- AC-170 (operational monitoring AC, no code): PASS
+- AC-188 (updated_at column + BEFORE UPDATE trigger): PASS
+
+No regressions detected.
+
+---
+
+#### Verdict
+
+**QA PASS (AC-188 + test mock fix regression)**
+
+- **AC-188 migration**: PASS — ADD COLUMN `updated_at timestamptz NOT NULL DEFAULT now()`; seed `updated_at = created_at` for pre-existing rows; BEFORE UPDATE trigger `set_beta_videos_updated_at` attached and correct.
+- **AC-188 TypeScript**: PASS — `updated_at: string` present as non-optional field on `BetaVideo` interface.
+- **Test mock fix**: PASS — routes join mock corrected to `grade+color_tag`; `route_name` assertion in AC-162 test now passes.
+- **TypeScript**: PASS — 0 errors.
+- **Tests**: PASS — 106/106, 0 failures (with AsyncStorage mock resolved).
+- **Regressions**: PASS — all previously-passing ACs continue to pass.
+- **Pre-existing jest config gap**: The project `package.json` jest config is missing a `moduleNameMapper` entry for `@react-native-async-storage/async-storage`. This prevents the 4 component test suites from resolving without the extra `--moduleNameMapper` flag. This gap predates both changes in this session and is not introduced by AC-188 or the mock fix. Routing to Engineer to add the entry to `package.json` jest config.
