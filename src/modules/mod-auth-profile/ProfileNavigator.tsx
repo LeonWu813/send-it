@@ -128,8 +128,6 @@ export default function ProfileNavigator({
       session={session}
       isActive={isActive}
       onNavigateEditProfile={() => setView('editProfile')}
-      onNavigateSettings={() => setView('settings')}
-      onNavigateNotifications={() => setView('notifications')}
       onNavigateToRoute={onNavigateToRoute}
       onNavigateToFollowers={() => setView('followers')}
       onNavigateToFollowing={() => setView('following')}

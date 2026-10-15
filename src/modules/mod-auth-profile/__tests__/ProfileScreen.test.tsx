@@ -45,10 +45,6 @@ jest.mock('../../mod-social-feed/social-feed-service', () => ({
   fetchFollowerCounts: jest.fn().mockResolvedValue({ follower_count: 5, following_count: 3 }),
 }));
 
-jest.mock('../../mod-notifications/notification-service', () => ({
-  fetchUnreadNotificationCount: jest.fn().mockResolvedValue(0),
-}));
-
 jest.mock('../../mod-beta-video', () => ({
   BetaVideoGrid: () => null,
   BetaVideoReelViewer: () => null,
@@ -77,10 +73,9 @@ jest.mock('../hooks/useSession', () => ({
 }));
 
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { render } from '@testing-library/react-native';
 import ProfileScreen from '../screens/ProfileScreen';
 import type { Session } from '@supabase/supabase-js';
-import { fetchUnreadNotificationCount } from '../../mod-notifications/notification-service';
 
 const mockSession = {
   user: { id: 'user-1', email: 'test@example.com' },
@@ -113,35 +108,4 @@ describe('ProfileScreen', () => {
     expect(getByLabelText(/socialFeed.following/)).toBeTruthy();
   });
 
-  it('renders the bell icon button when onNavigateNotifications is provided (AC-171)', () => {
-    const { getByLabelText } = render(
-      <ProfileScreen
-        session={mockSession}
-        onNavigateEditProfile={jest.fn()}
-        onNavigateNotifications={jest.fn()}
-      />,
-    );
-    expect(getByLabelText('notifications.title')).toBeTruthy();
-  });
-
-  it('shows unread badge when unread count > 0 (AC-173)', async () => {
-    // Override the mock to return 7 unread notifications (distinct from follower/following counts).
-    (fetchUnreadNotificationCount as jest.MockedFunction<typeof fetchUnreadNotificationCount>)
-      .mockResolvedValueOnce(7);
-
-    const { getAllByText } = render(
-      <ProfileScreen
-        session={mockSession}
-        onNavigateEditProfile={jest.fn()}
-        onNavigateNotifications={jest.fn()}
-        isActive={true}
-      />,
-    );
-
-    await waitFor(() => {
-      // The badge renders the count as text. Use getAllByText in case the number
-      // appears elsewhere, then assert at least one element exists.
-      expect(getAllByText('7').length).toBeGreaterThan(0);
-    });
-  });
 });
