@@ -3318,3 +3318,47 @@ Pressable (card, flexDirection: 'row')
 **Commit**: 62ee9cc
 
 **Result: READY FOR QA**
+
+---
+
+### Bugfix — RouteCard bookmark moved out of info View as sibling — 2026-10-15
+
+**Bug (human invocation):** The bookmark `Pressable` was nested inside the `info` View, inside an `infoHeader` row with `justifyContent: 'space-between'`. The card had `alignItems: 'flex-start'`, causing both the thumbnail and the info block to pin to the card's top edge. The required behavior is: `alignItems: 'center'` on the card (thumbnail and info are vertically centered), but the bookmark pins to the top of the card independently via `alignSelf: 'flex-start'`.
+
+**Fix:** Moved the bookmark `Pressable` out of the `info` View so it is a direct child of the card `Pressable` (sibling of thumbnail and info). Removed the `infoHeader` wrapper `View` and `infoHeader` style. Added `bookmarkButton` style (`alignSelf: 'flex-start'`, `marginLeft: theme.spacing.xs`). Restored `card.alignItems` to `'center'`. The `nameRow`, `gymName`, and `betaCount` now sit directly inside `info` (no intermediate `infoHeader`).
+
+**Resulting structure:**
+```
+Pressable (card, flexDirection: 'row', alignItems: 'center')
+  ├── thumbnail / placeholder (80×80)
+  ├── View info (flex-1, marginLeft: sm)
+  │     ├── View nameRow (route name + optional send icon)
+  │     ├── Text gymName (optional)
+  │     └── Text betaCount (optional, when > 0)
+  └── Pressable bookmarkButton (alignSelf: 'flex-start')
+        └── Ionicons bookmark icon
+```
+
+**Files changed:**
+- `src/components/RouteCard.tsx` — removed `<View style={styles.infoHeader}>` wrapper; bookmark `Pressable` moved to be a sibling of `info`, after it; added `style={styles.bookmarkButton}`; removed `infoHeader` style; added `bookmarkButton: { alignSelf: 'flex-start', marginLeft: theme.spacing.xs }`; `card.alignItems` corrected to `'center'`; file header comment updated to reflect new layout.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest src/components --watchAll=false` | PASS — 25 tests, 2 suites, 0 failures |
+| `npx jest src/modules/mod-home --watchAll=false` | PASS — 39 tests, 3 suites, 0 failures |
+| card.alignItems is 'center' | PASS |
+| bookmark is a sibling of info, not nested inside | PASS |
+| infoHeader View and style removed | PASS |
+| bookmarkButton has alignSelf: 'flex-start', marginLeft: theme.spacing.xs | PASS |
+| nameRow, gymName, betaCount sit directly inside info | PASS |
+| No props added or removed | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Commit**: e9aebe0
+
+**Result: READY FOR QA**
