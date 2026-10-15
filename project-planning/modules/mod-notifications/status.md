@@ -2,6 +2,42 @@
 
 ## Engineering Progress
 
+**AC-185: SwipeBackWrapper added to NotificationInboxScreen — complete 2026-10-15**
+
+Added `SwipeBackWrapper` to `NotificationInboxScreen` per the AC-185 rule: every screen that shows a back icon must be wrapped.
+
+### What was implemented
+
+- Added `import SwipeBackWrapper from '../../../components/SwipeBackWrapper'` to `NotificationInboxScreen.tsx`.
+- Wrapped the main return path's outermost `<View style={styles.root}>` with `<SwipeBackWrapper onBack={onBack ?? (() => {})} enabled={onBack !== undefined}>`. The loading-spinner path (which has no back icon) is NOT wrapped — only the main render that contains the `chevron-back` nav bar.
+- `enabled={onBack !== undefined}` disables the gesture when the screen is rendered without a back handler (e.g. in isolation or standalone), preventing ghost swipes when there is no navigation target.
+- No other changes — minimal diff as specified.
+
+### Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npx jest src/modules/mod-notifications --watchAll=false` | PASS | 46/46 tests pass, 0 failures |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| AC-185 — SwipeBackWrapper present on back-icon screen | PASS | `SwipeBackWrapper` wraps the outermost root of the main render path, which contains the `chevron-back` Ionicons icon and the `onBack` Pressable. |
+| Gesture disabled when no handler | PASS | `enabled={onBack !== undefined}` — when `onBack` is not provided, the wrapper is present but the gesture is inactive; the fallback `onBack ?? (() => {})` prevents a runtime error if the gesture somehow fires. |
+| Loading path not wrapped | PASS | The early-return loading spinner `<View style={styles.centered}>` has no back icon and is correctly not wrapped. |
+| No new tests required | PASS | `SwipeBackWrapper` is already tested in `src/components/__tests__/SwipeBackWrapper.test.tsx`; the wrapper is a thin pass-through `View` with `flex:1` so existing inbox tests pass without modification. |
+| No new dependencies | PASS | `SwipeBackWrapper` is an existing shared component at `src/components/SwipeBackWrapper.tsx`. |
+
+### Files Modified
+
+- `src/modules/mod-notifications/screens/NotificationInboxScreen.tsx` — added `SwipeBackWrapper` import and wrapped the main return's outermost element
+
+---
+
 **AC-173 (Rev 35) + AC-184: UnreadCountProvider context — complete 2026-10-13**
 
 Created `src/modules/mod-notifications/UnreadCountProvider.tsx`. Updated `NotificationInboxScreen.tsx` to call `refresh()` from context after AC-172 batch mark-read.
