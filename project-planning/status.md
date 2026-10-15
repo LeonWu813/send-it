@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-route-catalog
+agent: qa-mod-home
 mode: regression
-module: mod-route-catalog
+module: mod-home
 result: success
-commit: 620f5b9ac84f5d8b343b712b5a7f7694e5cd6264
+commit: 36c990598e9ee987ea2cd73892096f9823d2d3bb
 timestamp: 2026-10-14T00:00:00Z
 ```
 

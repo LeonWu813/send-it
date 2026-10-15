@@ -2226,3 +2226,191 @@ No regressions introduced. TypeScript clean (0 errors). i18n check passes. 52/52
 **Commit**: 3c1ff55
 
 **Result: READY FOR QA RE-VERIFICATION**
+
+---
+
+### QA Run 12 — Regression — 2026-10-14
+
+**Workflow**: regression-test (re-verification after Engineer applied three fixes: banner gray background, Projecting Routes gym+section_label data, and grade filter derived from data)
+
+**Bugs being re-verified (from human invocation):**
+1. **Fix 1 — Banner section gray background**: banner outer `<View>` had no background color; the horizontal margin on `bannerCard` exposed the root `backgroundColor: background` on either side of the card.
+2. **Fix 2 — Projecting Routes data**: `.select()` string did not include `section_label` or `gyms!routes_gym_id_fkey(name)`; `ProjectingRoute` interface lacked `section_label` and `gym_name`; `gymName` was not passed to `RouteCard`; `section_label` was not appended to the composed route name.
+3. **Fix 3 — Grade filter**: `GRADE_TABS` constant showed all possible grades regardless of user's data; replaced by `availableGrades` useMemo derived from `projectingRoutes`; `gradeTab` style updated to `borderRadius.full` + `borderWidth: 1` + `borderColor: theme.colors.border`.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output (exit 0)
+- `npm test -- --watchAll=false --testPathPattern="mod-home"`: PASS — 38 tests, 3 suites, 0 failures
+- `npm test -- --watchAll=false` (full suite): 515 tests, 35 suites — 514 pass, 1 fail (pre-existing `mod-beta-video` failure, unrelated to MOD-012, unchanged throughout this change set)
+
+---
+
+#### REGRESSION PASS — Fix 1: Banner section gray background
+
+**`bannerSection` style (`HomeScreen.tsx` lines 693–695):**
+`bannerSection: { backgroundColor: theme.colors.surface }` — theme token, no hardcoded color. PASS.
+
+**Banner outer `<View>` JSX (`HomeScreen.tsx` line 492):**
+`<View style={[styles.section, styles.bannerSection]}>` — both `styles.section` (margin) and `styles.bannerSection` (surface background) applied to the outer View. The horizontal gap left by `bannerCard`'s `marginHorizontal` is now covered by `theme.colors.surface`. PASS.
+
+Input: active banner present; `bannerCard` has `marginHorizontal: theme.spacing.md`.
+Actual (after fix): outer `<View>` background is `theme.colors.surface` — same as card background — no visible gap.
+Expected: section has coherent surface-colored background surrounding the card.
+Status: RESOLVED.
+
+---
+
+#### REGRESSION PASS — Fix 2: Projecting Routes — select includes section_label + gym join
+
+**`.select()` string (`HomeScreen.tsx` line 300):**
+`'id, gym_id, grade, color_tag, photo_url, section_label, gyms!routes_gym_id_fkey(name)'` — both `section_label` and the FK-hinted gym join present. PASS.
+
+**`ProjectingRoute` interface (`HomeScreen.tsx` lines 91–99):**
+`section_label: string | null` and `gym_name: string | null` declared. PASS.
+
+**Data mapping (`HomeScreen.tsx` lines 318–326):**
+`gym_name: row.gyms?.name ?? null` and `section_label: row.section_label` both mapped. PASS.
+
+**`RouteCard` call-site (`HomeScreen.tsx` lines 608–614):**
+- `name`: `` `${route.grade} ${capitalize(route.color_tag)}${route.section_label ? ` (${route.section_label})` : ''}` `` — section_label appended when non-null. PASS.
+- `gymName: route.gym_name ?? undefined` — passed to RouteCard. PASS.
+
+Input: route with `section_label = 'Left Wall'`, `gyms.name = 'MegaSTONE'`.
+Actual (after fix): name = `'V5 Red (Left Wall)'`; `gymName = 'MegaSTONE'` passed to RouteCard.
+Expected per AC-183/AC-177: RouteCard receives gym name; section label disambiguates route.
+Status: RESOLVED.
+
+---
+
+#### REGRESSION PASS — Fix 3: Grade filter derived from data; gradeTab style updated
+
+**`GRADE_TABS` removal:**
+`grep -n "GRADE_TABS"` returns no output in `HomeScreen.tsx`. Constant gone. PASS.
+
+**`availableGrades` useMemo (`HomeScreen.tsx` lines 472–475):**
+```
+const availableGrades = useMemo<GradeFilter[]>(() => {
+  const grades = [...new Set(projectingRoutes.map((r) => r.grade))].sort();
+  return [ALL_GRADE_FILTER, ...grades];
+}, [projectingRoutes]);
+```
+Derives unique grades from data; prepends `ALL_GRADE_FILTER`; re-derives on every `projectingRoutes` change. Grade tab render at line 576 uses `availableGrades`. PASS.
+
+**`gradeTab` style (`HomeScreen.tsx` lines 787–794):**
+`borderRadius: theme.borderRadius.full`, `borderWidth: 1`, `borderColor: theme.colors.border`, `backgroundColor: theme.colors.surface` — all present. PASS.
+
+**`gradeTabActive` style (`HomeScreen.tsx` lines 795–798):**
+`borderColor: theme.colors.primary`, `backgroundColor: theme.colors.primary` — active tab overrides border and fill. PASS.
+
+**No hardcoded colors:** all values are theme tokens. Grep for `#[0-9a-fA-F]` returns 0 results. PASS.
+
+Input: user has projecting routes with grades `['V3', 'V5']`.
+Actual (after fix): grade tabs are `['All', 'V3', 'V5']` — only data-present grades shown.
+Expected per AC-177: V-grade filter tabs derived from actual saved-route data.
+Status: RESOLVED.
+
+---
+
+#### Re-verification of all previously passing ACs
+
+**AC-110** — PASS. Tab state and TabBar unchanged. TabBar tests (5) pass. PASS.
+
+**AC-111 (rev)** — PASS. JSX section order unchanged (Banner line 491, Saved Gyms line 517, Projecting Routes line 565, Following Activity line 624). None of the three fixes reorder sections. PASS.
+
+**AC-112 (rev)** — PASS. `loadBanner` query and `{activeBanner !== null && (...)}` guard unchanged. Fix 1 adds `bannerSection` style only — no impact on hide/show logic. Tests pass. PASS.
+
+**AC-113** — PASS. `loadSavedGyms`, strip render, "View All" callback unchanged. Tests pass. PASS.
+
+**AC-114 (rev) / AC-176** — PASS. `onSelectGym(gym.id, gym.name)` on chip press unchanged. Test verifies callback. PASS.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, unchanged). PASS.
+
+**AC-174** — PASS. `20261013000001_mod_012_admin_banners.sql` unchanged. DDL, RLS (4 policies), GRANT verified in QA Run 10. PASS.
+
+**AC-175** — PASS. `loadSavedGyms` recency sort logic unchanged. PASS.
+
+**AC-177** — PASS. `fetchSavedRouteIds()` call unchanged. Grade filter now uses `availableGrades` (Fix 3 — improvement). Empty state unchanged. Tests pass ("All" tab present, "V5 Red" route card renders). PASS.
+
+**AC-178** — PASS. `onSelectRoute(route.id, route.gym_id)` on RouteCard press unchanged. Test verifies callback. PASS.
+
+**AC-181** — PASS. `routes_with_new_beta` RPC call and 60s cache unchanged. `hasNewBetaVideo` prop unchanged. Tests pass. PASS.
+
+**AC-182** — PASS. `loadFollowingActivity` logic unchanged. None of the three fixes touch the Following Activity section. Tests pass. PASS.
+
+**AC-183** — PASS. `src/components/RouteCard.tsx` unchanged. Fix 2 adds `gymName` and `section_label`-derived name at call-site — consumed by existing RouteCard props. 9 RouteCard tests pass. PASS.
+
+**AC-184** — PASS. `AppHeader.tsx` and wiring unchanged. 8 AppHeader tests pass. PASS.
+
+**AC-185** — PASS. `SwipeBackWrapper.tsx` unchanged. 4 tests pass. PASS.
+
+**Keep-alive mount strategy** — PASS. AppShell keep-alive logic unchanged. PASS.
+
+**Top safe area** — PASS. `makeStyles` signature unchanged; AppHeader owns top inset. PASS.
+
+**Bottom safe area — TabBar** — PASS. Unchanged. PASS.
+
+**Cross-module import rule** — PASS. No new imports introduced. All existing imports verified PASS in QA Run 11. PASS.
+
+**i18n completeness** — PASS. No locale keys added or removed by the three fixes. PASS.
+
+**Inline string literals** — PASS. `relativeTime()` uses `t()` for all paths (verified QA Run 11). No new raw strings. PASS.
+
+**No hardcoded hex colors** — PASS. All new style values use theme tokens. Grep confirms 0 hex literals in `HomeScreen.tsx`. PASS.
+
+**Migration correctness** — PASS. Both migrations unchanged. PASS.
+
+**Gold-plating check** — PASS. All three fixes correct spec-required behavior; no speculative additions. PASS.
+
+---
+
+#### Adjacent code check
+
+**Fix 1:** `bannerCard` inner View style unchanged — both `bannerCard` and `bannerImagePlaceholder` already carried `backgroundColor: theme.colors.surface`. `section` base style (margin only) unchanged. New `bannerSection` style is additive. PASS.
+
+**Fix 2:** `color_tag` already in select string; `photo_url` and `grade` unchanged. `row.gyms?.name` null-checked safely. `section_label` null-guarded in name composition. No adjacent mapping regressions. PASS.
+
+**Fix 3:** `filteredRoutes` useMemo (lines 477–480) unchanged — filters `projectingRoutes` by `selectedGrade`, default `ALL_GRADE_FILTER` still correct. `gradeTabActive` override applies correctly atop `gradeTab` (both declare `borderColor`; active wins). PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 12
+
+| AC / Check | QA Run 11 | QA Run 12 |
+|---|---|---|
+| AC-110: Three-tab bar, Home default | PASS | PASS |
+| AC-111 (rev): Four sections in order | PASS | PASS |
+| AC-112 (rev): Admin-managed banner; hidden when none active | PASS | PASS |
+| AC-113: Saved Gyms strip + View All | PASS | PASS |
+| AC-114 (rev) / AC-176: Gym tap → onSelectGym(gymId, gymName) | PASS | PASS |
+| AC-115: Saved gyms empty state | PASS | PASS |
+| AC-174: admin_banners migration — DDL, RLS, GRANT | PASS | PASS |
+| AC-175: Saved Gyms ordered by recency; no-recency gyms appear | PASS | PASS |
+| AC-177: Projecting Routes — fetchSavedRouteIds, grade tabs, empty state | PASS | PASS |
+| AC-178: Route card tap → onSelectRoute(routeId, gymId) | PASS | PASS |
+| AC-181: New Beta badge via routes_with_new_beta RPC + cache | PASS | PASS |
+| AC-182: Following Activity — avatar+name+count+timestamp, tap, empty state | PASS | PASS |
+| AC-183: RouteCard — name+grade left, 48×48 thumbnail right, New Beta badge | PASS | PASS |
+| AC-184: AppHeader — bell left (unread badge), settings right | PASS | PASS |
+| AC-185: SwipeBackWrapper — PanResponder, left-edge gate | PASS | PASS |
+| Fix 1: bannerSection style — backgroundColor: theme.colors.surface on outer View | — | REGRESSION PASS |
+| Fix 2: section_label + gyms FK join in select; interface + RouteCard call-site correct | — | REGRESSION PASS |
+| Fix 3: availableGrades useMemo replaces GRADE_TABS; gradeTab style updated | — | REGRESSION PASS |
+| Cross-module import rule | PASS | PASS |
+| Inline string literals | PASS | PASS |
+| i18n completeness (EN + zh-TW) | PASS | PASS |
+| No hardcoded hex colors | PASS | PASS |
+| Migration: saved_gyms + admin_banners | PASS | PASS |
+| `npx tsc --noEmit` | PASS — 0 errors | PASS — 0 errors |
+| `npm test -- --testPathPattern="mod-home"` | PASS — 38 tests, 3 suites | PASS — 38 tests, 3 suites |
+| `npm test -- --watchAll=false` (full suite) | PASS — 512 tests; 1 pre-existing failure | PASS — 514/515; same pre-existing failure |
+| Gold-plating check | PASS | PASS |
+
+**Result: ALL PASS — MOD-012 QA Run 12 PASS**
+
+All three fixes verified. No regressions introduced. All 15 ACs (AC-110 through AC-185) pass. TypeScript clean (0 errors). 38/38 mod-home tests pass. 514/515 full-suite tests pass (1 pre-existing `mod-beta-video` failure, unrelated to MOD-012).
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip and Events Banner.
