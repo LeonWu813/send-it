@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 37
-**Date**: 2026-10-14
-**Revision**: 37
+**Status**: [SUBSTANTIVE] — Revision 38
+**Date**: 2026-10-15
+**Revision**: 38
 
 ---
 
@@ -99,7 +99,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 
 **Known Phase 1 trade-off (accepted, not a bug)**: Phase 1 performs no client-side compression (AC-031); the app uploads the original native video file as-is, after an upfront 45 MB native-file size gate (AC-169). ~22 s at full 1080p HEVC bitrate hits 45 MB, so clips above roughly that length are rejected with the AC-031 error, and those users are expected to trim the clip or lower their camera's recording quality. This is a deliberate Phase 1 limitation of the no-client-compression approach; the Phase 2 server-side video pipeline (§4, §7) removes it with a proper server-side HDR→SDR tone-map and transcode. HLG/HDR videos recorded with Dolby Vision may appear overexposed in Phase 1 playback — accepted trade-off, fixed in Phase 2.
 
-**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166, AC-169, AC-170
+**Acceptance Criteria**: AC-030, AC-031, AC-032, AC-037, AC-130, AC-161, AC-165, AC-166, AC-169, AC-170, AC-188
 
 ---
 
@@ -129,7 +129,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to follow other users and see their sends and beta videos in a chronological feed,
 **so that** I can keep up with what my friends and local strong climbers are doing.
 
-**Note (Phase 1)**: the chronological activity feed UI is deferred to Phase 2 (AC-159). Phase 1 ships follow/unfollow and surfaces a Following activity section on the Home screen (US-020, AC-182) — user rows showing followed climbers' new beta-video counts — plus their beta videos on profile grids (US-023, AC-163), but not a dedicated feed screen.
+**Note (Phase 1)**: the chronological activity feed UI is deferred to Phase 2 (AC-159). Phase 1 ships follow/unfollow and surfaces a Following activity section on the Home screen (US-020, AC-182) — one row per followed climber who has uploaded or replaced a beta video, showing a fixed "new video upload" label and their most-recent beta-video activity time — plus their beta videos on profile grids (US-023, AC-163), but not a dedicated feed screen.
 
 **Acceptance Criteria**: AC-050, AC-051, AC-159
 
@@ -366,7 +366,7 @@ The data flow for the two most important loops:
 
 ### MOD-005: Beta Video
 
-**Purpose**: Handle video capture/selection (≤60 sec cap), an upfront 45 MB native-file size gate (reject-if-over, fail-closed; no client-side compression in Phase 1, AC-031/AC-169), client-generated thumbnail, upload of the original native file to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154), and filtering out beta videos whose poster has set `beta_video_privacy = followers_only` when the viewer is neither the poster nor a follower (AC-158). Own the shared `BetaVideoGrid` component (3-column thumbnail grid, AC-160) consumed by MOD-006 (AC-163) and MOD-001 (AC-164); the `fetchBetaVideosByUser` service (AC-162) consumed by the same; the `reelContext: 'route' | 'profile'` prop on `BetaVideoReelViewer` (AC-164); the account-level upload flow (per-upload visibility toggle removed, AC-161; one-video-per-route enforced by a DB unique constraint AC-165 with an upsert/replace flow and a replace reminder, AC-166).
+**Purpose**: Handle video capture/selection (≤60 sec cap), an upfront 45 MB native-file size gate (reject-if-over, fail-closed; no client-side compression in Phase 1, AC-031/AC-169), client-generated thumbnail, upload of the original native file to storage, inline playback on route detail pages and the activity feed, the fullscreen portrait reel viewer (thumbnail grid → swipe-navigable viewer with a persistent back control, poster-identity overlay, and a two-icon action sidebar), and the one-tap beta-video report flow (report icon → `is_reported` flag via SECURITY DEFINER RPC + `VideoReport` insert, with reported videos hidden until an admin dismisses the report), filtering out beta videos uploaded by blocked users (block in either direction) on the route detail screen via MOD-009's `fetchBlockedUserIds()` (AC-154), and filtering out beta videos whose poster has set `beta_video_privacy = followers_only` when the viewer is neither the poster nor a follower (AC-158). Own the shared `BetaVideoGrid` component (3-column thumbnail grid, AC-160) consumed by MOD-006 (AC-163) and MOD-001 (AC-164); the `fetchBetaVideosByUser` service (AC-162) consumed by the same; the `reelContext: 'route' | 'profile'` prop on `BetaVideoReelViewer` (AC-164); the account-level upload flow (per-upload visibility toggle removed, AC-161; one-video-per-route enforced by a DB unique constraint AC-165 with an upsert/replace flow and a replace reminder, AC-166; a `beta_videos.updated_at` column bumped to NOW() on every upsert/replace as the authoritative "last activity" timestamp, AC-188).
 
 **User Stories**: US-004, US-005, US-015, US-023
 
@@ -436,7 +436,7 @@ The data flow for the two most important loops:
 
 ### MOD-012: Home
 
-**Purpose**: Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders four sections in order — (1) a single admin-managed Events Banner (AC-112/AC-174), (2) the user's Saved Gyms strip (AC-113/AC-114/AC-115), (3) the user's Projecting Routes section sourced from `saved_routes` with V-grade filter tabs (AC-177/AC-178), and (4) a Following activity section showing followed climbers' new beta-video counts (AC-182) — and provides navigation from those sections into the gym route list, route detail, and user profile surfaces. **Tech-Lead-assigned cross-cutting ownership (pending review)**: MOD-012 is the proposed owner of (a) the global app-level header rendered on all screens except the fullscreen beta-video reel viewer (AC-133) and auth/signed-out screens — bell on the left wiring to MOD-007's inbox, settings on the right (AC-184); (b) the shared route card component with a fixed small square `photo_url` thumbnail, consumed by the Home Projecting section, RouteListScreen, and the profile send-history section (AC-183); and (c) the swipe left-to-right back gesture on all screens that have a back icon (AC-185). Final ownership of (a), (b), and (c) is assigned by the Tech Lead in architecture review.
+**Purpose**: Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders four sections in order — (1) a single admin-managed Events Banner (AC-112/AC-174), (2) the user's Saved Gyms strip (AC-113/AC-114/AC-115), (3) the user's Projecting Routes section sourced from `saved_routes` with V-grade filter tabs (AC-177/AC-178), and (4) a Following activity section with one row per followed climber who has uploaded or replaced a beta video — showing a fixed "new video upload" label and the climber's most-recent beta-video activity time (AC-182) — and provides navigation from those sections into the gym route list, route detail, and user profile surfaces. **Tech-Lead-assigned cross-cutting ownership (pending review)**: MOD-012 is the proposed owner of (a) the global app-level header rendered on all screens except the fullscreen beta-video reel viewer (AC-133) and auth/signed-out screens — bell on the left wiring to MOD-007's inbox, settings on the right (AC-184); (b) the shared route card component with a fixed small square `photo_url` thumbnail, consumed by the Home Projecting section, RouteListScreen, and the profile send-history section (AC-183); and (c) the swipe left-to-right back gesture on all screens that have a back icon (AC-185). Final ownership of (a), (b), and (c) is assigned by the Tech Lead in architecture review.
 
 **User Stories**: US-020, US-019
 
@@ -656,7 +656,9 @@ The data flow for the two most important loops:
 - If an existing video is found (`hasExistingVideo === true`), the system shall present a confirmation dialog **before** opening the video picker. The dialog shall show the title "替換 Beta 影片" / "Replace Beta Video" (`betaVideo.replaceConfirmTitle`), the message "你已有此路線的 Beta 影片，繼續操作將會取代現有影片。" / "You already have a beta video for this route. If you proceed, the old video will be replaced." (`betaVideo.replaceConfirmMessage`), and exactly two actions: a destructive confirm "替換" / "Replace" (`betaVideo.replaceConfirmOk`) and a "取消" / "Cancel" (`betaVideo.replaceConfirmCancel`). Activating **Replace** shall dismiss the dialog and proceed with the normal flow (open the picker, select the video, upload). Activating **Cancel** shall dismiss the dialog and take no further action — the picker shall not open.
 - If no existing video is found (`hasExistingVideo === false`), the system shall open the video picker directly with no confirmation dialog, as in the ordinary upload flow.
 
-There shall be no disabled-button state and no "delete your existing video first" static message. The upload itself shall continue to use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint — the database upsert (AC-165) handles the replacement, and no backend change is required.
+There shall be no disabled-button state and no "delete your existing video first" static message. The upload itself shall continue to use an upsert pattern (delete-old + insert, or `ON CONFLICT (user_id, route_id) DO UPDATE`) consistent with the AC-165 unique constraint — the database upsert (AC-165) handles the replacement. On a replace/upsert the system shall set `updated_at = NOW()` (`ON CONFLICT ... DO UPDATE SET ... updated_at = NOW()`, AC-188) so the beta video's "last activity" timestamp reflects the replacement time while `created_at` stays fixed at the original insert.
+
+**AC-188** (new, Rev 38, MOD-005, DB migration): The system shall add an `updated_at timestamptz NOT NULL DEFAULT now()` column to the `beta_videos` table. On every upsert/replace of a beta video (the AC-166 replace flow), the system shall bump `updated_at = NOW()` via `ON CONFLICT (user_id, route_id) DO UPDATE SET ... updated_at = NOW()`, while `created_at` shall remain the original insert time and never change on replace. `updated_at` is the authoritative "last activity" / "last changed" timestamp for a beta video and shall be used anywhere the app needs "when was this video last changed" — notably the Home Following section's most-recent-activity timestamp, which uses `MAX(updated_at)` across a climber's beta videos (AC-182). **Tech Lead review required** — the migration adding the column and the upsert/RPC change to bump `updated_at` on conflict.
 
 **AC-169** (revised, Rev 24): Before any upload is attempted — after format validation (AC-035) and the duration check (AC-030), and before the upload begins — the system shall read the native video file's size. If the native file size is greater than 45 MB, or the size cannot be read, the system shall not attempt the upload and shall reject it with the AC-031 error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB". The check shall fail closed: an unreadable size is treated as oversized and the upload is rejected. This upfront source-size gate replaces the former post-compression size guard (Phase 1 performs no compression, AC-031) and prevents an HTTP 413 from ever reaching the user as a cryptic error. The 45 MB threshold sits below the 50 MB Supabase Storage free-tier bucket ceiling to leave a safe margin.
 
@@ -780,7 +782,7 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-111** (revised, Rev 35): The Home screen shall render four sections in the following order: (1) Events Banner (AC-112), (2) Saved Gyms (AC-113), (3) Projecting Routes (AC-177), and (4) Following activity (AC-182). Any section with no content applies its own empty-state or hidden behavior as defined in its AC; the ordering of the sections that do render is fixed as listed.
 
-**AC-112** (revised, Rev 35): The Events Banner section shall display exactly one banner at a time — a single, admin-managed banner whose content is sourced per AC-174. If no active banner is defined, the section shall be hidden.
+**AC-112** (revised, Rev 38): The Events Banner section shall display exactly one banner at a time — a single, admin-managed banner whose content is sourced per AC-174. When the `admin_banners` store returns no active rows (no active banner is defined), the section shall render a visible placeholder card — a surface/gray-colored card with a centered "No active events" label styled in `theme.colors.textSecondary` — rather than hiding. The Events Banner section is never fully hidden in Phase 1. The placeholder label uses the bilingual i18n key `home.banner.noEvents` ("目前沒有活動" / "No active events"). This supersedes the Rev 35 "the section shall be hidden" behavior for the empty state.
 
 **AC-113** (new): The Saved Gyms section shall display a horizontal scroll strip of the current user's saved gyms, each showing the gym's `photo_url` and name. A "View All" control shall navigate to the full gym list (MOD-002).
 
@@ -808,7 +810,7 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-181** (new, Rev 35): The system shall render a "new beta video" tag on route cards that qualify per AC-180. The tag shall appear on the shared route card (AC-183) wherever that card surfaces a route — specifically the Home screen's Projecting Routes section (AC-177) and the gym route list (RouteListScreen, MOD-003). When a route does not qualify (AC-180), no tag is rendered.
 
-**AC-182** (new, Rev 35): The Home screen shall render a Following activity section listing the climbers the current user follows (sourced from MOD-006). Each entry is a user row showing the climber's avatar, `display_name`, a "X new beta video(s)" count, and a relative timestamp of the most recent new beta video. Tapping a row shall navigate the user to that climber's `UserProfileScreen` (MOD-006). When the current user follows no one (or no followed climber has new beta videos, per the section's defined behavior), the section shall display an appropriate empty state. This section replaces the former Following Climbers strip (AC-123/AC-124, removed).
+**AC-182** (revised, Rev 38): The Home screen shall render a Following activity section with one row per followed climber (sourced from MOD-006) who has uploaded or replaced at least one beta video. Each row shows the climber's avatar, `display_name`, a fixed label "new video upload" (i18n key `home.following.newUpload`, "新影片上傳" / "new video upload") — **no video count is displayed** — and the relative timestamp of that climber's most recent beta-video activity, computed as `MAX(updated_at)` across all of that climber's beta videos (AC-188). Tapping a row shall navigate the user to that climber's `UserProfileScreen` (MOD-006). When the current user follows no one, or no followed climber has any beta video, the section shall display an appropriate empty state. This supersedes the Rev 35 per-user "X new beta video(s)" count design and replaces the former Following Climbers strip (AC-123/AC-124, removed). **Tech Lead review required** — the query now uses `updated_at` (not `created_at`) with a `MAX(updated_at)` aggregate per followed climber.
 
 **AC-183** (new, Rev 35): The system shall provide a shared route card component that renders a route with a fixed small square thumbnail on the right sourced from the route's existing `photo_url` field (no schema change). The shared route card shall be used in the Home screen's Projecting Routes section (AC-177), the gym route list (RouteListScreen, MOD-003), and the profile send-history section (MOD-008). The card also renders the "new beta video" tag when the route qualifies (AC-181). **This is a shared cross-module component and requires Tech Lead architecture review to assign the owning module** (and the consuming modules' import contract) before Doc-Sync/Engineering implements it.
 
@@ -919,6 +921,7 @@ Ascent (a "log")
 BetaVideo
  - id, route_id (FK Route), user_id (FK User),
    video_url, thumbnail_url, duration_seconds, caption, created_at,
+   updated_at (timestamptz NOT NULL DEFAULT now()),
    is_reported (boolean NOT NULL DEFAULT false),
    report_dismissed (boolean NOT NULL DEFAULT false)
    -- is_reported: set true via a SECURITY DEFINER RPC when any user files a
@@ -937,6 +940,14 @@ BetaVideo
    --   for the route, confirming replaces it (delete-old + insert, or ON CONFLICT
    --   DO UPDATE). Per-upload visibility toggle removed (AC-161) -- visibility is the
    --   account-level users.beta_video_privacy setting (AC-156/AC-157).
+   -- updated_at (AC-188, Rev 38, requires a migration): the authoritative "last
+   --   activity" / "last changed" timestamp for a beta video. On upsert/replace
+   --   (AC-166) the upsert bumps updated_at = NOW() via
+   --   ON CONFLICT (user_id, route_id) DO UPDATE SET ... updated_at = NOW();
+   --   created_at stays fixed at the original insert. Used wherever the app needs
+   --   "when was this video last changed", notably the Home Following section's
+   --   most-recent-activity timestamp MAX(updated_at) per climber (AC-182).
+   --   Tech Lead review required (the column migration + the on-conflict bump).
    -- Upload size (AC-169, Rev 24, no schema change): Phase 1 performs NO
    --   client-side compression (AC-031). Before upload, the client reads the
    --   native file size; if it is >= 45 MB or unreadable (fail-closed), the
