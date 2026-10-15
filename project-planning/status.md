@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: f78907d373f1015ad827ae2bc3d4b5c6357564ff
+commit: 4f2b89fa6612793291cee6008a3eaf2935eaeb23
 timestamp: 2026-10-15T00:00:00Z
 ```
 
@@ -322,6 +322,62 @@ timestamp: 2026-10-15T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-15 — change (Rev 38: AC-188 `beta_videos.updated_at` migration + AC-182 `MAX(updated_at)` Home Following query)
+
+**Context**: Two items flagged "Tech Lead review required" in PRD Rev 38 before Doc-Sync proceeds. Read-only investigation across `prd.md`, the MOD-005 beta-video migrations, `beta-video-service.ts`, and `HomeScreen.tsx`. Advisory only — **no source, migration, or spec files were edited**. One load-bearing correction applies to each item; both are otherwise sound.
+
+---
+
+**Item 1 — AC-188: add `beta_videos.updated_at` + bump on replace. Verdict: APPROVED WITH ONE CORRECTION.**
+
+Findings against the four questions:
+
+1. **Is `NOT NULL DEFAULT now()` safe on the existing table?** Yes. On Postgres 11+ (Supabase is PG15+), adding a column with a non-volatile *or* volatile `DEFAULT` is a fast metadata-only add for the catalog, and existing rows read back the default — so `NOT NULL DEFAULT now()` populates every existing row with the migration-run timestamp and the column is immediately NOT-NULL-valid. No table rewrite blocking concern at Phase-1 row counts. This is a non-blocking migration. **Caveat (accepted, not a blocker)**: every pre-existing row gets the *same* `updated_at` (migration time), which is strictly ≥ its real `created_at`. For AC-182's "most recent activity" that is acceptable — it is at worst a one-time, slightly-too-recent timestamp for videos uploaded before this migration, and self-corrects on the next replace. If you want pre-existing rows to reflect their true last-change time instead, the migration can seed `updated_at := created_at` with an `UPDATE` after the add (`ALTER TABLE ... ADD COLUMN updated_at timestamptz; UPDATE ... SET updated_at = created_at; ALTER TABLE ... ALTER COLUMN updated_at SET NOT NULL, SET DEFAULT now();`). Recommended but not required — flagging so Engineer makes a deliberate choice rather than defaulting silently.
+
+2. **Does the `(user_id, route_id)` unique constraint exist to hang ON CONFLICT on?** Yes — `beta_videos_user_id_route_id_key UNIQUE (user_id, route_id)`, added in `20260930000001_mod_005_beta_video_unique_per_route.sql`. The conflict target is valid. UPDATE RLS was also already opened for the replace flow in `20261001000001_mod_005_beta_video_update_policy.sql` (`beta_videos_update_own`, `USING`/`WITH CHECK auth.uid() = user_id`), so the DO-UPDATE path is already permitted under RLS.
+
+3. **Edge cases — INSERT and conflict paths both set `updated_at` correctly?** On INSERT: `DEFAULT now()` sets it, correct. On replace: this is where the correction lands — see below.
+
+4. **CORRECTION — the AC-188 prescription `ON CONFLICT (user_id, route_id) DO UPDATE SET updated_at = NOW()` does not map to how the upload is actually written.** `uploadBetaVideo` in `src/modules/mod-beta-video/beta-video-service.ts` (lines 144–160) does **not** issue raw SQL. It calls the PostgREST client upsert: `supabase.from('beta_videos').upsert({ route_id, user_id, video_url, thumbnail_url, duration_seconds, caption }, { onConflict: 'user_id,route_id' })`. PostgREST translates this to `INSERT ... ON CONFLICT (user_id, route_id) DO UPDATE SET <only the columns present in the payload>` — you cannot inject a free-form `SET updated_at = NOW()` clause into a PostgREST upsert. There are two correct ways to make AC-188 hold, and Engineer must pick one explicitly (do **not** leave `updated_at` out of both — if it is neither in the payload nor in a trigger, the DO-UPDATE path leaves `updated_at` at its stale prior value and AC-182 silently shows the *old* replace time):
+   - **Option A (recommended) — a `BEFORE UPDATE` trigger on `beta_videos` that sets `NEW.updated_at = NOW()`.** This makes `updated_at` authoritative regardless of which caller updates the row (PostgREST upsert, a future RPC, or a Studio edit), keeps the service code unchanged, and is the standard Supabase pattern for a last-modified column. It is the most robust against the "some other write path forgets to bump it" failure mode. The migration adding the column should add this trigger in the same file.
+   - **Option B — add `updated_at: new Date().toISOString()` to the upsert payload object in `uploadBetaVideo`.** Simpler, no trigger, but it is client-supplied time (clock-skew sensitive) and only covers this one call site — any other write path must remember to set it. Acceptable for Phase 1 but strictly weaker than A.
+   Recommend **Option A**. Either way, the exact literal `ON CONFLICT ... DO UPDATE SET ... updated_at = NOW()` text in AC-188 / §9 is describing the *semantics*, not an SQL statement that appears anywhere in this codebase — Engineer should not try to transcribe it literally into the service, which uses PostgREST upsert. This is a NEEDS-CHANGE on the implementation mechanics, not on the AC's intent; the AC's behavioral contract (created_at frozen, updated_at = last replace time) is correct and achievable.
+
+   Note: `uploadBetaVideo`'s `.select(...)` list (line 159) does not currently include `updated_at`. If any caller needs the new timestamp in the returned row it must be added to that select list; AC-182's query is a separate fetch and does not depend on it.
+
+**Item 1 net**: migration is safe and non-blocking; constraint and UPDATE RLS already in place; the only required change is implementing the `updated_at` bump via Option A (trigger, recommended) or Option B (payload field) rather than a literal `ON CONFLICT ... SET` clause the PostgREST call cannot express. Decide the pre-existing-row seed (`updated_at := created_at`) explicitly.
+
+---
+
+**Item 2 — AC-182: Home Following section uses "most recent activity" per climber via `MAX(updated_at)`. Verdict: APPROVED WITH ONE CLARIFICATION.**
+
+Findings against the three questions:
+
+1. **Does `loadFollowingActivity` already query `beta_videos`?** Yes. `src/modules/mod-home/screens/HomeScreen.tsx`, Step 2 (lines 397–402): a single batched query `supabase.from('beta_videos').select('user_id, created_at').in('user_id', followedIds).gte('created_at', cutoff).order('created_at', { ascending: false })`, where `cutoff` is a 14-day window (`FOLLOWING_ACTIVITY_DAYS = 14`, line 54). It then **groups in JavaScript** (Step 3, lines 410–425): it builds a `Map<userId, { count, latestAt }>` and keeps the max timestamp per user via `if (row.created_at > existing.latestAt)`. There is no SQL `MAX()` or `GROUP BY` today — the "most recent per user" is computed client-side.
+
+2. **CLARIFICATION — "use `MAX(updated_at)`" is already the shape of this code; the change is a field swap, not a SQL-aggregate rewrite.** Do not read AC-182's `MAX(updated_at)` as "add a Postgres aggregate / `GROUP BY` query." The existing batched-fetch-then-group-in-JS pattern already implements per-user max, and it is the right pattern here (it coexists with the 14-day `cutoff` filter and avoids an N+1). The correct, minimal change is to replace `created_at` with `updated_at` in **four places**, consistently:
+   - the `.select('user_id, created_at')` → `.select('user_id, updated_at')` (line 399),
+   - the `.gte('created_at', cutoff)` window filter → `.gte('updated_at', cutoff)` (line 401) — **this is the semantic point of Rev 38**: a video replaced within the last 14 days should surface even if its original `created_at` is older, so the window must filter on `updated_at`,
+   - the `.order('created_at', ...)` → `.order('updated_at', ...)` (line 402),
+   - the JS grouping comparison and the typed row shape `Array<{ user_id; created_at }>` and `latestAt` assignments (lines 415–425) → read `row.updated_at`.
+   The displayed relative timestamp then derives from `latestAt` (now the max `updated_at`), satisfying AC-182's "most recent beta-video activity". Flagging all four because a partial swap (e.g. selecting `updated_at` but still filtering `.gte('created_at', …)`) would produce a subtly wrong window and is exactly the kind of inconsistency that passes a mocked unit test.
+
+3. **Performance concern with adding `updated_at`?** None. `updated_at` is an ordinary column on the same row already being fetched — no extra join, no extra round-trip, same row count. Ordering/filtering by `updated_at` is unindexed today, but at Phase-1 volumes over a 14-day window scoped to a small followed-id set this is negligible; no new index is warranted for Phase 1. (If the Following set ever grows large, an index on `beta_videos (user_id, updated_at DESC)` would be the lever — not needed now, noted for completeness.)
+
+**Item 2 net**: the approach is correct and already matches the batched-fetch + JS-group pattern; the change is a disciplined four-point `created_at` → `updated_at` swap (select, window filter, order, JS grouping), with the window filter being the behaviorally load-bearing one. No SQL aggregate, no new RPC, no new index.
+
+---
+
+**Verdicts summary**:
+- AC-188 — **APPROVED WITH CORRECTION**: migration is safe/non-blocking; constraint + UPDATE RLS already exist; implement the `updated_at` bump via a `BEFORE UPDATE` trigger (Option A, recommended) or a payload field (Option B) — not a literal `ON CONFLICT ... SET`, which the PostgREST `.upsert()` call cannot express. Decide the pre-existing-row seed (`updated_at := created_at`) explicitly.
+- AC-182 — **APPROVED WITH CLARIFICATION**: keep the existing batched-fetch + JS-group pattern; swap `created_at` → `updated_at` in all four spots (select, `.gte` window, `.order`, JS grouping). The `.gte('updated_at', cutoff)` window filter is the point of the change.
+
+**Cross-cutting note for Doc-Sync / Engineering sequencing**: Item 2 depends on Item 1 at runtime — `updated_at` must exist and be bumped on replace before the Home query reading `MAX(updated_at)` is meaningful. Land the MOD-005 migration + bump mechanism (AC-188) before or with the MOD-012 query change (AC-182). No module-boundary or dependency change: `beta_videos.updated_at` is MOD-005-owned (write), MOD-012 reads it — this matches the existing MOD-012 → MOD-006/MOD-003 read relationships and needs no new dependency edge in the Module Breakdown.
+
+**No Proposed Shared Convention** from this review — both items are localized AC implementations, not project-wide patterns. (The "always implement a last-modified column via a BEFORE UPDATE trigger" idea could become one if more tables grow `updated_at`, but with a single table it is premature; not proposing it now.)
+
+---
 
 ### Review — 2026-10-14 — blocker (device-QA batch: 5 reported issues — safe-area audit, swipe-back, RouteCard UI, Home banner placeholder, Following section redesign)
 
