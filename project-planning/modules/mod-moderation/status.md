@@ -2,6 +2,17 @@
 
 ## Engineering Progress
 
+### AC-185 — SwipeBackWrapper wired into OtherUserProfileScreen (2026-10-15)
+
+Wrapped the outermost `<ScrollView>` in `OtherUserProfileScreen.tsx` with `<SwipeBackWrapper onBack={onBack}>` per the AC-185 requirement. The `enabled` prop is omitted (defaults to `true` — no case in this screen where swiping back should be blocked). The loading-state early return (`<View style={styles.centered}>`) is intentionally left unwrapped; it has no `onBack` interaction surface and exits before the wrapper is reached.
+
+- Import added: `import SwipeBackWrapper from '../../../components/SwipeBackWrapper';`
+- `<ScrollView ...>` is now the direct child of `<SwipeBackWrapper onBack={onBack}>`.
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] `npx jest --testPathPattern="mod-moderation" --passWithNoTests` — no test files, exit 0
+
+**Date**: 2026-10-15
+
 ### Bug Fix (2026-10-13) — QA Run 3 convention violation
 
 **Production.md convention: "Log Raw Supabase Error Before Throwing a User-Facing String"**

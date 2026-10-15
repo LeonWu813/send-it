@@ -28,6 +28,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import { fetchProfileHistory } from '../../mod-profile-history/history-service';
@@ -115,74 +116,76 @@ export default function OtherUserProfileScreen({
   }
 
   return (
-    <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.contentContainer}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Back button */}
-      <Pressable
-        style={styles.backButton}
-        onPress={onBack}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.back')}
-        hitSlop={8}
+    <SwipeBackWrapper onBack={onBack}>
+      <ScrollView
+        style={styles.root}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.backButtonText}>{'‹  '}{t('common.back')}</Text>
-      </Pressable>
+        {/* Back button */}
+        <Pressable
+          style={styles.backButton}
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel={t('common.back')}
+          hitSlop={8}
+        >
+          <Text style={styles.backButtonText}>{'‹  '}{t('common.back')}</Text>
+        </Pressable>
 
-      {/* Error */}
-      {error !== null && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      )}
-
-      {profile !== null && (
-        <>
-          {/* Avatar + name */}
-          <View style={styles.avatarSection}>
-            {profile.avatar_url !== null ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                style={styles.avatar}
-                accessibilityLabel={profile.display_name}
-              />
-            ) : (
-              <View style={[styles.avatar, styles.avatarPlaceholder]} />
-            )}
-            <Text style={styles.displayName}>{profile.display_name}</Text>
-            {profile.bio !== null && profile.bio !== '' && (
-              <Text style={styles.bio}>{profile.bio}</Text>
-            )}
+        {/* Error */}
+        {error !== null && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
           </View>
+        )}
 
-          {/* Moderation actions (Report + Block) — never shown for own profile */}
-          <ModerationActions
-            targetUserId={userId}
-            currentUserId={currentUserId}
-            onBlock={() => void loadData()}
-          />
+        {profile !== null && (
+          <>
+            {/* Avatar + name */}
+            <View style={styles.avatarSection}>
+              {profile.avatar_url !== null ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  style={styles.avatar}
+                  accessibilityLabel={profile.display_name}
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]} />
+              )}
+              <Text style={styles.displayName}>{profile.display_name}</Text>
+              {profile.bio !== null && profile.bio !== '' && (
+                <Text style={styles.bio}>{profile.bio}</Text>
+              )}
+            </View>
 
-          {/* Send history (privacy-gated server-side; empty state if blocked) */}
-          <View style={styles.historySection}>
-            <Text style={styles.historySectionTitle}>{t('profile.sendHistory')}</Text>
-            {history.length === 0 ? (
-              <Text style={styles.historyEmpty}>{t('profileHistory.empty')}</Text>
-            ) : (
-              history.slice(0, 20).map((ascent) => (
-                <View key={ascent.ascent_id} style={styles.historyItem}>
-                  <Text style={styles.historyGrade}>{ascent.grade}</Text>
-                  <Text style={styles.historyDate}>
-                    {new Date(ascent.logged_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
-        </>
-      )}
-    </ScrollView>
+            {/* Moderation actions (Report + Block) — never shown for own profile */}
+            <ModerationActions
+              targetUserId={userId}
+              currentUserId={currentUserId}
+              onBlock={() => void loadData()}
+            />
+
+            {/* Send history (privacy-gated server-side; empty state if blocked) */}
+            <View style={styles.historySection}>
+              <Text style={styles.historySectionTitle}>{t('profile.sendHistory')}</Text>
+              {history.length === 0 ? (
+                <Text style={styles.historyEmpty}>{t('profileHistory.empty')}</Text>
+              ) : (
+                history.slice(0, 20).map((ascent) => (
+                  <View key={ascent.ascent_id} style={styles.historyItem}>
+                    <Text style={styles.historyGrade}>{ascent.grade}</Text>
+                    <Text style={styles.historyDate}>
+                      {new Date(ascent.logged_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                ))
+              )}
+            </View>
+          </>
+        )}
+      </ScrollView>
+    </SwipeBackWrapper>
   );
 }
 
