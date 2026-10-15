@@ -4,14 +4,14 @@
 **Module Name**: Send Logging
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 15
-**Last Updated**: 2026-09-28
+**Last Synced from PRD Revision**: 40
+**Last Updated**: 2026-10-15
 
 ---
 
 ## Purpose
 
-Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override) and restricting the ascent style to the three-value set (flash, top, attempt). Expose `fetchUserAchievements(routeIds[])`, `fetchMyAscentsForRoute(routeId)`, and `summarizeAscents(ascents)` as public service functions for consumption by MOD-003 screens.
+Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override) and restricting the ascent style to the three-value set (flash, top, attempt). Expose `fetchUserAchievements(routeIds[])`, `fetchMyAscentsForRoute(routeId)`, and `summarizeAscents(ascents)` as public service functions for consumption by MOD-003 screens and (for AC-190, Rev 39/40) by MOD-003 RouteListScreen and MOD-012 HomeScreen.
 
 ---
 
@@ -31,7 +31,7 @@ The log-send form (`LogSendScreen.tsx`) does not present a V-grade or any grade 
 
 MOD-004 owns the following public service functions:
 
-- `fetchUserAchievements(routeIds[])`: given a list of route IDs, returns the best ascent style achieved by the calling user on each route (scoped to `auth.uid()`), reducing multiple ascents per route to the best style with precedence `flash > top > attempt`. Routes with no ascent by the user are absent from the returned map. Consumed by MOD-003 screens (RouteListScreen and RouteDetailScreen) for achievement icon display.
+- `fetchUserAchievements(routeIds[])`: given a list of route IDs, returns the best ascent style achieved by the calling user on each route (scoped to `auth.uid()`), reducing multiple ascents per route to the best style with precedence `flash > top > attempt`. Routes with no ascent by the user are absent from the returned map. Consumed by: (a) MOD-003 RouteListScreen and RouteDetailScreen for achievement icon display; (b) MOD-003 RouteListScreen for the shared route card's `hasSend`/`sendStyle` props (AC-190, Rev 39/40); (c) MOD-012 HomeScreen for the shared route card's `hasSend`/`sendStyle` props in the Projecting Routes section (AC-190, Rev 39/40). In all three cases it is called once per screen load with all visible route IDs (no N+1). Already batched, user-scoped via `.eq('user_id', …)`, enforces flash > top precedence client-side. No new RPC or migration is needed for AC-190 — callers derive `hasSend`/`sendStyle` client-side from the returned map.
 
 - `fetchMyAscentsForRoute(routeId)`: returns `AscentWithProfile[]` for the calling user's own ascents on a single route, scoped to `auth.uid()`, ordered `logged_at DESC`. Already consumed by RouteDetailScreen today (imported at line 49 of `RouteDetailScreen.tsx`). Consumed by MOD-003 for AC-127 (send-summary cards) and AC-129 (Send History Detail screen list). Return shape: `{ id, user_id, route_id, style, attempts, note, logged_at, is_private, display_name }`.
 
@@ -81,7 +81,7 @@ MOD-004 owns the following public service functions:
 
 MOD-004 exposes the following public service functions in `send-service.ts`:
 
-1. `fetchUserAchievements(routeIds: string[]): Promise<Record<string, 'flash' | 'top' | 'attempt'>>` — consumed by MOD-003 (RouteListScreen, RouteDetailScreen) for achievement icon display. MOD-003 imports only the public service function — not MOD-004 internal screens, components, or the `ascents` table. MOD-004 engineer implements this function; MOD-003 engineer confirms it is available before MOD-003 QA handoff.
+1. `fetchUserAchievements(routeIds: string[]): Promise<Record<string, 'flash' | 'top' | 'attempt'>>` — consumed by: (a) MOD-003 (RouteListScreen, RouteDetailScreen) for achievement icon display; (b) MOD-003 RouteListScreen for the shared route card's `hasSend`/`sendStyle` props (AC-190, Rev 39/40); (c) MOD-012 HomeScreen for the shared route card's `hasSend`/`sendStyle` props in the Projecting Routes section (AC-190, Rev 39/40). All consuming screens call it once per load with all visible route IDs. MOD-003 and MOD-012 import only the public service function — not MOD-004 internal screens, components, or the `ascents` table. MOD-004 engineer implements this function; MOD-003 and MOD-012 engineers confirm it is available before their respective QA handoffs.
 
 2. `fetchMyAscentsForRoute(routeId: string): Promise<AscentWithProfile[]>` — route-scoped, own-user-only (`.eq('user_id', user.id)`, defense-in-depth against RLS OR-clause), ordered `logged_at DESC`. Already consumed by `RouteDetailScreen.tsx` (imported line 49). Also consumed by MOD-003 for AC-127 (send-summary cards via `summarizeAscents`) and AC-129 (Send History Detail screen raw list). No new service function and no new RPC are needed for either AC.
 

@@ -2,7 +2,7 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 38 (2026-10-15)
+**Last synced from PRD**: rev 40 (2026-10-15)
 **Last Updated**: 2026-10-15
 
 ---
@@ -56,7 +56,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 |---------|------------------------|------------------------------|-----------------------------------------------------------------------------------------------------------|
 | MOD-001 | mod-auth-profile       | Auth & Profile               | Signup, sign-in (Email/Apple/Google), session management, profile CRUD (name/avatar/bio/privacy), Profile tab surface with send history; no bell/settings in ProfileScreen header (moved to MOD-012 global header). |
 | MOD-002 | mod-gym-directory      | Gym Directory                | Admin-curated gym directory, gym detail pages, search/filter, "request a gym" form, and saved-gym bookmark toggle (add/remove from saved_gyms). |
-| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission (duplicates allowed by design — no uniqueness constraint; non-blocking soft-warning AC-187), 4-value status lifecycle, per-user route-visit tracking (user_route_visits), routes_with_new_beta RPC, new-beta tag on route cards. |
+| MOD-003 | mod-route-catalog      | Route Catalog                | Route submission (duplicates allowed by design — no uniqueness constraint; non-blocking soft-warning AC-187), 4-value status lifecycle, per-user route-visit tracking (user_route_visits), routes_with_new_beta RPC, count_beta_videos_by_routes RPC, fetchBetaVideoCounts wrapper; new-beta chip removed from RouteCard (AC-181, Rev 39); bookmark wiring via isSaved/onBookmarkToggle props (AC-046/047, Rev 39). |
 | MOD-004 | mod-send-logging       | Send Logging                 | Send log creation enforcing grade inheritance from route; no per-user grade override; ascent style restricted to {flash, top, attempt}.     |
 | MOD-005 | mod-beta-video         | Beta Video                   | Video capture/selection (≤60 sec, 45 MB native-file size gate, no client-side compression), thumbnail, storage upload, inline playback, reel viewer, report flow.             |
 | MOD-006 | mod-social-feed        | Social Graph & Feed          | Follow/unfollow, chronological activity feed via SECURITY INVOKER RPC, beta-video like reactions.        |
@@ -65,7 +65,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 | MOD-009 | mod-moderation         | Moderation (Report & Block)  | Report submission, symmetric block/unblock, feed filtering, scheduled report-digest Edge Function.        |
 | MOD-010 | mod-localization-theme | Localization & Theming       | i18n catalog loading, device-locale detection, zh-TW fallback, language toggle, Light/Dark theming.       |
 | MOD-011 | mod-analytics          | Analytics                    | PostHog event instrumentation across the app (cross-cutting; no user-facing UI).                          |
-| MOD-012 | mod-home               | Home                         | Persistent three-tab bottom navigation shell (AppShell), Home screen (Events Banner, Saved Gyms, Projecting Routes, Following activity), global app-level header (bell + settings), shared src/components/ (RouteCard, SwipeBackWrapper). |
+| MOD-012 | mod-home               | Home                         | Persistent three-tab bottom navigation shell (AppShell), Home screen (Events Banner, Saved Gyms, Projecting Routes, Following activity), global app-level header (bell + settings), shared src/components/ (RouteCard with 80×80 thumbnail + betaVideoCount + hasSend/sendStyle badges + interactive bookmark + hidden grade label, AC-183/189/190/191/192; SwipeBackWrapper). |
 
 ---
 
@@ -372,6 +372,10 @@ For any list or grid that renders N items each needing the same per-item lookup 
 **Server-side predicate reuse**: when AC-142 (reported-video exclusion), AC-154 (blocked-user filter), and AC-158 (beta-video privacy) are composed inside an RPC (e.g. `routes_with_new_beta` or `get_like_info_batch`), reuse the exact SQL predicates already established by the canonical `Beta-Video Visibility Has One Canonical Exclusion Predicate` convention and the existing `get_activity_feed` RPC — never hand-write a parallel copy. Drift between RPC copies of the same predicate is a silent bug.
 
 **Client cache auth-clear rule**: on the client, like counts and like state fetched via a batched RPC may be held in a short-lived in-memory cache keyed by `beta_video_id` and reused across the surfaces that render the same video within a session (route-detail grid, reel viewer, profile grids). The cache must be cleared on sign-out and must never persist across auth changes. The cache is advisory for read performance only and is never the source of truth for a write — an optimistic update from the user's own like/unlike action (AC-052) is always authoritative over the cache.
+
+### Per-Route Beta-Video Aggregates Must Go Through a Batched SECURITY INVOKER RPC
+
+When computing counts, membership, or any rollup of `beta_videos` keyed by `route_id`, the query must run through a SECURITY INVOKER RPC over a `route_ids uuid[]` parameter that composes the AC-142/154/158 visibility fence server-side (reported exclusion, symmetric block filter, followers-only privacy). A plain client-side `.in('route_id', ids)` PostgREST call is never acceptable for this — it cannot compose the cross-table predicate and will over-count or leak private/blocked videos. The reference contracts are `routes_with_new_beta` (membership, AC-180) and `count_beta_videos_by_routes` (count, AC-189); both share the same visibility body so a route's count and its "new" state can never disagree on which videos are visible to the current viewer.
 
 ### Commit Conventions
 

@@ -19,6 +19,8 @@ Project root: `/Users/tsan/Desktop/MacBookPro/send-it`
 Dependency status files you may read:
 - `project-planning/modules/mod-auth-profile/status.md` (MOD-001)
 - `project-planning/modules/mod-gym-directory/status.md` (MOD-002)
+- `project-planning/modules/mod-route-catalog/status.md` (MOD-003 — fetchBetaVideoCounts for AC-189; saved_routes/route-visit data for AC-177/AC-178)
+- `project-planning/modules/mod-send-logging/status.md` (MOD-004 — fetchUserAchievements for AC-190)
 - `project-planning/modules/mod-social-feed/status.md` (MOD-006)
 
 Follow the base engineer process exactly as defined in `~/.claude/agents/templates/engineer.md`. Do not read any other module's spec. Do not read `prd.md`. Do not read `.env`.

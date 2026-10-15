@@ -3,13 +3,13 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: a77fd8e3bc2478dc77fa3721dfab306b57a92534
+commit: e4e9f6c7d43eb3cd0b66366bb59be0be5ce83fa1
 timestamp: 2026-10-15T00:00:00Z
-summary: Rev 40 — applied Tech Lead Rev 39 follow-up: refined AC-189 with the approved count_beta_videos_by_routes SECURITY INVOKER RPC + fetchBetaVideoCounts wrapper (MOD-003-owned, new migration) and AC-190 with the reuse of MOD-004's existing fetchUserAchievements (no new backend); logged [SUBSTANTIVE] PM Update directing Doc-Sync to carry the per-route beta-video aggregate batched-RPC Shared Convention into production.md; PRD Revision 39 -> 40. Doc-Sync NOT invoked (coordinator will run it next).
+summary: Rev 40 delta sync — RouteCard redesign (AC-181/189/190/191/192), count_beta_videos_by_routes RPC, bookmark wiring (AC-046/047), Per-route beta-video aggregates Shared Convention; updated production.md, mod-route-catalog/spec.md, mod-home/spec.md, mod-beta-video/spec.md, mod-send-logging/spec.md, and engineer-mod-home/route-catalog agent wrappers.
 ```
 
 
@@ -3553,6 +3553,38 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 - none
 
 **verify-sync.sh:** not run (trivial passthrough — per workflow rules, verify-sync.sh is skipped for [TRIVIAL] syncs).
+
+### Sync Report — Delta Sync — 2026-10-15
+
+**Sync type:** delta (substantive)
+**PRD Revision:** 40
+**PM Update reference:** 2026-10-15 [SUBSTANTIVE] — Rev 39 (RouteCard redesign: AC-181 revised chip removal, AC-189 new betaVideoCount/count_beta_videos_by_routes RPC, AC-190 new hasSend/sendStyle reusing fetchUserAchievements, AC-046/047 revised bookmark wiring, AC-191 grade hidden, AC-192 80x80 thumbnail layout) and Rev 40 (Tech Lead follow-up: AC-189/AC-190 refined implementation constraints + per-route beta-video aggregate Shared Convention).
+
+**Files modified:**
+- `project-planning/production.md` — Last synced revision bumped 38 -> 40; MOD-003 and MOD-012 module index descriptions updated; new Shared Convention section added: "Per-Route Beta-Video Aggregates Must Go Through a Batched SECURITY INVOKER RPC" (full text sourced verbatim from PM Updates 2026-10-15 [SUBSTANTIVE] Proposed Shared Convention).
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced from PRD Revision bumped 37 -> 40; Purpose updated; AC-046 revised (Rev 39, shared route card isSaved/onBookmarkToggle props); AC-047 revised (Rev 39, interactive bookmark); AC-181 revised (Rev 39, chip removed, hasNewBetaVideo prop removed); AC-189 added (betaVideoCount prop, count_beta_videos_by_routes SECURITY INVOKER RPC, new migration, fetchBetaVideoCounts wrapper); AC-191 added (grade hidden); AC-192 added (80x80 thumbnail, left/right layout); Requirements updated (RPC + fetchBetaVideoCounts spec, i18n keys); Key Implementation Notes updated (bookmark now interactive, chip removal, RPC, grade hidden, RouteCard layout).
+- `project-planning/modules/mod-home/spec.md` — Last Synced from PRD Revision bumped 38 -> 40; Purpose updated (full prop interface per Rev 39); AC-181 revised (Rev 39, chip removed); AC-183 updated (full prop interface per Rev 39); AC-189 added (caller pattern: calls fetchBetaVideoCounts from MOD-003); AC-190 added (caller pattern: reuses MOD-004 fetchUserAchievements, no new RPC/migration); AC-191 added (grade hidden); AC-192 added (80x80, layout); Requirements updated; Input/Output Contract updated; Key Implementation Notes updated (i18n keys added).
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision bumped 38 -> 40; Key Implementation Notes: added count_beta_videos_by_routes visibility fence note (MOD-005 does not own the RPC but its AC-142/154/158 visibility body is cloned into it; drift warning).
+- `project-planning/modules/mod-send-logging/spec.md` — Last Synced from PRD Revision bumped to 40; Purpose updated to note AC-190 callers (MOD-003 RouteListScreen, MOD-012 HomeScreen); fetchUserAchievements description in Context updated to enumerate all three consumer callsites (AC-190, Rev 39/40); Integration Points entry updated to enumerate MOD-003 and MOD-012 as additional consumers.
+- `project-planning/status.md` — Sync report added (this entry). Last Action block updated.
+
+**Agent wrappers modified:**
+- `.claude/agents/engineer-mod-home.md` — Added MOD-003 (mod-route-catalog, fetchBetaVideoCounts for AC-189) and MOD-004 (mod-send-logging, fetchUserAchievements for AC-190) to dependency status file list.
+- `.claude/agents/engineer-mod-route-catalog.md` — Added dependency status files section with MOD-001, MOD-002, and MOD-004 (fetchUserAchievements for achievement icons and AC-190 hasSend/sendStyle derivation).
+
+**Files created:**
+- none
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as all prior delta syncs since Rev 18. Check 4 FAIL (script bug): awk range pattern terminates immediately on macOS because the opening delimiter matches the end condition — all module specs have correct Related User Stories sections with US-IDs present; alternative grep confirms. Check 6 FAIL (script bug): script over-matches non-phase-plan PRD content (gym seed data "Milestone:" / "Rule:" / "Scope summary:" lines) as "phase names"; Phase Plan section in status.md is correctly written with Phase 1/2/3 content. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
 
 ## Skill Recommendations
 
