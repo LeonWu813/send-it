@@ -2,6 +2,53 @@
 
 ## Engineering Progress
 
+### AC-187 QA fix — replace post-submit Alert with pre-submit inline notice (2026-10-15)
+
+**ACs implemented / changed:**
+- AC-187: Replaced the post-submit `check_route_duplicate` RPC + `setTimeout`/`Alert.alert` approach with a client-side reactive inline notice that appears **before** submission as the user changes grade/color selections.
+
+**route-service.ts:**
+- Removed `RouteWithDuplicateFlag` exported type (line 88 in prior version).
+- Removed `checkDuplicateActiveRoute` function — it issued a per-check DB query; the new approach uses the already-fetched active route list.
+- `submitRoute` return type reverted from `RouteWithDuplicateFlag` to `Promise<Route>`. The function no longer calls `check_route_duplicate` RPC after insert — only one RPC call (`submit_route`) is made.
+
+**RouteSubmitScreen.tsx:**
+- Added `listRoutes` import from `route-service`.
+- Added `useEffect` + `useMemo` to React imports.
+- Added `RouteSummary` to types imports.
+- On mount: `useEffect` fires `listRoutes(gymId, { grade: null, colorTag: null })` once to populate `activeRoutes: RouteSummary[]` state. Errors are silently swallowed (non-blocking — the notice simply won't appear).
+- `isDuplicate: boolean` derived via `useMemo` — true when any entry in `activeRoutes` matches `selectedGrade` + `selectedColor`. Reactive to chip selection changes with no additional network call.
+- Inline duplicate notice rendered between the section-label field and the submit button, visible only when `isDuplicate === true`. Yellow-tinted `View` with `duplicateNotice` / `duplicateNoticeTitle` / `duplicateNoticeBody` styles. Uses i18n keys `routes.duplicateWarning.title` and `routes.duplicateWarning.body` (with `{{grade}}` and `{{color}}` interpolations).
+- Removed `has_duplicate` check and the `setTimeout`/`Alert.alert` block that triggered after `onSuccess()`. `onSuccess(newRoute.id)` is now called directly without any post-navigate alert.
+- The submit button remains enabled regardless of `isDuplicate` — advisory only, not blocking.
+
+**Locale files:**
+- `locales/en/common.json` — added `routes.duplicateWarning.title: "Possible Duplicate"` and `routes.duplicateWarning.body: "An active {{grade}} {{color}} route already exists at this gym."` (sibling to `routes.status`, not under `routes.submit`).
+- `locales/zh-TW/common.json` — added `routes.duplicateWarning.title: "可能重複"` and `routes.duplicateWarning.body: "這個健身房已有一條 {{grade}} {{color}} 的現役路線。"`.
+
+**Test changes:**
+- `route-service.test.ts`: Replaced the 5 `submitRoute` tests that verified `has_duplicate` and `check_route_duplicate` RPC calls with 4 new tests verifying: (1) `submit_route` RPC called and Route returned, (2) `check_route_duplicate` is never called (client-side check only), (3) pending route works correctly, (4) RPC failure throws user-friendly error.
+- `RouteSubmitScreen.test.tsx`: Added `listRoutes: jest.fn().mockResolvedValue([])` to the module mock; added `mockListRoutes` typed reference; removed `has_duplicate: false` from mock return objects (field no longer exists); added 3 new AC-187 tests: shows notice when active route matches, hides notice when selection doesn't match, notice disappears when grade chip changes.
+
+**Self-check (2026-10-15):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest src/modules/mod-route-catalog --watchAll=false` — 92 tests pass across 4 suites (route-service.test.ts: new tests pass; RouteSubmitScreen.test.tsx: 3 new AC-187 tests pass + all prior tests pass; RouteDetailScreen.test.tsx: PASS; SendHistoryDetailScreen.test.tsx: PASS). The 10 failures in `RouteListScreen.test.tsx` are pre-existing — verified pre-existing by git stash test.
+- PASS: `isDuplicate` computed via `useMemo` — reactive to chip changes with zero additional DB calls.
+- PASS: No system `Alert.alert` for duplicate check — notice is inline JSX, not a modal.
+- PASS: No `check_route_duplicate` RPC call anywhere in the client code.
+- PASS: i18n keys at `routes.duplicateWarning.*` (not under `routes.submit`) — matching spec AC-187.
+- PASS: `check_route_duplicate` RPC in migration `20261015000001` stays as-is — it was pushed to dev DB already; no drop migration needed.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/route-service.ts` — removed `RouteWithDuplicateFlag` type, `checkDuplicateActiveRoute` function, `check_route_duplicate` RPC call; reverted `submitRoute` return type to `Route`.
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — added `listRoutes` import, `useEffect`/`useMemo` imports, `RouteSummary` import, `activeRoutes` state + fetch effect, `isDuplicate` memo, inline duplicate notice JSX + styles; removed `has_duplicate` Alert block.
+- `src/modules/mod-route-catalog/__tests__/route-service.test.ts` — replaced `submitRoute` describe block (5 tests → 4 new tests).
+- `src/modules/mod-route-catalog/__tests__/RouteSubmitScreen.test.tsx` — added `listRoutes` to mock + typed ref; removed `has_duplicate` from mock objects; added 3 AC-187 inline notice tests.
+- `locales/en/common.json` — added `routes.duplicateWarning.*` keys.
+- `locales/zh-TW/common.json` — added `routes.duplicateWarning.*` keys.
+
+---
+
 ### Rev 37 engineering cleanup — idempotent migration + checkDuplicateActiveRoute (AC-187) (2026-10-15)
 
 **ACs implemented / changed:**
