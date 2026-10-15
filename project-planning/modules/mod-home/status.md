@@ -183,6 +183,37 @@
 
 ---
 
+### Bugfix — SwipeBackWrapper stale enabled-prop closure — 2026-10-15
+
+**Bug**: `PanResponder.create(...)` is called once inside `useRef(...)`. The `onMoveShouldSetPanResponder` callback captured the initial value of the `enabled` prop via closure and never saw runtime updates. If a parent screen passed `enabled={false}` after mount (e.g., when a modal opened), the gesture remained enabled — the PanResponder still used the stale initial value.
+
+**onTouchStart vs panHandlers conflict analysis**: Verified that `panResponder.panHandlers` contains only React Native Responder-protocol keys (`onMoveShouldSetResponder`, `onStartShouldSetResponder`, `onResponder*`). There is no `onTouchStart` key in `panHandlers`, so spreading `{...panResponder.panHandlers}` after the `onTouchStart` prop on the `<View>` does NOT override `onTouchStart`. The synthetic-event approach for reading `pageX` is safe; no conflict exists.
+
+**Fix applied:**
+1. Added `const enabledRef = useRef<boolean>(enabled)` initialized to the prop value.
+2. Added `useEffect(() => { enabledRef.current = enabled; }, [enabled])` to keep the ref current on every prop change.
+3. Changed `if (!enabled)` to `if (!enabledRef.current)` inside `onMoveShouldSetPanResponder`.
+
+**Files changed:**
+- `src/components/SwipeBackWrapper.tsx` — added `useEffect` to import; added `enabledRef` with `useEffect` sync; changed guard to read `enabledRef.current`.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-home\|RouteCard\|SwipeBack" --passWithNoTests` | SwipeBackWrapper (4/4 pass), HomeScreen (pass), TabBar (pass), AppHeader (pass). RouteCard suite fails to run due to pre-existing missing AsyncStorage mock in Jest setup — unrelated to this change (no AsyncStorage dependency in SwipeBackWrapper) |
+| Stale-closure fixed: `enabledRef.current` read at call time, not captured at creation | PASS |
+| `onTouchStart` not overridden by `panHandlers` spread — no conflict | PASS (confirmed by inspecting RN PanResponder source) |
+| No new dependencies introduced | PASS |
+| No inline string literals | PASS |
+| No hardcoded hex colors | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24

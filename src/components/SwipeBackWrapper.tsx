@@ -24,7 +24,7 @@
  *   enabled  — whether the gesture is active (default true).
  */
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Dimensions,
   PanResponder,
@@ -59,6 +59,14 @@ export default function SwipeBackWrapper({
   children,
   enabled = true,
 }: SwipeBackWrapperProps): React.JSX.Element {
+  // Ref keeps the latest `enabled` value inside the PanResponder closure.
+  // PanResponder.create() runs once (inside useRef), so the closure would
+  // otherwise capture the initial prop value and never see later changes.
+  const enabledRef = useRef<boolean>(enabled);
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
+
   // Track where the touch started so we can enforce the left-edge gate.
   const touchStartXRef = useRef<number>(0);
 
@@ -69,7 +77,7 @@ export default function SwipeBackWrapper({
         _evt,
         gestureState: PanResponderGestureState,
       ): boolean => {
-        if (!enabled) return false;
+        if (!enabledRef.current) return false;
 
         const { dx, dy, vx } = gestureState;
         const screenWidth = Dimensions.get('window').width;
