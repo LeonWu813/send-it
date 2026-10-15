@@ -462,6 +462,79 @@ describe('UserProfileScreen', () => {
     });
   });
 
+  it('AC-163: hides BetaVideoGrid for followers_only profile when viewer is not following', async () => {
+    setupProfileMock({ ...MOCK_PROFILE, privacy_setting: 'followers_only' });
+    mockFetchIsFollowing.mockResolvedValue(false);
+
+    const { getByText } = render(
+      <UserProfileScreen
+        targetUserId={TARGET_USER_ID}
+        session={MOCK_SESSION}
+        onBack={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    // Wait for profile to load
+    await waitFor(() => {
+      expect(getByText('Alice')).toBeTruthy();
+    });
+
+    // Video section title must not appear — grid is hidden for non-follower
+    const videoTitles = screen
+      .queryAllByText('Beta Videos')
+      .concat(screen.queryAllByText('試攀影片'));
+    expect(videoTitles.length).toBe(0);
+  });
+
+  it('AC-163: shows BetaVideoGrid for followers_only profile when viewer is following', async () => {
+    setupProfileMock({ ...MOCK_PROFILE, privacy_setting: 'followers_only' });
+    mockFetchIsFollowing.mockResolvedValue(true);
+
+    render(
+      <UserProfileScreen
+        targetUserId={TARGET_USER_ID}
+        session={MOCK_SESSION}
+        onBack={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+
+    // Video section title must appear — viewer is a follower so grid is shown
+    const videoTitles = screen
+      .queryAllByText('Beta Videos')
+      .concat(screen.queryAllByText('試攀影片'));
+    expect(videoTitles.length).toBeGreaterThan(0);
+  });
+
+  it('AC-163: shows BetaVideoGrid for public profiles regardless of follow state', async () => {
+    setupProfileMock({ ...MOCK_PROFILE, privacy_setting: 'public' });
+    mockFetchIsFollowing.mockResolvedValue(false);
+
+    render(
+      <UserProfileScreen
+        targetUserId={TARGET_USER_ID}
+        session={MOCK_SESSION}
+        onBack={jest.fn()}
+      />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Alice')).toBeTruthy();
+    });
+
+    // Video section title must appear — public profile, no privacy gate
+    const videoTitles = screen
+      .queryAllByText('Beta Videos')
+      .concat(screen.queryAllByText('試攀影片'));
+    expect(videoTitles.length).toBeGreaterThan(0);
+  });
+
   it('AC-153: hides three-dots icon in blocked state when viewer was blocked (not blocker)', async () => {
     mockFetchBlockedUserIds.mockResolvedValue(new Set([TARGET_USER_ID]));
     const qb = makeQueryBuilder({ data: MOCK_PROFILE, error: null });

@@ -11,9 +11,9 @@
  *   unlikeBetaVideo(targetId)  — unlike a beta video
  *   fetchLikeInfo(targetId)    — like count + own-like state (AC-052)
  *   fetchFollowing(userId)     — list of users the given user follows
- *                                (public service function for MOD-012 Following strip)
  *   fetchFollowersList(userId) — list of users who follow userId (AC-146)
  *   fetchFollowingList(userId) — list of users that userId follows (AC-147)
+ *   fetchLikeInfoBatch(...)    — batched like count + own-like state (AC-186, deferred)
  *
  * Rules:
  * - Uses the shared Supabase singleton from src/lib/supabase.ts.
@@ -272,8 +272,6 @@ export async function fetchLikeInfo(betaVideoId: string): Promise<LikeInfo> {
  * the Following Climbers strip. Returns minimal user info (id, display_name,
  * avatar_url) sufficient for rendering avatar chips.
  *
- * AC-123, AC-124: MOD-012 shows a strip of followed climbers on the Home tab.
- *
  * @param userId  UUID of the user whose following list to fetch.
  * @returns       Array of FollowingUser rows ordered by follow creation date DESC.
  * @throws {Error} with a user-facing message on failure.
@@ -378,4 +376,45 @@ export async function fetchFollowingList(userId: string): Promise<UserListItem[]
     results.push({ userId: user.id, displayName: user.display_name, avatarUrl: user.avatar_url });
   }
   return results;
+}
+
+// ── Batched Like Info (AC-186, Phase 1 deferred) ──────────────────────────────
+
+/**
+ * Fetch like count and own-like state for multiple targets in a single
+ * round-trip using the `get_like_info_batch` SECURITY INVOKER RPC.
+ *
+ * Phase 1 status — deferred (AC-186): this function is defined now to
+ * establish the data-access convention but is not wired into any UI path in
+ * Phase 1. Callers continue to use `fetchLikeInfo` (per-video) until the
+ * batched RPC is activated in Phase 2, at which point this function supersedes
+ * the per-card lookups with zero change to AC-052 behaviour.
+ *
+ * FeedScreen.tsx remains dead code per AC-159 — do NOT import or call this
+ * function from FeedScreen or any active navigator/shell in Phase 1.
+ *
+ * @param targetType  Reaction target type — 'beta_video' in Phase 1.
+ * @param targetIds   Array of target UUIDs to look up.
+ * @returns           Array of { targetId, isLiked, likeCount } — one entry per
+ *                    supplied id, in no guaranteed order. Returns [] on empty
+ *                    input or on RPC error (logs the error; does not throw).
+ */
+export async function fetchLikeInfoBatch(
+  targetType: string,
+  targetIds: string[]
+): Promise<Array<{ targetId: string; isLiked: boolean; likeCount: number }>> {
+  if (targetIds.length === 0) return [];
+  const { data, error } = await supabase.rpc('get_like_info_batch', {
+    p_target_type: targetType,
+    p_target_ids: targetIds,
+  });
+  if (error) {
+    console.error('[fetchLikeInfoBatch] error:', error);
+    return [];
+  }
+  return (data ?? []).map((row: { target_id: string; is_liked: boolean; like_count: number }) => ({
+    targetId: row.target_id,
+    isLiked: row.is_liked,
+    likeCount: Number(row.like_count),
+  }));
 }

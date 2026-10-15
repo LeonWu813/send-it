@@ -2,7 +2,7 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug).
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
@@ -12,7 +12,7 @@
 **AC-150/151/152/153 commit**: pending — `feat(mod-social-feed): AC-150/151(UI)/152/153 — three-dots sheet, block/report, blocked state`
 **AC-052 like button commit**: `0de9d44` — `feat(mod-social-feed): AC-052 — tappable like button in BetaVideoReelViewer`
 **AC-186 + cleanup commit**: pending — `feat(mod-social-feed): AC-186 — get_like_info_batch RPC and service wrapper; remove AC-123/124 refs`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup)
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup); 2026-10-15 (AC-185 SwipeBackWrapper wiring)
 
 ### AC-163 Bug Fix — BetaVideoGrid privacy gate (2026-10-13, QA Run 4)
 
