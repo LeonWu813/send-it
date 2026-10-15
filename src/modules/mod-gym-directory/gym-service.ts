@@ -34,6 +34,7 @@ export async function listGyms(): Promise<GymSummary[]> {
     .order('name', { ascending: true });
 
   if (error) {
+    console.error('[listGyms] error:', error);
     throw new Error('Failed to load gyms. Please try again.');
   }
 
@@ -59,6 +60,7 @@ export async function loadGym(gymId: string): Promise<Gym | null> {
     if (error.code === 'PGRST116') {
       return null;
     }
+    console.error('[loadGym] error:', error);
     throw new Error('Failed to load gym details. Please try again.');
   }
 
@@ -82,6 +84,7 @@ export async function fetchSavedGymIds(): Promise<string[]> {
     .select('gym_id');
 
   if (error) {
+    console.error('[fetchSavedGymIds] error:', error);
     throw new Error('Failed to load saved gyms. Please try again.');
   }
 
@@ -104,6 +107,7 @@ export async function saveGym(gymId: string): Promise<void> {
     .insert({ gym_id: gymId });
 
   if (error) {
+    console.error('[saveGym] error:', error);
     throw new Error('Failed to save gym. Please try again.');
   }
 }
@@ -124,6 +128,7 @@ export async function unsaveGym(gymId: string): Promise<void> {
     .eq('gym_id', gymId);
 
   if (error) {
+    console.error('[unsaveGym] error:', error);
     throw new Error('Failed to unsave gym. Please try again.');
   }
 }
@@ -153,6 +158,7 @@ export async function submitGymRequest(
   });
 
   if (error) {
+    console.error('[submitGymRequest] error:', error);
     throw new Error('Failed to submit gym request. Please try again.');
   }
 }
