@@ -41,7 +41,7 @@ import RouteCard from '../../../components/RouteCard';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import { fetchSavedRouteIds } from '../../mod-route-catalog/route-service';
-import { ROUTE_GRADES, type RouteGrade } from '../../mod-route-catalog/types';
+import type { RouteGrade } from '../../mod-route-catalog/types';
 import { fetchFollowing } from '../../mod-social-feed/social-feed-service';
 import type { FollowingUser } from '../../mod-social-feed/types';
 
@@ -94,6 +94,8 @@ interface ProjectingRoute {
   grade: RouteGrade;
   color_tag: string;
   photo_url: string | null;
+  section_label: string | null;
+  gym_name: string | null;
 }
 
 /** Following-activity row per followed climber. */
@@ -143,7 +145,11 @@ function relativeTime(
 const ALL_GRADE_FILTER = 'ALL' as const;
 type GradeFilter = typeof ALL_GRADE_FILTER | RouteGrade;
 
-const GRADE_TABS: GradeFilter[] = [ALL_GRADE_FILTER, ...ROUTE_GRADES];
+/** Capitalizes the first letter of a string (used for color_tag display). */
+function capitalize(s: string): string {
+  if (s.length === 0) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -291,7 +297,7 @@ export default function HomeScreen({
       // Step 2: Fetch route details for the saved route IDs.
       const { data: routeRows, error: routeError } = await supabase
         .from('routes')
-        .select('id, gym_id, grade, color_tag, photo_url')
+        .select('id, gym_id, grade, color_tag, photo_url, section_label, gyms!routes_gym_id_fkey(name)')
         .in('id', savedRouteIds)
         .eq('status', 'active');
 
@@ -301,7 +307,23 @@ export default function HomeScreen({
         return;
       }
 
-      const routes = (routeRows as ProjectingRoute[]) ?? [];
+      const routes: ProjectingRoute[] = ((routeRows as unknown as Array<{
+        id: string;
+        gym_id: string;
+        grade: RouteGrade;
+        color_tag: string;
+        photo_url: string | null;
+        section_label: string | null;
+        gyms: { name: string } | null;
+      }>) ?? []).map((row) => ({
+        id: row.id,
+        gym_id: row.gym_id,
+        grade: row.grade,
+        color_tag: row.color_tag,
+        photo_url: row.photo_url,
+        section_label: row.section_label,
+        gym_name: row.gyms?.name ?? null,
+      }));
       setProjectingRoutes(routes);
 
       // Step 3: Call routes_with_new_beta RPC (with in-memory cache, ~60s TTL).
@@ -445,7 +467,12 @@ export default function HomeScreen({
     }
   }, [session.user.id]);
 
-  // ── Derived: filtered projecting routes ───────────────────────────────────
+  // ── Derived: available grades + filtered projecting routes ───────────────
+
+  const availableGrades = useMemo<GradeFilter[]>(() => {
+    const grades = [...new Set(projectingRoutes.map((r) => r.grade))].sort();
+    return [ALL_GRADE_FILTER, ...grades];
+  }, [projectingRoutes]);
 
   const filteredRoutes = useMemo(() => {
     if (selectedGrade === ALL_GRADE_FILTER) return projectingRoutes;
@@ -462,7 +489,7 @@ export default function HomeScreen({
     >
       {/* ── Section 1: Events Banner (AC-112, AC-174) ─────────────────── */}
       {activeBanner !== null && (
-        <View style={styles.section}>
+        <View style={[styles.section, styles.bannerSection]}>
           <View style={styles.bannerCard}>
             {activeBanner.image_url !== null ? (
               <Image
@@ -546,7 +573,7 @@ export default function HomeScreen({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.gradeTabsRow}
         >
-          {GRADE_TABS.map((grade) => (
+          {availableGrades.map((grade) => (
             <Pressable
               key={grade}
               style={[
@@ -580,9 +607,10 @@ export default function HomeScreen({
                 key={route.id}
                 route={{
                   id: route.id,
-                  name: `${route.grade} ${t(`routeCatalog.colors.${route.color_tag}`)}`,
+                  name: `${route.grade} ${capitalize(route.color_tag)}${route.section_label ? ` (${route.section_label})` : ''}`,
                   grade: route.grade,
                   photo_url: route.photo_url,
+                  gymName: route.gym_name ?? undefined,
                 }}
                 onPress={() => onSelectRoute(route.id, route.gym_id)}
                 hasNewBetaVideo={newBetaRouteIds.has(route.id)}
@@ -661,6 +689,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     section: {
       marginBottom: theme.spacing.lg,
+    },
+    bannerSection: {
+      backgroundColor: theme.colors.surface,
     },
     sectionHeader: {
       flexDirection: 'row',
@@ -756,10 +787,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     gradeTab: {
       paddingHorizontal: theme.spacing.sm,
       paddingVertical: theme.spacing.xs,
-      borderRadius: theme.borderRadius.sm,
+      borderRadius: theme.borderRadius.full,
+      borderWidth: 1,
+      borderColor: theme.colors.border,
       backgroundColor: theme.colors.surface,
     },
     gradeTabActive: {
+      borderColor: theme.colors.primary,
       backgroundColor: theme.colors.primary,
     },
     gradeTabText: {
