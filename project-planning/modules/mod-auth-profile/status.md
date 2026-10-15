@@ -1658,3 +1658,32 @@ PASS. The fix is narrowly scoped: one import line removed, one `const` removed, 
 **New regressions: 0**
 
 **MOD-001 safe-area inset bugfix — QA PASS.**
+
+---
+
+## Engineering Progress — Bugfix — 2026-10-15 (double safe-area inset in EditProfileScreen)
+
+**Issue**: `EditProfileScreen.tsx` called `useSafeAreaInsets()` and passed `insets.top` to `makeStyles`, applying `paddingTop: topInset + theme.spacing.md` in `scrollContent`. The global `AppHeader` (mounted in `AppShell`, MOD-012) already consumes `insets.top`, producing a visible double top margin on the Edit Profile screen. The same root cause as the `ProfileScreen.tsx` fix logged 2026-10-14.
+
+**Fix applied — one file changed**: `src/modules/mod-auth-profile/screens/EditProfileScreen.tsx`
+- Removed `import { useSafeAreaInsets } from 'react-native-safe-area-context';` — import is now unused and removed.
+- Removed the `const insets = useSafeAreaInsets();` call.
+- Changed `makeStyles(theme, insets.top)` to `makeStyles(theme, 0)`.
+- `scrollContent.paddingTop` now evaluates to `0 + theme.spacing.md = theme.spacing.md` — correct breathing room beneath the global AppHeader.
+
+**Out of scope — reported to engineer-mod-social-feed**: `FollowersListScreen.tsx` and `FollowingListScreen.tsx` (both in `src/modules/mod-social-feed/screens/`) are owned by MOD-006 and cannot be modified by this engineer. Both screens apply the same `useSafeAreaInsets()`/`makeStyles(theme, topInset)` pattern under an AppShell that already consumes `insets.top`, producing the same double-margin bug. The fix for each is identical to this one (remove the `useSafeAreaInsets()` call, remove the import if unused, change `makeStyles(theme, insets.top)` → `makeStyles(theme, 0)`). Route to `engineer-mod-social-feed`.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | Pre-existing error in `mod-route-catalog/screens/SendHistoryDetailScreen.tsx` (unrelated, not introduced by this change); 0 errors in changed file |
+| `useSafeAreaInsets` import removed | PASS |
+| `insets.top` call removed | PASS |
+| `makeStyles` called with `0` instead of `insets.top` | PASS |
+| No other spacing, layout, or logic touched | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+| No new dependencies | PASS |
+
+**Result: READY FOR QA**

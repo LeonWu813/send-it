@@ -24,8 +24,6 @@ import {
   View,
 } from 'react-native';
 
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
 import { useTheme } from '../../../lib/theme';
 import { uploadAvatar, upsertProfile } from '../auth-service';
 import type { PrivacySetting, UserProfile } from '../types';
@@ -45,8 +43,7 @@ export default function EditProfileScreen({
 }: EditProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const styles = makeStyles(theme, 0);
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
