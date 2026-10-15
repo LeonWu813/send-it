@@ -2562,3 +2562,238 @@ All three fixes verified. No regressions introduced. All 15 ACs (AC-110 through 
 | TypeScript strict mode — no unguarded `any` | PASS |
 
 **Result: READY FOR QA RE-VERIFICATION**
+
+---
+
+### QA Run 13 — Regression — 2026-10-15
+
+**Workflow**: regression-test (three engineering changes: NewBetaCache key fix (commit 66c5f89), AC-112 banner placeholder (commit bef4169), AC-182 following section redesign (commit 1957fac))
+
+**Changes being re-verified:**
+1. **NewBetaCache keyed by route-id set** (commit 66c5f89): `NewBetaCache.routeIdsKey: string` added; cache hit requires both TTL valid AND `routeIdsKey === currentRouteIdsKey`; cache write stores `routeIdsKey`.
+2. **AC-112 (revised, Rev 38) — banner placeholder** (commit bef4169): when `admin_banners` returns no active rows, section renders a visible placeholder card (`theme.colors.surface` background, centered `home.banner.noEvents` label in `theme.colors.textSecondary`); section outer `<View>` is always rendered (never hidden in Phase 1).
+3. **AC-182 (revised, Rev 38) — following section redesign** (commit 1957fac): four-point `created_at` → `updated_at` swap in `loadFollowingActivity`; `FollowingActivity` interface has no `count` field; UI renders `t('home.following.newUpload')` static label with no video count; relative timestamp derived from `MAX(updated_at)`.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors, no output (exit 0)
+- `npx jest src/modules/mod-home` (scoped): FAIL — 3 suites fail to run (TabBar.test.tsx, HomeScreen.test.tsx, AppHeader.test.tsx). Root cause: commit `8d4c6e4` (`fix(mod-localization-theme): load saved theme override in ThemeProvider on init`) added `import AsyncStorage from '@react-native-async-storage/async-storage'` at the top level of `src/lib/theme.ts`. Since `theme.ts` is transitively imported by virtually all component test files, and no `@react-native-async-storage/async-storage` mock is configured in Jest (not listed in `jest.moduleNameMapper` in `package.json`, no `__mocks__/` file exists for it), all component test suites fail with `[@RNC/AsyncStorage]: NativeModule: AsyncStorage is null`. This is **not a mod-home bug** — it is a cross-module test infrastructure regression introduced by a mod-localization-theme engineering commit.
+- `npm test -- --watchAll=false` (full suite): 23 suites fail to run (same AsyncStorage root cause), 12 suites pass (service/unit test files that do not import `theme.ts`). 204 tests pass across the 12 passing suites. The full-suite failure is the same cross-module regression.
+
+**Note on test-run limitation**: Because the test suite failure is caused by an external change (`theme.ts`) not under mod-home's ownership, automated test execution cannot confirm or deny mod-home test behavior for this QA run. Source-code inspection is used for all three changes instead.
+
+---
+
+#### Change 1 — NewBetaCache route-id key (commit 66c5f89)
+
+**`NewBetaCache` interface (`HomeScreen.tsx` lines 114–125):**
+`routeIdsKey: string` field present in the interface. PASS.
+
+**Cache-hit guard (`HomeScreen.tsx` lines 345–353):**
+```
+const currentRouteIdsKey = savedRouteIds.slice().sort().join(',');
+if (
+  newBetaCache !== null &&
+  newBetaCache.routeIdsKey === currentRouteIdsKey &&
+  now - newBetaCache.populatedAt < NEW_BETA_CACHE_TTL_MS
+) {
+```
+Both `routeIdsKey === currentRouteIdsKey` AND TTL check must pass for a cache hit. A changed route-id set produces a different `currentRouteIdsKey`, causing a cache miss. PASS.
+
+**Cache write (`HomeScreen.tsx` line 366):**
+`newBetaCache = { data: ids, populatedAt: now, routeIdsKey: currentRouteIdsKey };` — `routeIdsKey` stored on every write. PASS.
+
+**`clearNewBetaCacheForTests()` and `clearNewBetaCache()` (`HomeScreen.tsx` lines 130–136):**
+Both null the `newBetaCache` variable — correct; the key-based interface does not affect the clear path. PASS.
+
+Input: second `loadProjectingRoutes` call with a different route-id set (e.g. user saved/removed a route between renders).
+Actual (after fix): `currentRouteIdsKey` computed from sorted new set differs from cached `routeIdsKey` → cache miss → RPC called again → correct set of route IDs returned → "New Beta" badge appears only on correct cards.
+Expected per spec (AC-181): "New Beta" badge reflects the current set of route IDs, not a stale prior-session result.
+Status: VERIFIED by source inspection.
+
+---
+
+#### Change 2 — AC-112 (revised, Rev 38): banner placeholder when admin_banners is empty
+
+**Section always rendered (spec: "section is never fully hidden in Phase 1"):**
+`HomeScreen.tsx` line 505: `<View style={[styles.section, styles.bannerSection]}>` — unconditional outer View. No `{condition && <View ...>}` wrapper around the section. The banner section is always mounted. PASS.
+
+**`bannerLoading` state initialized `true` (`HomeScreen.tsx` line 178):**
+`const [bannerLoading, setBannerLoading] = useState(true);` — loading starts true; placeholder suppressed during load. PASS.
+
+**`loadBanner` sets `bannerLoading = false` in both success and error paths:**
+- Success path (`HomeScreen.tsx` line 197): `setBannerLoading(false)` after `setActiveBanner(data)`.
+- Error path (`HomeScreen.tsx` line 193): `setBannerLoading(false)` after `setActiveBanner(null)`.
+Both paths release the loading gate. PASS.
+
+**Placeholder renders when `!bannerLoading && activeBanner === null` (`HomeScreen.tsx` lines 506–511):**
+```
+{!bannerLoading && activeBanner === null ? (
+  <View style={styles.bannerPlaceholderCard}>
+    <Text style={styles.bannerPlaceholderText}>
+      {t('home.banner.noEvents')}
+    </Text>
+  </View>
+) : ...}
+```
+Correct guard — placeholder only shown after load completes with no active banner. PASS.
+
+**Placeholder styling (`HomeScreen.tsx` lines 739–750):**
+- `bannerPlaceholderCard.backgroundColor: theme.colors.surface` — surface/gray per spec. PASS.
+- `bannerPlaceholderCard.alignItems: 'center', justifyContent: 'center'` — centered per spec. PASS.
+- `bannerPlaceholderText.color: theme.colors.textSecondary` — `theme.colors.textSecondary` per spec. PASS.
+
+**i18n key `home.banner.noEvents`:**
+- `locales/en/common.json` line 266: `"noEvents": "No active events"` — per spec. PASS.
+- `locales/zh-TW/common.json` line 266: `"noEvents": "目前沒有活動"` — per spec. PASS.
+
+Input: `admin_banners` table has no active rows (query returns null).
+Actual (after fix): section outer `<View>` renders; after `loadBanner` resolves, placeholder card shows with "No active events" centered in a surface-colored card.
+Expected per AC-112 (Rev 38): visible placeholder card when no active banner; section never hidden.
+Status: VERIFIED by source inspection.
+
+---
+
+#### Change 3 — AC-182 (revised, Rev 38): following section redesign
+
+**Point 1 — `.select('user_id, updated_at')` (`HomeScreen.tsx` line 404):**
+`const { data: betaRows, error: betaError } = await supabase.from('beta_videos').select('user_id, updated_at')` — `updated_at` selected, not `created_at`. PASS.
+
+**Point 2 — `.gte('updated_at', cutoff)` (`HomeScreen.tsx` line 406):**
+`.gte('updated_at', cutoff)` — filters by `updated_at`, not `created_at`. Semantic point per Rev 38: a video replaced within the last 14 days surfaces even if its original `created_at` is older. PASS.
+
+**Point 3 — `.order('updated_at', { ascending: false })` (`HomeScreen.tsx` line 407):**
+`.order('updated_at', { ascending: false })` — ordering consistent with fetched column. PASS.
+
+**Point 4 — JS grouping uses `row.updated_at` (`HomeScreen.tsx` lines 419–426):**
+Row type annotation: `Array<{ user_id: string; updated_at: string }>` (line 419). Three reads in the loop: `row.updated_at > existing.latestAt` (line 422), `existing.latestAt = row.updated_at` (line 423), `activityMap.set(row.user_id, { latestAt: row.updated_at })` (line 426). No `created_at` references in this path. PASS.
+
+**`FollowingActivity` interface has no `count` field (`HomeScreen.tsx` lines 104–110):**
+Interface declares only `userId`, `displayName`, `avatarUrl`, `latestAt`. No `newBetaVideoCount` or any count field. PASS.
+
+**UI renders static `home.following.newUpload` label, no count (`HomeScreen.tsx` lines 680–681):**
+`<Text style={styles.activityLabel}>{t('home.following.newUpload')}</Text>` — fixed static label, no count interpolation. PASS.
+
+**i18n key `home.following.newUpload`:**
+- `locales/en/common.json` line 281: `"newUpload": "new video upload"` — per spec. PASS.
+- `locales/zh-TW/common.json` line 281: `"newUpload": "新影片上傳"` — per spec. PASS.
+
+**Batched-fetch + JS-group pattern preserved (spec requirement):**
+Step 2 queries `beta_videos` for all followed user IDs in a single batched query (`.in('user_id', followedIds)`). Step 3 groups in JS without a SQL `GROUP BY`. Pattern is unchanged per spec note "The existing batched-fetch + JS-group pattern (no SQL MAX() / GROUP BY) is correct and must be preserved." PASS.
+
+Input: followed climber with beta videos; most recent video was replaced 3 days ago (updated_at 3 days ago, created_at 20 days ago).
+Actual (after fix): video qualifies for the 14-day window (`.gte('updated_at', cutoff)` passes); `latestAt` reflects `updated_at` (3 days ago); row renders with static "new video upload" label and relative timestamp.
+Expected per AC-182 (Rev 38): climber appears in section; timestamp reflects `MAX(updated_at)`; no count shown.
+Status: VERIFIED by source inspection.
+
+---
+
+#### Re-verification of all previously passing ACs (carried from QA Run 12)
+
+**AC-110** — PASS. `AppShell.tsx` tab state and `TabBar.tsx` unchanged. No new tab logic introduced by the three changes. Source confirmed unchanged.
+
+**AC-111 (rev)** — PASS. Section order in `HomeScreen.tsx` JSX confirmed: Section 1 Events Banner (line 502), Section 2 Saved Gyms (line 538), Section 3 Projecting Routes (line 586), Section 4 Following Activity (line 645). None of the three changes reorder sections.
+
+**AC-112 (rev, Rev 38)** — REGRESSION PASS. See Change 2 above. Outer `<View>` always rendered; placeholder shown when load completes with no active banner; styling matches spec; i18n keys correct in both locales.
+
+**AC-113** — PASS. Saved gyms strip and "View All" unchanged. Source confirmed.
+
+**AC-114 (rev) / AC-176** — PASS. `onSelectGym(gym.id, gym.name)` callback unchanged. Source confirmed.
+
+**AC-115** — PASS. `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, unchanged). Source confirmed.
+
+**AC-174** — PASS. `20261013000001_mod_012_admin_banners.sql` unchanged by the three session commits. Migration DDL, RLS (4 policies), GRANT verified in QA Run 10/11. Source confirmed.
+
+**AC-175** — PASS. `loadSavedGyms` recency sort logic unchanged. Source confirmed.
+
+**AC-177** — PASS. `fetchSavedRouteIds()` call, `availableGrades` useMemo, grade tab render, empty state all unchanged. Source confirmed.
+
+**AC-178** — PASS. `onSelectRoute(route.id, route.gym_id)` on RouteCard press unchanged. Source confirmed.
+
+**AC-181** — PASS (with NewBetaCache improvement). `routes_with_new_beta` RPC call path preserved; cache now also checks `routeIdsKey` (Change 1 above). `hasNewBetaVideo` prop to RouteCard unchanged. REGRESSION PASS for cache fix.
+
+**AC-182 (rev, Rev 38)** — REGRESSION PASS. See Change 3 above. Four-point `updated_at` swap verified; no count field; static label; batched pattern preserved; i18n keys correct.
+
+**AC-183** — PASS. `src/components/RouteCard.tsx` unchanged. Source confirmed.
+
+**AC-184** — PASS. `AppHeader.tsx` and `AppShell.tsx` wiring unchanged. Source confirmed.
+
+**AC-185** — PASS. `src/components/SwipeBackWrapper.tsx` unchanged. Source confirmed.
+
+**Keep-alive mount strategy** — PASS. AppShell keep-alive logic (`display: 'none'`) unchanged. Source confirmed.
+
+**Top safe area** — PASS. AppHeader owns top inset; `HomeScreen.tsx` `makeStyles` does not apply topInset. Unchanged.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` `paddingBottom: bottomInset + theme.spacing.sm` unchanged.
+
+**Cross-module import rule** — PASS. No new cross-module imports introduced by the three changes. All existing imports verified PASS in QA Run 11/12.
+
+**i18n completeness (EN + zh-TW)** — PASS. New keys `home.banner.noEvents` and `home.following.newUpload` verified present in both locales (see Change 2 and Change 3 above). All prior `home.*` keys unchanged.
+
+**Inline string literals** — PASS. `relativeTime()` uses `t()` for all paths (verified QA Run 11). Static "new video upload" label uses `t('home.following.newUpload')` — not an inline literal. No new raw strings.
+
+**No hardcoded hex colors** — PASS. All new style values (`bannerPlaceholderCard`, `bannerPlaceholderText`) use `theme.colors.*` tokens. No `#RRGGBB` literals introduced.
+
+**Migration correctness** — PASS. Both migrations (`20260924000002_mod_012_home.sql` and `20261013000001_mod_012_admin_banners.sql`) unchanged by all three session commits.
+
+**Gold-plating check** — PASS. All three changes implement or improve spec-required behavior. NewBetaCache key fix tightens cache correctness per AC-181. AC-112 and AC-182 implement Rev 38 spec revisions exactly as written.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0, no output.
+
+---
+
+#### Test suite regression — root cause and routing
+
+**Root cause**: commit `8d4c6e4` (`fix(mod-localization-theme): load saved theme override in ThemeProvider on init, not SettingsScreen mount`, 2026-10-15 10:34) added `import AsyncStorage from '@react-native-async-storage/async-storage'` at the top level of `src/lib/theme.ts`. No Jest mock for `@react-native-async-storage/async-storage` is configured in `package.json` `jest.moduleNameMapper` or `__mocks__/`. Since `theme.ts` is imported by virtually every component (via `useTheme()`), all component test suites fail with `[@RNC/AsyncStorage]: NativeModule: AsyncStorage is null` when Jest tries to load the native module in a node environment.
+
+**Scope**: 23 test suites fail to run; all are component/screen test files. 12 test suites still pass (service/unit test files that do not import `theme.ts`). 204 tests pass. This affects suites across mod-home, mod-localization-theme, mod-gym-directory, mod-social-feed, mod-route-catalog, mod-notifications, mod-send-logging, mod-beta-video, mod-profile-history, and src/components.
+
+**This is NOT a mod-home bug.** The three mod-home engineering changes under review did not touch `theme.ts` or the Jest configuration. The three changes are otherwise correctly implemented (verified by source inspection and TypeScript clean).
+
+**Route to**: `engineer-mod-localization-theme`. Required fix: add a Jest mock for `@react-native-async-storage/async-storage` to the project's Jest configuration. The standard fix (per the AsyncStorage docs) is to add to `package.json` `jest.moduleNameMapper`:
+```json
+"^@react-native-async-storage/async-storage$": "<rootDir>/__mocks__/@react-native-async-storage/async-storage.js"
+```
+and create `__mocks__/@react-native-async-storage/async-storage.js` returning a mock object. Alternatively, use the official `@react-native-async-storage/async-storage/jest/async-storage-mock` preset if available in the installed version. The fix belongs to the module that introduced the import (`mod-localization-theme` owns `src/lib/theme.ts` via the ThemeProvider it introduced).
+
+---
+
+### Summary — QA Run 13
+
+| AC / Check | QA Run 12 | QA Run 13 |
+|---|---|---|
+| AC-110: Three-tab bar, Home default | PASS | PASS |
+| AC-111 (rev): Four sections in order | PASS | PASS |
+| AC-112 (rev, Rev 38): Banner placeholder when no active banner | PASS | REGRESSION PASS (Rev 38 change verified) |
+| AC-113: Saved Gyms strip + View All | PASS | PASS |
+| AC-114 (rev) / AC-176: Gym tap → onSelectGym(gymId, gymName) | PASS | PASS |
+| AC-115: Saved gyms empty state | PASS | PASS |
+| AC-174: admin_banners migration — DDL, RLS, GRANT | PASS | PASS |
+| AC-175: Saved Gyms ordered by recency; no-recency gyms appear | PASS | PASS |
+| AC-177: Projecting Routes — fetchSavedRouteIds, grade tabs, empty state | PASS | PASS |
+| AC-178: Route card tap → onSelectRoute(routeId, gymId) | PASS | PASS |
+| AC-181: New Beta badge via routes_with_new_beta RPC + cache | PASS | REGRESSION PASS (cache now keyed by route-id set) |
+| AC-182 (rev, Rev 38): Following Activity — updated_at (4 points), static label, no count | PASS | REGRESSION PASS (Rev 38 change verified) |
+| AC-183: RouteCard — name+grade left, 48×48 thumbnail right, New Beta badge | PASS | PASS |
+| AC-184: AppHeader — bell left (unread badge), settings right | PASS | PASS |
+| AC-185: SwipeBackWrapper — PanResponder, left-edge gate | PASS | PASS |
+| Cross-module import rule | PASS | PASS |
+| Inline string literals | PASS | PASS |
+| i18n completeness (EN + zh-TW) | PASS | PASS (new keys home.banner.noEvents + home.following.newUpload verified) |
+| No hardcoded hex colors | PASS | PASS |
+| Migration: saved_gyms + admin_banners | PASS | PASS |
+| `npx tsc --noEmit` | PASS — 0 errors | PASS — 0 errors |
+| `npx jest src/modules/mod-home` (scoped) | PASS — 39 tests, 3 suites | FAIL — 0 tests run; suites fail due to cross-module AsyncStorage mock regression (commit 8d4c6e4, mod-localization-theme) |
+| `npm test` (full suite) | PASS — 514/515 | FAIL — 204/204 service tests pass; 23 component suites fail due to same AsyncStorage regression |
+| Gold-plating check | PASS | PASS |
+
+**Result: FAIL — 1 cross-module test infrastructure regression (not a mod-home implementation bug)**
+
+All 15 acceptance criteria pass per source-code verification. The three engineering changes under review (NewBetaCache key fix, AC-112 banner placeholder, AC-182 following redesign) are correctly implemented. `npx tsc --noEmit` is clean.
+
+The blocking issue is a cross-module test infrastructure regression: commit `8d4c6e4` added `AsyncStorage` to `src/lib/theme.ts` without a corresponding Jest mock, causing all component test suites (23 suites, including all 3 mod-home suites) to fail to run. This regression is owned by `mod-localization-theme`, not `mod-home`.
+
+**Route to**: `engineer-mod-localization-theme` — add a Jest mock for `@react-native-async-storage/async-storage` to restore the test suite. The mod-home changes do not require any fix.
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA of the saved-gyms strip and Events Banner.
