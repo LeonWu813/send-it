@@ -2,6 +2,35 @@
 
 ## Engineering Progress
 
+### Rev 37 engineering cleanup — idempotent migration + checkDuplicateActiveRoute (AC-187) (2026-10-15)
+
+**ACs implemented / changed:**
+- AC-187 (Rev 37): Added exported `checkDuplicateActiveRoute(gymId, grade, colorTag)` function to `route-service.ts`. Queries the `routes` table with a HEAD count for `(gym_id, grade, color_tag)` where `status = 'active'`. Returns `true` when at least one matching active route exists; returns `false` on error (fail-open — advisory only, never blocks submission). Backed by the non-unique `routes_active_grade_color_idx` index. Caller (RouteSubmitScreen) handles the UI soft warning.
+- AC-020 / AC-029 (Rev 37): Dead `23505` and `pending submission` error branches were already removed from `submitRoute` in the prior Rev 37 engineering run (committed 2026-10-15, migration `20261015000001`). No additional changes needed there.
+
+**Migration — `supabase/migrations/20261015000003_mod_003_rev37_route_uniqueness.sql`:**
+- `DROP INDEX IF EXISTS routes_active_unique_idx` — idempotent; already dropped in `000001`.
+- `DROP INDEX IF EXISTS routes_pending_unique_per_submitter` — idempotent; already dropped in `000001`.
+- `CREATE INDEX IF NOT EXISTS routes_active_grade_color_idx` — idempotent; already created in `000001`. Carried here for completeness per task spec.
+- Note: `20261015000002` was taken by MOD-005 (`mod_005_beta_videos_updated_at`); this migration uses `20261015000003`.
+
+**route-service.ts:**
+- Added `checkDuplicateActiveRoute(gymId, grade, colorTag): Promise<boolean>` — exported function. Uses `.select('id', { count: 'exact', head: true })` with `.eq('status', 'active')` predicates. Logs and returns `false` on error.
+
+**Self-check (2026-10-15):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: Dead error branches were already absent from `submitRoute` (confirmed by reading the file — no `23505` code or `pending submission` message check present).
+- PASS: `findMatchingActiveRoutes` was already absent (confirmed — removed in prior Rev 37 run).
+- PASS: Migration uses `IF EXISTS` / `IF NOT EXISTS` guards — fully idempotent.
+- PASS: `checkDuplicateActiveRoute` is fail-open — errors return `false`, never blocking submission.
+- PASS: No gold-plating — strictly confined to the three tasks in the Rev 37 engineering cleanup invocation.
+
+**Files changed:**
+- `supabase/migrations/20261015000003_mod_003_rev37_route_uniqueness.sql` — new idempotent migration
+- `src/modules/mod-route-catalog/route-service.ts` — `checkDuplicateActiveRoute` added
+
+---
+
 ### AC-185 — Wire SwipeBackWrapper into RouteDetail, RouteSubmit, SendHistoryDetail screens (2026-10-15)
 
 **AC implemented:** AC-185 (swipe-back gesture wiring for mod-route-catalog screens).
