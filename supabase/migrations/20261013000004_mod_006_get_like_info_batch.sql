@@ -35,7 +35,7 @@ AS $$
     COUNT(r.id) AS like_count
   FROM UNNEST(p_target_ids) AS t(id)
   LEFT JOIN public.reactions r
-    ON r.target_id = t.id AND r.target_type = p_target_type
+    ON r.target_id = t.id AND r.target_type = p_target_type::reaction_target_type
   GROUP BY t.id;
 $$;
 
