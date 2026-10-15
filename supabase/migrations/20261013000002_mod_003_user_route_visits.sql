@@ -78,7 +78,7 @@ AS $$
       u.beta_video_privacy = 'public'
       OR EXISTS (
         SELECT 1 FROM public.follows f
-        WHERE f.follower_id = auth.uid() AND f.following_id = bv.user_id
+        WHERE f.follower_id = auth.uid() AND f.followee_id = bv.user_id
       )
       OR bv.user_id = auth.uid()
     )
