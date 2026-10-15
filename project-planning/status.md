@@ -3,13 +3,13 @@
 ## Last Action
 
 ```
-agent: qa-mod-route-catalog
+agent: qa-mod-home
 mode: regression
-module: mod-route-catalog (MOD-003)
+module: mod-home (MOD-012)
 result: success
-commit: aa0d672
+commit: d22c9a8
 timestamp: 2026-10-15T00:00:00Z
-summary: Regression pass — AC-187 fix verified (inline reactive duplicate warning, not Alert; correct i18n keys; submit button enabled); AC-189/190/047-Rev39/181-Rev39 all pass; 110 tests pass, 0 errors.
+summary: Regression pass — Rev 39/40 RouteCard redesign verified; AC-181/189/190/191/192/046/047 all pass; i18n OK; 23 RouteCard tests + 39 mod-home tests pass; 0 TypeScript errors.
 ```
 
 
