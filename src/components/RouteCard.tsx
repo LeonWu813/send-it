@@ -11,12 +11,11 @@
  *
  * Layout (AC-192, redesigned):
  *   Left  — 80×80 photo_url thumbnail (Image or placeholder)
- *   Right — info View (flex-1, marginLeft gap)
- *             ├── infoHeader row (space-between)
- *             │     ├── nameRow (route name + send icon when hasSend)
- *             │     └── bookmark Pressable (top-right)
- *             ├── gymName (optional)
- *             └── betaCount subtitle (when betaVideoCount > 0, AC-189)
+ *   Center — info View (flex-1, marginLeft gap)
+ *               ├── nameRow (route name + send icon when hasSend)
+ *               ├── gymName (optional)
+ *               └── betaCount subtitle (when betaVideoCount > 0, AC-189)
+ *   Right — bookmark Pressable (alignSelf: flex-start — pins to card top)
  *
  * Removed (Rev 39):
  *   - hasNewBetaVideo prop and "New Beta" chip (AC-181)
@@ -123,43 +122,19 @@ export default function RouteCard({
 
       {/* Right: route info */}
       <View style={styles.info}>
-        {/* Header row: name+sendIcon on left, bookmark on right */}
-        <View style={styles.infoHeader}>
-          <View style={styles.nameRow}>
-            <Text style={styles.routeName} numberOfLines={2}>
-              {route.name}
-            </Text>
-            {hasSend && (
-              <Ionicons
-                name={sendStyle === 'flash' ? 'flash' : 'checkmark-circle'}
-                size={16}
-                color={sendStyle === 'flash' ? FLASH_BADGE_COLOR : theme.colors.success}
-                style={styles.sendIcon}
-                testID="send-icon"
-              />
-            )}
-          </View>
-
-          {/* Bookmark icon (AC-046/047) */}
-          <Pressable
-            onPress={(e) => {
-              // stopPropagation prevents the card's outer onPress from firing (AC-046/047).
-              // The event object may be absent in test environments; guard accordingly.
-              if (e != null && typeof (e as unknown as { stopPropagation?: () => void }).stopPropagation === 'function') {
-                (e as unknown as { stopPropagation: () => void }).stopPropagation();
-              }
-              onBookmarkToggle?.();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={isSaved ? t('routeCard.saved') : t('routeCard.unsaved')}
-            hitSlop={8}
-          >
+        <View style={styles.nameRow}>
+          <Text style={styles.routeName} numberOfLines={2}>
+            {route.name}
+          </Text>
+          {hasSend && (
             <Ionicons
-              name={isSaved ? 'bookmark' : 'bookmark-outline'}
-              size={18}
-              color={isSaved ? theme.colors.warning : theme.colors.textSecondary}
+              name={sendStyle === 'flash' ? 'flash' : 'checkmark-circle'}
+              size={16}
+              color={sendStyle === 'flash' ? FLASH_BADGE_COLOR : theme.colors.success}
+              style={styles.sendIcon}
+              testID="send-icon"
             />
-          </Pressable>
+          )}
         </View>
 
         {/* gymName (optional) */}
@@ -176,6 +151,28 @@ export default function RouteCard({
           </Text>
         )}
       </View>
+
+      {/* Bookmark icon (AC-046/047) — sibling of info, pins to top via alignSelf */}
+      <Pressable
+        onPress={(e) => {
+          // stopPropagation prevents the card's outer onPress from firing (AC-046/047).
+          // The event object may be absent in test environments; guard accordingly.
+          if (e != null && typeof (e as unknown as { stopPropagation?: () => void }).stopPropagation === 'function') {
+            (e as unknown as { stopPropagation: () => void }).stopPropagation();
+          }
+          onBookmarkToggle?.();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={isSaved ? t('routeCard.saved') : t('routeCard.unsaved')}
+        hitSlop={8}
+        style={styles.bookmarkButton}
+      >
+        <Ionicons
+          name={isSaved ? 'bookmark' : 'bookmark-outline'}
+          size={18}
+          color={isSaved ? theme.colors.warning : theme.colors.textSecondary}
+        />
+      </Pressable>
     </Pressable>
   );
 }
@@ -186,7 +183,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     card: {
       flexDirection: 'row',
-      alignItems: 'flex-start',
+      alignItems: 'center',
       backgroundColor: theme.colors.surface,
       borderRadius: theme.borderRadius.md,
       paddingHorizontal: theme.spacing.md,
@@ -208,10 +205,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       flex: 1,
       marginLeft: theme.spacing.sm,
     },
-    infoHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
+    bookmarkButton: {
+      alignSelf: 'flex-start',
+      marginLeft: theme.spacing.xs,
     },
     nameRow: {
       flexDirection: 'row',
