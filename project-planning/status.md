@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-home
+agent: engineer-mod-route-catalog
 mode: implementation
-module: mod-home (MOD-012)
+module: mod-route-catalog (MOD-003)
 result: success
 timestamp: 2026-10-15T00:00:00Z
-summary: Rev 39/40 RouteCard redesign — implemented AC-181 (chip removed), AC-189 (betaCount subtitle), AC-190 (send badge flash/top), AC-191 (grade label hidden), AC-192 (80x80 thumbnail), AC-046/047 (bookmark wired). Updated RouteCard.tsx, RouteCard.test.tsx (23 tests), HomeScreen.tsx (fetchUserAchievements + saveRoute/unsaveRoute wiring), HomeScreen.test.tsx (39 tests), locale files (routeCard namespace), RouteListScreen.tsx and ProfileHistoryScreen.tsx (hasNewBetaVideo cleanup). npx tsc --noEmit: 0 errors. All tests pass.
+summary: Rev 39/40 RouteCard redesign MOD-003 side — AC-189 (count_beta_videos_by_routes SECURITY INVOKER RPC migration + fetchBetaVideoCounts wrapper), AC-190 (hasSend/sendStyle derived from fetchUserAchievements), AC-047 Rev 39 (interactive bookmark toggle with optimistic update via saveRoute/unsaveRoute), AC-181 Rev 39 (New Beta chip no longer rendered; fetchRoutesWithNewBeta retained for AC-175). RouteListScreen wires all new RouteCard props. 110 tests pass, 0 errors, i18n OK.
 ```
 
 

@@ -2,6 +2,51 @@
 
 ## Engineering Progress
 
+### Rev 39/40 RouteCard redesign — AC-189/190/047 Rev 39 live data wiring (2026-10-15)
+
+**ACs implemented:**
+- AC-189: `count_beta_videos_by_routes(route_ids uuid[])` SECURITY INVOKER RPC migration created (`20261015000004_mod_003_count_beta_videos_by_routes.sql`). Clones the three-part visibility fence from `routes_with_new_beta` (AC-142 reported-video exclusion, AC-154 symmetric block filter, AC-158 followers-only privacy), drops the recency clause, returns `TABLE(route_id uuid, beta_count bigint)`. `fetchBetaVideoCounts(routeIds: string[]): Promise<Record<string, number>>` wrapper added to `route-service.ts`.
+- AC-190: `RouteListScreen` derives `hasSend` and `sendStyle` from `fetchUserAchievements` (already in scope for AC-046); `hasSend = achievement === 'flash' || achievement === 'top'`; `sendStyle` = 'flash' | 'top' | null. No new service call needed.
+- AC-047 (Rev 39): `RouteListScreen` now passes `isSaved` and `onBookmarkToggle` to `RouteCard`. `handleBookmarkToggle(routeId)` performs an optimistic update on `savedRouteIds` (Set), then calls `saveRoute`/`unsaveRoute`; reverts on error. `saveRoute`/`unsaveRoute` imported from `route-service`.
+- AC-181 (Rev 39): "New Beta" chip no longer rendered on RouteCard. `fetchRoutesWithNewBeta` is still called (retained for AC-175 most-recently-viewed ordering).
+
+**Migration:**
+- `supabase/migrations/20261015000004_mod_003_count_beta_videos_by_routes.sql` — `count_beta_videos_by_routes(uuid[])` SECURITY INVOKER RPC. `REVOKE ALL FROM PUBLIC`, `GRANT EXECUTE TO authenticated`.
+
+**route-service.ts:**
+- Added `fetchBetaVideoCounts(routeIds: string[]): Promise<Record<string, number>>` — calls `count_beta_videos_by_routes` RPC; returns `{}` on error (non-fatal). Added `saveRoute`/`unsaveRoute` to RouteListScreen imports.
+
+**RouteListScreen.tsx:**
+- Added `betaCountMap: Record<string, number>` state.
+- `fetchRoutes` now fetches achievements and beta counts in parallel (`Promise.all`) after routes load — one batched call each, no N+1.
+- `handleBookmarkToggle(routeId)` added — optimistic toggle of `savedRouteIds` Set, async save/unsave, revert on error.
+- `renderRouteCard` updated: derives `hasSend`, `sendStyle` from `achievements`; passes `betaVideoCount`, `hasSend`, `sendStyle`, `isSaved`, `onBookmarkToggle` to `RouteCard`. Removed overlay `View` wrappers for achievement icon and saved indicator (RouteCard handles bookmark natively per Rev 39).
+- `AchievementIcon` component and `AchievementIconProps` interface removed (no longer needed in this screen).
+
+**Tests:**
+- `route-service.test.ts`: 4 new `fetchBetaVideoCounts` tests — empty array fast-path, successful RPC + result map, RPC error returns `{}`, null data returns `{}`.
+- `RouteListScreen.test.tsx`: mocks updated to include `fetchBetaVideoCounts`, `saveRoute`, `unsaveRoute`, `getPhotoSignedUrl` (fixes pre-existing "Unable to find node on unmounted component" failures caused by unmocked async `getPhotoSignedUrl` in `RouteCard`). Added AC-189 tests (fetchBetaVideoCounts called with all route IDs; betaCount subtitle rendered), AC-181 Rev 39 test (no "New Beta" chip), AC-047 Rev 39 tests (unsaveRoute called on saved-bookmark tap; saveRoute called on unsaved-bookmark tap). All 21 RouteListScreen tests now pass.
+
+**Self-check (2026-10-15):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest src/modules/mod-route-catalog --watchAll=false` — 110 tests pass across 5 suites (21 RouteListScreen, 30 route-service, and all other suites). Zero failures.
+- PASS: `npm run check:i18n` — "i18n completeness OK". routeCard.* keys already present from MOD-012 implementation.
+- PASS: Migration clones exact visibility predicates from `routes_with_new_beta` (AC-142/154/158 fence), drops the recency clause, adds `COUNT(*) GROUP BY bv.route_id`. SECURITY INVOKER + correct grants.
+- PASS: No `user_id` accepted as RPC parameter — auth.uid() resolved server-side inside the RPC.
+- PASS: No client-side `.in('route_id', ids)` count — all counting goes through the RPC.
+- PASS: No `RouteCard.tsx` modifications — already done by MOD-012.
+- PASS: No `supabase db push` run.
+- PASS: No gold-plating — strictly confined to AC-189/190/047-Rev39/181-Rev39.
+
+**Files changed:**
+- `supabase/migrations/20261015000004_mod_003_count_beta_videos_by_routes.sql` — new migration
+- `src/modules/mod-route-catalog/route-service.ts` — `fetchBetaVideoCounts` added
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — `betaCountMap` state, `handleBookmarkToggle`, `saveRoute`/`unsaveRoute` imports, updated `renderRouteCard`, removed `AchievementIcon`
+- `src/modules/mod-route-catalog/__tests__/route-service.test.ts` — 4 new `fetchBetaVideoCounts` tests
+- `src/modules/mod-route-catalog/__tests__/RouteListScreen.test.tsx` — mock updates + new AC-189/047/181-Rev39 tests
+
+---
+
 ### AC-187 QA fix — replace post-submit Alert with pre-submit inline notice (2026-10-15)
 
 **ACs implemented / changed:**
