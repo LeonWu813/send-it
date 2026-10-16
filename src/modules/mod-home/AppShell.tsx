@@ -83,6 +83,7 @@ import {
   tabBarBottomGap,
   useAppHeaderStoreVersion,
 } from './components/AppHeaderContext';
+import { AppHeaderOverlayScope } from './components/AppHeaderOverlayScope';
 import TabBar, { TabBarFade, type TabKey } from './components/TabBar';
 import HomeNavigator from './HomeNavigator';
 
@@ -339,17 +340,30 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             {/* Climber profile overlay (AC-182) */}
             {targetUserId !== null && (
               <View style={styles.overlayContainer}>
+                <AppHeaderOverlayScope
+                  topInset={insets.top}
+                  bottomInset={insets.bottom}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                >
                 <UserProfileScreen
                   targetUserId={targetUserId}
                   session={session}
                   onBack={handleClimberProfileBack}
                 />
+                </AppHeaderOverlayScope>
               </View>
             )}
 
             {/* Notifications overlay (AC-184) */}
             {notificationsOpen && (
               <View style={styles.overlayContainer}>
+                <AppHeaderOverlayScope
+                  topInset={insets.top}
+                  bottomInset={insets.bottom}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                >
                 <NotificationsNavigator
                   session={session}
                   initialView="inbox"
@@ -357,13 +371,21 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   onBack={handleNotificationsBack}
                   onNavigateToUser={handleSelectClimber}
                 />
+                </AppHeaderOverlayScope>
               </View>
             )}
 
             {/* Settings overlay (AC-184) */}
             {settingsOpen && (
               <View style={styles.overlayContainer}>
+                <AppHeaderOverlayScope
+                  topInset={insets.top}
+                  bottomInset={insets.bottom}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                >
                 <SettingsScreen onBack={handleSettingsBack} />
+                </AppHeaderOverlayScope>
               </View>
             )}
           </View>

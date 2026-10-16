@@ -16,6 +16,11 @@
  *   <Animated.ScrollView onScroll={onScroll} scrollEventThrottle={scrollEventThrottle}
  *     contentContainerStyle={{ paddingTop: contentTopInset }} ... />
  *
+ * Overlays: AppShell wraps each full-screen overlay (notifications, settings, climber profile) in
+ * `AppHeaderOverlayScope`. Inside it `useAppHeader` drives the overlay's OWN nested header (rendered by the
+ * scope), `useTabBarInset` returns 0 and `useHideTabBar` is a no-op, so a screen (e.g. SettingsScreen)
+ * can call the same hooks whether it is mounted in a tab or in an overlay.
+ *
  * Rules:
  *   - Registrations are per tab (AppShell wraps each tab in `AppHeaderTabScope`), so a keep-alive
  *     hidden tab never drives the header of the visible one.
@@ -136,6 +141,8 @@ export class AppHeaderStore {
 
 const StoreContext = createContext<AppHeaderStore | null>(null);
 const TabContext = createContext<HeaderTab | null>(null);
+/** True inside a full-screen overlay (`AppHeaderOverlayScope`): it covers the TabBar. */
+export const OverlayContext = createContext<boolean>(false);
 
 export const AppHeaderProvider = StoreContext.Provider;
 
@@ -206,7 +213,9 @@ const MD = 16;
 /** Insets every scroll container inside a tab must apply so content clears the floating TabBar. */
 export function useTabBarInset(): { contentBottom: number; indicatorBottom: number } {
   const store = useContext(StoreContext);
-  if (!store) return { contentBottom: 0, indicatorBottom: 0 };
+  const overlay = useContext(OverlayContext);
+  // An overlay covers the TabBar: nothing to clear.
+  if (!store || overlay) return { contentBottom: 0, indicatorBottom: 0 };
   const indicator = TAB_BAR_HEIGHT + tabBarBottomGap(store.bottomInset);
   return { contentBottom: indicator + MD, indicatorBottom: indicator };
 }
@@ -215,11 +224,12 @@ export function useTabBarInset(): { contentBottom: number; indicatorBottom: numb
 export function useHideTabBar(hidden = true): void {
   const store = useContext(StoreContext);
   const tab = useContext(TabContext);
+  const overlay = useContext(OverlayContext);
   useEffect(() => {
-    if (!store || !tab || !hidden) return undefined;
+    if (!store || !tab || !hidden || overlay) return undefined;
     store.adjustHidden(tab, 1);
     return () => store.adjustHidden(tab, -1);
-  }, [store, tab, hidden]);
+  }, [store, tab, hidden, overlay]);
 }
 
 /**
