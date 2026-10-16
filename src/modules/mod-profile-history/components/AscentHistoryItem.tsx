@@ -2,7 +2,7 @@
  * AscentHistoryItem — single row in the send history list (spec §32.7).
  *
  * Layout (row sits on a `surface` container):
- *   [photo 44] grade + route name        [SendStyleChip]
+ *   [photo 44] TapeBadge grade section        [SendStyleChip]
  *              date · gym  (lock + Private)
  *
  * - Grade is its own non-shrinking node; the route name shrinks (1 line, 2 lines
@@ -10,8 +10,6 @@
  * - At fontScale >= 1.6 the SendStyleChip moves to the start of the second line.
  * - One merged VoiceOver label for the whole row.
  *
- * Not built: TapeBadge (route-catalog has not shipped TAPE_DISPLAY yet), so the
- * route colour is carried by the localized colour name in the route label.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +20,7 @@ import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { AppText, SendStyleChip } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { TapeBadge } from '../../mod-route-catalog/tape-exports';
 import type { HistoryAscent } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -67,6 +66,8 @@ export default function AscentHistoryItem({
   const colorLabel = item.color_tag ? t(`routeCatalog.colors.${item.color_tag}`) : '';
   const sectionLabel = item.section_label ? `(${item.section_label})` : '';
   const routeName = [colorLabel, sectionLabel].filter(Boolean).join(' ');
+  // The TapeBadge carries the colour word visually; the visible name is the section only.
+  const visibleName = sectionLabel;
 
   const date = formatDate(item.logged_at);
   const styleLabel = t(`sends.styles.${item.style}`);
@@ -103,17 +104,22 @@ export default function AscentHistoryItem({
       <View style={styles.middle}>
         {/* Line 1: grade + route name */}
         <View style={styles.line}>
+          {item.color_tag ? (
+            <View style={styles.badge}>
+              <TapeBadge color={item.color_tag} size="sm" />
+            </View>
+          ) : null}
           <AppText variant="subhead" weight="600" numeric style={styles.grade}>
             {item.grade}
           </AppText>
-          {routeName ? (
+          {visibleName ? (
             <AppText
               variant="subhead"
               weight="600"
               numberOfLines={ax ? 2 : 1}
               style={styles.routeName}
             >
-              {routeName}
+              {visibleName}
             </AppText>
           ) : null}
         </View>
@@ -174,6 +180,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flexDirection: 'row',
       alignItems: 'flex-start',
       columnGap: theme.spacing.sm,
+    },
+    badge: {
+      flexShrink: 0,
     },
     grade: {
       flexShrink: 0,

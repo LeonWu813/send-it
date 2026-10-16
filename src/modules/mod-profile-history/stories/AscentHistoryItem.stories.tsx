@@ -6,6 +6,7 @@ import AscentHistoryItem from '../components/AscentHistoryItem';
 import type { HistoryAscent } from '../types';
 
 interface Args {
+  colorTag: string;
   sendStyle: HistoryAscent['style'];
   attempts: number;
   isPrivate: boolean;
@@ -27,7 +28,7 @@ function toItem(a: Args): HistoryAscent {
       ? 'The Extremely Long Named Bouldering and Climbing Gymnasium of Greater Taipei City'
       : 'Boulder Planet',
     grade: 'V3',
-    color_tag: 'blue',
+    color_tag: a.colorTag,
     section_label: a.hasSection
       ? a.longNames
         ? 'Overhanging North Wall Competition Training Area Section B'
@@ -49,8 +50,9 @@ const meta: Meta<Args> = {
       <AscentHistoryItem item={toItem(args)} />
     </View>
   ),
-  args: { sendStyle: 'top', attempts: 3, isPrivate: false, hasSection: true, hasPhoto: false, longNames: false },
+  args: { colorTag: 'blue', sendStyle: 'top', attempts: 3, isPrivate: false, hasSection: true, hasPhoto: false, longNames: false },
   argTypes: {
+    colorTag: { control: 'select', options: ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'white', 'black'] },
     sendStyle: { control: 'inline-radio', options: ['top', 'flash', 'attempt'] },
     attempts: { control: { type: 'number', min: 1, max: 20 }, description: 'Only shown for attempt' },
     isPrivate: { control: 'boolean' },
