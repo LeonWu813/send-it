@@ -2,6 +2,10 @@
 
 ## Engineering Progress
 
+
+### Storybook stories for RouteColorBadge (2026-10-16)
+
+Off-spec design tooling (branch `design/storybook`), pending PR review. Added `src/modules/mod-route-catalog/stories/RouteColorBadge.stories.tsx` (Single, AllColorsAndSizes, LightVsDark). No component source changes.
 ### AC-185 follow-up — SwipeBackWrapper added to RouteListScreen (2026-10-15)
 
 **AC implemented:** AC-185 (swipe-back gesture wiring — RouteListScreen was missing the wrapper).
