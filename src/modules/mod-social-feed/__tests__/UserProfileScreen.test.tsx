@@ -12,6 +12,12 @@
  * mocked; no real network activity.
  */
 
+const mockUseAppHeader = jest.fn();
+jest.mock('../../mod-home/components/AppHeaderContext', () => ({
+  useAppHeader: (cfg: unknown): void => { mockUseAppHeader(cfg); },
+  useTabBarInset: () => ({ contentBottom: 0, indicatorBottom: 0 }),
+}));
+
 jest.mock('../../mod-beta-video', () => ({
   fetchBetaVideosByUser: jest.fn(),
   BetaVideoGrid: () => null,
@@ -366,6 +372,29 @@ describe('UserProfileScreen', () => {
         el.props.accessibilityLabel === '返回',
     );
     expect(backButton).toBeUndefined();
+  });
+
+  it('v2.2: registers the AppShell header with display name title and onBack', async () => {
+    setupProfileMock();
+    const onBack = jest.fn();
+
+    render(
+      <UserProfileScreen targetUserId={TARGET_USER_ID} session={MOCK_SESSION} onBack={onBack} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(mockUseAppHeader).toHaveBeenLastCalledWith(
+        expect.objectContaining({ title: 'Alice', onBack }),
+      );
+    });
+    const last = mockUseAppHeader.mock.calls[mockUseAppHeader.mock.calls.length - 1][0] as {
+      onBack: () => void;
+      trailing?: unknown;
+    };
+    last.onBack();
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(last.trailing).toBeTruthy();
   });
 
   it('AC-150: renders three-dots icon for non-own profiles', async () => {

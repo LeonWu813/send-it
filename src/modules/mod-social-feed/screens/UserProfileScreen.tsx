@@ -31,6 +31,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ViewStyle } from 'react-native';
 
 import { fetchProfileStats } from '../../mod-profile-history/history-service';
@@ -50,6 +51,7 @@ import {
 import { supabase } from '../../../lib/supabase';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
@@ -108,7 +110,9 @@ export default function UserProfileScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, screenMargin);
+  const insets = useSafeAreaInsets();
+  const tabInset = useTabBarInset();
+  const styles = makeStyles(theme, screenMargin, insets.top);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [counts, setCounts] = useState<FollowerCounts>({ follower_count: 0, following_count: 0 });
@@ -306,6 +310,22 @@ export default function UserProfileScreen({
   // 44pt IconButtons carry a 24pt glyph: pull them outward so the glyphs align to the margin.
   const glyphInset = (theme.layout.minTouchTarget - theme.iconSize.lg) / 2;
 
+  // Header (§30): back + title + "⋯" trailing. NOTE: AppShell mounts this screen as an overlay OUTSIDE
+  // any AppHeaderTabScope, so the hook is a no-op there; the overlay keeps its own "⋯" row and a safe
+  // top inset (below) until the overlay is wrapped in a tab scope.
+  useAppHeader({
+    title: profile?.display_name ?? '',
+    onBack,
+    trailing: !isOwnProfile && (!isProfileBlocked || isBlockedByMe) ? (
+      <IconButton
+        variant="float"
+        name={ICON.more.outline}
+        accessibilityLabel={t('socialFeed.moreOptions')}
+        onPress={() => { setSheetVisible(true); }}
+      />
+    ) : undefined,
+  });
+
   const renderMore = (style: ViewStyle): React.JSX.Element => (
     <View style={style}>
       {/* AC-150: three-dots icon, only for !isOwnProfile */}
@@ -373,7 +393,8 @@ export default function UserProfileScreen({
     <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible && !showReel}>
       <ScrollView
         style={styles.root}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom }]}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         showsVerticalScrollIndicator={false}
       >
         {/* Dots icon; back + title are the AppShell nested header (§30) */}
@@ -624,6 +645,7 @@ function ActionSheet({
 function makeStyles(
   theme: ReturnType<typeof useTheme>['theme'],
   screenMargin: number,
+  topInset: number,
 ) {
   return StyleSheet.create({
     root: {
@@ -631,7 +653,7 @@ function makeStyles(
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: theme.spacing.sm,
+      paddingTop: topInset + theme.spacing.sm,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
@@ -653,7 +675,7 @@ function makeStyles(
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'flex-end',
-      paddingTop: theme.spacing.sm,
+      paddingTop: topInset + theme.spacing.sm,
       paddingHorizontal: screenMargin,
     },
     profileUnavailableText: {
