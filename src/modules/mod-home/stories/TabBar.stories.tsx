@@ -1,30 +1,33 @@
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import TabBar from '../components/TabBar';
+import type { TabKey } from '../components/TabBar';
 
 // Off-spec design tooling. Fake data only.
-const meta: Meta<typeof TabBar> = {
+type Args = { activeTab: TabKey; bottomInset: number };
+
+function Demo({ activeTab, bottomInset }: Args): React.JSX.Element {
+  const [tab, setTab] = useState<TabKey>(activeTab);
+  useEffect(() => setTab(activeTab), [activeTab]);
+  return (
+    <View style={{ width: 375 }}>
+      <TabBar activeTab={tab} onTabPress={setTab} bottomInset={bottomInset} />
+    </View>
+  );
+}
+
+const meta: Meta<Args> = {
   title: 'Home/TabBar',
-  component: TabBar,
-  decorators: [
-    (Story) => (
-      <View style={{ width: 375 }}>
-        <Story />
-      </View>
-    ),
-  ],
-  args: { activeTab: 'home', bottomInset: 0, onTabPress: () => {} },
+  component: Demo,
+  args: { activeTab: 'home', bottomInset: 0 },
   argTypes: {
     activeTab: { control: 'inline-radio', options: ['home', 'gyms', 'profile'] },
-    bottomInset: { control: { type: 'number', min: 0, max: 60 } },
+    bottomInset: { control: { type: 'number', min: 0, max: 60 }, description: 'Home-indicator inset; padding is max(inset, 8)' },
   },
 };
 export default meta;
-type Story = StoryObj<typeof TabBar>;
 
-export const HomeActive: Story = { args: { activeTab: 'home' } };
-export const GymsActive: Story = { args: { activeTab: 'gyms' } };
-export const ProfileActive: Story = { args: { activeTab: 'profile' } };
-export const WithHomeIndicatorInset: Story = { args: { activeTab: 'home', bottomInset: 34 } };
+/** Tap the tabs (icon 0.9 -> 1 + colour cross-fade; changing the activeTab control does not animate), tap the active tab again, set bottomInset 34. */
+export const Playground: StoryObj<Args> = {};

@@ -44,6 +44,10 @@
  * Climber profile overlay (onSelectClimber / AC-182):
  *   Tapping a following-activity row opens UserProfileScreen as an overlay.
  *
+ * Feedback hosts (design system v1.2, MIGRATION.md §3):
+ *   ToastProvider and CelebrationHost are mounted exactly once, here, above the tab bar and all
+ *   screens/overlays. Toasts sit `tabBarHeight + toastOffsetAboveTabBar` above the bottom edge.
+ *
  * Cross-module imports:
  *   - GymNavigator from mod-gym-directory (public entry-point component).
  *   - ProfileNavigator from mod-auth-profile (public entry-point component).
@@ -60,6 +64,9 @@ import React, { useCallback, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CelebrationHost } from '../../components/ui/CelebrationHost';
+import { ToastProvider } from '../../components/ui/Toast';
+import { useTheme } from '../../lib/theme';
 import { UnreadCountProvider } from '../mod-notifications/UnreadCountProvider';
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
 import GymNavigator from '../mod-gym-directory/GymNavigator';
@@ -104,6 +111,12 @@ const styles = StyleSheet.create({
 export default function AppShell({ session }: AppShellProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+
+  /** Measured TabBar height — toasts float `toastOffsetAboveTabBar` above it. */
+  const [tabBarHeight, setTabBarHeight] = useState<number | null>(null);
+  const toastBottomOffset =
+    tabBarHeight === null ? undefined : tabBarHeight + theme.componentSize.toastOffsetAboveTabBar;
 
   /** Non-null while a climber profile overlay is open (AC-182). */
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
@@ -188,93 +201,98 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
 
   return (
     <UnreadCountProvider session={session}>
-      <View style={styles.root}>
-        {/* Global app-level header (AC-184) — above tab content on all non-exempt screens */}
-        <AppHeader
-          onNavigateToNotifications={handleNavigateToNotifications}
-          onNavigateToSettings={handleNavigateToSettings}
-          topInset={insets.top}
-        />
-
-        <View style={styles.tabContentArea}>
-          {/* Tab 1 — Home */}
-          <View style={[styles.tabContent, activeTab !== 'home' && styles.hidden]}>
-            <HomeNavigator
-              session={session}
-              isActive={activeTab === 'home'}
-              onViewAllGyms={handleViewAllGyms}
-              onSelectGym={handleSelectGym}
-              onSelectRoute={handleSelectRoute}
-              onSelectClimber={handleSelectClimber}
+      <ToastProvider bottomOffset={toastBottomOffset}>
+        <CelebrationHost>
+          <View style={styles.root}>
+            {/* Global app-level header (AC-184) — above tab content on all non-exempt screens */}
+            <AppHeader
               onNavigateToNotifications={handleNavigateToNotifications}
               onNavigateToSettings={handleNavigateToSettings}
+              topInset={insets.top}
             />
-          </View>
 
-          {/* Tab 2 — Gyms */}
-          <View style={[styles.tabContent, activeTab !== 'gyms' && styles.hidden]}>
-            <GymNavigator
-              session={session}
-              initialGymId={selectedGymId}
-              gymNavKey={gymNavKey}
-              initialRoutesGymId={selectedRoutesGymId}
-              initialRoutesGymName={selectedRoutesGymName}
-              routesNavKey={routesNavKey}
-              routeDeepLinkId={routeDeepLinkId}
-              gymDeepLinkId={gymDeepLinkId}
-              routeNavKey={routeNavKey}
-              onNavigateToUser={handleSelectClimber}
+            <View style={styles.tabContentArea}>
+              {/* Tab 1 — Home */}
+              <View style={[styles.tabContent, activeTab !== 'home' && styles.hidden]}>
+                <HomeNavigator
+                  session={session}
+                  isActive={activeTab === 'home'}
+                  onViewAllGyms={handleViewAllGyms}
+                  onSelectGym={handleSelectGym}
+                  onSelectRoute={handleSelectRoute}
+                  onSelectClimber={handleSelectClimber}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                />
+              </View>
+
+              {/* Tab 2 — Gyms */}
+              <View style={[styles.tabContent, activeTab !== 'gyms' && styles.hidden]}>
+                <GymNavigator
+                  session={session}
+                  initialGymId={selectedGymId}
+                  gymNavKey={gymNavKey}
+                  initialRoutesGymId={selectedRoutesGymId}
+                  initialRoutesGymName={selectedRoutesGymName}
+                  routesNavKey={routesNavKey}
+                  routeDeepLinkId={routeDeepLinkId}
+                  gymDeepLinkId={gymDeepLinkId}
+                  routeNavKey={routeNavKey}
+                  onNavigateToUser={handleSelectClimber}
+                />
+              </View>
+
+              {/* Tab 3 — Profile */}
+              <View style={[styles.tabContent, activeTab !== 'profile' && styles.hidden]}>
+                <ProfileNavigator
+                  session={session}
+                  isActive={activeTab === 'profile'}
+                  onNavigateToRoute={handleNavigateToRoute}
+                  onNavigateToUser={handleSelectClimber}
+                />
+              </View>
+            </View>
+
+            <TabBar
+              activeTab={activeTab}
+              onTabPress={setActiveTab}
+              bottomInset={insets.bottom}
+              onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}
             />
-          </View>
 
-          {/* Tab 3 — Profile */}
-          <View style={[styles.tabContent, activeTab !== 'profile' && styles.hidden]}>
-            <ProfileNavigator
-              session={session}
-              isActive={activeTab === 'profile'}
-              onNavigateToRoute={handleNavigateToRoute}
-              onNavigateToUser={handleSelectClimber}
-            />
-          </View>
-        </View>
+            {/* Climber profile overlay (AC-182) */}
+            {targetUserId !== null && (
+              <View style={styles.overlayContainer}>
+                <UserProfileScreen
+                  targetUserId={targetUserId}
+                  session={session}
+                  onBack={handleClimberProfileBack}
+                />
+              </View>
+            )}
 
-        <TabBar
-          activeTab={activeTab}
-          onTabPress={setActiveTab}
-          bottomInset={insets.bottom}
-        />
+            {/* Notifications overlay (AC-184) */}
+            {notificationsOpen && (
+              <View style={styles.overlayContainer}>
+                <NotificationsNavigator
+                  session={session}
+                  initialView="inbox"
+                  isActive={notificationsOpen}
+                  onBack={handleNotificationsBack}
+                  onNavigateToUser={handleSelectClimber}
+                />
+              </View>
+            )}
 
-        {/* Climber profile overlay (AC-182) */}
-        {targetUserId !== null && (
-          <View style={styles.overlayContainer}>
-            <UserProfileScreen
-              targetUserId={targetUserId}
-              session={session}
-              onBack={handleClimberProfileBack}
-            />
+            {/* Settings overlay (AC-184) */}
+            {settingsOpen && (
+              <View style={styles.overlayContainer}>
+                <SettingsScreen onBack={handleSettingsBack} />
+              </View>
+            )}
           </View>
-        )}
-
-        {/* Notifications overlay (AC-184) */}
-        {notificationsOpen && (
-          <View style={styles.overlayContainer}>
-            <NotificationsNavigator
-              session={session}
-              initialView="inbox"
-              isActive={notificationsOpen}
-              onBack={handleNotificationsBack}
-              onNavigateToUser={handleSelectClimber}
-            />
-          </View>
-        )}
-
-        {/* Settings overlay (AC-184) */}
-        {settingsOpen && (
-          <View style={styles.overlayContainer}>
-            <SettingsScreen onBack={handleSettingsBack} />
-          </View>
-        )}
-      </View>
+        </CelebrationHost>
+      </ToastProvider>
     </UnreadCountProvider>
   );
 }

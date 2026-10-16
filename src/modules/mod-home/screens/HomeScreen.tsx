@@ -36,18 +36,21 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 
 import RouteCard from '../../../components/RouteCard';
+import { AppText } from '../../../components/ui/AppText';
+import { Avatar } from '../../../components/ui/Avatar';
+import { Button } from '../../../components/ui/Button';
+import { Card } from '../../../components/ui/Card';
+import { Chip } from '../../../components/ui/Chip';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { PressableScale } from '../../../components/ui/PressableScale';
+import { useToast } from '../../../components/ui/Toast';
+import { ICON } from '../../../lib/icons';
+import { useMotion } from '../../../lib/motion';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { fetchSavedRouteIds, saveRoute, unsaveRoute } from '../../mod-route-catalog/route-service';
 import type { RouteGrade } from '../../mod-route-catalog/types';
 import { fetchUserAchievements } from '../../mod-send-logging';
@@ -177,7 +180,11 @@ export default function HomeScreen({
 }: HomeScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { screenMargin } = useLayout();
+  const { haptic } = useMotion();
+  const toast = useToast();
+  const c = theme.colors;
+  const styles = makeStyles(theme, screenMargin);
 
   // ── Section 1: Admin Events Banner ────────────────────────────────────────
 
@@ -529,7 +536,47 @@ export default function HomeScreen({
     return projectingRoutes.filter((r) => r.grade === selectedGrade);
   }, [projectingRoutes, selectedGrade]);
 
+  // ── Bookmark toggle (optimistic, reverts + error toast on failure) ─────────
+
+  function toggleProjectingBookmark(routeId: string): void {
+    const isCurrentlySaved = savedProjectingIds.has(routeId);
+    // Optimistic update.
+    setSavedProjectingIds((prev) => {
+      const next = new Set(prev);
+      if (isCurrentlySaved) {
+        next.delete(routeId);
+      } else {
+        next.add(routeId);
+      }
+      return next;
+    });
+    // Persist to backend; revert on failure.
+    const persist = isCurrentlySaved ? unsaveRoute(routeId) : saveRoute(routeId);
+    persist.catch(() => {
+      setSavedProjectingIds((prev) => {
+        const revert = new Set(prev);
+        if (isCurrentlySaved) {
+          revert.add(routeId);
+        } else {
+          revert.delete(routeId);
+        }
+        return revert;
+      });
+      haptic('error', `bookmark-${routeId}`);
+      toast.show({ message: t('home.projectingRoutes.bookmarkFailed'), tone: 'error' });
+    });
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
+
+  const sectionHeader = (title: string, action?: React.ReactNode): React.JSX.Element => (
+    <View style={styles.sectionHeader}>
+      <AppText variant="headline" accessibilityRole="header">
+        {title}
+      </AppText>
+      {action}
+    </View>
+  );
 
   return (
     <ScrollView
@@ -540,13 +587,13 @@ export default function HomeScreen({
       {/* ── Section 1: Events Banner (AC-112, AC-174) ─────────────────── */}
       {/* Section is NEVER hidden in Phase 1 (AC-112 Rev 38). When no active    */}
       {/* banner exists (and loading is complete), a placeholder card is shown. */}
-      <View style={[styles.section, styles.bannerSection]}>
+      <View style={styles.section}>
         {!bannerLoading && activeBanner === null ? (
-          <View style={styles.bannerPlaceholderCard}>
-            <Text style={styles.bannerPlaceholderText}>
+          <Card variant="static" style={styles.bannerPlaceholderCard}>
+            <AppText variant="subhead" color="textSecondary" align="center">
               {t('home.banner.noEvents')}
-            </Text>
-          </View>
+            </AppText>
+          </Card>
         ) : (
           activeBanner !== null && (
             <View style={styles.bannerCard}>
@@ -556,16 +603,19 @@ export default function HomeScreen({
                   style={styles.bannerImage}
                   resizeMode="cover"
                   accessibilityLabel={activeBanner.title}
+                  accessibilityIgnoresInvertColors
                 />
               ) : (
                 <View style={styles.bannerImagePlaceholder} />
               )}
               <View style={styles.bannerOverlay}>
-                <Text style={styles.bannerTitle}>{activeBanner.title}</Text>
+                <AppText variant="headline" color="onMedia">
+                  {activeBanner.title}
+                </AppText>
                 {activeBanner.body.length > 0 && (
-                  <Text style={styles.bannerBody} numberOfLines={2}>
+                  <AppText variant="subhead" color="onMedia" numberOfLines={2}>
                     {activeBanner.body}
-                  </Text>
+                  </AppText>
                 )}
               </View>
             </View>
@@ -575,20 +625,19 @@ export default function HomeScreen({
 
       {/* ── Section 2: Saved Gyms (AC-113, AC-114, AC-115, AC-175, AC-176) */}
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('home.savedGyms.title')}</Text>
-          <Pressable
+        {sectionHeader(
+          t('home.savedGyms.title'),
+          <Button
+            variant="ghost"
+            size="sm"
+            on="background"
+            label={t('home.savedGyms.viewAll')}
             onPress={onViewAllGyms}
-            accessibilityRole="button"
-            accessibilityLabel={t('home.savedGyms.viewAll')}
-            hitSlop={8}
-          >
-            <Text style={styles.viewAllText}>{t('home.savedGyms.viewAll')}</Text>
-          </Pressable>
-        </View>
+          />,
+        )}
 
         {!savedGymsLoading && savedGyms.length === 0 ? (
-          <Text style={styles.emptyText}>{t('home.savedGyms.empty')}</Text>
+          <EmptyState variant="inline" description={t('home.savedGyms.empty')} style={styles.inset} />
         ) : (
           <ScrollView
             horizontal
@@ -596,8 +645,9 @@ export default function HomeScreen({
             contentContainerStyle={styles.gymStripRow}
           >
             {savedGyms.map((gym) => (
-              <Pressable
+              <PressableScale
                 key={gym.id}
+                pressedColor={c.surfaceAltPressed}
                 style={styles.gymChip}
                 onPress={() => onSelectGym(gym.id, gym.name)}
                 accessibilityRole="button"
@@ -608,14 +658,15 @@ export default function HomeScreen({
                     source={{ uri: gym.photo_url }}
                     style={styles.gymChipImage}
                     resizeMode="cover"
+                    accessibilityIgnoresInvertColors
                   />
                 ) : (
                   <View style={styles.gymChipImagePlaceholder} />
                 )}
-                <Text style={styles.gymChipName} numberOfLines={2}>
+                <AppText variant="caption1" align="center" numberOfLines={2}>
                   {gym.name}
-                </Text>
-              </Pressable>
+                </AppText>
+              </PressableScale>
             ))}
           </ScrollView>
         )}
@@ -623,43 +674,30 @@ export default function HomeScreen({
 
       {/* ── Section 3: Projecting Routes (AC-177, AC-178, AC-181) ─────── */}
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('home.projectingRoutes.title')}</Text>
-        </View>
+        {sectionHeader(t('home.projectingRoutes.title'))}
 
-        {/* Grade filter tabs (AC-178) */}
+        {/* Grade filter chips (AC-178): single choice */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.gradeTabsRow}
+          accessibilityRole="radiogroup"
         >
           {availableGrades.map((grade) => (
-            <Pressable
+            <Chip
               key={grade}
-              style={[
-                styles.gradeTab,
-                selectedGrade === grade && styles.gradeTabActive,
-              ]}
+              variant="choice"
+              label={grade === ALL_GRADE_FILTER ? t('home.projectingRoutes.allGrades') : grade}
+              selected={selectedGrade === grade}
               onPress={() => setSelectedGrade(grade)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: selectedGrade === grade }}
-            >
-              <Text
-                style={[
-                  styles.gradeTabText,
-                  selectedGrade === grade && styles.gradeTabTextActive,
-                ]}
-              >
-                {grade === ALL_GRADE_FILTER ? t('home.projectingRoutes.allGrades') : grade}
-              </Text>
-            </Pressable>
+            />
           ))}
         </ScrollView>
 
         {!projectingLoading && projectingRoutes.length === 0 ? (
-          <Text style={styles.emptyText}>{t('home.projectingRoutes.empty')}</Text>
+          <EmptyState variant="inline" description={t('home.projectingRoutes.empty')} style={styles.inset} />
         ) : !projectingLoading && filteredRoutes.length === 0 ? (
-          <Text style={styles.emptyText}>{t('home.projectingRoutes.emptyFiltered')}</Text>
+          <EmptyState variant="inline" description={t('home.projectingRoutes.emptyFiltered')} style={styles.inset} />
         ) : (
           <View style={styles.routeList}>
             {filteredRoutes.map((route) => {
@@ -678,6 +716,7 @@ export default function HomeScreen({
                     grade: route.grade,
                     photo_url: route.photo_url,
                     gymName: route.gym_name ?? undefined,
+                    colorTag: route.color_tag,
                   }}
                   onPress={() => onSelectRoute(route.id, route.gym_id)}
                   // TODO: replace with fetchBetaVideoCounts once MOD-003 migration is shipped (AC-189)
@@ -685,34 +724,7 @@ export default function HomeScreen({
                   hasSend={hasSend}
                   sendStyle={sendStyle}
                   isSaved={savedProjectingIds.has(route.id)}
-                  onBookmarkToggle={() => {
-                    const isCurrentlySaved = savedProjectingIds.has(route.id);
-                    // Optimistic update.
-                    setSavedProjectingIds((prev) => {
-                      const next = new Set(prev);
-                      if (isCurrentlySaved) {
-                        next.delete(route.id);
-                      } else {
-                        next.add(route.id);
-                      }
-                      return next;
-                    });
-                    // Persist to backend; revert on failure.
-                    const persist = isCurrentlySaved
-                      ? unsaveRoute(route.id)
-                      : saveRoute(route.id);
-                    persist.catch(() => {
-                      setSavedProjectingIds((prev) => {
-                        const revert = new Set(prev);
-                        if (isCurrentlySaved) {
-                          revert.add(route.id);
-                        } else {
-                          revert.delete(route.id);
-                        }
-                        return revert;
-                      });
-                    });
-                  }}
+                  onBookmarkToggle={() => toggleProjectingBookmark(route.id)}
                 />
               );
             })}
@@ -722,49 +734,43 @@ export default function HomeScreen({
 
       {/* ── Section 4: Following Activity (AC-182) ─────────────────────── */}
       <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>{t('home.followingActivity.title')}</Text>
-        </View>
+        {sectionHeader(t('home.followingActivity.title'))}
 
         {!followingLoading && followingActivity.length === 0 ? (
-          <Text style={styles.emptyText}>{t('home.followingActivity.empty')}</Text>
+          <EmptyState variant="inline" description={t('home.followingActivity.empty')} style={styles.inset} />
         ) : (
-          <View>
-            {followingActivity.map((item) => (
-              <Pressable
+          <View style={styles.activityList}>
+            {followingActivity.map((item, index) => (
+              <PressableScale
                 key={item.userId}
-                style={styles.activityRow}
+                feedback="row"
+                inScroll
+                pressedColor={c.surfacePressed}
+                style={[
+                  styles.activityRow,
+                  index < followingActivity.length - 1 && styles.activityRowDivider,
+                ]}
                 onPress={() => onSelectClimber(item.userId)}
                 accessibilityRole="button"
                 accessibilityLabel={item.displayName}
               >
-                {/* Avatar */}
-                {item.avatarUrl !== null ? (
-                  <Image
-                    source={{ uri: item.avatarUrl }}
-                    style={styles.activityAvatar}
-                    resizeMode="cover"
-                    accessibilityLabel={item.displayName}
-                  />
-                ) : (
-                  <View style={styles.activityAvatarPlaceholder} />
-                )}
+                <Avatar size="md" uri={item.avatarUrl} name={item.displayName} decorative />
 
                 {/* Info */}
                 <View style={styles.activityInfo}>
-                  <Text style={styles.activityName} numberOfLines={1}>
+                  <AppText variant="headline" numberOfLines={1}>
                     {item.displayName}
-                  </Text>
-                  <Text style={styles.activityLabel}>
+                  </AppText>
+                  <AppText variant="footnote" color="textSecondary">
                     {t('home.following.newUpload')}
-                  </Text>
+                  </AppText>
                   {item.latestAt !== null && (
-                    <Text style={styles.activityTime}>
+                    <AppText variant="caption1" color="textSecondary">
                       {relativeTime(item.latestAt, t)}
-                    </Text>
+                    </AppText>
                   )}
                 </View>
-              </Pressable>
+              </PressableScale>
             ))}
           </View>
         )}
@@ -775,63 +781,44 @@ export default function HomeScreen({
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
+  const c = theme.colors;
   return StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: theme.colors.background,
+      backgroundColor: c.background,
     },
     contentContainer: {
       paddingTop: theme.spacing.md,
       paddingBottom: theme.spacing.xl,
     },
     section: {
-      marginBottom: theme.spacing.lg,
+      marginBottom: theme.layout.sectionGap,
     },
-    bannerSection: {
-      backgroundColor: theme.colors.surface,
+    inset: {
+      paddingHorizontal: screenMargin,
     },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: theme.spacing.md,
-      marginBottom: theme.spacing.sm,
-    },
-    sectionTitle: {
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    viewAllText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.primary,
-    },
-    emptyText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      paddingHorizontal: theme.spacing.md,
+      minHeight: theme.layout.minTouchTarget,
+      paddingHorizontal: screenMargin,
+      marginBottom: theme.layout.sectionHeaderGap,
     },
     // ── Banner ──────────────────────────────────────────────────────────────
     bannerPlaceholderCard: {
-      marginHorizontal: theme.spacing.md,
-      height: 160,
-      borderRadius: theme.borderRadius.lg,
-      backgroundColor: theme.colors.surface,
+      marginHorizontal: screenMargin,
+      minHeight: 160,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    bannerPlaceholderText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
     bannerCard: {
-      marginHorizontal: theme.spacing.md,
+      marginHorizontal: screenMargin,
       height: 160,
       borderRadius: theme.borderRadius.lg,
       overflow: 'hidden',
-      backgroundColor: theme.colors.surface,
+      backgroundColor: c.surfaceAlt,
     },
     bannerImage: {
       width: '100%',
@@ -840,35 +827,27 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     bannerImagePlaceholder: {
       width: '100%',
       height: '100%',
-      backgroundColor: theme.colors.surface,
+      backgroundColor: c.surfaceAlt,
     },
     bannerOverlay: {
       position: 'absolute',
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: theme.colors.overlay,
+      backgroundColor: c.overlay,
       paddingHorizontal: theme.spacing.md,
       paddingVertical: theme.spacing.sm,
     },
-    bannerTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
-    bannerBody: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textInverse,
-      marginTop: 2,
-    },
     // ── Saved Gyms ──────────────────────────────────────────────────────────
     gymStripRow: {
-      paddingHorizontal: theme.spacing.md,
-      gap: theme.spacing.sm,
+      paddingHorizontal: screenMargin,
+      columnGap: theme.layout.inlineGap,
     },
     gymChip: {
       width: 96,
       alignItems: 'center',
+      borderRadius: theme.borderRadius.md,
+      paddingBottom: theme.spacing.xs,
     },
     gymChipImage: {
       width: 80,
@@ -880,81 +859,44 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       width: 80,
       height: 80,
       borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: c.surfaceAlt,
       marginBottom: theme.spacing.xs,
     },
-    gymChipName: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textPrimary,
-      textAlign: 'center',
-    },
-    // ── Grade Filter Tabs ────────────────────────────────────────────────────
+    // ── Grade filter chips ──────────────────────────────────────────────────
     gradeTabsRow: {
-      paddingHorizontal: theme.spacing.md,
-      gap: theme.spacing.xs,
-      marginBottom: theme.spacing.sm,
-    },
-    gradeTab: {
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: theme.spacing.xs,
-      borderRadius: theme.borderRadius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    gradeTabActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primary,
-    },
-    gradeTabText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textSecondary,
-    },
-    gradeTabTextActive: {
-      color: theme.colors.textInverse,
+      paddingHorizontal: screenMargin,
+      // Chips carry 6pt hitSlop above and below: leave room so the ScrollView does not clip it.
+      paddingVertical: theme.spacing.sm,
+      columnGap: theme.layout.inlineGap,
     },
     // ── Projecting Routes ────────────────────────────────────────────────────
     routeList: {
-      paddingHorizontal: theme.spacing.md,
+      paddingHorizontal: screenMargin,
+      rowGap: theme.layout.cardGap,
     },
     // ── Following Activity ───────────────────────────────────────────────────
+    activityList: {
+      marginHorizontal: screenMargin,
+      backgroundColor: c.surface,
+      borderRadius: theme.borderRadius.lg,
+      overflow: 'hidden',
+      borderWidth: theme.isDark ? theme.stroke.thin : 0,
+      borderColor: c.border,
+    },
     activityRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
+      columnGap: theme.spacing.smd,
+      minHeight: theme.layout.minTouchTarget,
+      paddingHorizontal: theme.layout.cardPadding,
+      paddingVertical: theme.layout.listRowPaddingV,
+    },
+    activityRowDivider: {
       borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.divider,
-    },
-    activityAvatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      marginRight: theme.spacing.sm,
-    },
-    activityAvatarPlaceholder: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: theme.colors.surface,
-      marginRight: theme.spacing.sm,
+      borderBottomColor: c.divider,
     },
     activityInfo: {
       flex: 1,
-    },
-    activityName: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    activityLabel: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    activityTime: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
     },
   });
 }

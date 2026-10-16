@@ -3392,3 +3392,15 @@ Pressable (card, flexDirection: 'row', alignItems: 'center')
 
 ### Storybook stories (off-spec design tooling)
 Added `src/modules/mod-home/stories/{RouteCard,AppHeader,TabBar}.stories.tsx` on branch `design/storybook`. This is off-spec design tooling requested by the UI/UX designer, pending PR review. No component source changed; fake data only (Supabase stubbed).
+
+### Design system v1.2 applied (off-spec design work, pending PR review) — 2026-10-16
+Visual + motion only. No service, API, DB or flow changes. No illustrations, no `expo-haptics` (uses `useMotion().haptic` stub).
+
+- **RouteCard** (`src/components/RouteCard.tsx`, §32.1): PRD layout (AC-183/192) — 80x80 thumbnail on the right; name, non-tappable flash/top status icon, beta count and bookmark in the left column. Grade not drawn; VoiceOver label = grade, colour, name, gym, status, beta count. Gym name is no longer drawn (spec). Card body (`PressableScale` row feedback, `inScroll`) and bookmark are siblings (no nested buttons, no stopPropagation). Bookmark = `IconButton` toggle with the C9 pop motion and haptic stub. Placeholder = tape fill via `resolveTape` (falls back to `surfaceAlt`). `FLASH_BADGE_COLOR` replaced by `sendFlash`/`sendTop`. Play disc (accentIllustration) when beta >= 1. AX layout at fontScale >= 1.6. New optional `route.colorTag`.
+- **AppHeader** (§30/§32.3): Ionicons from `ICON`, 44pt content height, `IconButton on="background"`, unread via IconButton `badge`; new optional `badgeLive` prop.
+- **TabBar** (§29/§32.4): caption1 labels, filled/outline icons, `Math.max(insets.bottom, sm)`, localized a11y labels (`tabs.*`), tablist role, large-content viewer, tap-only icon scale + colour cross-fade; map icon -> location.
+- **AppShell**: mounts `ToastProvider` (`bottomOffset` = measured tab bar height + 8) and `CelebrationHost` once.
+- **HomeScreen**: `AppText`, `useLayout().screenMargin`, Chip (grade filter), Button ghost (View all), `EmptyState inline`, `Avatar`, `surface`/`surfaceAlt` migration, `onMedia` banner text; bookmark failure now reverts + error toast + haptic (`home.projectingRoutes.bookmarkFailed`).
+- **Locales**: `tabs.*`, `routeCard.openHint/statusFlash/statusTop`, `home.projectingRoutes.bookmarkFailed`.
+- **Stories**: one Controls-driven `Playground` each for RouteCard / AppHeader / TabBar, plus `RouteCard/List`.
+- **Not done**: tab re-tap scroll-to-top (needs a navigator-level API / behaviour change); Skeleton loading states on HomeScreen.

@@ -39,20 +39,17 @@ const meta: Meta<Args> = {
   args: {
     unreadCount: 0,
     topInset: 0,
+    badgeLive: false,
     onNavigateToNotifications: () => {},
     onNavigateToSettings: () => {},
   },
   argTypes: {
-    unreadCount: { control: { type: 'number', min: 0, max: 150 } },
-    topInset: { control: { type: 'number', min: 0, max: 80 } },
+    unreadCount: { control: { type: 'number', min: 0, max: 150 }, description: '0 hides the badge; 100+ shows 99+' },
+    topInset: { control: { type: 'number', min: 0, max: 80 }, description: 'Safe-area top (notch ~47); content height stays 44' },
+    badgeLive: { control: 'boolean', description: 'On: the badge pops in (topOut) like a foreground push. Off: fades in like a launch / refresh' },
   },
 };
 export default meta;
-type Story = StoryObj<Args>;
 
-export const NoUnread: Story = {};
-export const OneUnread: Story = { args: { unreadCount: 1 } };
-export const FewUnread: Story = { args: { unreadCount: 7 } };
-export const DoubleDigit: Story = { args: { unreadCount: 42 } };
-export const Over99: Story = { args: { unreadCount: 120 } };
-export const WithTopInsetNotch: Story = { args: { unreadCount: 3, topInset: 47 } };
+/** Change unreadCount (0, 1, 7, 42, 120), toggle badgeLive, press the bell / gear (disc on the sand background), raise topInset for a notch. */
+export const Playground: StoryObj<Args> = {};

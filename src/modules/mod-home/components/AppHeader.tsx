@@ -20,21 +20,23 @@
  *   Applies the top inset passed from AppShell (derived from useSafeAreaInsets()
  *   at the AppShell level so the header can reserve the correct space).
  *
+ * Design system v1.2 (§30 / §32.3): Ionicons from ICON (no emoji), 44pt content height,
+ * IconButtons with `on="background"` (pressed disc = surfaceAltPressed), unread count via the
+ * IconButton `badge` (Badge §15.9, which owns the 99+ cap and its motion).
+ *
  * Theme tokens — no hardcoded hex colors.
  * i18n for all accessible labels.
  */
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
+import { AppText } from '../../../components/ui/AppText';
+import { IconButton } from '../../../components/ui/IconButton';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { useUnreadCount } from '../../mod-notifications/UnreadCountProvider';
-import { useTheme } from '../../../lib/theme';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,12 +45,12 @@ export interface AppHeaderProps {
   onNavigateToSettings: () => void;
   /** Top safe-area inset applied as paddingTop (passed from AppShell). */
   topInset: number;
+  /**
+   * The unread number just arrived as a live notification while the app is in the foreground:
+   * the badge pops in with `topOut`. Default false (launch / resume / refresh: fades in).
+   */
+  badgeLive?: boolean;
 }
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-/** Maximum badge count displayed numerically; shows "99+" above this. */
-const MAX_BADGE_COUNT = 99;
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
@@ -56,103 +58,75 @@ export default function AppHeader({
   onNavigateToNotifications,
   onNavigateToSettings,
   topInset,
+  badgeLive = false,
 }: AppHeaderProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
+  const { screenMargin } = useLayout();
   const unreadCount = useUnreadCount();
-  const styles = makeStyles(theme, topInset);
-
-  const badgeLabel =
-    unreadCount > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : String(unreadCount);
 
   return (
-    <View style={styles.header}>
-      {/* Bell icon — left side */}
-      <Pressable
-        style={styles.iconButton}
-        onPress={onNavigateToNotifications}
-        accessibilityRole="button"
-        accessibilityLabel={
-          unreadCount > 0
-            ? t('home.appHeader.bellA11yUnread', { count: unreadCount })
-            : t('home.appHeader.bellA11y')
-        }
-        hitSlop={8}
-      >
-        {/* Bell glyph — simple text placeholder matching icon convention */}
-        <Text style={styles.iconText}>{'🔔'}</Text>
-        {unreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{badgeLabel}</Text>
-          </View>
-        )}
-      </Pressable>
+    <View
+      style={[
+        styles.header,
+        {
+          paddingTop: topInset,
+          // The 44pt IconButton container sits at screenMargin - 10 so the glyph aligns to the margin.
+          paddingHorizontal: screenMargin - 10,
+          backgroundColor: theme.colors.background,
+          borderBottomWidth: theme.stroke.hairline,
+          borderBottomColor: theme.colors.border,
+        },
+      ]}
+    >
+      <View style={[styles.content, { minHeight: theme.layout.headerContentHeight }]}>
+        {/* Bell — left */}
+        <IconButton
+          name={ICON.notifications.outline}
+          on="background"
+          badge={unreadCount}
+          badgeLive={badgeLive}
+          accessibilityLabel={
+            unreadCount > 0
+              ? t('home.appHeader.bellA11yUnread', { count: unreadCount })
+              : t('home.appHeader.bellA11y')
+          }
+          onPress={onNavigateToNotifications}
+        />
 
-      {/* App name — centre */}
-      <Text style={styles.appName}>{t('app.name')}</Text>
+        {/* App name — centre (max width = screen width - 2 x (margin - 10 + 44)) */}
+        <AppText
+          variant="headline"
+          align="center"
+          numberOfLines={1}
+          accessibilityRole="header"
+          style={styles.title}
+        >
+          {t('app.name')}
+        </AppText>
 
-      {/* Settings icon — right side */}
-      <Pressable
-        style={styles.iconButton}
-        onPress={onNavigateToSettings}
-        accessibilityRole="button"
-        accessibilityLabel={t('home.appHeader.settingsA11y')}
-        hitSlop={8}
-      >
-        <Text style={styles.iconText}>{'⚙️'}</Text>
-      </Pressable>
+        {/* Settings — right */}
+        <IconButton
+          name={ICON.settings.outline}
+          on="background"
+          accessibilityLabel={t('home.appHeader.settingsA11y')}
+          onPress={onNavigateToSettings}
+        />
+      </View>
     </View>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-function makeStyles(
-  theme: ReturnType<typeof useTheme>['theme'],
-  topInset: number,
-) {
-  return StyleSheet.create({
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingTop: topInset + theme.spacing.sm,
-      paddingBottom: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.md,
-      backgroundColor: theme.colors.background,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: theme.colors.border,
-    },
-    iconButton: {
-      width: 40,
-      height: 40,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    iconText: {
-      fontSize: theme.fontSize.xl,
-    },
-    badge: {
-      position: 'absolute',
-      top: 2,
-      right: 2,
-      minWidth: 16,
-      height: 16,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.error,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 3,
-    },
-    badgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textInverse,
-    },
-    appName: {
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-  });
-}
+const styles = StyleSheet.create({
+  header: {},
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    flex: 1,
+  },
+});

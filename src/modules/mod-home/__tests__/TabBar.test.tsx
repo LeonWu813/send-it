@@ -78,4 +78,16 @@ describe('TabBar', () => {
     fireEvent.press(screen.getByLabelText('Profile'));
     expect(onTabPress).toHaveBeenCalledWith('profile');
   });
+
+  it('shows a text label under each icon and a tablist container', () => {
+    render(
+      <TabBar activeTab="home" onTabPress={jest.fn()} bottomInset={0} />,
+      renderOptions(),
+    );
+    expect(screen.UNSAFE_getByProps({ accessibilityRole: 'tablist' })).toBeTruthy();
+    // Labels are visual layers (the tab itself carries the a11y label), so include hidden.
+    for (const label of ['Home', 'Gyms', 'Profile']) {
+      expect(screen.getAllByText(label, { includeHiddenElements: true }).length).toBeGreaterThan(0);
+    }
+  });
 });

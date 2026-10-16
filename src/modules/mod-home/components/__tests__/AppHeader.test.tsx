@@ -33,6 +33,9 @@ const mockUseUnreadCount = UnreadCountProviderModule.useUnreadCount as jest.Mock
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
+// The Badge is hidden from VoiceOver (the bell label carries the count), so query it explicitly.
+const HIDDEN = { includeHiddenElements: true };
+
 describe('AppHeader (AC-184)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -99,7 +102,7 @@ describe('AppHeader (AC-184)', () => {
       />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('5')).toBeTruthy();
+    expect(screen.getByText('5', HIDDEN)).toBeTruthy();
   });
 
   it('renders "99+" badge when unreadCount exceeds 99 (AC-173)', () => {
@@ -112,7 +115,7 @@ describe('AppHeader (AC-184)', () => {
       />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('99+')).toBeTruthy();
+    expect(screen.getByText('99+', HIDDEN)).toBeTruthy();
   });
 
   it('shows unread a11y label when count > 0 (AC-173)', () => {
