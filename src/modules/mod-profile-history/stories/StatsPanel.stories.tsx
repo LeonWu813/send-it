@@ -40,7 +40,7 @@ const meta: Meta<Args> = {
     totalSends: 42,
     accumulatedDays: 18,
     highestGrade: 'V6',
-    counts: '2,8,10,9,7,4,2',
+    counts: '2,8,10,9,7,4,2,1',
   },
   argTypes: {
     empty: { control: 'boolean', description: 'Zero sends: the whole panel becomes the firstUse EmptyState' },

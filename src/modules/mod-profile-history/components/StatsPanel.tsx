@@ -136,9 +136,12 @@ export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Elemen
 
   const countOf = (grade: string): number =>
     stats.sends_by_grade.find((g) => g.grade === grade)?.count ?? 0;
-  const topIndex = Math.max(
-    ...GRADE_ORDER.map((g, i) => (countOf(g) > 0 ? i : -1)),
-  );
+  // Same source as the summary: highest_grade; fall back to the top non-zero count.
+  const summaryTop = GRADE_ORDER.indexOf(stats.highest_grade as (typeof GRADE_ORDER)[number]);
+  const topIndex =
+    summaryTop >= 0
+      ? summaryTop
+      : Math.max(...GRADE_ORDER.map((g, i) => (countOf(g) > 0 ? i : -1)));
   const v0Index = GRADE_ORDER.indexOf('V0');
   // V0 .. highest are always shown (zero = 4pt nub); VB only when it has sends.
   const rows = GRADE_ORDER.map((grade, i) => ({ grade, i, count: countOf(grade) })).filter(
