@@ -16,7 +16,7 @@ import { Appearance, ColorSchemeName, StyleSheet, useWindowDimensions } from 're
 // ─── Color palettes ───────────────────────────────────────────────────────────
 //
 // Source of truth: send-it-design/ux-team/design-system/send-it-design-system.md (v1.1+,
-// supersedes 07-final-design-system.md). Warm sand B neutrals. 57 keys. Both palettes MUST
+// supersedes 07-final-design-system.md). Warm sand B neutrals. 58 keys (v2.2 adds `segmentedThumb`). Both palettes MUST
 // have exactly the same keys (DARK_PALETTE is typed against ThemePalette).
 //
 // Usage rules (07 §2.4):
@@ -24,14 +24,16 @@ import { Appearance, ColorSchemeName, StyleSheet, useWindowDimensions } from 're
 //  2. Purple (`accentIllustration`) is ONLY the beta-video play disc. Never buttons,
 //     selection, text, particles, toasts or pressed states.
 //  3. `sendFlashBright` and `decorChalk` are decoration only (particles) — never text/icons.
-//  4. `toastAction` only on `toastBackground`; `sendTopContainer` only for new-row highlight
-//     and the celebration trophy disc; `secondaryContainer` is the selected-state fill and
-//     always pairs with a 1.5pt `primary` outline.
-//  5. Brand colours are never square-cornered labels (radius 4 + text = route tape only).
+//  4. Selected chip = textPrimary fill + background text (inverted). secondaryContainer =
+//     TabBar selected pill. primary is never a selection fill (CTAs only).
+//     `toastAction` only on `toastBackground`.
+//     sendTopContainer: new-row highlight, celebration disc, and SendStatus (disc/tag) container.
+//  5. Brand colours are never square-cornered labels (radius 6 (RADIUS.tape) + text = route tape only).
 //  6. Pressed feedback never uses opacity — swap to the matching `*Pressed` colour
 //     (`surfacePressed` on surface, `surfaceAltPressed` on background / secondary buttons).
 //  7. Card-less lists (notifications, settings, followers): rows sit on `surface`, not on
 //     the sand `background`.
+//  8. Neutral notices use surfaceAlt; noticeContainer is for real warnings only.
 
 export const LIGHT_PALETTE = {
   // Backgrounds
@@ -45,6 +47,8 @@ export const LIGHT_PALETTE = {
   surfacePressed: '#F1E7D8',
   /** Pressed state on `background` / on `surfaceAlt` (secondary Button). Same value as `border`. */
   surfaceAltPressed: '#D1C5B1',
+  /** SegmentedControl thumb (dark theme also draws a 1pt `outline` ring). */
+  segmentedThumb: '#FFFFFF',
   // Text
   textPrimary: '#201B12',
   textSecondary: '#4E4637',
@@ -124,6 +128,7 @@ export const DARK_PALETTE: ThemePalette = {
   surfaceAlt: '#3A342A',
   surfacePressed: '#3A342A',
   surfaceAltPressed: '#4E4637',
+  segmentedThumb: '#4E4637',
   textPrimary: '#ECE1D3',
   textSecondary: '#D1C5B1',
   textPlaceholder: '#D1C5B1',
@@ -200,7 +205,8 @@ export const LAYOUT = {
   largeWidthBreakpoint: 428,
   cardPadding: 16,
   cardGap: 12,
-  listRowPaddingV: 12,
+  listRowPaddingV: 14,
+  listRowMinHeight: 52,
   sectionGap: 24,
   sectionHeaderGap: 8,
   inlineGap: 8,
@@ -213,7 +219,15 @@ export const LAYOUT = {
   gridColumns: 4,
   gridGutter: 12,
   mediaGridGapFull: 2,
-  mediaGridGapInset: 4,
+  mediaGridGapInset: 2,
+  /** RouteCard inner padding (thumbnail radius = innerRadius(card, 8)). */
+  routeCardPadding: 8,
+  /** Floating BottomSheet inset from the screen edges. */
+  sheetInset: 8,
+  /** Gap between grouped-form fields. */
+  fieldGap: 16,
+  /** Below this width: RouteCard thumb 64, StatsPanel 1:1. */
+  compactWidthBreakpoint: 360,
 } as const;
 
 export const ICON_SIZE = {
@@ -221,7 +235,7 @@ export const ICON_SIZE = {
   sm: 16,
   md: 20,
   lg: 24,
-  tab: 26,
+  tab: 24,
   xl: 28,
 } as const;
 
@@ -232,17 +246,22 @@ export const COMPONENT_SIZE = {
   sheetDragZoneHeight: 24,
   toastMinHeight: 48,
   toastOffsetAboveTabBar: 8,
-  progressBarHeight: 4,
+  progressBarHeight: 6,
+  statsBarHeight: 6,
   badgeMinSize: 16,
   quickLogButton: 44,
   celebrationIconContainer: 44,
   playDisc: 24,
   playDiscRing: 1.5,
+  /** @deprecated v2.2 chips have no outline. */
   chipSelectedBorder: 1.5,
+  /** @deprecated v2.2 chips have no outline. */
   chipBorder: 1,
-  chipHeight: 32,
+  chipHeight: 36,
+  /** Button `md` minHeight. */
   buttonMinHeight: 44,
-  buttonPrimaryMinHeight: 50,
+  /** Button `lg` minHeight. */
+  buttonPrimaryMinHeight: 52,
   /** Button `sm` (hitSlop 6 top/bottom brings the touch target to 44). */
   buttonSmMinHeight: 32,
   textFieldMinHeight: 48,
@@ -251,10 +270,36 @@ export const COMPONENT_SIZE = {
   radioDot: 10,
   /** InlineError block / NoticeBox left bar (a filled child View, never borderLeftWidth). */
   noticeBarWidth: 4,
-  tapeSwatch: 11,
+  tapeSwatch: 14,
+  /** @deprecated use RADIUS.minor. */
   tapeSwatchRadius: 3,
   /** TapeBadge horizontal padding per size. */
-  tapePadH: { sm: 6, md: 10 },
+  tapePadH: { sm: 6, md: 8, lg: 10 },
+  /** TapeBadge minHeight per size. */
+  tapeHeight: { sm: 20, md: 24, lg: 34 },
+  segmentedHeight: { compact: 32, standard: 36, icon: 68 },
+  tabBarHeight: 64,
+  tabItemWidth: 88,
+  headerActionGroup: { width: 96, height: 44, gap: 8 },
+  /** Sheet close button, FilterChip clear button. */
+  smallButton: 30,
+  /** Reel back button. */
+  mediaButton: 32,
+  sendStatusDisc: 28,
+  sendStatusTag: 24,
+  routeThumb: 88,
+  routeThumbCompact: 64,
+  listThumb: 56,
+  uploadThumb: { width: 60, height: 80 },
+  searchFieldHeight: 44,
+  stepperHeight: 56,
+  stepperMin: 1,
+  stepperMax: 9999,
+  unreadDot: 8,
+  mediaTileAspect: 0.75,
+  statsPrimaryMinHeight: 176,
+  /** Floating sheet grabber toggles to bottom-attached above this share of the window height. */
+  sheetFloatMaxHeightRatio: 0.6,
   /** Reel double-tap heart. */
   likeBurst: 84,
 } as const;
@@ -270,6 +315,7 @@ export const AVATAR_SIZE = {
   xs: 24,
   sm: 32,
   md: 48,
+  lg: 64,
   xl: 96,
 } as const;
 
@@ -308,22 +354,34 @@ export const ELEVATION = {
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   } as ElevationStyle,
+  /** Small floating controls: float IconButton, SegmentedControl thumb. */
+  control: {
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 2,
+  } as ElevationStyle,
 };
 
-export const ELEVATION_DARK: typeof ELEVATION = { raised: NO_SHADOW, card: NO_SHADOW };
+export const ELEVATION_DARK: typeof ELEVATION = { raised: NO_SHADOW, card: NO_SHADOW, control: NO_SHADOW };
 
-const FW = { w400: '400', w500: '500', w600: '600', w700: '700' } as const;
+const FW = { w400: '400', w500: '500', w600: '600', w700: '700', w800: '800' } as const;
 
 export interface TypeStyle {
   fontSize: number;
   lineHeight: number;
-  fontWeight: '400' | '500' | '600' | '700';
+  fontWeight: '400' | '500' | '600' | '700' | '800';
   maxFontSizeMultiplier: number;
 }
 
 /** System font (SF Pro / PingFang TC). letterSpacing is always 0. CJK-safe line heights. */
 export const TYPE_SCALE = {
+  /** Latin digits / difficulty only (StatsPanel primary number). Always `numeric`. */
+  display: { fontSize: 72, lineHeight: 76, fontWeight: FW.w700, maxFontSizeMultiplier: 1.2 },
   largeTitle: { fontSize: 34, lineHeight: 44, fontWeight: FW.w700, maxFontSizeMultiplier: 1.3 },
+  /** Numbers only (StatsPanel secondary numbers). */
+  numeric1: { fontSize: 34, lineHeight: 40, fontWeight: FW.w700, maxFontSizeMultiplier: 1.3 },
   title1: { fontSize: 28, lineHeight: 38, fontWeight: FW.w700, maxFontSizeMultiplier: 1.3 },
   title2: { fontSize: 22, lineHeight: 30, fontWeight: FW.w700, maxFontSizeMultiplier: 1.5 },
   title3: { fontSize: 20, lineHeight: 28, fontWeight: FW.w600, maxFontSizeMultiplier: 1.5 },
@@ -340,15 +398,37 @@ export const TYPE_SCALE = {
 
 export type TypeVariant = keyof typeof TYPE_SCALE;
 
+const GROUP_HEADER = {
+  base: 'footnote' as TypeVariant,
+  fontWeight: FW.w600,
+  color: 'textSecondary' as PaletteKey,
+  enUppercase: true,
+  enLetterSpacing: 0.5,
+};
+
 export const TYPE_VARIANT = {
-  /** footnote + 600 + textSecondary; English UI also uppercases with letterSpacing 0.5 (not Chinese). */
-  sectionHeader: {
-    base: 'footnote' as TypeVariant,
-    fontWeight: FW.w600,
+  /** footnote + 600 + textSecondary; English UI also uppercases with letterSpacing 0.5 (not Chinese). Grouped-list header only. */
+  groupHeader: GROUP_HEADER,
+  /** @deprecated renamed `groupHeader` (v2.0). Kept one version as an alias. */
+  sectionHeader: GROUP_HEADER,
+  /** Page section title: title3 20/28 600 textPrimary. */
+  pageSection: { base: 'title3' as TypeVariant, fontWeight: FW.w600, color: 'textPrimary' as PaletteKey },
+  /** Unit next to a number: half the size of the number role, 400 textSecondary. Same Text node. */
+  unit: {
+    fontWeight: FW.w400,
     color: 'textSecondary' as PaletteKey,
-    enUppercase: true,
-    enLetterSpacing: 0.5,
+    /** number role -> unit role (rounded to an existing role). */
+    roleFor: { display: 'headline', numeric1: 'headline', title1: 'subhead' } as Record<string, TypeVariant>,
   },
+  /** TapeBadge only. The one allowed non-title use of 700/800 (spec H.2 A9). */
+  tapeLabel: {
+    lg: { fontSize: 24, lineHeight: 30, fontWeight: FW.w800, maxFontSizeMultiplier: 1.5 },
+    md: { fontSize: 13, lineHeight: 18, fontWeight: FW.w800, maxFontSizeMultiplier: 1.6 },
+    sm: { fontSize: 12, lineHeight: 16, fontWeight: FW.w700, maxFontSizeMultiplier: 1.6 },
+    numeric: true,
+  },
+  /** TextField label: subhead 600 textPrimary. */
+  fieldLabel: { base: 'subhead' as TypeVariant, fontWeight: FW.w600, color: 'textPrimary' as PaletteKey },
   numeric: { fontVariant: ['tabular-nums'] as 'tabular-nums'[] },
 } as const;
 
@@ -368,9 +448,47 @@ export const FONT_WEIGHT = {
   medium: '500' as const,
   semibold: '600' as const,
   bold: '700' as const,
+  /** TapeBadge `tapeLabel` only. */
+  heavy: '800' as const,
 };
 
-/** sm = route tape / thumbnail corners only; full = chips, avatars, badges. */
+/**
+ * Radius ROLES (v2.2, spec section 5). One value per role. All containers >= 12 also set
+ * `borderCurve: 'continuous'` (see `CONTINUOUS`).
+ */
+export const RADIUS = {
+  /** Small parts, tape swatch, skeleton text lines, innerRadius fallback. */
+  minor: 4,
+  /** TapeBadge only. */
+  tape: 6,
+  /** Rectangular controls: TextField, stepper, notices. */
+  control: 12,
+  /** Media: list thumbnails, upload thumb, inset video grid outer corners. */
+  media: 12,
+  /** Containers: Card, grouped list, RouteCard, block error, EmptyState, upload modal. */
+  card: 20,
+  /** Screen-level panels (fixed value, not derived). */
+  sheet: 32,
+  /** Capsules and circles: buttons, chips, segmented, avatar, single-line toast, TabBar. */
+  full: 9999,
+} as const;
+
+/**
+ * Concentric inner radius (WWDC25 356). Use when the gap between inner and outer corner is
+ * < outer / 2; otherwise the inner element uses its own role. Fallback RADIUS.minor so nested
+ * corners never go square.
+ */
+export function innerRadius(outer: number, gap: number): number {
+  return Math.max(outer - gap, RADIUS.minor);
+}
+
+/** Spread into any container with a radius >= 12. react-native-web ignores it. */
+export const CONTINUOUS = { borderCurve: 'continuous' } as const;
+
+/**
+ * @deprecated Use RADIUS roles. Values stay at v1.2 until all modules migrate.
+ * sm = route tape / thumbnail corners only; full = chips, avatars, badges.
+ */
 export const BORDER_RADIUS = {
   sm: 4,
   md: 8,
@@ -389,7 +507,9 @@ export interface Theme {
   /** @deprecated use typeScale. */
   fontSize: typeof FONT_SIZE;
   fontWeight: typeof FONT_WEIGHT;
+  /** @deprecated use `radius`. */
   borderRadius: typeof BORDER_RADIUS;
+  radius: typeof RADIUS;
   typeScale: typeof TYPE_SCALE;
   typeVariant: typeof TYPE_VARIANT;
   layout: typeof LAYOUT;
@@ -418,6 +538,7 @@ function buildTheme(isDark: boolean): Theme {
     fontSize: FONT_SIZE,
     fontWeight: FONT_WEIGHT,
     borderRadius: BORDER_RADIUS,
+    radius: RADIUS,
     typeScale: TYPE_SCALE,
     typeVariant: TYPE_VARIANT,
     layout: LAYOUT,

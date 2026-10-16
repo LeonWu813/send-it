@@ -2,6 +2,19 @@
 
 ## Engineering Progress
 
+### Design-system foundation G3 (design system v2.2 shared foundation) — 2026-10-16 (off-spec design-system work pending PR review)
+
+Same authorization as G1/G2: off-spec visual + motion work requested directly by the human designer, not routed through tech-lead/pm/doc-sync; PR review covers it. Source: `send-it-design/ux-team/design-system/send-it-design-system.md` v2.2, Appendix G + Part 2 + `png-v2/c-*.png`. Phase 1 only; nothing from Appendix F. No illustrations, no `expo-haptics`, no new dependencies (opaque TabBar capsule, no glass / blur). Planning docs were not edited.
+
+- `src/lib/theme.ts`: `RADIUS` roles + `innerRadius()` + `CONTINUOUS`, 58-key palette (`segmentedThumb`), `display` / `numeric1`, `groupHeader` / `pageSection` / `unit` / `tapeLabel` / `fieldLabel`, `ELEVATION.control`, G.2 sizes (`chipHeight` 36, `segmentedHeight`, `stepper*`, `listThumb`, ...), `LAYOUT` (`listRowMinHeight`, `sheetInset`, `routeCardPadding`, ...), `AVATAR_SIZE.lg`; deprecated aliases kept: `BORDER_RADIUS`, `TYPE_VARIANT.sectionHeader`, `chipBorder`, `chipSelectedBorder`, `tapeSwatchRadius`, `FONT_SIZE`, `textInverse`.
+- `src/lib/motion.ts`: `press` 100, `release` 120, `spring.glide`, `scale.pressWide`, `distance`, `useMotion()` time-scales press / release, M1 + M12 comments. `src/lib/icons.ts`: `remove`, `image`, `betaCount`.
+- `ui/`: Button (capsule, `destructiveTonal`), PressableScale (press / release / pressWide), IconButton (`tonal`, `float`, `small`, `media` 32, `IconButtonGroup`), Chip (inverted selected, 36), SegmentedControl (new), Stepper (new), SendStatus (`SendStyleChip` kept as re-export; `SendStylePicker` is now the icon SegmentedControl), TextField (12 radius, `fieldLabel`, search capsule), BottomSheet (floating / attached), Toast (capsule, width tween, 1 action), ListRow (`content`), Card (20, `tinted`), ProgressBar (6) + `UploadProgressCard`, InlineError / NoticeBox (no bar, neutral notice, `warning`), Skeleton (+ 4 layouts), EmptyState (`slot`, `prompt`), Avatar (`lg`).
+- Stories: Controls + `AllStates` per component, Tokens story updated (RADIUS + innerRadius, `ELEVATION.control`, `distance`). `.storybook/MIGRATION.md` has a v2.2 section. i18n: `ui.stepper.*`.
+
+Checks: `npm run lint` clean; `npm test` all pass except the pre-existing `supabase.test.ts` env failure (token test updated); `npm run check:i18n` OK; `storybook build` OK; every `ui-*` / `foundations-*` story loaded in headless Chrome (light + dark) with no console errors.
+
+---
+
 ### Design-system foundation G2 (final design system v1.1/v1.2 alignment) — 2026-10-16 (off-spec design-system work pending PR review)
 
 Same authorization as G1: off-spec visual + motion work requested directly by the human designer, not routed through tech-lead/pm/doc-sync; PR review covers it. Source: `send-it-design/ux-team/design-system/send-it-design-system.md` (section 0.6 checklist, Appendix A/B, Part 2). Phase 1 only; nothing from Appendix F. No illustrations, no `expo-haptics`, no new product flows. Planning docs were not edited.

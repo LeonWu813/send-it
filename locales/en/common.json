@@ -524,7 +524,15 @@
     "clearText": "Clear",
     "toastWithActions": "{{message}}. Actions available: {{actions}}",
     "avatarOf": "{{name}}'s avatar",
-    "progress": "Progress"
+    "progress": "Progress",
+    "stepper": {
+      "done": "Done",
+      "enterNumber": "Enter a number",
+      "decrease": "Decrease",
+      "increase": "Increase",
+      "announceLocked": "{{label}} fixed at {{value}}",
+      "lockedValue": "{{label}}, {{value}}, {{reason}}, cannot be changed"
+    }
   },
   "tabs": {
     "home": "Home",

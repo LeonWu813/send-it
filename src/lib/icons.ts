@@ -49,6 +49,8 @@ export const ICON = {
   /** Both states are `ellipse-outline` (I3 exception: a filled circle reads as "achieved"). */
   sendAttempt: { outline: 'ellipse-outline' },
   add: { outline: 'add' },
+  /** Stepper minus (A10). */
+  remove: { outline: 'remove' },
   newTopGrade: { filled: 'trophy' },
   grade: { outline: 'trending-up-outline' },
   date: { outline: 'calendar-clear-outline' },
@@ -59,6 +61,10 @@ export const ICON = {
   // D. Beta video
   betaVideo: { outline: 'videocam-outline', filled: 'videocam' },
   play: { filled: 'play' },
+  /** Beta-video count line on RouteCard (A10). */
+  betaCount: { outline: 'play-circle-outline' },
+  /** Missing-photo placeholder (A10). */
+  image: { outline: 'image-outline' },
   upload: { outline: 'cloud-upload-outline' },
   uploaded: { outline: 'cloud-done-outline', filled: 'cloud-done' },
   library: { outline: 'images-outline' },

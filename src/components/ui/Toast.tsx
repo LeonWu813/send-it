@@ -26,7 +26,7 @@ export interface ToastContent {
   tone?: ToastTone;
   /** Glyph (use `ICON.*`). Defaults: flash -> flash, error -> alert-circle-outline, default -> none. Plain success has no icon. */
   icon?: IoniconName;
-  /** Up to two text actions. */
+  /** At most ONE action (extras are ignored). */
   actions?: ToastAction[];
   /** Shorthand for a single action. */
   actionLabel?: string;
@@ -45,12 +45,14 @@ export interface ToastProps extends ToastContent {
 }
 
 /**
- * Toast: dark HUD in both themes (flash / error tones). In: translateY 16->0 + fade (`medium`,
- * enter), icon pops (grip, 30ms later; error icon shakes instead). Replacement: container stays, content
- * cross-fades (`short`, standard). Out: `short`, exit. Swipe down to dismiss (works under Reduce Motion).
- * Auto-dismiss after 5s, paused while touched, never under VoiceOver. Message never clamps; at font
- * scale >= 1.6 the actions move under the message. Announces "message. Actions available: ..." and
- * exposes accessibilityActions. Taps outside pass through.
+ * Toast (v2.2): opaque dark HUD in both themes (flash / error tones). One line = a content-width capsule
+ * (height 48, centred, max width = screen - 2 x margin, radius full); two lines or font scale >= 1.6 = a
+ * `card` 20 block (stacked actions). In: translateY `distance.toastEnter` 8 -> 0 + fade (`medium`, enter);
+ * icon pops (grip, 30ms later; error icon shakes). Replacement single -> single: the capsule WIDTH tweens
+ * (JS driver, `short` + `standard`) while the new content cross-fades in at its final width; single <-> two
+ * lines swaps shape with a cross-fade. Out: `short`, exit. Swipe down to dismiss (works under Reduce Motion).
+ * Auto-dismiss after 5s, paused while touched, never under VoiceOver. At most one action. Announces
+ * "message. Actions available: ..." and exposes accessibilityActions. Taps outside pass through.
  */
 export function Toast({
   visible,
@@ -67,10 +69,10 @@ export function Toast({
 }: ToastProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation('common');
   const { theme } = useTheme();
-  const { duration, spring, reduceMotion } = useMotion();
+  const { duration, spring, distance, reduceMotion } = useMotion();
   const insets = useSafeAreaInsets();
   const { screenMargin } = useLayout();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width: windowWidth } = useWindowDimensions();
   const screenReader = useScreenReader();
   const { translateX: shakeX, shake } = useShake();
   const [mounted, setMounted] = useState(visible);
@@ -79,10 +81,16 @@ export function Toast({
   const drag = useRef(new Animated.Value(0)).current;
   const iconPop = useRef(new Animated.Value(1)).current;
   const first = useRef(true);
+  const [multi, setMulti] = useState(false);
+  const [natural, setNatural] = useState(0);
+  const [morphWidth, setMorphWidth] = useState<number | null>(null);
+  const width = useRef(new Animated.Value(0)).current;
+  const lastWidth = useRef(0);
+  const lastMulti = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const c = theme.colors;
 
-  const list: ToastAction[] = actions ?? (actionLabel ? [{ label: actionLabel, onPress: () => onAction?.() }] : []);
+  const list: ToastAction[] = (actions ?? (actionLabel ? [{ label: actionLabel, onPress: () => onAction?.() }] : [])).slice(0, 1);
   const live = useRef({ onDismiss, durationMs, screenReader, duration: duration.toast, reduceMotion });
   live.current = { onDismiss, durationMs, screenReader, duration: duration.toast, reduceMotion };
 
@@ -150,6 +158,26 @@ export function Toast({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, id, screenReader]);
 
+  // Width morph for a single-line replacement (JS driver: width cannot use the native driver).
+  useEffect(() => {
+    if (!visible) {
+      lastWidth.current = 0;
+      return;
+    }
+    if (natural === 0) return;
+    const from = lastWidth.current;
+    const sameShape = !multi && !lastMulti.current;
+    lastWidth.current = natural;
+    lastMulti.current = multi;
+    if (!sameShape || from === 0 || from === natural || first.current || reduceMotion) return;
+    setMorphWidth(natural);
+    width.setValue(from);
+    Animated.timing(width, { toValue: natural, duration: duration.short, easing: bezierFor('standard'), useNativeDriver: false }).start(() =>
+      setMorphWidth(null),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [natural, multi, id]);
+
   const MS_SHORT = useRef(duration.short);
   MS_SHORT.current = duration.short;
   const MOTION_SETTLE = useRef(spring.settle);
@@ -195,14 +223,63 @@ export function Toast({
         : { bg: c.toastBackground, fg: c.onToast, action: c.toastAction, icon: c.onToast, border: c.toastBorder };
   const iconName = icon ?? (tone === 'flash' ? ICON.sendFlash.filled : tone === 'error' ? ICON.error.outline : undefined);
   const stacked = fontScale >= 1.6;
+  const card = multi || stacked;
   const iconTop = (theme.typeScale.subhead.lineHeight - theme.iconSize.md) / 2;
+  const maxW = windowWidth - 2 * screenMargin;
+  const hasAction = list.length > 0;
 
-  const actionButtons = list.slice(0, 2).map((a, i) => (
+  const actionButtons = list.map((a, i) => (
     <ToastActionButton key={`${a.label}-${i}`} label={a.label} onPress={a.onPress} tone={tone} color={palette.action} hotColor={c.onToast} />
   ));
 
+  const row = (measure: boolean, asCapsule = false): React.JSX.Element => (
+    <View style={{ flexDirection: card && stacked && !asCapsule ? 'column' : 'row', alignItems: card && stacked && !asCapsule ? 'stretch' : 'center', flexShrink: 1 }}>
+      <View style={{ flexDirection: 'row', alignItems: card && !asCapsule ? 'flex-start' : 'center', flexShrink: 1 }}>
+        {iconName ? (
+          <Animated.View
+            style={[{ marginTop: card && !asCapsule ? iconTop : 0, marginRight: 10 }, measure ? null : { transform: [{ scale: iconPop }, { translateX: shakeX }] }]}
+          >
+            <Ionicons name={iconName} size={theme.iconSize.md} color={palette.icon} />
+          </Animated.View>
+        ) : null}
+        {/* never numberOfLines: error messages must not be clipped, even at AX sizes */}
+        <AppText
+          variant="subhead"
+          weight="500"
+          style={{ color: palette.fg, flexShrink: 1 }}
+          // the measuring copy tells whether the message wraps (taller than ~1.5 lines): then use the card
+          onLayout={measure ? (e) => setMulti(e.nativeEvent.layout.height > theme.typeScale.subhead.lineHeight * 1.5) : undefined}
+        >
+          {message}
+        </AppText>
+      </View>
+      {hasAction ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginLeft: card && stacked ? 0 : theme.spacing.xs }}>
+          {measure ? <View style={{ minHeight: 44, paddingHorizontal: theme.spacing.smd, justifyContent: 'center' }}><AppText variant="subhead" weight="600">{list[0].label}</AppText></View> : actionButtons}
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const capsule = { borderRadius: theme.radius.full, minHeight: theme.componentSize.toastMinHeight, paddingLeft: theme.spacing.md, paddingRight: hasAction ? theme.spacing.xs : 18 };
+  const shape = card
+    ? { borderRadius: theme.radius.card, paddingVertical: theme.spacing.smd, paddingLeft: theme.spacing.md, paddingRight: hasAction && !stacked ? theme.spacing.xs : theme.spacing.md }
+    : capsule;
+
   return (
-    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end' }]}>
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { justifyContent: 'flex-end', alignItems: 'center' }]}>
+      {/* invisible measuring layer: natural capsule width of the CURRENT content (drives the width tween) */}
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        onLayout={(e) => {
+          setNatural(Math.round(e.nativeEvent.layout.width));
+        }}
+        style={{ position: 'absolute', opacity: 0, maxWidth: maxW, flexDirection: 'row', alignItems: 'center', ...capsule }}
+      >
+        {row(true, true)}
+      </View>
       <Animated.View
         {...pan.panHandlers}
         onTouchStart={clearTimer}
@@ -219,47 +296,34 @@ export function Toast({
         }}
         style={[
           {
-            marginHorizontal: screenMargin,
+            maxWidth: maxW,
             marginBottom: bottomOffset ?? insets.bottom + theme.componentSize.toastOffsetAboveTabBar,
-            minHeight: theme.componentSize.toastMinHeight,
-            borderRadius: theme.borderRadius.lg,
             backgroundColor: palette.bg,
+            borderCurve: 'continuous',
             borderWidth: theme.isDark && tone === 'default' ? theme.stroke.thin : 0,
             borderColor: palette.border,
-            paddingVertical: theme.spacing.smd,
-            paddingLeft: theme.spacing.md,
-            paddingRight: list.length && !stacked ? theme.spacing.xs : theme.spacing.md,
-            flexDirection: stacked ? 'column' : 'row',
-            alignItems: stacked ? 'stretch' : 'center',
+            justifyContent: 'center',
+            overflow: morphWidth !== null ? 'hidden' : 'visible',
+            ...(morphWidth !== null ? { width } : null),
             opacity: show,
             transform: [
-              ...(reduceMotion ? [] : [{ translateY: show.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }]),
+              ...(reduceMotion ? [] : [{ translateY: show.interpolate({ inputRange: [0, 1], outputRange: [distance.toastEnter, 0] }) }]),
               { translateY: drag },
             ],
           },
+          shape,
           theme.elevation.raised,
         ]}
       >
-        <Animated.View style={{ flex: stacked ? undefined : 1, flexDirection: 'row', alignItems: 'flex-start', opacity: content }}>
-          {iconName ? (
-            <Animated.View
-              style={{
-                marginTop: iconTop,
-                marginRight: theme.layout.iconTextGapInButton,
-                transform: [{ scale: iconPop }, { translateX: shakeX }],
-              }}
-            >
-              <Ionicons name={iconName} size={theme.iconSize.md} color={palette.icon} />
-            </Animated.View>
-          ) : null}
-          {/* never numberOfLines: error messages must not be clipped, even at AX sizes */}
-          <AppText variant="subhead" style={{ color: palette.fg, flex: 1 }}>
-            {message}
-          </AppText>
+        <Animated.View
+          style={[
+            { opacity: content },
+            // the new content is laid out at its FINAL width from frame one (no re-wrap while the width tweens)
+            morphWidth !== null ? { width: morphWidth - shape.paddingLeft - (shape.paddingRight as number) } : null,
+          ]}
+        >
+          {row(false)}
         </Animated.View>
-        {list.length ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', columnGap: theme.spacing.xs }}>{actionButtons}</View>
-        ) : null}
       </Animated.View>
     </View>
   );
@@ -290,14 +354,14 @@ function ToastActionButton({
   return (
     <PressableScale
       onPress={onPress}
-      onPressIn={() => set(1, duration.micro, 'standard')}
-      onPressOut={() => set(0, duration.short, 'standard')}
+      onPressIn={() => set(1, duration.press, 'standard')}
+      onPressOut={() => set(0, duration.release, 'standard')}
       accessibilityLabel={label}
       style={{
         minHeight: theme.layout.minTouchTarget,
         minWidth: theme.layout.minTouchTarget,
         paddingHorizontal: theme.spacing.smd,
-        borderRadius: theme.borderRadius.md,
+        borderRadius: theme.radius.full,
         justifyContent: 'center',
         alignItems: 'center',
       }}

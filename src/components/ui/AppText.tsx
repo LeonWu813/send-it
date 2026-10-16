@@ -6,13 +6,13 @@ import i18n from '../../lib/i18n';
 import { useTheme } from '../../lib/theme';
 import type { PaletteKey, TypeVariant } from '../../lib/theme';
 
-export type AppTextVariant = TypeVariant | 'sectionHeader';
+export type AppTextVariant = TypeVariant | 'groupHeader' | 'pageSection' | 'fieldLabel' | 'sectionHeader';
 
 export interface AppTextProps extends TextProps {
   variant?: AppTextVariant;
   /** Palette key. Defaults to textPrimary (sectionHeader: textSecondary). */
   color?: PaletteKey;
-  /** Emphasis only (400/500/600). 700 is built into the title1/title2/largeTitle roles. */
+  /** Emphasis only (400/500/600). 700/800 come from a role (title1, display) or tapeLabel, never from here. */
   weight?: '400' | '500' | '600';
   /** tabular-nums for numbers. */
   numeric?: boolean;
@@ -31,10 +31,18 @@ export function AppText({
   ...rest
 }: AppTextProps): React.JSX.Element {
   const { theme } = useTheme();
-  const isSection = variant === 'sectionHeader';
-  const base = theme.typeScale[isSection ? theme.typeVariant.sectionHeader.base : (variant as TypeVariant)];
+  const isSection = variant === 'sectionHeader' || variant === 'groupHeader';
+  const derived =
+    isSection
+      ? theme.typeVariant.groupHeader
+      : variant === 'pageSection'
+        ? theme.typeVariant.pageSection
+        : variant === 'fieldLabel'
+          ? theme.typeVariant.fieldLabel
+          : null;
+  const base = theme.typeScale[derived ? derived.base : (variant as TypeVariant)];
   const isEn = i18n.language === 'en';
-  const resolvedColor = theme.colors[color ?? (isSection ? theme.typeVariant.sectionHeader.color : 'textPrimary')];
+  const resolvedColor = theme.colors[color ?? (derived ? derived.color : 'textPrimary')];
   return (
     <Text
       {...rest}
@@ -43,12 +51,12 @@ export function AppText({
         {
           fontSize: base.fontSize,
           lineHeight: base.lineHeight,
-          fontWeight: weight ?? (isSection ? theme.typeVariant.sectionHeader.fontWeight : base.fontWeight),
+          fontWeight: weight ?? (derived ? derived.fontWeight : base.fontWeight),
           color: resolvedColor,
           letterSpacing: 0,
         },
         isSection && isEn
-          ? { textTransform: 'uppercase', letterSpacing: theme.typeVariant.sectionHeader.enLetterSpacing }
+          ? { textTransform: 'uppercase', letterSpacing: theme.typeVariant.groupHeader.enLetterSpacing }
           : null,
         numeric ? { fontVariant: theme.typeVariant.numeric.fontVariant } : null,
         align ? { textAlign: align } : null,

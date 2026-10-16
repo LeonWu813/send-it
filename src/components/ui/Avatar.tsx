@@ -13,7 +13,7 @@ import { AppText } from './AppText';
 export type AvatarSize = keyof typeof AVATAR_SIZE;
 
 export interface AvatarProps {
-  /** xs 24 (scrim author), sm 32 (single-line rows), md 48 (two-line rows), xl 96 (profile). Only these four exist. */
+  /** xs 24, sm 32 (single-line rows), md 48 (two-line rows), lg 64 (profile header), xl 96 (edit profile). Only these five exist. */
   size?: AvatarSize;
   /** Photo URL. While loading or on failure the default (initial / person glyph) shows. */
   uri?: string | null;
@@ -28,16 +28,16 @@ const TEXT: Record<AvatarSize, { variant: TypeVariant; weight?: '600' }> = {
   xs: { variant: 'caption1', weight: '600' },
   sm: { variant: 'footnote', weight: '600' },
   md: { variant: 'headline' },
+  lg: { variant: 'title2' },
   xl: { variant: 'title1' },
 };
-const GLYPH: Record<AvatarSize, 'xs' | 'sm' | 'lg' | 'xl'> = { xs: 'xs', sm: 'sm', md: 'lg', xl: 'xl' };
 
 function initial(name?: string): string {
   const first = Array.from((name ?? '').trim())[0];
   return first ? first.toUpperCase() : '';
 }
 
-/** Circle on `surfaceAlt` with a hairline `border` ring, photo fades in over `short`. */
+/** Circle on `surfaceAlt` with a hairline `border` ring, photo fades in over `short` + `linear`. */
 export function Avatar({ size = 'md', uri, name, decorative, style }: AvatarProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -64,7 +64,7 @@ export function Avatar({ size = 'md', uri, name, decorative, style }: AvatarProp
         {
           width: dim,
           height: dim,
-          borderRadius: theme.borderRadius.full,
+          borderRadius: theme.radius.full,
           backgroundColor: theme.colors.surfaceAlt,
           borderWidth: theme.stroke.hairline,
           borderColor: theme.colors.border,
@@ -80,7 +80,7 @@ export function Avatar({ size = 'md', uri, name, decorative, style }: AvatarProp
           {ch}
         </AppText>
       ) : (
-        <Ionicons name={ICON.profile.filled} size={theme.iconSize[GLYPH[size]]} color={theme.colors.textSecondary} />
+        <Ionicons name={ICON.profile.filled} size={Math.round(dim / 2)} color={theme.colors.textSecondary} />
       )}
       {showPhoto ? (
         <Animated.View style={{ position: 'absolute', width: dim, height: dim, opacity: photo }}>
@@ -89,10 +89,10 @@ export function Avatar({ size = 'md', uri, name, decorative, style }: AvatarProp
             resizeMode="cover"
             accessibilityIgnoresInvertColors
             onLoad={() =>
-              Animated.timing(photo, { toValue: 1, duration: duration.short, easing: bezierFor('standard'), useNativeDriver: USE_NATIVE_DRIVER }).start()
+              Animated.timing(photo, { toValue: 1, duration: duration.short, easing: bezierFor('linear'), useNativeDriver: USE_NATIVE_DRIVER }).start()
             }
             onError={() => setFailed(true)}
-            style={{ width: dim, height: dim, borderRadius: theme.borderRadius.full }}
+            style={{ width: dim, height: dim, borderRadius: theme.radius.full }}
           />
         </Animated.View>
       ) : null}

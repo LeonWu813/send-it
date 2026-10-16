@@ -140,7 +140,8 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
               {
                 marginTop: insets.top + theme.layout.headerContentHeight + theme.spacing.sm,
                 marginHorizontal: screenMargin,
-                borderRadius: theme.borderRadius.lg,
+                borderRadius: theme.radius.card,
+                borderCurve: 'continuous',
                 backgroundColor: c.surfaceElevated,
                 // light: raised shadow only; dark: 1pt border only (never both)
                 borderWidth: theme.isDark ? theme.stroke.thin : 0,
@@ -173,7 +174,7 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
                 style={{
                   width: theme.componentSize.celebrationIconContainer,
                   height: theme.componentSize.celebrationIconContainer,
-                  borderRadius: theme.borderRadius.full,
+                  borderRadius: theme.radius.full,
                   backgroundColor: c.sendTopContainer,
                   alignItems: 'center',
                   justifyContent: 'center',

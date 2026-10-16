@@ -11,13 +11,15 @@ import { AppText } from './AppText';
 import { Button } from './Button';
 import { PressableScale } from './PressableScale';
 
-export type ListRowVariant = 'navigation' | 'value' | 'toggle' | 'selectable' | 'radio' | 'action' | 'withButton';
+export type ListRowVariant = 'navigation' | 'value' | 'toggle' | 'selectable' | 'radio' | 'action' | 'withButton' | 'content';
 
 export interface ListRowProps {
   /**
    * navigation: trailing chevron. value: trailing value text + chevron. toggle: system Switch.
    * selectable: trailing primary checkmark when `selected` (sheet options). radio: leading Radio.
    * action: primary (or error when `destructive`) title, no trailing. withButton: trailing Button `sm`.
+   * content (v2.2): Send It's own row (AscentHistoryItem, AscentList, follow feed): optional 56 `thumbnail`,
+   * `headline` title, `footnote` subtitle, trailing = `trailing` (a SendStatus disc) or a chevron.
    */
   variant?: ListRowVariant;
   title: string;
@@ -26,6 +28,10 @@ export interface ListRowProps {
   value?: string;
   /** Leading concept glyph (md 20, textSecondary). */
   leadingIcon?: IoniconName;
+  /** content: 56x56 leading media (a photo, or a TapeBadge on `surfaceAlt`), clipped to `RADIUS.media`. */
+  thumbnail?: React.ReactNode;
+  /** content: trailing node (SendStatus `disc`). At font scale >= 1.6 it moves to the start of the second line. */
+  trailing?: React.ReactNode;
   /** Custom leading element (Avatar, thumbnail). Pass `leadingWidth` so the divider can inset past it. */
   leading?: React.ReactNode;
   leadingWidth?: number;
@@ -83,7 +89,7 @@ export function Radio({ selected }: { selected: boolean }): React.JSX.Element {
       style={{
         width: radioSize,
         height: radioSize,
-        borderRadius: theme.borderRadius.full,
+        borderRadius: theme.radius.full,
         borderWidth: theme.stroke.emphasis,
         borderColor: selected ? c.primary : c.outline,
         alignItems: 'center',
@@ -94,7 +100,7 @@ export function Radio({ selected }: { selected: boolean }): React.JSX.Element {
         style={{
           width: radioDot,
           height: radioDot,
-          borderRadius: theme.borderRadius.full,
+          borderRadius: theme.radius.full,
           backgroundColor: c.primary,
           opacity: dot,
           transform: [{ scale: dot }],
@@ -140,6 +146,8 @@ export function ListRow({
   subtitle,
   value,
   leadingIcon,
+  thumbnail,
+  trailing,
   leading,
   leadingWidth,
   selected = false,
@@ -171,14 +179,17 @@ export function ListRow({
 
   const titleColor = disabled ? 'textDisabled' : destructive ? 'error' : variant === 'action' ? 'primary' : 'textPrimary';
   const glyphColor = disabled ? c.textDisabled : destructive ? c.error : c.textSecondary;
-  const titleVariant = density === 'content' ? 'subhead' : 'body';
-  const titleWeight = density === 'content' ? '600' : undefined;
+  const isContent = variant === 'content';
+  const titleVariant = isContent ? 'headline' : density === 'content' ? 'subhead' : 'body';
+  const titleWeight = !isContent && density === 'content' ? '600' : undefined;
   const subColor = disabled ? 'textDisabled' : 'textSecondary';
   const hasLeadingIcon = !!leadingIcon && variant !== 'radio';
-  const leadW = variant === 'radio' ? theme.componentSize.radioSize : hasLeadingIcon ? theme.iconSize.md : (leading ? (leadingWidth ?? 0) : 0);
+  const thumb = isContent && !!thumbnail;
+  const leadW = thumb ? theme.componentSize.listThumb : variant === 'radio' ? theme.componentSize.radioSize : hasLeadingIcon ? theme.iconSize.md : (leading ? (leadingWidth ?? 0) : 0);
   const hasLead = leadW > 0 || !!leading;
   const showValueInline = variant === 'value' && !stacked;
-  const hasChevron = variant === 'navigation' || variant === 'value';
+  const hasChevron = variant === 'navigation' || variant === 'value' || (isContent && !trailing && !!onPress);
+  const trailingBelow = isContent && !!trailing && stacked;
   const sibling = variant === 'toggle' || variant === 'withButton';
   const siblingBelow = variant === 'withButton' && stacked;
   const pressable = !!onPress && !disabled;
@@ -192,6 +203,19 @@ export function ListRow({
         </View>
       ) : hasLeadingIcon ? (
         <Ionicons name={leadingIcon as IoniconName} size={theme.iconSize.md} color={glyphColor} style={{ marginRight: theme.spacing.smd }} />
+      ) : thumb ? (
+        <View
+          style={{
+            width: theme.componentSize.listThumb,
+            height: theme.componentSize.listThumb,
+            borderRadius: theme.radius.media,
+            borderCurve: 'continuous',
+            overflow: 'hidden',
+            marginRight: theme.spacing.smd,
+          }}
+        >
+          {thumbnail}
+        </View>
       ) : leading ? (
         <View style={{ marginRight: theme.spacing.smd }}>{leading}</View>
       ) : null}
@@ -200,10 +224,11 @@ export function ListRow({
           {title}
         </AppText>
         {subtitle ? (
-          <AppText variant={density === 'content' ? 'caption1' : 'footnote'} color={subColor} numberOfLines={density === 'content' ? 2 : 1} style={{ marginTop: theme.layout.stackTight }}>
+          <AppText variant={!isContent && density === 'content' ? 'caption1' : 'footnote'} color={subColor} numberOfLines={isContent || density === 'content' ? 2 : 1} style={{ marginTop: theme.layout.stackTight }}>
             {subtitle}
           </AppText>
         ) : null}
+        {trailingBelow ? <View style={{ marginTop: theme.spacing.xs, alignSelf: 'flex-start' }}>{trailing}</View> : null}
         {variant === 'value' && stacked && value ? (
           <AppText variant="footnote" color={subColor} style={{ marginTop: theme.layout.stackTight }}>
             {value}
@@ -215,6 +240,7 @@ export function ListRow({
           {value}
         </AppText>
       ) : null}
+      {isContent && trailing && !trailingBelow ? <View style={{ marginLeft: theme.spacing.smd }}>{trailing}</View> : null}
       {hasChevron ? (
         <Ionicons
           name={ICON.forward.outline}
@@ -236,7 +262,7 @@ export function ListRow({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: theme.layout.minTouchTarget,
+    minHeight: theme.layout.listRowMinHeight,
     paddingVertical: theme.layout.listRowPaddingV,
     paddingLeft: padH,
     paddingRight: sibling && !siblingBelow ? theme.spacing.smd : padH,

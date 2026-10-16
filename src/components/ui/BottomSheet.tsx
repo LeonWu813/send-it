@@ -19,13 +19,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ICON } from '../../lib/icons';
 import type { IoniconName } from '../../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
-import { useLayout, useTheme } from '../../lib/theme';
+import { useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
 import { Button } from './Button';
 import { IconButton } from './IconButton';
 import { InlineError } from './InlineError';
 
 export type BottomSheetVariant = 'content' | 'list-single' | 'form' | 'confirm';
+export type BottomSheetPresentation = 'floating' | 'attached';
 
 export interface BottomSheetProps {
   visible: boolean;
@@ -40,6 +41,15 @@ export interface BottomSheetProps {
    * haptic `warning` on show. (Multi-select menus are Phase 2: not built.)
    */
   variant?: BottomSheetVariant;
+  /**
+   * floating: inset 8 from the left / right / bottom, four corners `sheet` 32. attached: full width,
+   * top corners 32, bottom edge 0. Default: `form` = attached, everything else floating. A floating
+   * sheet switches to attached by itself when its content is taller than 60% of the window or the
+   * font scale is >= 1.6 (Accessibility sizes).
+   */
+  presentation?: BottomSheetPresentation;
+  /** list-single: number of options. More than 6 switches a floating sheet to attached. */
+  optionCount?: number;
   /** While loading the sheet cannot be dismissed (drag has 10% damping; backdrop, escape and close are inert). */
   loading?: boolean;
   /** Fixed action area under the content (content / form): usually a full-width `lg` Button. */
@@ -79,11 +89,13 @@ export function useSheetSelect(onClose: () => void): (apply?: () => void) => voi
 }
 
 /**
- * Modal sheet: surfaceElevated panel (xl top radius, no shadow), 36x5 grabber, overlay backdrop,
- * title row with a close IconButton. In: backdrop `short` linear fade, panel `settle` spring with
- * overshootClamping. Out: `short` exit. Dragging works under Reduce Motion (direct manipulation);
- * the backdrop fades with the panel position; past 30% (or velocity > 0.5) closes, else settles
- * back. Reduce Motion: enter / exit / settle-back are cross-fades / `short` timing.
+ * Modal sheet (v2.2): `surfaceElevated` panel, radius `sheet` 32 (continuous), 36x5 grabber, `overlay`
+ * backdrop, title row with a `small` 30 close IconButton (none on `confirm`: Cancel is the close).
+ * Floating: in = translateY +24 -> 0 with `settle`, opacity timing `short` + `enter` (M12); out =
+ * translateY +24 + opacity `short` + `exit`; a drag-dismiss continues off screen. Attached: `settle`
+ * from off screen with overshootClamping, out `short` exit. The backdrop follows the drag (clamped).
+ * Dragging works under Reduce Motion (direct manipulation); past 30% (or velocity > 0.5) closes.
+ * Reduce Motion: enter / exit are opacity only.
  */
 export function BottomSheet({
   visible,
@@ -91,6 +103,8 @@ export function BottomSheet({
   title,
   description,
   variant = 'content',
+  presentation,
+  optionCount,
   loading = false,
   footer,
   confirmLabel,
@@ -105,20 +119,25 @@ export function BottomSheet({
 }: BottomSheetProps): React.JSX.Element | null {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const { duration, spring, reduceMotion, haptic } = useMotion();
+  const { duration, spring, distance, reduceMotion, haptic } = useMotion();
   const { height: windowHeight, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { screenMargin } = useLayout();
   const [mounted, setMounted] = useState(visible);
   const [panelH, setPanelH] = useState(windowHeight);
+  const [tooTall, setTooTall] = useState(false);
+  const floatingDefault = variant !== 'form' && presentation !== 'attached';
+  const attached = !floatingDefault || tooTall || fontScale >= 1.6 || (variant === 'list-single' && (optionCount ?? 0) > 6);
+  const inset = theme.layout.sheetInset;
+  const panelFade = useRef(new Animated.Value(0)).current;
+  const draggedClose = useRef(false);
   const panelHeight = useRef(windowHeight);
   const ty = useRef(new Animated.Value(windowHeight)).current;
   const fade = useRef(new Animated.Value(0)).current;
   const grab = useRef(new Animated.Value(0)).current;
   const titleRef = useRef<View>(null);
   const crossed = useRef(false);
-  const live = useRef({ loading, reduceMotion, onClose });
-  live.current = { loading, reduceMotion, onClose };
+  const live = useRef({ loading, reduceMotion, onClose, attached, exitFar: 0 });
+  live.current = { loading, reduceMotion, onClose, attached, exitFar: panelH + inset + insets.bottom };
 
   const springTo = useCallback(
     (toValue: number) => {
@@ -134,9 +153,20 @@ export function BottomSheet({
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      ty.setValue(reduceMotion ? 0 : panelHeight.current);
+      setTooTall(false);
+      const floating = !live.current.attached;
+      ty.setValue(reduceMotion ? 0 : floating ? distance.sheetFloatEnter : panelHeight.current);
       fade.setValue(0);
+      panelFade.setValue(0);
+      draggedClose.current = false;
       crossed.current = false;
+      // opacity is ALWAYS timing (M12): the spring only drives translateY
+      Animated.timing(panelFade, {
+        toValue: 1,
+        duration: duration.short,
+        easing: bezierFor(reduceMotion ? 'standard' : 'enter'),
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }).start();
       if (variant === 'confirm') haptic('warning', 'bottom-sheet');
       Animated.timing(fade, {
         toValue: 1,
@@ -156,11 +186,25 @@ export function BottomSheet({
       return () => clearTimeout(id);
     }
     if (!mounted) return undefined;
+    const floating = !live.current.attached;
+    const dragged = draggedClose.current;
     Animated.parallel([
-      Animated.timing(fade, { toValue: 0, duration: duration.short, easing: bezierFor('exit'), useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(fade, { toValue: 0, duration: duration.short, easing: bezierFor('linear'), useNativeDriver: USE_NATIVE_DRIVER }),
+      ...(floating && !dragged
+        ? [Animated.timing(panelFade, { toValue: 0, duration: duration.short, easing: bezierFor(reduceMotion ? 'standard' : 'exit'), useNativeDriver: USE_NATIVE_DRIVER })]
+        : reduceMotion
+          ? [Animated.timing(panelFade, { toValue: 0, duration: duration.short, easing: bezierFor('standard'), useNativeDriver: USE_NATIVE_DRIVER })]
+          : []),
       ...(reduceMotion
         ? []
-        : [Animated.timing(ty, { toValue: panelHeight.current, duration: duration.short, easing: bezierFor('exit'), useNativeDriver: USE_NATIVE_DRIVER })]),
+        : [
+            Animated.timing(ty, {
+              toValue: dragged ? live.current.exitFar : floating ? distance.sheetFloatEnter : panelHeight.current,
+              duration: duration.short,
+              easing: bezierFor('exit'),
+              useNativeDriver: USE_NATIVE_DRIVER,
+            }),
+          ]),
     ]).start(() => {
       setMounted(false);
       onClosed?.();
@@ -183,10 +227,10 @@ export function BottomSheet({
           Animated.spring(grab, { toValue: 1, ...spring.grip, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
         }
       } else {
-        Animated.timing(grab, { toValue: 0, duration: duration.short, easing: bezierFor('standard'), useNativeDriver: USE_NATIVE_DRIVER }).start();
+        Animated.timing(grab, { toValue: 0, duration: duration.release, easing: bezierFor('standard'), useNativeDriver: USE_NATIVE_DRIVER }).start();
       }
     },
-    [grab, spring, duration.micro, duration.short],
+    [grab, spring, duration.micro, duration.release],
   );
 
   const pan = useMemo(
@@ -209,7 +253,10 @@ export function BottomSheet({
         onPanResponderRelease: (_e, g) => {
           const shouldClose = !live.current.loading && (g.dy > panelHeight.current * 0.3 || g.vy > 0.5);
           setGrabbed(false);
-          if (shouldClose) live.current.onClose();
+          if (shouldClose) {
+            draggedClose.current = true;
+            live.current.onClose();
+          }
           else springTo(0);
         },
         onPanResponderTerminate: () => {
@@ -224,14 +271,20 @@ export function BottomSheet({
   if (!mounted) return null;
 
   const c = theme.colors;
-  const maxHeight = windowHeight * 0.9;
+  const floating = !attached;
+  const maxHeight = attached ? windowHeight - insets.top - inset : windowHeight * 0.9;
+  const padX = theme.spacing.mdl;
   const backdropOpacity = Animated.multiply(
     fade,
     ty.interpolate({ inputRange: [0, Math.max(panelH, 1)], outputRange: [1, 0], extrapolate: 'clamp' }),
   );
-  const bottomPad = Math.max(insets.bottom, theme.spacing.md);
-  const closeTop = theme.componentSize.sheetDragZoneHeight;
+  // floating: the panel already sits `sheetInset` above the screen edge, so the home indicator needs
+  // (insets.bottom - inset + sm); attached: max(insets.bottom, md).
+  const bottomPad = floating ? Math.max(insets.bottom - inset + theme.spacing.sm, theme.spacing.mdl) : Math.max(insets.bottom, theme.spacing.md);
   const closeBox = theme.layout.minTouchTarget;
+  const small = theme.componentSize.smallButton;
+  const closeTop = theme.componentSize.sheetDragZoneHeight + (closeBox - small) / 2;
+  const showClose = variant !== 'confirm';
 
   const actions =
     variant === 'confirm' ? (
@@ -257,19 +310,32 @@ export function BottomSheet({
       onLayout={(e) => {
         panelHeight.current = e.nativeEvent.layout.height;
         setPanelH(e.nativeEvent.layout.height);
+        // content taller than 60% of the window: switch to the attached presentation (once per open)
+        if (floatingDefault && e.nativeEvent.layout.height > windowHeight * theme.componentSize.sheetFloatMaxHeightRatio) setTooTall(true);
       }}
       onAccessibilityEscape={requestClose}
       style={[
-        styles.panel,
+        floating ? null : styles.panel,
         {
           maxHeight,
-          ...(fontScale >= 1.6 ? { height: maxHeight } : null),
           backgroundColor: c.surfaceElevated,
-          borderTopLeftRadius: theme.borderRadius.xl,
-          borderTopRightRadius: theme.borderRadius.xl,
-          paddingHorizontal: screenMargin,
+          borderTopLeftRadius: theme.radius.sheet,
+          borderTopRightRadius: theme.radius.sheet,
+          ...(floating ? { borderBottomLeftRadius: theme.radius.sheet, borderBottomRightRadius: theme.radius.sheet } : null),
+          borderCurve: 'continuous',
+          paddingHorizontal: padX,
           paddingBottom: bottomPad,
-          opacity: reduceMotion ? fade : 1,
+          ...(floating
+            ? {
+                alignSelf: 'stretch',
+                marginHorizontal: inset,
+                marginBottom: inset,
+                borderWidth: theme.isDark ? theme.stroke.thin : 0,
+                borderColor: c.border,
+                ...theme.elevation.raised,
+              }
+            : null),
+          opacity: panelFade,
           transform: [{ translateY: ty }],
         },
       ]}
@@ -288,7 +354,7 @@ export function BottomSheet({
               marginTop: theme.componentSize.grabberTopOffset,
               width: theme.componentSize.grabberWidth,
               height: theme.componentSize.grabberHeight,
-              borderRadius: theme.borderRadius.full,
+              borderRadius: theme.radius.full,
               backgroundColor: c.outline,
               transform: reduceMotion ? [] : [{ scaleX: grab.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] }) }],
             }}
@@ -297,7 +363,7 @@ export function BottomSheet({
             <Animated.View
               style={[
                 StyleSheet.absoluteFill,
-                { borderRadius: theme.borderRadius.full, backgroundColor: c.textSecondary, opacity: grab },
+                { borderRadius: theme.radius.full, backgroundColor: c.textSecondary, opacity: grab },
               ]}
             />
           </Animated.View>
@@ -307,9 +373,9 @@ export function BottomSheet({
             ref={titleRef}
             accessible
             accessibilityRole="header"
-            style={{ minHeight: closeBox, justifyContent: 'center', paddingRight: closeBox }}
+            style={{ minHeight: closeBox, justifyContent: 'center', paddingRight: showClose ? closeBox : 0 }}
           >
-            <AppText variant="title3" numberOfLines={2}>
+            <AppText variant="title2" numberOfLines={fontScale >= 1.6 ? undefined : 2}>
               {title}
             </AppText>
           </View>
@@ -344,15 +410,17 @@ export function BottomSheet({
       {actions}
       {/* Close sits last in JSX (VoiceOver order: title, description, content, actions, close) and is
           positioned top-right. Its outer edge is screenMargin - 10 so the 24pt glyph lines up with content. */}
-      <View style={{ position: 'absolute', top: closeTop, right: screenMargin - 10 }}>
-        <IconButton
-          name={ICON.close.outline}
-          accessibilityLabel={t('ui.close')}
-          color="textSecondary"
-          disabled={loading}
-          onPress={requestClose}
-        />
-      </View>
+      {showClose ? (
+        <View style={{ position: 'absolute', top: closeTop, right: padX }}>
+          <IconButton
+            variant="small"
+            name={ICON.close.outline}
+            accessibilityLabel={t('ui.close')}
+            disabled={loading}
+            onPress={requestClose}
+          />
+        </View>
+      ) : null}
     </Animated.View>
   );
 

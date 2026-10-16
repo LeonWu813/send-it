@@ -28,10 +28,12 @@ export interface ChipProps {
   onClear?: () => void;
   /** Localized label of the clear button, e.g. "Clear gym filter". Required when `onClear` is set. */
   clearAccessibilityLabel?: string;
-  /** Tape swatch fill (11x11, radius 3) for colour filters. Pops when the chip becomes selected. */
+  /** Tape swatch fill (14x14, radius `minor`) for colour filters. Pops when the chip becomes selected. */
   swatch?: string;
   /** Hairline colour for swatches that need one (white / yellow / pink / black tape). */
   swatchHair?: string;
+  /** Surface the chip sits on: `background` (default, chip = surface) or `surface` (chip = surfaceAlt). */
+  on?: 'background' | 'surface';
   /** Leading glyph (sm 16; md 20 for size="large"). */
   icon?: IoniconName;
   /** Glyph used while selected (e.g. filled variant). Defaults to `icon`. */
@@ -39,7 +41,7 @@ export interface ChipProps {
   /** The glyph scales 0.6 -> 1 (`grip`) when it becomes selected (send-style picker). */
   iconPop?: boolean;
   /**
-   * default: 32pt chip (+6pt hitSlop top/bottom), `footnote`. large: minHeight 44, `subhead`, md glyph;
+   * default: 36pt chip (+4pt hitSlop top/bottom), `subhead` 500. large: minHeight 44, md glyph;
    * for equal-width choice rows, set `style={{ flex: 1 }}`.
    */
   size?: 'default' | 'large';
@@ -49,12 +51,11 @@ export interface ChipProps {
 }
 
 /**
- * Visual height 32 (minHeight) with vertical hitSlop so the touch height is >= 44. Space chips in
- * rows with `columnGap` inlineGap (8) and `rowGap` smd (12) so hit areas never overlap.
- * Selected: secondaryContainer fill cross-faded over `surface` (two layers, opacity only, native
- * driver) + 1.5pt primary outline + 600 weight; outline and weight switch instantly. Padding is
- * smd + (chipSelectedBorder - border) so the outer size never changes. The label reserves its
- * bold width so selection never shifts layout.
+ * Capsule, visual height 36 (`chipHeight`) with vertical hitSlop so the touch height is >= 44. Space
+ * chips with `columnGap` 8 / `rowGap` 8. Selected = INVERTED (textPrimary fill, `background` text);
+ * no outline, no bold copy, weight 500 in both states. Fill AND text colour are two stacked layers
+ * driven by one Animated.Value (`micro` + `standard`, opacity only) so light text never lands on a light
+ * fill. Pressed: unselected `surfaceAltPressed`, selected `textSecondary`. `primary` is never used here.
  */
 export function Chip({
   label,
@@ -66,6 +67,7 @@ export function Chip({
   clearAccessibilityLabel,
   swatch,
   swatchHair,
+  on = 'background',
   icon,
   iconSelected,
   iconPop = false,
@@ -118,14 +120,15 @@ export function Chip({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  const { chipHeight, chipSelectedBorder, chipBorder, tapeSwatch, tapeSwatchRadius } = theme.componentSize;
-  const border = selected ? chipSelectedBorder : chipBorder;
+  const { chipHeight, tapeSwatch } = theme.componentSize;
   const large = size === 'large';
   const height = large ? theme.layout.minTouchTarget : chipHeight;
   const slop = large ? 0 : Math.max(0, (theme.layout.minTouchTarget - chipHeight) / 2);
   const glyph = large ? theme.iconSize.md : theme.iconSize.sm;
-  const textVariant = large ? 'subhead' : 'footnote';
-  const textColor = disabled ? 'textDisabled' : selected ? 'onSecondaryContainer' : 'textSecondary';
+  const textVariant = 'subhead';
+  const offText = disabled ? 'textDisabled' : 'textPrimary';
+  const onText = disabled ? 'textDisabled' : 'background';
+  const textColor = selected ? onText : offText;
   const role = variant === 'choice' ? 'radio' : variant === 'multi' ? 'checkbox' : 'button';
   const showClear = variant === 'filter' && selected && !!onClear;
 
@@ -135,17 +138,17 @@ export function Chip({
       disabled={disabled}
       accessibilityRole={role}
       hitSlop={{ top: slop, bottom: slop, left: 0, right: 0 }}
-      pressedColor={disabled ? undefined : selected ? c.secondaryContainerPressed : c.surfacePressed}
+      pressedColor={disabled ? undefined : selected ? c.textSecondary : c.surfaceAltPressed}
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={variant === 'filter' ? { selected, disabled } : { checked: selected, disabled }}
       underlay={
         <>
-          <View style={[StyleSheet.absoluteFill, { backgroundColor: c.surface }]} />
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.secondaryContainer, opacity: fill }]} />
+          <View style={[StyleSheet.absoluteFill, { backgroundColor: on === 'surface' ? c.surfaceAlt : c.surface }]} />
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.textPrimary, opacity: disabled ? 0 : fill }]} />
         </>
       }
-      style={[{ borderRadius: theme.borderRadius.full, overflow: 'hidden' }, style]}
+      style={[{ borderRadius: theme.radius.full, overflow: 'hidden' }, style]}
     >
       <View
         style={{
@@ -153,11 +156,7 @@ export function Chip({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          borderRadius: theme.borderRadius.full,
-          borderWidth: border,
-          borderColor: disabled ? c.border : selected ? c.primary : c.outline,
-          // keep the outer size constant between the 1pt and 1.5pt outlines
-          paddingHorizontal: theme.spacing.smd + (chipSelectedBorder - border),
+          paddingHorizontal: 14,
         }}
       >
         {swatch ? (
@@ -165,34 +164,43 @@ export function Chip({
             style={{
               width: tapeSwatch,
               height: tapeSwatch,
-              borderRadius: tapeSwatchRadius,
+              borderRadius: theme.radius.minor,
               backgroundColor: swatch,
               borderWidth: swatchHair ? theme.stroke.thin : 0,
               borderColor: swatchHair,
-              marginRight: theme.layout.iconTextGap,
+              marginRight: 6,
               transform: [{ scale: pop }],
             }}
-          />
+          >
+            {/* selected: 1pt `background` ring fades in (keeps black tape visible on the black fill) */}
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                StyleSheet.absoluteFill,
+                { borderRadius: theme.radius.minor, borderWidth: theme.stroke.thin, borderColor: c.background, opacity: fill },
+              ]}
+            />
+          </Animated.View>
         ) : null}
         {icon ? (
-          <Animated.View style={{ marginRight: theme.layout.iconTextGap, transform: [{ scale: iconScale }] }}>
+          <Animated.View style={{ marginRight: 6, transform: [{ scale: iconScale }] }}>
             <Ionicons name={selected && iconSelected ? iconSelected : icon} size={glyph} color={c[textColor]} />
           </Animated.View>
         ) : null}
         <View style={{ flexShrink: 1 }}>
-          {/* invisible bold copy reserves the widest width */}
-          <AppText variant={textVariant} weight="600" numberOfLines={1} style={{ opacity: 0 }} accessibilityElementsHidden importantForAccessibility="no">
+          <AppText variant={textVariant} weight="500" color={offText} numberOfLines={1}>
             {label}
           </AppText>
-          <AppText
-            variant={textVariant}
-            weight={selected ? '600' : '400'}
-            color={textColor}
-            numberOfLines={1}
-            style={{ position: 'absolute', left: 0, right: 0, textAlign: 'center' }}
+          <Animated.View
+            pointerEvents="none"
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={{ position: 'absolute', left: 0, right: 0, opacity: disabled ? 0 : fill }}
           >
-            {label}
-          </AppText>
+            <AppText variant={textVariant} weight="500" color={onText} numberOfLines={1}>
+              {label}
+            </AppText>
+          </Animated.View>
         </View>
         {variant === 'filter' ? (
           <Ionicons name={ICON.dropdown.outline} size={theme.iconSize.sm} color={c[textColor]} style={{ marginLeft: theme.layout.iconTextGap }} />
@@ -241,15 +249,14 @@ function ClearButton({ visible, onPress, accessibilityLabel }: { visible: boolea
   return (
     <Animated.View
       style={{
+        marginLeft: theme.spacing.sm,
         opacity: p,
         transform: reduceMotion ? [] : [{ scale: grow.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) }],
       }}
     >
       <IconButton
-        name={ICON.clear.filled}
-        size={theme.iconSize.md}
-        color="textSecondary"
-        on="background"
+        variant="small"
+        name={ICON.close.outline}
         onPress={() => onPress?.()}
         accessibilityLabel={accessibilityLabel}
       />

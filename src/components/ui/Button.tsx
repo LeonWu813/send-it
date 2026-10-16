@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
-import { ICON } from '../../lib/icons';
 import type { IoniconName } from '../../lib/icons';
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
 import { useTheme } from '../../lib/theme';
@@ -11,7 +10,7 @@ import type { PaletteKey } from '../../lib/theme';
 import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'destructiveTonal' | 'ghost';
 export type ButtonSize = 'lg' | 'md' | 'sm';
 /** Which surface the button sits on; decides the ghost pressed colour (design system §8.5). */
 export type OnSurface = 'surface' | 'background' | 'media' | 'tinted';
@@ -20,7 +19,7 @@ export interface ButtonProps {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
-  /** lg = 50 (primary default, sheet actions, forms), md = 44 (default for other variants), sm = 32 (+6 hitSlop). */
+  /** lg = 52 (primary default, sheet actions, forms; headline), md = 44 (callout), sm = 32 (+6 hitSlop; footnote). All capsules. */
   size?: ButtonSize;
   /**
    * Surface under the button. Only ghost changes: surface -> surfacePressed wash, background ->
@@ -28,7 +27,7 @@ export interface ButtonProps {
    * Secondary always presses to surfaceAltPressed.
    */
   on?: OnSurface;
-  /** Leading icon (use `ICON.*` glyphs). Destructive buttons always carry one (default: delete). */
+  /** Leading icon (use `ICON.*` glyphs). Optional on every variant. */
   icon?: IoniconName;
   /** Trailing icon, only for link-style ghost buttons (`ICON.forward.outline`, `ICON.external.outline`). */
   trailingIcon?: IoniconName;
@@ -48,6 +47,7 @@ const COLORS: Record<ButtonVariant, { bg: PaletteKey | null; fg: PaletteKey; pre
   primary: { bg: 'primary', fg: 'onPrimary', pressed: 'primaryPressed' },
   secondary: { bg: 'surfaceAlt', fg: 'textPrimary', pressed: 'surfaceAltPressed' },
   destructive: { bg: 'error', fg: 'onError', pressed: 'errorPressed' },
+  destructiveTonal: { bg: 'surfaceAlt', fg: 'error', pressed: 'surfaceAltPressed' },
   ghost: { bg: null, fg: 'primary', pressed: 'surfacePressed' },
 };
 
@@ -93,13 +93,12 @@ export function Button({
 
   const resolvedSize: ButtonSize = size ?? (variant === 'primary' ? 'lg' : 'md');
   const dims = {
-    lg: { minHeight: theme.componentSize.buttonPrimaryMinHeight, padH: theme.spacing.mdl, text: 'callout' as const, icon: theme.iconSize.md, radius: theme.borderRadius.lg },
-    md: { minHeight: theme.componentSize.buttonMinHeight, padH: theme.spacing.md, text: 'callout' as const, icon: theme.iconSize.md, radius: theme.borderRadius.lg },
-    sm: { minHeight: theme.componentSize.buttonSmMinHeight, padH: theme.spacing.smd, text: 'footnote' as const, icon: theme.iconSize.sm, radius: theme.borderRadius.md },
+    lg: { minHeight: theme.componentSize.buttonPrimaryMinHeight, padH: theme.spacing.lg, text: 'headline' as const, icon: theme.iconSize.md },
+    md: { minHeight: theme.componentSize.buttonMinHeight, padH: theme.spacing.mdl, text: 'callout' as const, icon: theme.iconSize.md },
+    sm: { minHeight: theme.componentSize.buttonSmMinHeight, padH: 14, text: 'footnote' as const, icon: theme.iconSize.sm },
   }[resolvedSize];
 
-  // Destructive buttons always carry an icon; callers pass ICON.block.outline for "block".
-  const iconName = icon ?? (variant === 'destructive' ? ICON.delete.outline : undefined);
+  const iconName = icon;
 
   const tintedGhost = variant === 'ghost' && on === 'tinted';
   const pressedKey: PaletteKey | null = variant === 'ghost' ? GHOST_PRESSED[on] : spec.pressed;
@@ -122,14 +121,14 @@ export function Button({
       style={[
         {
           minHeight: minHeight ?? dims.minHeight,
-          borderRadius: dims.radius,
+          borderRadius: theme.radius.full,
           paddingHorizontal: dims.padH,
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: bg,
           overflow: 'hidden',
         },
-        fullWidth ? { alignSelf: 'stretch' } : { alignSelf: 'flex-start', minWidth: minHeight ?? dims.minHeight },
+        fullWidth ? { alignSelf: 'stretch' } : { alignSelf: 'flex-start', minWidth: (minHeight ?? dims.minHeight) * 1.5 },
         style,
       ]}
     >

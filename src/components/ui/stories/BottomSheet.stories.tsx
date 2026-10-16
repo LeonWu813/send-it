@@ -40,7 +40,7 @@ function Demo(props: Args): React.JSX.Element {
         }
       >
         {v === 'list-single' ? (
-          ['V2', 'V3', 'V4', 'V5'].map((g, i, all) => (
+          Array.from({ length: props.optionCount ?? 4 }, (_, i) => `V${i + 2}`).map((g, i, all) => (
             <ListRow
               key={g}
               on="elevated"
@@ -71,15 +71,19 @@ const meta: Meta<Args> = {
     title: '封鎖小明？',
     description: '你們將看不到彼此的影片和紀錄。',
     variant: 'confirm',
+    presentation: undefined,
+    optionCount: 4,
     loading: false,
     error: undefined,
   },
   argTypes: {
     variant: { control: 'inline-radio', options: ['content', 'list-single', 'form', 'confirm'] },
+    presentation: { control: 'inline-radio', options: [undefined, 'floating', 'attached'], description: 'Default: form = attached, others floating (auto-attached at font scale >= 1.6, content > 60% height, list > 6)' },
+    optionCount: { control: { type: 'number', min: 2, max: 12 }, description: 'list-single: more than 6 options switches to attached' },
     error: { control: 'text', description: 'Shows an InlineError block above the actions; the sheet stays open' },
   },
 };
 export default meta;
 
-/** Switch `variant` to see each layout. Drag works under Reduce Motion; `loading` disables dismiss and damps the drag to 10%. */
+/** Switch `variant` / `presentation` to see each layout (confirm has no close X). Drag works under Reduce Motion; `loading` disables dismiss and damps the drag to 10%. */
 export const Playground: StoryObj<Args> = {};

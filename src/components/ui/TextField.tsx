@@ -28,9 +28,9 @@ export interface TextFieldProps
     | 'autoFocus'
     | 'maxLength'
   > {
-  /** singleLine: min 48. multiline: min 96, grows to 5 lines then scrolls, Return = newline. search: min 44, search glyph, no label. */
+  /** singleLine: min 48. multiline: min 96, grows to 5 lines then scrolls, Return = newline. search: min 44 capsule, search glyph 18, no label. */
   variant?: TextFieldVariant;
-  /** Field label (footnote 600, textSecondary). Required except for `search` (use accessibilityLabel). */
+  /** Field label (`fieldLabel`: subhead 600 textPrimary, 6 above the field). Required except for `search` (use accessibilityLabel). */
   label?: string;
   value: string;
   onChangeText: (text: string) => void;
@@ -55,7 +55,7 @@ export interface TextFieldProps
 }
 
 /**
- * `surfaceAlt` field, radius md. Outline: 1pt `outline` (3:1) -> focused 1.5pt `primary` -> error 1.5pt
+ * `surfaceAlt` field, radius `control` 12 (search: capsule), continuous curve, horizontal padding 14. Outline: 1pt `outline` (3:1) -> focused 1.5pt `primary` -> error 1.5pt
  * `error`; read-only / disabled 1pt `border`. Padding drops 0.5 when the outline thickens so nothing
  * jumps. The outline switches instantly (no animation). Text is `body` 17 so iOS never zooms in.
  * Tapping anywhere (label included) focuses. Keep the user's input on error.
@@ -93,8 +93,8 @@ export function TextField({
   const borderColor = error ? c.error : locked ? c.border : focused ? c.primary : c.outline;
   // The outline grows 1 -> 1.5, so the padding shrinks by 0.5: the outer size never changes.
   const pad = (base: number): number => base - (borderW - thin);
-  const minHeight = multiline ? 96 : search ? theme.layout.minTouchTarget : theme.componentSize.textFieldMinHeight;
-  const maxLines = theme.typeScale.body.lineHeight * 5 + 2 * theme.spacing.smd;
+  const minHeight = multiline ? 96 : search ? theme.componentSize.searchFieldHeight : theme.componentSize.textFieldMinHeight;
+  const maxLines = theme.typeScale.body.lineHeight * 5 + 2 * 14;
   const textColor = disabled ? c.textDisabled : readOnly ? c.textSecondary : c.textPrimary;
   const baseLabel = label ?? accessibilityLabel ?? '';
   const a11yLabel = readOnly
@@ -107,8 +107,8 @@ export function TextField({
   return (
     <View>
       {label && !search ? (
-        <Pressable accessible={false} onPress={() => input.current?.focus()} style={{ marginBottom: theme.spacing.xs }}>
-          <AppText variant="footnote" weight="600" color="textSecondary">
+        <Pressable accessible={false} onPress={() => input.current?.focus()} style={{ marginBottom: 6 }}>
+          <AppText variant="fieldLabel" color={disabled ? 'textDisabled' : 'textPrimary'}>
             {label}
           </AppText>
         </Pressable>
@@ -122,16 +122,17 @@ export function TextField({
           flexDirection: 'row',
           alignItems: multiline ? 'flex-start' : 'center',
           backgroundColor: c.surfaceAlt,
-          borderRadius: theme.borderRadius.md,
+          borderRadius: search ? theme.radius.full : theme.radius.control,
+          borderCurve: 'continuous',
           borderWidth: borderW,
           borderColor,
-          paddingLeft: pad(theme.spacing.smd),
-          paddingRight: showClear || (secureTextEntry && !locked) ? 0 : pad(theme.spacing.smd),
-          paddingVertical: multiline ? pad(theme.spacing.smd) : 0,
+          paddingLeft: pad(14),
+          paddingRight: showClear || (secureTextEntry && !locked) ? 0 : pad(14),
+          paddingVertical: multiline ? pad(14) : 0,
         }}
       >
         {search ? (
-          <Ionicons name={ICON.search.outline} size={theme.iconSize.md} color={c.textSecondary} style={{ marginRight: theme.spacing.sm }} />
+          <Ionicons name={ICON.search.outline} size={18} color={c.textSecondary} style={{ marginRight: theme.spacing.sm }} />
         ) : null}
         <TextInput
           ref={input}

@@ -11,6 +11,109 @@ Rules that apply everywhere: no hex / `rgba()` / font sizes / radii in component
 touch targets, fixed heights become `minHeight`, pressed states swap to a `*Pressed` colour (never
 opacity), every icon-only button has a localized `accessibilityLabel`, all strings through `t()`.
 
+# v2.2 (design system v2.2, real component redesign) - READ THIS FIRST
+
+Source: `send-it-design/ux-team/design-system/send-it-design-system.md` v2.2, Appendix G. The foundation
+(`theme.ts`, `motion.ts`, `icons.ts`, every `src/components/ui/*`) is done; module engineers migrate their
+own screens. Old names stay as deprecated aliases for one version. Sections 1-3 below describe v1.2
+and are still valid except where this section overrides them.
+
+## Radius roles (replaces `BORDER_RADIUS`)
+
+`RADIUS.minor 4` (tape swatch, skeleton text, `innerRadius` fallback), `tape 6` (TapeBadge ONLY), `control 12`
+(TextField, stepper, notices), `media 12` (thumbnails, inset video grid outer corners), `card 20` (Card, RouteCard,
+grouped list, page InlineError, EmptyState, double-line toast, upload modal), `sheet 32` (fixed), `full` (buttons,
+chips, segmented, avatar, single-line toast, TabBar). Also on `theme.radius`.
+
+```ts
+import { RADIUS, innerRadius, CONTINUOUS } from '../../lib/theme';
+innerRadius(RADIUS.card, 8);   // 12: gap < outer / 2 => concentric (RouteCard thumbnail = card 20, padding 8)
+// gap >= outer / 2 => the inner element uses its own role (list thumb 56 in a card = RADIUS.media)
+<View style={{ borderRadius: RADIUS.card, borderCurve: 'continuous', overflow: 'hidden' }} />
+```
+
+Every container with radius >= 12 sets `borderCurve: 'continuous'` (`...CONTINUOUS`). `BORDER_RADIUS.sm/md/lg/xl`
+are deprecated (values unchanged, v1.2): `sm` -> `minor` / `full` / delete, `md` -> `control` / `media`,
+`lg` -> `card`, `xl` -> `sheet`. Never write `borderRadius: 20` / `12` / `3` directly.
+
+## Tokens that changed or are new
+
+- `LIGHT/DARK_PALETTE` 58 keys: new `segmentedThumb`. Header rules 4/5 rewritten (selected chip = inverted).
+- `TYPE_SCALE.display` (72/76, Latin digits only, `numeric`), `numeric1` (34/40). `FontWeight` includes `'800'`
+  (only `tapeLabel`). `TYPE_VARIANT`: `groupHeader` (was `sectionHeader`, alias kept), `pageSection` (title3 600),
+  `unit` (half-size, textSecondary), `tapeLabel` (lg 24/800, md 13/800, sm 12/700), `fieldLabel` (subhead 600).
+  `<AppText variant="pageSection" | "groupHeader" | "fieldLabel">` work; use `pageSection` for page sections
+  (Home, Profile, RouteDetail) and `groupHeader` ONLY above grouped lists.
+- `ELEVATION.control` (float IconButton, segmented thumb, header capsule); dark = none. `raised` also floating sheet / TabBar.
+- `COMPONENT_SIZE`: `chipHeight 36`, `buttonPrimaryMinHeight 52`, `progressBarHeight 6`, `statsBarHeight 6`,
+  `tapeSwatch 14`, `tapePadH {sm 6, md 8, lg 10}`, `tapeHeight {sm 20, md 24, lg 34}`, `segmentedHeight`,
+  `tabBarHeight 64`, `tabItemWidth 88`, `headerActionGroup`, `smallButton 30`, `mediaButton 32`, `sendStatusDisc 28`,
+  `sendStatusTag 24`, `routeThumb 88` / `routeThumbCompact 64`, `listThumb 56`, `uploadThumb`, `searchFieldHeight 44`,
+  `stepperHeight/Min/Max 56/1/9999`, `unreadDot 8`, `mediaTileAspect 0.75`, `statsPrimaryMinHeight 176`.
+  Deprecated: `chipBorder`, `chipSelectedBorder`, `tapeSwatchRadius`.
+- `LAYOUT`: `listRowPaddingV 14`, `listRowMinHeight 52`, `routeCardPadding 8`, `sheetInset 8`, `mediaGridGapInset 2`,
+  `fieldGap 16`, `compactWidthBreakpoint 360`. `ICON_SIZE.tab` 24. `AVATAR_SIZE.lg` 64.
+- Icons (`ICON`): new `remove`, `image` (`image-outline`), `betaCount` (`play-circle-outline`); `add`, `share`, `locked` already existed.
+
+## Motion (`src/lib/motion.ts`)
+
+`duration.press 100` / `duration.release 120` (press-in / pressed colour leaving; `short` is NOT used for that any more),
+`spring.glide` (selection moving between items: segmented thumb, TabBar pill), `scale.pressWide 0.98`
+(PressableScale picks it itself for controls >= 200pt wide), `distance.{sheetFloatEnter 24, toastEnter 8, stepperDigit 6,
+bookmarkDrop 2}` (via `useMotion().distance`; not time-scaled, unused under Reduce Motion). `useMotion()` time-scales
+`micro`, `press`, `release`, `short`, `medium`, `long`, `celebrate`. M1 reworded, **M12**: springs drive transforms only
+(`translate` / `scale` / `rotate`); opacity and colour always use timing + an easing token; position-derived opacity is clamped.
+
+## Components: new, renamed, removed props
+
+- **Button**: capsule (`RADIUS.full`) in every size; `lg` 52 / `headline`, `md` 44 / `callout`, `sm` 32 / `footnote`; new variant
+  `destructiveTonal` (page entry that opens a confirm; `destructive` is only the final confirm). `destructive` no longer adds a
+  default icon. Min width = height x 1.5.
+- **PressableScale**: press `press` 100, release `release` 120, `pressWide` 0.98 for width >= 200.
+- **IconButton**: variants `tonal` (`diameter` 44 | 52, `tonalBase`), `float`, `small` (30, touch 44), `media` (visual 32);
+  new `IconButtonGroup` (96x44 header action capsule). `onPressIn` / `onPressOut` passthrough.
+- **Chip**: 36 high, **selected = inverted** (textPrimary fill, `background` text), no outline and no bold copy, `subhead` 500;
+  new `on: 'background' | 'surface'`; swatch 14x14 `minor`; clear button = `IconButton small`. `size="large"` kept (min 44).
+  `primary` is never a selection colour.
+- **SegmentedControl (new)**: `<SegmentedControl options value onChange variant accessibilityLabel hapticPurpose />`;
+  `variant: 'standard' (36) | 'compact' (32) | 'icon' (68, tap only)`. Options `{ value, label, icon?, iconSelected?, selectedColor? }`.
+  2-4 items; `glide` thumb, dark theme thumb has a 1pt `outline`. LogSend: use `variant="icon"` with
+  `selectedColor: 'sendTop' | 'sendFlash' | 'sendAttempt'`, `hapticPurpose="send-style"`.
+  `SendStylePicker` is now exactly that (kept, props unchanged).
+- **Stepper (new)**: `<Stepper label description value onChange min max valueText locked lockedDescription lockedAnnouncement doneLabel hapticSource />`.
+  Defaults 1..9999. The container is the VoiceOver element (`adjustable`); `locked` is the flash state (no discs, lock hint, 1pt border,
+  announces `lockedAnnouncement` when it becomes locked; the caller restores the pre-flash value on unlock and submits
+  `resolvedAttempts` as before). Hold -/+ for auto-repeat; tap the number to type (iOS Done accessory). Keep `value` in the screen.
+- **SendStatus** (was `SendStyleChip`; the old name is a re-export that defaults to `variant="tag"`): `variant: 'disc' | 'tag'`, tonal containers
+  (`sendTopContainer` / `sendFlashContainer` / `sendAttemptContainer`); `landing` pops the ICON, not the disc.
+- **TextField**: radius 12, padding 14, label = `fieldLabel`, `search` = capsule 44. Put the fields of one form in ONE `Card` with
+  `gap: LAYOUT.fieldGap`; keep each field's own 1pt border.
+- **BottomSheet**: new `presentation: 'floating' | 'attached'` (default floating, `form` = attached), `optionCount`. Floating = inset 8, radius 32 on all
+  corners; it switches to attached by itself above 60% window height, at font scale >= 1.6, or `list-single` with > 6 options.
+  `confirm` has NO close X (Cancel closes). Close = `IconButton small`. Title `title2`, AX sizes never truncate.
+- **Toast**: capsule when it is one line (content width, 48 high), `card` 20 when it wraps or font scale >= 1.6; **at most ONE action**
+  (`actions` beyond the first are ignored); enters from +8; replacing a single-line toast tweens the width.
+- **ListRow**: min 52, vertical padding 14; new `variant="content"` with `thumbnail` (56, media radius) + `trailing` (a `SendStatus disc`) or a chevron;
+  title `headline`. Dividers start at the title's left edge. Grouped container: `surface`, `RADIUS.card`, `overflow: hidden`.
+- **Card**: radius 20 + continuous curve, new `variant="tinted"` (`primaryContainer`); RouteCard padding is `LAYOUT.routeCardPadding` 8.
+- **ProgressBar**: 6 high. New `UploadProgressCard` (thumbnail + route + percent + bar + failure state with Retry / Cancel).
+- **InlineError / NoticeBox**: no colour bar. `block` has a `title` prop (headline) and the action sits on the same row;
+  page = `surface` card 20, `on="elevated"` (sheet) = `surfaceAlt` 12. `notice` is NEUTRAL (`surfaceAlt`); real warnings use
+  `variant="warning"` / `<NoticeBox tone="warning">` (`noticeContainer`). `warning` prop on `notice` still works.
+- **Skeleton**: text lines `minor`; new compositions `RouteCardSkeleton`, `AscentRowSkeleton`, `VideoCellSkeleton`, `StatsPanelSkeleton`;
+  `shape="tape"`; `thumb` is 12 radius.
+- **EmptyState**: variants `slot` (dashed card, the whole card is the Pressable via `onPrimary`; `primaryLabel` is only a visual hint),
+  `prompt` (`primaryContainer` card: `eyebrow`, `title`, `description`, `primaryLabel`; the ONLY prompt on a page), `filtered`, `private`, `inline`.
+  `firstUse` is a deprecated alias of `prompt`.
+- **Avatar**: `lg` 64; photo fades in `linear`.
+
+## Still to migrate in module code (not part of the foundation)
+
+TapeBadge (`RouteColorBadge`), RouteCard, AppHeader, TabBar / AppShell, StatsPanel, FilterBar, AscentHistoryItem, AscentList,
+LogSendScreen, BetaVideoGrid, ReelOverlay, ReportSheet, ModerationActions (spec G.7). Not built: anything in Appendix F.
+
+---
+
 ## 1. Colours (`src/lib/theme.ts`)
 
 57 keys per palette (light + dark, identical key sets). See Foundations/Tokens.

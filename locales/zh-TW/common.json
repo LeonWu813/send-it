@@ -524,7 +524,15 @@
     "clearText": "清除",
     "toastWithActions": "{{message}}。可用動作：{{actions}}",
     "avatarOf": "{{name}} 的頭像",
-    "progress": "進度"
+    "progress": "進度",
+    "stepper": {
+      "done": "完成",
+      "enterNumber": "輸入數字",
+      "decrease": "減少",
+      "increase": "增加",
+      "announceLocked": "{{label}}已固定為 {{value}}",
+      "lockedValue": "{{label}}，{{value}}，{{reason}}，無法修改"
+    }
   },
   "tabs": {
     "home": "首頁",

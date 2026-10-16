@@ -2,10 +2,13 @@
  * Motion tokens and useMotion() (design system §10). Identical in both themes.
  *
  * Rules:
- *  - Exits are shorter than entrances.
+ *  - M1: A component leaving the screen is shorter than its entrance. A pressed background
+ *    returning to rest (`release`) is not "leaving the screen" and is exempt.
  *  - Anything that blocks interaction is <= `medium` (300ms).
  *  - `topOut` spring is only for "earned" moments (top, flash, new highest, badge 0->n, like);
  *    never for high-frequency interactions.
+ *  - M12: Springs drive transforms only; opacity and colour always use timing; position-derived
+ *    opacity is clamped.
  *  - Particles animate transform + opacity only, with the native driver.
  *  - Reduce Motion does NOT change token values: components switch to a `short` cross-fade
  *    (no translate/scale/particles/shake). Information and haptics are unchanged.
@@ -23,6 +26,10 @@ export const MOTION = {
   duration: {
     instant: 0,
     micro: 100,
+    /** Press-in: pressed layer 0 -> 1, scale to pressControl / pressWide. */
+    press: 100,
+    /** Press-out: pressed layer 1 -> 0 (20ms longer than press so a fast tap is still seen). */
+    release: 120,
     short: 200,
     medium: 300,
     long: 450,
@@ -49,10 +56,14 @@ export const MOTION = {
     grip: { stiffness: 400, damping: 20, mass: 0.6 },
     topOut: { stiffness: 260, damping: 10, mass: 0.8 },
     settle: { stiffness: 280, damping: 28, mass: 1 },
+    /** Selection indicator moving between items (SegmentedControl thumb, TabBar pill). */
+    glide: { stiffness: 380, damping: 34, mass: 1 },
   },
-  scale: { pressControl: 0.96, pop: 1.2, celebratePeak: 1.3 },
+  scale: { pressControl: 0.96, pressWide: 0.98, pop: 1.2, celebratePeak: 1.3 },
   /** Failure shake: translateX 0 -> +d -> -d -> +d -> 0 in `segments` linear steps over duration.short. */
   shake: { distancePt: 4, segments: 4 },
+  /** Translate distances. Not affected by timeScale; unused under Reduce Motion. */
+  distance: { sheetFloatEnter: 24, toastEnter: 8, stepperDigit: 6, bookmarkDrop: 2 },
   particles: {
     flash: {
       count: 10,
@@ -168,6 +179,7 @@ export interface UseMotion {
   spring: MotionTokens['spring'];
   scale: MotionTokens['scale'];
   shake: MotionTokens['shake'];
+  distance: MotionTokens['distance'];
   particles: MotionTokens['particles'];
   reduceMotion: boolean;
   /**
@@ -188,7 +200,7 @@ export function useMotion(): UseMotion {
     if (timeScale === 1) return MOTION.duration;
     // Only the visual durations scale; throttles, delays and timeouts do not.
     const out: Record<keyof MotionTokens['duration'], number> = { ...MOTION.duration };
-    (['micro', 'short', 'medium', 'long', 'celebrate'] as const).forEach((k) => {
+    (['micro', 'press', 'release', 'short', 'medium', 'long', 'celebrate'] as const).forEach((k) => {
       out[k] = MOTION.duration[k] * timeScale;
     });
     return out;
@@ -211,6 +223,7 @@ export function useMotion(): UseMotion {
       spring: MOTION.spring,
       scale: MOTION.scale,
       shake: MOTION.shake,
+      distance: MOTION.distance,
       particles: MOTION.particles,
       reduceMotion,
       haptic,

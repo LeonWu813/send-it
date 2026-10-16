@@ -11,7 +11,7 @@ import { Badge, BadgeAnchor } from './Badge';
 import type { OnSurface } from './Button';
 import { PressableScale } from './PressableScale';
 
-export type IconButtonVariant = 'plain' | 'toggle' | 'media';
+export type IconButtonVariant = 'plain' | 'toggle' | 'media' | 'tonal' | 'float' | 'small';
 
 export interface IconButtonProps {
   /** Glyph (use `ICON.*`). For `toggle` this is the OFF glyph. */
@@ -22,7 +22,12 @@ export interface IconButtonProps {
   accessibilityLabel: string;
   accessibilityHint?: string;
   onPress: () => void;
-  /** plain: transparent, pressed disc. toggle: two stacked glyphs cross-fade. media: scrim disc, onMedia glyph. */
+  /**
+   * plain: transparent, pressed disc. toggle: two stacked glyphs cross-fade. media: scrim disc, onMedia
+   * glyph (visual 32, touch 44). tonal: `surfaceAlt` disc (44 or 52). float: `surface` disc + control
+   * shadow (dark: 1pt border), nested-screen back button. small: 30 `surfaceAlt` disc (sheet close,
+   * FilterChip clear), touch 44 through hitSlop.
+   */
   variant?: IconButtonVariant;
   /** Surface under the button (decides the pressed disc, §8.5). `media` forces 'media'. */
   on?: OnSurface;
@@ -30,11 +35,18 @@ export interface IconButtonProps {
   color?: PaletteKey;
   /** toggle ON colour. Default `primary`. */
   colorOn?: PaletteKey;
+  /** tonal only: disc diameter, 44 (default) or 52 (next to an `lg` Button). */
+  diameter?: 44 | 52;
+  /** tonal only: disc colour. `surface` when the button sits inside a `surfaceAlt` container (stepper). */
+  tonalBase?: 'surfaceAlt' | 'surface';
   /** Glyph size: md 20 (in-card), lg 24 (header, nav, sheet), xl 28 (Reel). Default lg. */
   size?: number;
   /** toggle: the ON state. Also reported as accessibilityState.selected. */
   selected?: boolean;
   disabled?: boolean;
+  /** Press-and-hold hooks (Stepper auto-repeat). */
+  onPressIn?: () => void;
+  onPressOut?: () => void;
   /** Unread count marker (0 hides it). Put the count in `accessibilityLabel` too. */
   badge?: number;
   /** The badge number arrived live in the foreground: it pops in with `topOut`. */
@@ -58,8 +70,12 @@ export function IconButton({
   color = 'textPrimary',
   colorOn = 'primary',
   size,
+  diameter,
+  tonalBase = 'surfaceAlt',
   selected,
   disabled,
+  onPressIn,
+  onPressOut,
   badge,
   badgeLive,
   style,
@@ -68,7 +84,13 @@ export function IconButton({
   const { duration } = useMotion();
   const c = theme.colors;
   const box = theme.layout.minTouchTarget;
-  const glyph = size ?? theme.iconSize.lg;
+  const sm = theme.componentSize;
+  const disc =
+    variant === 'small' ? sm.smallButton : variant === 'media' ? sm.mediaButton : variant === 'tonal' ? (diameter ?? box) : box;
+  const slop = Math.max(0, (box - disc) / 2);
+  const defaultGlyph =
+    variant === 'small' ? theme.iconSize.sm : variant === 'media' ? theme.iconSize.md : variant === 'tonal' ? theme.iconSize.md : theme.iconSize.lg;
+  const glyph = size ?? defaultGlyph;
   const surface: OnSurface = variant === 'media' ? 'media' : on;
   const [pressed, setPressed] = useState(false);
   const fade = useRef(new Animated.Value(selected ? 1 : 0)).current;
@@ -84,33 +106,59 @@ export function IconButton({
   }, [selected, variant, fade, duration.micro]);
 
   const pressedDisc: PaletteKey | null =
-    surface === 'surface' ? 'surfacePressed' : surface === 'background' ? 'surfaceAltPressed' : surface === 'media' ? 'mediaScrimStrong' : null;
+    variant === 'tonal' || variant === 'small'
+      ? 'surfaceAltPressed'
+      : variant === 'float'
+        ? 'surfacePressed'
+        : surface === 'surface' ? 'surfacePressed' : surface === 'background' ? 'surfaceAltPressed' : surface === 'media' ? 'mediaScrimStrong' : null;
   const tintedPressed = surface === 'tinted' && pressed;
-  const offColor = variant === 'media' ? c.onMedia : disabled ? c.textDisabled : tintedPressed ? c.primaryPressed : c[color];
+  const fixedColor: PaletteKey | null = variant === 'tonal' || variant === 'float' ? 'textPrimary' : variant === 'small' ? 'textSecondary' : null;
+  const offColor =
+    variant === 'media' ? c.onMedia : disabled ? c.textDisabled : tintedPressed ? c.primaryPressed : c[fixedColor ?? color];
   const onColor = variant === 'media' ? c.onMedia : disabled ? c.textDisabled : c[colorOn];
 
   // media: the disc swaps between mediaScrim and mediaScrimStrong (no wash, so the two never stack)
   const mediaBg = variant === 'media' ? (pressed ? c.mediaScrimStrong : c.mediaScrim) : undefined;
+  const discBg =
+    variant === 'tonal'
+      ? c[tonalBase]
+      : variant === 'small'
+        ? c.surfaceAlt
+        : variant === 'float'
+          ? theme.isDark
+            ? c.surfaceElevated
+            : c.surface
+          : mediaBg;
 
   return (
     <PressableScale
       onPress={onPress}
-      onPressIn={() => setPressed(true)}
-      onPressOut={() => setPressed(false)}
+      onPressIn={() => {
+        setPressed(true);
+        onPressIn?.();
+      }}
+      onPressOut={() => {
+        setPressed(false);
+        onPressOut?.();
+      }}
       disabled={disabled}
       pressedColor={disabled || variant === 'media' || !pressedDisc ? undefined : c[pressedDisc]}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled, selected }}
+      hitSlop={slop ? { top: slop, bottom: slop, left: slop, right: slop } : undefined}
       style={[
         {
-          width: box,
-          height: box,
-          borderRadius: theme.borderRadius.full,
+          width: disc,
+          height: disc,
+          borderRadius: theme.radius.full,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: mediaBg,
+          backgroundColor: discBg,
         },
+        variant === 'float'
+          ? { ...theme.elevation.control, borderWidth: theme.isDark ? theme.stroke.thin : 0, borderColor: c.border }
+          : null,
         style,
       ]}
     >
@@ -132,5 +180,44 @@ export function IconButton({
         </BadgeAnchor>
       ) : null}
     </PressableScale>
+  );
+}
+
+export interface IconButtonGroupItem {
+  name: IoniconName;
+  accessibilityLabel: string;
+  onPress: () => void;
+  badge?: number;
+}
+
+/**
+ * Header action capsule: 96 x 44 (two 44 buttons, 8 between), `float` style. The container is not
+ * an accessibility element; each button is. The pressed button shows its own 44 `surfacePressed` disc.
+ */
+export function IconButtonGroup({ items, style }: { items: [IconButtonGroupItem, IconButtonGroupItem]; style?: StyleProp<ViewStyle> }): React.JSX.Element {
+  const { theme } = useTheme();
+  const { width, height, gap } = theme.componentSize.headerActionGroup;
+  const c = theme.colors;
+  return (
+    <View
+      style={[
+        {
+          width,
+          height,
+          flexDirection: 'row',
+          columnGap: gap,
+          borderRadius: theme.radius.full,
+          backgroundColor: theme.isDark ? c.surfaceElevated : c.surface,
+          borderWidth: theme.isDark ? theme.stroke.thin : 0,
+          borderColor: c.border,
+          ...theme.elevation.control,
+        },
+        style,
+      ]}
+    >
+      {items.map((it) => (
+        <IconButton key={it.accessibilityLabel} name={it.name} accessibilityLabel={it.accessibilityLabel} onPress={it.onPress} badge={it.badge} on="surface" size={theme.iconSize.md + 2} />
+      ))}
+    </View>
   );
 }

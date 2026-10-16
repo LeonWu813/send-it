@@ -1,14 +1,17 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 
 import { SPRING_REST, bezierFor, USE_NATIVE_DRIVER, useMotion } from '../../lib/motion';
 
+/** Controls at least this wide press to `pressWide` (0.98) instead of `pressControl` (0.96). */
+const WIDE_CONTROL = 200;
+
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 export interface PressableScaleProps extends Omit<PressableProps, 'style' | 'children'> {
   /**
-   * 'control' (buttons, chips, icon buttons, tiles): scale to 0.96 + colour wash.
+   * 'control' (buttons, chips, icon buttons, tiles): scale to 0.96 (0.98 when the control is >= 200pt wide) + colour wash.
    * 'row' (cards, list rows): colour wash only, never scales.
    */
   feedback?: 'control' | 'row';
@@ -35,12 +38,14 @@ export function PressableScale({
   children,
   onPressIn,
   onPressOut,
+  onLayout,
   accessibilityRole = 'button',
   ...rest
 }: PressableScaleProps): React.JSX.Element {
   const { duration, scale, spring, reduceMotion } = useMotion();
   const wash = useRef(new Animated.Value(0)).current;
   const size = useRef(new Animated.Value(1)).current;
+  const [wide, setWide] = useState(false);
   const scales = feedback === 'control' && !reduceMotion;
 
   useEffect(() => {
@@ -53,18 +58,22 @@ export function PressableScale({
     <AnimatedPressable
       {...rest}
       accessibilityRole={accessibilityRole}
+      onLayout={(e) => {
+        setWide(e.nativeEvent.layout.width >= WIDE_CONTROL);
+        onLayout?.(e);
+      }}
       unstable_pressDelay={inScroll ? duration.pressDelayInScroll : undefined}
       onPressIn={(e) => {
         Animated.timing(wash, {
           toValue: 1,
-          duration: duration.micro,
+          duration: duration.press,
           easing: bezierFor('standard'),
           useNativeDriver: USE_NATIVE_DRIVER,
         }).start();
         if (scales) {
           Animated.timing(size, {
-            toValue: scale.pressControl,
-            duration: duration.micro,
+            toValue: wide ? scale.pressWide : scale.pressControl,
+            duration: duration.press,
             easing: bezierFor('standard'),
             useNativeDriver: USE_NATIVE_DRIVER,
           }).start();
@@ -74,7 +83,7 @@ export function PressableScale({
       onPressOut={(e) => {
         Animated.timing(wash, {
           toValue: 0,
-          duration: duration.short,
+          duration: duration.release,
           easing: bezierFor('standard'),
           useNativeDriver: USE_NATIVE_DRIVER,
         }).start();

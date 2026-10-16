@@ -26,8 +26,8 @@ const meta: Meta<CardProps> = {
   component: Demo,
   args: { variant: 'static', padding: 16 },
   argTypes: {
-    variant: { control: 'inline-radio', options: ['static', 'pressable', 'elevated'] },
-    padding: { control: 'inline-radio', options: [12, 16], description: '16 = cardPadding; RouteCard uses 12' },
+    variant: { control: 'inline-radio', options: ['static', 'pressable', 'elevated', 'tinted'] },
+    padding: { control: 'inline-radio', options: [8, 16, 20], description: '16 = cardPadding; RouteCard 8; tinted prompt 20' },
   },
 };
 export default meta;

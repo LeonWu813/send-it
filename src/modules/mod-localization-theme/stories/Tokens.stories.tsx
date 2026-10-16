@@ -7,7 +7,8 @@ import { AppText } from '../../../components/ui/AppText';
 import { MOTION } from '../../../lib/motion';
 import {
   AVATAR_SIZE,
-  BORDER_RADIUS,
+  RADIUS,
+  innerRadius,
   COMPONENT_SIZE,
   DARK_PALETTE,
   ICON_SIZE,
@@ -104,12 +105,30 @@ function Tokens(): React.JSX.Element {
         ))}
       </Section>
 
-      <Section title="BORDER_RADIUS">
+      <Section title="RADIUS roles (BORDER_RADIUS is deprecated)">
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          {Object.entries(BORDER_RADIUS).map(([name, value]) => (
+          {Object.entries(RADIUS).map(([name, value]) => (
             <View key={name} style={{ alignItems: 'center', marginRight: 24, marginBottom: 12 }}>
-              <View style={{ width: 72, height: 72, backgroundColor: c.surface, borderColor: c.primary, borderWidth: 2, borderRadius: value }} />
+              <View style={{ width: 72, height: 72, backgroundColor: c.surface, borderColor: c.primary, borderWidth: 2, borderRadius: value, borderCurve: 'continuous' }} />
               <AppText variant="footnote" color="textSecondary">{`${name} (${value})`}</AppText>
+            </View>
+          ))}
+        </View>
+        <AppText variant="subhead" style={{ marginTop: 8, marginBottom: 8 }}>
+          innerRadius(outer, gap) = max(outer - gap, 4). Gap below outer / 2 must be concentric:
+        </AppText>
+        <View style={{ flexDirection: 'row', columnGap: 24 }}>
+          {[
+            [20, 8],
+            [20, 16],
+            [32, 20],
+            [12, 6],
+          ].map(([outer, gap]) => (
+            <View key={`${outer}-${gap}`} style={{ alignItems: 'center' }}>
+              <View style={{ width: 96, height: 96, padding: gap, borderRadius: outer, borderCurve: 'continuous', backgroundColor: c.surfaceAlt, borderWidth: 1, borderColor: c.outline }}>
+                <View style={{ flex: 1, borderRadius: innerRadius(outer, gap), borderCurve: 'continuous', backgroundColor: c.primary }} />
+              </View>
+              <AppText variant="caption1" color="textSecondary">{`outer ${outer}, gap ${gap} -> ${innerRadius(outer, gap)}`}</AppText>
             </View>
           ))}
         </View>
@@ -138,7 +157,7 @@ function Tokens(): React.JSX.Element {
         <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap' }}>
           {Object.entries(AVATAR_SIZE).map(([name, value]) => (
             <View key={name} style={{ alignItems: 'center', marginRight: 24 }}>
-              <View style={{ width: value, height: value, borderRadius: BORDER_RADIUS.full, backgroundColor: c.surfaceAlt, borderWidth: STROKE.hairline, borderColor: c.border }} />
+              <View style={{ width: value, height: value, borderRadius: RADIUS.full, backgroundColor: c.surfaceAlt, borderWidth: STROKE.hairline, borderColor: c.border }} />
               <AppText variant="caption1" color="textSecondary">{`${name} ${value}`}</AppText>
             </View>
           ))}
@@ -155,11 +174,11 @@ function Tokens(): React.JSX.Element {
 
       <Section title="ELEVATION (current theme)">
         <View style={{ flexDirection: 'row' }}>
-          {(['card', 'raised'] as const).map((k) => (
+          {(['card', 'control', 'raised'] as const).map((k) => (
             <View
               key={k}
               style={[
-                { width: 120, height: 72, margin: 12, backgroundColor: c.surface, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', justifyContent: 'center', borderWidth: theme.isDark ? 1 : 0, borderColor: c.border },
+                { width: 120, height: 72, margin: 12, backgroundColor: c.surface, borderRadius: RADIUS.card, alignItems: 'center', justifyContent: 'center', borderWidth: theme.isDark ? 1 : 0, borderColor: c.border },
                 theme.elevation[k],
               ]}
             >
@@ -186,6 +205,11 @@ function Tokens(): React.JSX.Element {
         {Object.entries(MOTION.spring).map(([name, v]) => (
           <Row key={name} label={`spring.${name}`}>
             <AppText variant="footnote">{JSON.stringify(v)}</AppText>
+          </Row>
+        ))}
+        {Object.entries(MOTION.distance).map(([name, v]) => (
+          <Row key={name} label={`distance.${name}`}>
+            <AppText variant="footnote">{`${v}pt (not time-scaled; unused under Reduce Motion)`}</AppText>
           </Row>
         ))}
         {Object.entries(MOTION.scale).map(([name, v]) => (
