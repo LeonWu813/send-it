@@ -461,6 +461,13 @@ export default function RouteDetailScreen({
         <LogSendScreen
           routeId={route.id}
           routeGrade={route.grade}
+          routeSummary={{
+            color: route.color_tag,
+            grade: route.grade,
+            title: routeName,
+            subtitle: gymName,
+            photoUri: photoUri ?? undefined,
+          }}
           session={session}
           onSuccess={handleLogSendSuccess}
           onCancel={handleLogSendCancel}
