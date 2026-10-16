@@ -391,8 +391,6 @@
     },
     "moreOptions": "更多選項",
     "menu": {
-      "reportAndBlock": "檢舉並封鎖",
-      "reportAndBlockHint": "我們會審查這個帳號，你們也會立刻互相看不到對方的內容。",
       "actionFailed": "沒送出，再試一次。"
     }
   },

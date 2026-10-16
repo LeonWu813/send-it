@@ -2,6 +2,13 @@
 
 ## Engineering Progress
 
+> Off-spec design work (pending PR review): design system v1.2 applied to `src/modules/mod-send-logging/**` (2026-10-16, branch design/storybook). Visual + motion only; no service changes, nothing from spec Appendix F.
+> - AscentList (§32.8): Card + hairline rows, Avatar sm, `SendStyleChip` (replaces `FLASH_BADGE_COLOR`), IconButton delete (own rows only), 3-line note + More, Skeleton / EmptyState inline / InlineError block, VoiceOver row label, delete via BottomSheet `confirm` (failure shown in the sheet with Retry, row stays, per §32.8), "Deleted" toast, D1 new-row landing (detected as an own new id after a `refreshKey` refresh).
+> - LogSendScreen: `SendStylePicker` (D2 grip pop via ui), attempts locked to 1 on flash (already today's behaviour) with a `short` cross-fade, `TextField` / `Button` / `InlineError`; save error now a translated sentence. No date picker exists today, so the date stays a text field.
+> - RouteSearchScreen: `TextField search`, `ListRow`, Skeleton / InlineError / EmptyState.
+> - Locale keys added: `sends.deleted`, `sends.loading`, `sends.searching`, `sends.logged`, `sends.noteMore`, `sends.deleteLabel`, `sends.errors.deleteFailed`.
+> - Tests updated (50 pass); `test-utils` now wraps `ToastProvider`. Stories: `SendLogging/AscentList` (one Playground, controls: state, rowCount, refreshKey), `SendLogging/LogSendScreen`.
+
 > Off-spec design tooling (pending PR review): added Storybook stories for AscentList at `src/modules/mod-send-logging/stories/AscentList.stories.tsx` (branch design/storybook). No component source changes.
 
 ### Bugfix — Bug E (attempts clamping) + Bug G (delete button in send history) (2026-10-04)

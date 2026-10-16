@@ -48,12 +48,12 @@ describe('LogSendScreen', () => {
     expect(screen.queryByText('V5')).toBeNull();
   });
 
-  it('renders exactly three style chips (flash, top, attempt) — project is removed (AC-014)', () => {
+  it('renders exactly three style chips (flash, send/top, attempt) — project is removed (AC-014)', () => {
     render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
 
     // All three valid style options must be present — query by text since i18n renders them
     expect(screen.getByText(/Flash|閃攀/)).toBeTruthy();
-    expect(screen.getByText(/^Top$|^完攀$/)).toBeTruthy();
+    expect(screen.getByText(/^Send$|^完攀$/)).toBeTruthy();
     expect(screen.getByText(/^Attempt$|^嘗試$/)).toBeTruthy();
     // 'project' must NOT appear in the UI (AC-014)
     expect(screen.queryByText(/^Project$|^項目$/)).toBeNull();

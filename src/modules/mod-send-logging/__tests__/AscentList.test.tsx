@@ -17,7 +17,6 @@ jest.mock('../send-service', () => ({
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
-
 import { Alert } from 'react-native';
 
 import { deleteAscent, loadAscentsForRoute } from '../send-service';
@@ -92,10 +91,10 @@ describe('AscentList', () => {
     render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Some "no ascents" message should be visible
-      const allText = screen.toJSON();
-      expect(allText).toBeTruthy();
+      expect(screen.getByText(/No sends yet|還沒有紀錄/)).toBeTruthy();
     });
+    // The inline empty state carries the (ghost) log button.
+    expect(screen.getAllByRole('button', { name: /Log Send|記錄完攀/ }).length).toBeGreaterThan(0);
   });
 
   it('shows style badge, attempts, date, and username for each ascent', async () => {
@@ -148,7 +147,7 @@ describe('AscentList', () => {
     });
   });
 
-  it('renders the flash badge with gold background (#FFD700) for a flash ascent', async () => {
+  it('renders the flash style chip with the sendFlashContainer fill for a flash ascent', async () => {
     mockLoadAscents.mockResolvedValueOnce([MOCK_OTHER_ASCENT]);
 
     const { toJSON } = render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
@@ -157,10 +156,9 @@ describe('AscentList', () => {
       expect(screen.getByText('OtherClimber')).toBeTruthy();
     });
 
-    // Serialize the rendered tree and confirm #FFD700 appears as a backgroundColor.
-    // This verifies the FLASH_BADGE_COLOR constant is applied to the style badge view.
-    const treeStr = JSON.stringify(toJSON());
-    expect(treeStr).toContain('#FFD700');
+    // Flash uses the theme token (no hard-coded gold): light sendFlashContainer.
+    expect(JSON.stringify(toJSON())).toContain('#FFDEAE');
+    expect(JSON.stringify(toJSON())).not.toContain('#FFD700');
   });
 
   it('re-fetches ascents when refreshKey increments (AC-013)', async () => {
@@ -190,73 +188,81 @@ describe('AscentList', () => {
     });
   });
 
+  const deleteButtons = (): ReturnType<typeof screen.queryAllByRole> =>
+    screen.queryAllByRole('button').filter(
+      (el) =>
+        typeof el.props.accessibilityLabel === 'string' &&
+        /^(Delete|刪除)/.test(el.props.accessibilityLabel),
+    );
+
   it('shows a delete button only for the current user\'s own ascents', async () => {
     mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT, MOCK_OTHER_ASCENT]);
 
     render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // The delete button accessibility label matches 'Delete' or '刪除'
-      const deleteButtons = screen.queryAllByRole('button').filter(
-        (el) =>
-          el.props.accessibilityLabel === 'Delete' ||
-          el.props.accessibilityLabel === '刪除',
-      );
-      // Only one delete button — for own ascent (ascent-001, user-001)
-      // Other user's ascent (ascent-002, user-002) gets no delete button
-      expect(deleteButtons).toHaveLength(1);
+      expect(screen.getByText('OtherClimber')).toBeTruthy();
     });
+    // Only one delete button, for the own ascent; the other row keeps no slot.
+    expect(deleteButtons()).toHaveLength(1);
   });
 
-  it('shows Alert confirmation dialog when delete button is tapped', async () => {
+  it('opens the confirm sheet (no system Alert) when delete is tapped, without deleting yet', async () => {
     mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT]);
     const alertSpy = jest.spyOn(Alert, 'alert');
 
     render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      const deleteButtons = screen.queryAllByRole('button').filter(
-        (el) =>
-          el.props.accessibilityLabel === 'Delete' ||
-          el.props.accessibilityLabel === '刪除',
-      );
-      expect(deleteButtons).toHaveLength(1);
-      fireEvent.press(deleteButtons[0]);
+      expect(deleteButtons()).toHaveLength(1);
     });
+    fireEvent.press(deleteButtons()[0]);
 
-    expect(alertSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.getByText(/Delete this send\?|刪除這筆紀錄？/)).toBeTruthy();
+    });
+    expect(alertSpy).not.toHaveBeenCalled();
+    expect(mockDeleteAscent).not.toHaveBeenCalled();
     alertSpy.mockRestore();
   });
 
-  it('calls deleteAscent and removes the row optimistically when user confirms', async () => {
+  it('calls deleteAscent and removes the row once the user confirms in the sheet', async () => {
     mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT]);
     mockDeleteAscent.mockResolvedValueOnce(undefined);
-
-    // Intercept Alert.alert and immediately invoke the "Delete" button handler
-    jest.spyOn(Alert, 'alert').mockImplementationOnce((_title, _message, buttons) => {
-      const deleteButton = buttons?.find(
-        (b) => b.style === 'destructive',
-      );
-      deleteButton?.onPress?.();
-    });
 
     render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
       expect(screen.getByText('Leon')).toBeTruthy();
     });
+    fireEvent.press(deleteButtons()[0]);
 
-    const deleteButtons = screen.queryAllByRole('button').filter(
-      (el) =>
-        el.props.accessibilityLabel === 'Delete' ||
-        el.props.accessibilityLabel === '刪除',
-    );
-    fireEvent.press(deleteButtons[0]);
+    const confirm = await screen.findAllByRole('button', { name: /^(Delete|刪除)$/ });
+    fireEvent.press(confirm[0]);
 
     await waitFor(() => {
       expect(mockDeleteAscent).toHaveBeenCalledWith('ascent-001');
-      // Optimistically removed — Leon's ascent should be gone
       expect(screen.queryByText('Leon')).toBeNull();
     });
+  });
+
+  it('keeps the row and shows the error inside the sheet when delete fails', async () => {
+    mockLoadAscents.mockResolvedValueOnce([MOCK_OWN_ASCENT]);
+    mockDeleteAscent.mockRejectedValueOnce(new Error('nope'));
+
+    render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByText('Leon')).toBeTruthy();
+    });
+    fireEvent.press(deleteButtons()[0]);
+
+    const confirm = await screen.findAllByRole('button', { name: /^(Delete|刪除)$/ });
+    fireEvent.press(confirm[0]);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Failed to delete your send|刪除失敗/)).toBeTruthy();
+    });
+    expect(screen.getByText('Leon')).toBeTruthy();
   });
 });

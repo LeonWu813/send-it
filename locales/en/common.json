@@ -391,8 +391,6 @@
     },
     "moreOptions": "More options",
     "menu": {
-      "reportAndBlock": "Report and block",
-      "reportAndBlockHint": "We'll review this account, and you'll both stop seeing each other's content right away.",
       "actionFailed": "Didn't go through. Try again."
     }
   },

@@ -4,6 +4,7 @@ import React from 'react';
 import { View } from 'react-native';
 
 import { setStubData } from '../../../../.storybook/stubs/supabase';
+import { ToastProvider } from '../../../components/ui';
 import AscentList from '../components/AscentList';
 
 /**
@@ -48,42 +49,62 @@ const mixed: Row[] = [
   row(5, { user_id: 'u4', style: 'attempt', attempts: 2, users: { display_name: 'Sam' } }),
 ];
 
-const long: Row[] = Array.from({ length: 40 }, (_, i) => {
+/** `count` rows: the first five are the hand-written mix above, the rest cycle through styles and authors. */
+function rowsFor(count: number): Row[] {
   const styles = ['flash', 'top', 'attempt'] as const;
-  const mine = i % 5 === 0;
-  return row(i + 1, {
-    user_id: mine ? ME : `u${i}`,
-    style: styles[i % 3],
-    attempts: (i % 7) + 1,
-    note: mine ? `Note #${i + 1}: 這是一段很長的備註，用來測試換行 wrapping of long text in the note box.` : null,
-    is_private: i % 9 === 0,
-    users: { display_name: mine ? 'Me' : `Climber ${i + 1}` },
+  return Array.from({ length: count }, (_, i) => {
+    if (i < mixed.length) return mixed[i];
+    const mine = i % 5 === 0;
+    return row(i + 1, {
+      user_id: mine ? ME : `u${i}`,
+      style: styles[i % 3],
+      attempts: (i % 7) + 1,
+      note: mine ? `Note #${i + 1}: 這是一段很長的備註，用來測試換行 wrapping of long text in the note box, long enough to run past three lines so the More link appears.` : null,
+      is_private: i % 9 === 0,
+      users: { display_name: mine ? 'Me' : `Climber ${i + 1}` },
+    });
   });
-});
+}
+
+type ListState = 'populated' | 'empty' | 'error';
+
+interface PlaygroundArgs {
+  state: ListState;
+  rowCount: number;
+  /** Bump to simulate the parent incrementing refreshKey after a log (plays the new-row landing). */
+  refreshKey: number;
+}
 
 /** Seeds the stub synchronously during render so the component's fetch effect sees it. */
-function Seeded({ data, refreshKey }: { data: unknown; refreshKey?: number }): React.JSX.Element {
-  setStubData('ascents', data);
+function Seeded({ state, rowCount, refreshKey }: PlaygroundArgs): React.JSX.Element {
+  // The stub returns a non-array for `error`, so the service's `.map` throws and the real error UI shows.
+  setStubData('ascents', state === 'error' ? 'boom' : state === 'empty' ? [] : rowsFor(rowCount));
   return (
-    <View style={{ padding: 16, maxWidth: 420 }}>
-      <AscentList routeId="route-1" session={session} onLogSend={() => {}} refreshKey={refreshKey} />
-    </View>
+    <ToastProvider>
+      <View style={{ padding: 16, maxWidth: 420 }}>
+        <AscentList routeId="route-1" session={session} onLogSend={() => {}} refreshKey={refreshKey} />
+      </View>
+    </ToastProvider>
   );
 }
 
-const meta: Meta<typeof AscentList> = {
+const meta: Meta<PlaygroundArgs> = {
   title: 'SendLogging/AscentList',
-  component: AscentList,
   parameters: { layout: 'fullscreen' },
+  args: { state: 'populated', rowCount: 5, refreshKey: 0 },
+  argTypes: {
+    state: { control: 'inline-radio', options: ['populated', 'empty', 'error'] },
+    rowCount: { control: { type: 'range', min: 1, max: 40, step: 1 } },
+    refreshKey: { control: { type: 'number', min: 0, max: 20 } },
+  },
+  // Remount on state / row count so the fetch effect runs against freshly seeded data.
+  render: (args) => <Seeded key={`${args.state}-${args.rowCount}`} {...args} />,
 };
 export default meta;
-type Story = StoryObj<typeof AscentList>;
+type Story = StoryObj<PlaygroundArgs>;
 
-export const Populated: Story = { render: () => <Seeded data={mixed} /> };
-
-export const Empty: Story = { render: () => <Seeded data={[]} /> };
-
-/** Stub returns a non-array so the service's `.map` throws, triggering the real error UI. */
-export const ErrorState: Story = { render: () => <Seeded data="boom" /> };
-
-export const LongList: Story = { render: () => <Seeded data={long} /> };
+/**
+ * Try: switch state (populated / empty / error), drag rowCount; press the trash icon on "Me" rows for
+ * the confirm sheet; raise refreshKey after adding a row to see the landing motion.
+ */
+export const Playground: Story = {};

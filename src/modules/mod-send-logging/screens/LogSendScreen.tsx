@@ -19,23 +19,16 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Animated, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '../../../lib/theme';
+import { AppText, Button, InlineError, SendStylePicker, TextField } from '../../../components/ui';
+import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { logAscent } from '../send-service';
 import type { AscentStyle } from '../types';
-import { ASCENT_STYLES } from '../types';
 
 interface LogSendScreenProps {
   /** Pre-selected route ID — required. */
@@ -52,15 +45,16 @@ interface LogSendScreenProps {
 
 export default function LogSendScreen({
   routeId,
-  routeGrade,
+  routeGrade: _routeGrade,
   session,
   onSuccess,
   onCancel,
 }: LogSendScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
+  const { screenMargin } = useLayout();
+  const { duration } = useMotion();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
 
   // ── Form state ────────────────────────────────────────────────────────────
 
@@ -73,6 +67,23 @@ export default function LogSendScreen({
   const [note, setNote] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Motion D2: the attempts field cross-fades (short) into / out of the locked "1" when flash toggles.
+  const attemptsFade = useRef(new Animated.Value(1)).current;
+  const wasFlash = useRef<boolean>(false);
+  useEffect(() => {
+    const isFlash = style === 'flash';
+    if (isFlash === wasFlash.current) return;
+    wasFlash.current = isFlash;
+    attemptsFade.setValue(0);
+    Animated.timing(attemptsFade, {
+      toValue: 1,
+      duration: duration.short,
+      easing: bezierFor('standard'),
+      useNativeDriver: USE_NATIVE_DRIVER,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [style]);
 
   // ── Derived / validation ──────────────────────────────────────────────────
 
@@ -116,13 +127,9 @@ export default function LogSendScreen({
         is_private: true,
       });
       onSuccess();
-    } catch (err) {
-      // AC-012: never silent. Display the thrown error message.
-      const message =
-        err instanceof Error
-          ? err.message
-          : t('sends.errors.saveFailed');
-      setErrorMessage(message);
+    } catch {
+      // AC-012: never silent. A translated sentence, never the raw error message.
+      setErrorMessage(t('sends.errors.saveFailed'));
     } finally {
       setIsSubmitting(false);
     }
@@ -132,263 +139,97 @@ export default function LogSendScreen({
 
   return (
     <ScrollView
-      style={styles.root}
-      contentContainerStyle={styles.contentContainer}
+      style={{ flex: 1, backgroundColor: theme.colors.background }}
+      contentContainerStyle={{
+        paddingTop: insets.top + theme.spacing.sm,
+        paddingHorizontal: screenMargin,
+        paddingBottom: theme.spacing.xxl,
+      }}
       keyboardShouldPersistTaps="handled"
     >
       {/* Header row */}
-      <View style={styles.headerRow}>
-        <Pressable
-          onPress={onCancel}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.cancel')}
-          style={styles.cancelButton}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          minHeight: theme.layout.minTouchTarget,
+          marginBottom: theme.layout.sectionGap,
+        }}
+      >
+        <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" on="background" />
+        <View
+          pointerEvents="none"
+          style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}
         >
-          <Text style={styles.cancelButtonText}>{t('common.cancel')}</Text>
-        </Pressable>
-        <Text style={styles.screenTitle}>{t('sends.logSend')}</Text>
-        <View style={styles.headerSpacer} />
+          <AppText variant="title3" accessibilityRole="header">
+            {t('sends.logSend')}
+          </AppText>
+        </View>
       </View>
 
       {/* Style selector — Tap 2 in the ≤4-tap flow */}
-      <Text style={styles.fieldLabel}>{t('sends.style')}</Text>
-      <View style={styles.styleRow}>
-        {ASCENT_STYLES.map((s) => (
-          <Pressable
-            key={s}
-            style={[
-              styles.styleChip,
-              style === s && styles.styleChipSelected,
-            ]}
-            onPress={() => handleStyleSelect(s)}
-            accessibilityRole="radio"
-            accessibilityLabel={t(`sends.styles.${s}`)}
-            accessibilityState={{ selected: style === s }}
-          >
-            <Text
-              style={[
-                styles.styleChipText,
-                style === s && styles.styleChipTextSelected,
-              ]}
-            >
-              {t(`sends.styles.${s}`)}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <AppText variant="sectionHeader" style={{ marginBottom: theme.spacing.sm }}>
+        {t('sends.style')}
+      </AppText>
+      <SendStylePicker value={style} onChange={handleStyleSelect} />
 
       {/* Attempts input — locked to 1 for flash */}
-      <Text style={styles.fieldLabel}>{t('sends.attempts')}</Text>
-      <TextInput
-        style={[
-          styles.attemptsInput,
-          style === 'flash' && styles.attemptsInputDisabled,
-        ]}
-        value={style === 'flash' ? '1' : attempts}
-        onChangeText={handleAttemptsChange}
-        keyboardType="number-pad"
-        returnKeyType="done"
-        editable={style !== 'flash'}
-        accessibilityLabel={t('sends.attempts')}
-        accessibilityHint={
-          style === 'flash' ? t('sends.attemptsFlashHint') : undefined
-        }
-        maxLength={4}
-        selectTextOnFocus
-      />
-      {style === 'flash' && (
-        <Text style={styles.flashNote}>{t('sends.attemptsFlashHint')}</Text>
-      )}
+      <Animated.View style={{ marginTop: theme.layout.sectionGap, opacity: attemptsFade }}>
+        <TextField
+          label={t('sends.attempts')}
+          value={style === 'flash' ? '1' : attempts}
+          onChangeText={handleAttemptsChange}
+          keyboardType="number-pad"
+          returnKeyType="done"
+          readOnly={style === 'flash'}
+          helper={style === 'flash' ? t('sends.attemptsFlashHint') : undefined}
+          maxLength={4}
+        />
+      </Animated.View>
 
-      {/* Date input (ISO date string YYYY-MM-DD) */}
-      <Text style={styles.fieldLabel}>{t('sends.date')}</Text>
-      <TextInput
-        style={styles.dateInput}
-        value={date}
-        onChangeText={setDate}
-        placeholder="YYYY-MM-DD"
-        accessibilityLabel={t('sends.date')}
-        maxLength={10}
-        keyboardType="numbers-and-punctuation"
-      />
+      {/* Date input (ISO date string YYYY-MM-DD). No date picker exists today. */}
+      <View style={{ marginTop: theme.layout.sectionGap }}>
+        <TextField
+          label={t('sends.date')}
+          value={date}
+          onChangeText={setDate}
+          placeholder="YYYY-MM-DD"
+          maxLength={10}
+          keyboardType="numbers-and-punctuation"
+        />
+      </View>
 
       {/* Note input — marked as private in the UI */}
-      <Text style={styles.fieldLabel}>{t('sends.note')}</Text>
-      <TextInput
-        style={styles.noteInput}
-        value={note}
-        onChangeText={setNote}
-        placeholder={t('sends.notePlaceholder')}
-        multiline
-        numberOfLines={3}
-        accessibilityLabel={t('sends.note')}
-        maxLength={500}
-        textAlignVertical="top"
-      />
+      <View style={{ marginTop: theme.layout.sectionGap }}>
+        <TextField
+          variant="multiline"
+          label={t('sends.note')}
+          value={note}
+          onChangeText={setNote}
+          placeholder={t('sends.notePlaceholder')}
+          maxLength={500}
+          showCount
+        />
+      </View>
 
       {/* Error message — AC-012: always shown on failure */}
       {errorMessage !== null && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
+        <View style={{ marginTop: theme.layout.sectionGap }}>
+          <InlineError variant="block" message={errorMessage} />
         </View>
       )}
 
       {/* Submit — Tap 4 (confirm) in the ≤4-tap flow */}
-      <Pressable
-        style={[
-          styles.submitButton,
-          isSubmitting && styles.submitButtonDisabled,
-        ]}
-        onPress={() => void handleSubmit()}
-        disabled={isSubmitting}
-        accessibilityRole="button"
-        accessibilityLabel={t('sends.submit')}
-        accessibilityState={{ disabled: isSubmitting }}
-      >
-        {isSubmitting ? (
-          <ActivityIndicator size="small" color={theme.colors.textInverse} />
-        ) : (
-          <Text style={styles.submitButtonText}>{t('sends.submit')}</Text>
-        )}
-      </Pressable>
+      <View style={{ marginTop: theme.spacing.xl }}>
+        <Button
+          label={t('sends.submit')}
+          onPress={() => void handleSubmit()}
+          variant="primary"
+          size="lg"
+          fullWidth
+          loading={isSubmitting}
+        />
+      </View>
     </ScrollView>
   );
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
-  return StyleSheet.create({
-    root: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    contentContainer: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.xxl,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: theme.spacing.lg,
-    },
-    cancelButton: {
-      paddingVertical: theme.spacing.xs,
-      paddingRight: theme.spacing.sm,
-    },
-    cancelButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-    },
-    screenTitle: {
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    headerSpacer: {
-      width: 60, // mirrors the cancel button width to center the title
-    },
-    fieldLabel: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: theme.spacing.sm,
-      marginTop: theme.spacing.lg,
-    },
-    styleRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: theme.spacing.sm,
-    },
-    styleChip: {
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    styleChipSelected: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primary,
-    },
-    styleChipText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    styleChipTextSelected: {
-      color: theme.colors.textInverse,
-    },
-    attemptsInput: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      fontSize: theme.fontSize.lg,
-      color: theme.colors.textPrimary,
-      backgroundColor: theme.colors.surface,
-      width: 80,
-    },
-    attemptsInputDisabled: {
-      color: theme.colors.textDisabled,
-      backgroundColor: theme.colors.divider,
-    },
-    flashNote: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginTop: theme.spacing.xs,
-    },
-    dateInput: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-      backgroundColor: theme.colors.surface,
-      width: 160,
-    },
-    noteInput: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-      backgroundColor: theme.colors.surface,
-      minHeight: 80,
-    },
-    errorContainer: {
-      marginTop: theme.spacing.md,
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.error,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textInverse,
-    },
-    submitButton: {
-      marginTop: theme.spacing.xl,
-      paddingVertical: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-    },
-    submitButtonDisabled: {
-      opacity: 0.5,
-    },
-    submitButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
-  });
 }
