@@ -949,3 +949,7 @@ Safe-area inset removal touches only the `useSafeAreaInsets()` call and the `mak
 **Overall verdict: PASS** — the safe-area fix is correct and introduced no regressions. The screen test suite failures are a pre-existing test-infrastructure issue (missing `@react-native-async-storage/async-storage` Jest mock, introduced by commit `8d4c6e4` which post-dates the safe-area fix). Route to engineer to add the AsyncStorage mock to the Jest configuration.
 
 **MOD-006 FollowersListScreen/FollowingListScreen safe-area fix — QA PASS.**
+
+## Design System v1.2 Migration (off-spec design work, pending PR review)
+
+Visual-only migration of FeedScreen (dead code), UserProfileScreen, FollowersListScreen, FollowingListScreen to `ui/` (AppText, Avatar, Button, IconButton, ListRow, BottomSheet `list-single`, Card, EmptyState, InlineError, Spinner), theme tokens, `ICON`, `useLayout().screenMargin`, 44pt targets. Follow button: primary; "Following" is a text-only secondary Button (a11y label stays "Unfollow"). The "..." menu is now a BottomSheet `list-single` with `ellipsis-horizontal` trigger; "Report and block" keeps one-tap behaviour and shows `moderation.sheetReportHint`; cancel row removed (sheet close button). Sheet errors now show translated `socialFeed.menu.actionFailed`. Locale keys added: `socialFeed.moreOptions`, `socialFeed.menu.actionFailed`. Not done: success toast "Reported and blocked {name}" (needs ToastProvider; avoided to keep no behaviour change). Tests 60/60, tsc clean for this module.
