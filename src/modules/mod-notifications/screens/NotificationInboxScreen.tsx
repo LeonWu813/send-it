@@ -33,7 +33,6 @@ import {
   AppText,
   Avatar,
   EmptyState,
-  IconButton,
   InlineError,
   PressableScale,
   Skeleton,
@@ -42,6 +41,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader } from '../../mod-home/components/AppHeaderContext';
 import {
   fetchNotifications,
   markNotificationsRead,
@@ -87,6 +87,9 @@ export default function NotificationInboxScreen({
   // MOD-012's AppShell). If the provider is not yet mounted (e.g. in tests that
   // render NotificationInboxScreen in isolation), a fallback no-op is used via
   // the try/catch at call time — see test-utils.tsx for the mock provider.
+  // v2.2: the AppShell overlay scope renders the nested header (back + title); no-op outside AppShell.
+  useAppHeader({ title: t('notifications.title'), onBack });
+
   const { refresh: refreshUnreadCount } = useUnreadCountContext();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -175,30 +178,10 @@ export default function NotificationInboxScreen({
   return (
     <SwipeBackWrapper onBack={onBack ?? (() => {})} enabled={onBack !== undefined}>
       <View style={styles.root}>
-        {/* Navigation bar with back button */}
-        {onBack !== undefined && (
-          <View style={styles.navBar}>
-            <View style={styles.navSide}>
-              <IconButton
-                name={ICON.back.outline}
-                size={theme.iconSize.lg}
-                color="textPrimary"
-                on="background"
-                accessibilityLabel={t('common.back') ?? 'Back'}
-                onPress={onBack}
-              />
-            </View>
-            <AppText variant="headline" align="center" numberOfLines={1} style={styles.navTitle}>
-              {t('notifications.title')}
-            </AppText>
-            <View style={styles.navSide} />
-          </View>
-        )}
-
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={
-            onBack !== undefined ? styles.contentContainerWithNav : styles.contentContainer
+            onBack !== undefined ? styles.contentContainerNested : styles.contentContainer
           }
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -357,23 +340,6 @@ function makeStyles(
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    navBar: {
-      paddingTop: topInset,
-      paddingHorizontal: screenMargin - theme.spacing.sm,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderBottomWidth: theme.stroke.hairline,
-      borderBottomColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
-    },
-    navSide: {
-      width: theme.layout.minTouchTarget,
-      minHeight: theme.layout.minTouchTarget,
-      justifyContent: 'center',
-    },
-    navTitle: {
-      flex: 1,
-    },
     scrollView: {
       flex: 1,
     },
@@ -381,7 +347,7 @@ function makeStyles(
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
     },
-    contentContainerWithNav: {
+    contentContainerNested: {
       paddingTop: theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
     },
