@@ -472,5 +472,12 @@
     "save": "儲存",
     "done": "完成",
     "back": "返回"
+  },
+  "ui": {
+    "close": "關閉",
+    "dismiss": "忽略",
+    "loading": "載入中",
+    "sheet": "面板",
+    "celebrationDismiss": "關閉慶祝訊息"
   }
 }

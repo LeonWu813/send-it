@@ -64,3 +64,23 @@ Only stubbed when they actually fail. If a component imports a native-only modul
 expo-notifications, image picker, Apple auth...) and the story errors in the browser, add a stub in
 `.storybook/stubs/` and an alias in `main.ts` `viteFinal` (mirror `__mocks__/`), or render the
 presentational part with props.
+
+## Motion and haptics tooling (design-system foundation)
+
+Toolbar items (`.storybook/preview.tsx`):
+
+- **Reduce Motion** (`Motion: reduced`) wraps the story in `MotionProvider reduceMotion` from
+  `src/lib/motion.ts`, forcing `useMotion().reduceMotion = true` regardless of the OS setting.
+  Verify every component's Reduce Motion fallback (cross-fade only, no scale/translate/particles).
+- **Speed** (1x / 3x / 10x) scales the visual durations (`micro`..`celebrate`) through
+  `MotionProvider timeScale`, for slow-motion inspection. Only components that read durations from
+  `useMotion()` are affected, so always use that hook instead of `MOTION` directly.
+- **Haptics**: the preview installs a logging `HapticDriver` (`.storybook/HapticLog.tsx`). Every
+  `useMotion().haptic(key)` call shows a black pill `haptic: <key>` (top right of the canvas) for
+  ~0.9s and logs `[haptic] <key>` to the console. Use it to check that each haptic has a visual
+  counterpart and fires on the same frame. `expo-haptics` is NOT installed.
+- **Replay**: use Storybook's built-in "Remount component" toolbar button (or re-trigger the story's
+  own buttons). No custom replay control was added.
+
+Shared base components live in `src/components/ui/` with stories in `src/components/ui/stories/`.
+See `.storybook/MIGRATION.md` for the migration rules and the story convention.

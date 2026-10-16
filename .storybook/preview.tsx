@@ -4,7 +4,9 @@ import { View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import i18n from '../src/lib/i18n';
+import { MotionProvider } from '../src/lib/motion';
 import { useTheme } from '../src/lib/theme';
+import { HapticLog, installLoggingHaptics } from './HapticLog';
 import { ForcedTheme } from './ForcedTheme';
 
 function Canvas({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -15,8 +17,10 @@ function Canvas({ children }: { children: React.ReactNode }): React.JSX.Element 
   return <View style={{ flex: 1, backgroundColor: theme.colors.background }}>{children}</View>;
 }
 
+installLoggingHaptics();
+
 const preview: Preview = {
-  initialGlobals: { theme: 'light', locale: 'zh-TW' },
+  initialGlobals: { theme: 'light', locale: 'zh-TW', reduceMotion: 'off', motionSpeed: '1' },
   globalTypes: {
     theme: {
       description: 'Theme',
@@ -42,6 +46,31 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
+    reduceMotion: {
+      description: 'Force Reduce Motion',
+      toolbar: {
+        title: 'Reduce Motion',
+        icon: 'accessibility',
+        items: [
+          { value: 'off', title: 'Motion: normal' },
+          { value: 'on', title: 'Motion: reduced' },
+        ],
+        dynamicTitle: true,
+      },
+    },
+    motionSpeed: {
+      description: 'Animation speed (slow motion)',
+      toolbar: {
+        title: 'Speed',
+        icon: 'time',
+        items: [
+          { value: '1', title: 'Speed 1x' },
+          { value: '3', title: 'Slow 3x' },
+          { value: '10', title: 'Slow 10x' },
+        ],
+        dynamicTitle: true,
+      },
+    },
   },
   parameters: {
     layout: 'fullscreen',
@@ -53,13 +82,18 @@ const preview: Preview = {
       const mode = context.globals.theme === 'dark' ? 'dark' : 'light';
       const locale = context.globals.locale === 'en' ? 'en' : 'zh-TW';
       if (i18n.language !== locale) void i18n.changeLanguage(locale);
+      const reduceMotion = context.globals.reduceMotion === 'on' ? true : undefined;
+      const timeScale = Number(context.globals.motionSpeed) || 1;
       return (
         <SafeAreaProvider style={{ flex: 1 }}>
-          <ForcedTheme mode={mode} key={mode}>
-            <Canvas>
-              <Story />
-            </Canvas>
-          </ForcedTheme>
+          <MotionProvider reduceMotion={reduceMotion} timeScale={timeScale}>
+            <ForcedTheme mode={mode} key={mode}>
+              <Canvas>
+                <Story />
+                <HapticLog />
+              </Canvas>
+            </ForcedTheme>
+          </MotionProvider>
         </SafeAreaProvider>
       );
     },

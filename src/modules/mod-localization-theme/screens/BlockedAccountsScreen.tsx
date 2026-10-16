@@ -102,7 +102,8 @@ function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       paddingVertical: theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
-      backgroundColor: theme.colors.background,
+      // card-less list: rows sit on surface, not directly on the sand background
+      backgroundColor: theme.colors.surface,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.divider,
     },
@@ -113,7 +114,7 @@ function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
       marginRight: theme.spacing.md,
     },
     avatarPlaceholder: {
-      backgroundColor: theme.colors.border,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     displayName: {
       flex: 1,
@@ -125,11 +126,12 @@ function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
       borderWidth: 1,
       borderColor: theme.colors.primary,
       borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.xs,
+      minHeight: theme.layout.minTouchTarget,
+      justifyContent: 'center',
       paddingHorizontal: theme.spacing.md,
     },
     unblockButtonPressed: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfacePressed,
     },
     unblockButtonText: {
       fontSize: theme.fontSize.sm,
@@ -283,9 +285,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: theme.spacing.xs,
       borderRadius: theme.borderRadius.md,
       minWidth: 60,
+      minHeight: theme.layout.minTouchTarget,
     },
     backButtonPressed: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfacePressed,
     },
     backButtonText: {
       fontSize: theme.fontSize.md,
@@ -327,7 +330,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       borderColor: theme.colors.primary,
     },
     retryButtonPressed: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfacePressed,
     },
     retryButtonText: {
       fontSize: theme.fontSize.md,

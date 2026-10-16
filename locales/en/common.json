@@ -472,5 +472,12 @@
     "save": "Save",
     "done": "Done",
     "back": "Back"
+  },
+  "ui": {
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "loading": "Loading",
+    "sheet": "Panel",
+    "celebrationDismiss": "Dismiss celebration"
   }
 }

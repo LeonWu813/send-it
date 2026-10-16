@@ -1,54 +1,65 @@
+import { Ionicons } from '@expo/vector-icons';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
-import { ForcedTheme } from '../../../../.storybook/ForcedTheme';
-import { BORDER_RADIUS, FONT_SIZE, FONT_WEIGHT, SPACING, useTheme } from '../../../lib/theme';
-
-// LIGHT_PALETTE / DARK_PALETTE are not exported from theme.ts, so each palette is
-// read through the real ThemeProvider (forced via its public setOverride).
+import { AppText } from '../../../components/ui/AppText';
+import { MOTION } from '../../../lib/motion';
+import {
+  BORDER_RADIUS,
+  COMPONENT_SIZE,
+  DARK_PALETTE,
+  ICON_SIZE,
+  LAYOUT,
+  LIGHT_PALETTE,
+  SPACING,
+  TYPE_SCALE,
+  useTheme,
+} from '../../../lib/theme';
+import type { ThemePalette } from '../../../lib/theme';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }): React.JSX.Element {
   const { theme } = useTheme();
   return (
-    <View style={{ marginBottom: theme.spacing.xl }}>
-      <Text
-        style={{
-          color: theme.colors.textPrimary,
-          fontSize: theme.fontSize.xl,
-          fontWeight: theme.fontWeight.bold,
-          marginBottom: theme.spacing.md,
-        }}
-      >
+    <View style={{ marginBottom: theme.layout.sectionGap + theme.spacing.sm }}>
+      <AppText variant="title3" style={{ marginBottom: theme.spacing.md }}>
         {title}
-      </Text>
+      </AppText>
       {children}
     </View>
   );
 }
 
-function Palette({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
+function Row({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
+  const { theme } = useTheme();
   return (
-    <ForcedTheme mode={mode}>
-      <PaletteInner mode={mode} />
-    </ForcedTheme>
+    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm }}>
+      <AppText variant="footnote" color="textSecondary" style={{ width: 170 }}>
+        {label}
+      </AppText>
+      <View style={{ flex: 1 }}>{children}</View>
+    </View>
   );
 }
 
-function PaletteInner({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
-  const { theme } = useTheme();
-  const c = theme.colors;
+// Palettes are rendered from the exported constants (not the active theme), so light and dark
+// are visible at the same time regardless of the toolbar.
+function Palette({ name, palette }: { name: string; palette: ThemePalette }): React.JSX.Element {
   return (
-    <View style={{ backgroundColor: c.background, padding: theme.spacing.md, borderColor: c.border, borderWidth: 1, borderRadius: theme.borderRadius.md, marginBottom: theme.spacing.md }}>
-      <Text style={{ color: c.textPrimary, fontWeight: theme.fontWeight.bold, marginBottom: theme.spacing.sm }}>
-        {mode === 'light' ? 'LIGHT_PALETTE' : 'DARK_PALETTE'}
-      </Text>
+    <View style={{ backgroundColor: palette.background, padding: 12, borderRadius: 8, marginBottom: 16, borderWidth: 1, borderColor: palette.border }}>
+      <AppText variant="headline" style={{ color: palette.textPrimary, marginBottom: 8 }}>
+        {`${name} (${Object.keys(palette).length} keys)`}
+      </AppText>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-        {(Object.entries(c) as [string, string][]).map(([name, hex]) => (
-          <View key={name} style={{ width: 150, margin: theme.spacing.xs }}>
-            <View style={{ height: 48, backgroundColor: hex, borderColor: c.border, borderWidth: 1, borderRadius: theme.borderRadius.sm }} />
-            <Text style={{ color: c.textPrimary, fontSize: theme.fontSize.sm }}>{name}</Text>
-            <Text style={{ color: c.textSecondary, fontSize: theme.fontSize.xs }}>{hex}</Text>
+        {(Object.entries(palette) as [string, string][]).map(([key, value]) => (
+          <View key={key} style={{ width: 150, margin: 4 }}>
+            <View style={{ height: 40, backgroundColor: value, borderColor: palette.outline, borderWidth: 1, borderRadius: 4 }} />
+            <AppText variant="caption1" style={{ color: palette.textPrimary }}>
+              {key}
+            </AppText>
+            <AppText variant="caption2" style={{ color: palette.textSecondary }}>
+              {value}
+            </AppText>
           </View>
         ))}
       </View>
@@ -58,51 +69,124 @@ function PaletteInner({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
 
 function Tokens(): React.JSX.Element {
   const { theme } = useTheme();
-  const text = { color: theme.colors.textPrimary };
-  const muted = { color: theme.colors.textSecondary, fontSize: FONT_SIZE.sm };
+  const c = theme.colors;
+  const bar = (w: number, color = c.primary) => <View style={{ width: w, height: 16, backgroundColor: color, borderRadius: 2 }} />;
   return (
-    <ScrollView contentContainerStyle={{ padding: theme.spacing.lg }}>
-      <Section title="Colors">
-        <Palette mode="light" />
-        <Palette mode="dark" />
+    <ScrollView contentContainerStyle={{ padding: theme.layout.screenMarginCompact + 8 }}>
+      <Section title="Colors (light + dark)">
+        <Palette name="LIGHT_PALETTE" palette={LIGHT_PALETTE} />
+        <Palette name="DARK_PALETTE" palette={DARK_PALETTE} />
       </Section>
 
-      <Section title="FONT_SIZE">
-        {Object.entries(FONT_SIZE).map(([name, size]) => (
-          <View key={name} style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: theme.spacing.sm }}>
-            <Text style={[muted, { width: 110 }]}>{`${name} (${size})`}</Text>
-            <Text style={[text, { fontSize: size }]}>Send It 攀岩紀錄 The quick brown fox</Text>
-          </View>
-        ))}
-      </Section>
-
-      <Section title="FONT_WEIGHT">
-        {Object.entries(FONT_WEIGHT).map(([name, weight]) => (
-          <View key={name} style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: theme.spacing.sm }}>
-            <Text style={[muted, { width: 110 }]}>{`${name} (${weight})`}</Text>
-            <Text style={[text, { fontSize: FONT_SIZE.lg, fontWeight: weight }]}>Send It 攀岩紀錄 The quick brown fox</Text>
-          </View>
+      <Section title="TYPE_SCALE">
+        {(Object.entries(TYPE_SCALE) as [string, (typeof TYPE_SCALE)[keyof typeof TYPE_SCALE]][]).map(([name, s]) => (
+          <Row key={name} label={`${name} ${s.fontSize}/${s.lineHeight} ${s.fontWeight} x${s.maxFontSizeMultiplier}`}>
+            <AppText variant={name as keyof typeof TYPE_SCALE}>Send It 攀岩紀錄 V4 Quick fox</AppText>
+          </Row>
         ))}
       </Section>
 
       <Section title="SPACING">
         {Object.entries(SPACING).map(([name, value]) => (
-          <View key={name} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm }}>
-            <Text style={[muted, { width: 110 }]}>{`${name} (${value})`}</Text>
-            <View style={{ width: value, height: 16, backgroundColor: theme.colors.primary }} />
-          </View>
+          <Row key={name} label={`${name} (${value})`}>
+            {bar(value)}
+          </Row>
+        ))}
+      </Section>
+
+      <Section title="LAYOUT">
+        {Object.entries(LAYOUT).map(([name, value]) => (
+          <Row key={name} label={name}>
+            <AppText variant="footnote">{String(value)}</AppText>
+          </Row>
         ))}
       </Section>
 
       <Section title="BORDER_RADIUS">
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           {Object.entries(BORDER_RADIUS).map(([name, value]) => (
-            <View key={name} style={{ alignItems: 'center', marginRight: theme.spacing.lg, marginBottom: theme.spacing.md }}>
-              <View style={{ width: 72, height: 72, backgroundColor: theme.colors.surfaceElevated, borderColor: theme.colors.primary, borderWidth: 2, borderRadius: value }} />
-              <Text style={muted}>{`${name} (${value})`}</Text>
+            <View key={name} style={{ alignItems: 'center', marginRight: 24, marginBottom: 12 }}>
+              <View style={{ width: 72, height: 72, backgroundColor: c.surface, borderColor: c.primary, borderWidth: 2, borderRadius: value }} />
+              <AppText variant="footnote" color="textSecondary">{`${name} (${value})`}</AppText>
             </View>
           ))}
         </View>
+      </Section>
+
+      <Section title="ICON_SIZE">
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          {Object.entries(ICON_SIZE).map(([name, value]) => (
+            <View key={name} style={{ alignItems: 'center', marginRight: 24 }}>
+              <Ionicons name="bookmark" size={value} color={c.textPrimary} />
+              <AppText variant="caption1" color="textSecondary">{`${name} ${value}`}</AppText>
+            </View>
+          ))}
+        </View>
+      </Section>
+
+      <Section title="COMPONENT_SIZE">
+        {Object.entries(COMPONENT_SIZE).map(([name, value]) => (
+          <Row key={name} label={name}>
+            <AppText variant="footnote">{String(value)}</AppText>
+          </Row>
+        ))}
+      </Section>
+
+      <Section title="ELEVATION (current theme)">
+        <View style={{ flexDirection: 'row' }}>
+          {(['card', 'raised'] as const).map((k) => (
+            <View
+              key={k}
+              style={[
+                { width: 120, height: 72, margin: 12, backgroundColor: c.surface, borderRadius: BORDER_RADIUS.lg, alignItems: 'center', justifyContent: 'center', borderWidth: theme.isDark ? 1 : 0, borderColor: c.border },
+                theme.elevation[k],
+              ]}
+            >
+              <AppText variant="footnote">{k}</AppText>
+            </View>
+          ))}
+        </View>
+      </Section>
+
+      <Section title="MOTION.duration (ms)">
+        {Object.entries(MOTION.duration).map(([name, ms]) => (
+          <Row key={name} label={`${name} (${ms})`}>
+            {bar(Math.min(ms / 10, 300), c.sendTop)}
+          </Row>
+        ))}
+      </Section>
+
+      <Section title="MOTION.easing / spring / scale">
+        {Object.entries(MOTION.easing).map(([name, v]) => (
+          <Row key={name} label={`easing.${name}`}>
+            <AppText variant="footnote">{`cubic-bezier(${v.join(', ')})`}</AppText>
+          </Row>
+        ))}
+        {Object.entries(MOTION.spring).map(([name, v]) => (
+          <Row key={name} label={`spring.${name}`}>
+            <AppText variant="footnote">{JSON.stringify(v)}</AppText>
+          </Row>
+        ))}
+        {Object.entries(MOTION.scale).map(([name, v]) => (
+          <Row key={name} label={`scale.${name}`}>
+            <AppText variant="footnote">{String(v)}</AppText>
+          </Row>
+        ))}
+      </Section>
+
+      <Section title="MOTION.particles">
+        {Object.entries(MOTION.particles).map(([name, v]) => (
+          <Row key={name} label={name}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {(v.colors as ReadonlyArray<{ key: keyof ThemePalette; n: number }>).map((col) => (
+                <View key={col.key} style={{ flexDirection: 'row', alignItems: 'center', marginRight: 12 }}>
+                  <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c[col.key], marginRight: 4 }} />
+                  <AppText variant="caption1">{`${col.key} x${col.n}`}</AppText>
+                </View>
+              ))}
+            </View>
+          </Row>
+        ))}
       </Section>
     </ScrollView>
   );

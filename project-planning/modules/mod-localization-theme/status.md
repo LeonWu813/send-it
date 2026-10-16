@@ -2,6 +2,19 @@
 
 ## Engineering Progress
 
+### Design-system foundation G1 — 2026-10-16 (off-spec design-system work pending PR review)
+
+Implements 07-final-design-system.md (visual + motion only), approved by the human designer; not routed through tech-lead/pm/doc-sync. Warm sand B palette; no illustrations; no `expo-haptics`.
+
+- `src/lib/theme.ts`: 55-key light/dark palettes (exported), `TYPE_SCALE`, `TYPE_VARIANT`, `SPACING` additions, `LAYOUT`, `ICON_SIZE`, `ELEVATION`, `COMPONENT_SIZE`, `useLayout()`; `FONT_SIZE` and `textInverse` kept as deprecated aliases.
+- `src/lib/motion.ts` (`MOTION`, `useMotion`, `MotionProvider`), `src/lib/haptics.ts` (stub driver).
+- `src/components/ui/`: AppText, PressableScale, Button, IconButton, Chip, BottomSheet, Toast (+ToastProvider), Skeleton, CelebrationHost, ParticleBurst; stories in `ui/stories/`.
+- Storybook: Reduce Motion + Speed toolbars, logging haptic driver, Tokens story, README, MIGRATION.md.
+- Own module migrated: Settings/BlockedAccounts use surfacePressed, surfaceAlt, outline, shared Button for logout, 44pt targets.
+- Added `ui.*` i18n keys (en + zh-TW).
+
+---
+
 ### Storybook infrastructure — 2026-10-16 (off-spec design tooling, pending PR review)
 
 Added on branch `design/storybook` at the UI/UX designer's request. NOT routed through tech-lead/pm/doc-sync; PR review covers it. No runtime app code changed (`src/lib/theme.ts` and `i18n.ts` untouched).

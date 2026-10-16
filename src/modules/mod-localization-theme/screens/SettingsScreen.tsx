@@ -35,7 +35,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -52,6 +51,7 @@ import { useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
 import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile/auth-service';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
+import { Button } from '../../../components/ui/Button';
 import {
   loadLanguage,
   loadThemeOverride,
@@ -306,7 +306,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
                 onValueChange={(value) => { void handleBetaVideoPrivacyToggle(value); }}
                 disabled={!privacyFetched || privacyLoading}
                 trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor={theme.colors.background}
+                thumbColor={theme.colors.surface}
               />
             </View>
           </View>
@@ -316,23 +316,16 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
         {logoutError ? (
           <Text style={styles.logoutError}>{logoutError}</Text>
         ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.logoutButton,
-            pressed && styles.logoutButtonPressed,
-            isSigningOut && styles.logoutButtonDisabled,
-          ]}
-          onPress={() => { void handleLogout(); }}
-          disabled={isSigningOut}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.logout')}
-        >
-          {isSigningOut ? (
-            <ActivityIndicator color={theme.colors.error} />
-          ) : (
-            <Text style={styles.logoutButtonText}>{t('profile.logout')}</Text>
-          )}
-        </Pressable>
+        <View style={styles.logoutWrap}>
+          <Button
+            variant="destructive"
+            icon="log-out-outline"
+            label={t('profile.logout')}
+            loading={isSigningOut}
+            fullWidth
+            onPress={() => { void handleLogout(); }}
+          />
+        </View>
       </ScrollView>
     </SwipeBackWrapper>
   );
@@ -359,9 +352,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: theme.spacing.xs,
       borderRadius: theme.borderRadius.md,
       minWidth: 60,
+      minHeight: theme.layout.minTouchTarget,
     },
     backButtonPressed: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfacePressed,
     },
     backButtonText: {
       fontSize: theme.fontSize.md,
@@ -407,13 +401,14 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: theme.spacing.md,
+      minHeight: theme.layout.minTouchTarget,
+      paddingVertical: theme.layout.listRowPaddingV,
       paddingHorizontal: theme.spacing.lg,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.divider,
     },
     optionRowPressed: {
-      backgroundColor: theme.colors.surfaceElevated,
+      backgroundColor: theme.colors.surfacePressed,
     },
     optionLabel: {
       fontSize: theme.fontSize.md,
@@ -428,7 +423,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       height: 20,
       borderRadius: theme.borderRadius.full,
       borderWidth: 2,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.outline,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -458,28 +453,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textSecondary,
       marginTop: 2,
     },
-    // AC-168: Logout button
-    logoutButton: {
-      height: 44,
-      marginHorizontal: theme.spacing.lg,
+    // AC-168: Logout button wrapper (shared destructive Button)
+    logoutWrap: {
       marginTop: theme.spacing.lg,
       marginBottom: theme.spacing.xl,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.error,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    logoutButtonPressed: {
-      backgroundColor: theme.colors.surface,
-    },
-    logoutButtonDisabled: {
-      opacity: 0.5,
-    },
-    logoutButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.error,
     },
     logoutError: {
       fontSize: theme.fontSize.sm,
