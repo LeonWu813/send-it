@@ -48,6 +48,8 @@ interface SendHistoryProfileProps {
    * route detail screen within the correct gym's route list.
    */
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  /** Primary action of the zero-records prompt ("Find routes"). */
+  onLogSend?: () => void;
 }
 
 /**
@@ -63,6 +65,7 @@ export default function SendHistoryProfile({
   listHeaderComponent,
   listFooterComponent,
   onNavigateToRoute,
+  onLogSend,
 }: SendHistoryProfileProps): React.JSX.Element {
   return (
     <ProfileHistoryScreen
@@ -72,6 +75,7 @@ export default function SendHistoryProfile({
       extraListHeader={listHeaderComponent}
       extraListFooter={listFooterComponent}
       onNavigateToRoute={onNavigateToRoute}
+      onLogSend={onLogSend}
     />
   );
 }

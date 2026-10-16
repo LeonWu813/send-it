@@ -1,11 +1,12 @@
 /**
  * FilterBar — filter row for send history (spec §32.6).
  *
- * Three `filter` Chips (gym, grade, date). A chip with a value shows that value
- * and a separate 44pt clear button (never nested). Tapping a chip opens a
+ * Three `filter` Chips (gym, grade, date). A chip with a value is INVERTED (textPrimary fill,
+ * `background` text) and shows that value plus a separate 30pt clear button (touch 44, never nested). Tapping a chip opens a
  * BottomSheet `list-single` whose first row is "All ...". All three filters
  * work independently and in combination (AC-060).
  *
+ * Pickers are floating `list-single` sheets (the sheet itself switches to attached above 6 options).
  * Motion D3 (chip width, clear-button pop) lives in the `ui/` Chip.
  * Tokens only.
  */
@@ -98,6 +99,13 @@ export default function FilterBar({
       ? presetLabel(presetDays)
       : new Date(filters.date_from).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
+  const optionCount =
+    activePicker === 'gym'
+      ? gyms.length + 1
+      : activePicker === 'grade'
+        ? GRADE_ORDER.length + 1
+        : DATE_PRESET_DAYS.length + 1;
+
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -105,6 +113,7 @@ export default function FilterBar({
       <View style={styles.row}>
         <Chip
           variant="filter"
+          on="background"
           label={gymLabel}
           selected={gymHasValue}
           onPress={() => open('gym')}
@@ -114,6 +123,7 @@ export default function FilterBar({
         />
         <Chip
           variant="filter"
+          on="background"
           label={gradeLabel}
           selected={filters.grade !== null}
           onPress={() => open('grade')}
@@ -123,6 +133,7 @@ export default function FilterBar({
         />
         <Chip
           variant="filter"
+          on="background"
           label={dateLabel}
           selected={filters.date_from !== null}
           onPress={() => open('date')}
@@ -136,6 +147,7 @@ export default function FilterBar({
       <BottomSheet
         visible={sheetOpen}
         variant="list-single"
+        optionCount={optionCount}
         onClose={closeSheet}
         onClosed={() => setActivePicker(null)}
         title={
@@ -235,8 +247,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flexWrap: 'wrap',
       alignItems: 'center',
       columnGap: theme.spacing.sm,
-      // 12 so the +6pt hit slops of adjacent rows never overlap.
-      rowGap: theme.spacing.smd,
+      rowGap: theme.spacing.sm,
       paddingHorizontal: screenMargin,
       marginBottom: theme.spacing.md,
     },

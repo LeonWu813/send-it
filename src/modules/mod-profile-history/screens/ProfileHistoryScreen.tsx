@@ -1,8 +1,9 @@
 /**
  * ProfileHistoryScreen — send history + stats for a user profile.
  *
- * AC-061: stats panel (total sends, sends-by-grade bar chart, accumulated days,
- *         highest grade). Bar chart hidden when total_sends = 0.
+ * AC-061: stats panel (v2.2: top-grade hero, sends / days tiles, sends-by-grade bars).
+ *         Bars hidden when total_sends = 0; zero records -> ONE EmptyState `prompt`
+ *         replaces the stats panel AND the history section (spec 32.5).
  * AC-062: stats recalculate immediately after a new send is logged (via
  *         refetchKey prop — parent bumps it when MOD-004 logs a new ascent).
  * AC-064: followers_only privacy gate (server-side via RPC; client shows
@@ -67,6 +68,8 @@ interface ProfileHistoryScreenProps {
    * route detail screen within the correct gym's route list.
    */
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  /** Primary action of the zero-records prompt ("Find routes"). Omitted -> the prompt has no button. */
+  onLogSend?: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -78,6 +81,7 @@ export default function ProfileHistoryScreen({
   extraListHeader,
   extraListFooter,
   onNavigateToRoute,
+  onLogSend,
 }: ProfileHistoryScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -195,6 +199,7 @@ export default function ProfileHistoryScreen({
           <Chip
             key={tab}
             variant="choice"
+            on="background"
             label={tab === 'all' ? t('home.projectingRoutes.allGrades') : tab}
             selected={isActive}
             onPress={() => setActiveGrade(tab)}
@@ -206,14 +211,23 @@ export default function ProfileHistoryScreen({
 
   // ── List header (optional host content + stats panel + grade tabs) ───────────
 
+  // Zero records (not even attempts): one prompt replaces the stats AND the history section.
+  const hasRecords = ascents.length > 0 || (stats?.total_sends ?? 0) > 0;
+
   const ListHeader = (
     <View>
       {extraListHeader ?? null}
-      {stats !== null && <StatsPanel stats={stats} />}
-      <AppText variant="sectionHeader" style={styles.sectionTitle} accessibilityRole="header">
-        {t('profile.sendHistory')}
-      </AppText>
-      {GradeTabBar}
+      {stats !== null && (
+        <StatsPanel stats={stats} hasRecords={hasRecords} onLogSend={onLogSend} />
+      )}
+      {hasRecords ? (
+        <>
+          <AppText variant="pageSection" style={styles.sectionTitle} accessibilityRole="header">
+            {t('profile.sendHistory')}
+          </AppText>
+          {GradeTabBar}
+        </>
+      ) : null}
     </View>
   );
 
@@ -253,7 +267,7 @@ export default function ProfileHistoryScreen({
         );
       }}
       ListHeaderComponent={ListHeader}
-      ListEmptyComponent={ListEmpty}
+      ListEmptyComponent={hasRecords ? ListEmpty : null}
       ListFooterComponent={extraListFooter ?? null}
       showsVerticalScrollIndicator={false}
     />

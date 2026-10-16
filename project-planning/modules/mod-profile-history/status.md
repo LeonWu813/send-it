@@ -95,6 +95,15 @@ Visual + motion only; no service, flow or filter-logic changes. Body (Phase 1) o
 - Not done: TapeBadge in the item (not shipped by route-catalog; route colour is in the name), results cross-fade (FilterBar is not used by the screen and does not own results), delete sheet (module has no delete), `FLASH_BADGE_COLOR` (lives in mod-route-catalog / mod-send-logging / src/components/RouteCard.tsx, not this module).
 
 
+### Design System v2.2 (off-spec design work, pending PR review) - 2026-10-16
+
+- StatsPanel: tinted hero (`display` 72 top grade + "N sends" at that grade, no date) + two static tiles (`numeric1` 34 + half-size `unit`; label "Days climbed"), distribution card with 6pt bars on `surfaceAlt` tracks (neutral `outline` fill, only the top row `sendTop` + "Highest" pill in the grade column), displacement reveal (`translateX` in a clipped track, `medium` + stagger 30 up to 7 steps, once per session; Reduce Motion fades the card). States: attempts-only (structure kept, no button), zero records (`hasRecords=false`: one EmptyState `prompt`). AX: hero full width, units wrap under the number. Only existing `ProfileStats` fields.
+- FilterBar: `on="background"` chips (inverted + 30pt clear come from `ui/Chip`), row gap 8, floating `list-single` sheet with `optionCount`.
+- AscentHistoryItem: v2.2 layout (56 thumb or TapeBadge square, TapeBadge md + area, `Color・Gym・Date` subtitle, private marker, SendStatus `disc`, optional divider; disc moves to line 2 at AX).
+- ProfileHistoryScreen: `pageSection` title, zero-records prompt replaces stats + history section, new optional `onLogSend` (also on SendHistoryProfile) for the prompt's single action.
+- Locales: new `profileHistory.stats.*` keys (hero, units, states, prompt, a11y); `accumulatedDays` zh "完攀天數", `chartTitle` reworded.
+- Open: mod-auth-profile ProfileScreen does not yet pass `onLogSend`, so the prompt shows without its button until it does.
+
 ## QA Results
 
 **QA verdict: FAIL**

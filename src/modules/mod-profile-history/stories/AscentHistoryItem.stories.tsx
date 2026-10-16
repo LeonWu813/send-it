@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
 import { View } from 'react-native';
 
+import { useTheme } from '../../../lib/theme';
 import AscentHistoryItem from '../components/AscentHistoryItem';
 import type { HistoryAscent } from '../types';
 
@@ -43,13 +44,19 @@ function toItem(a: Args): HistoryAscent {
   };
 }
 
+// The row sits on a `surface` grouped container (card radius), as on the Profile page.
+function Frame({ args }: { args: Args }): React.JSX.Element {
+  const { theme } = useTheme();
+  return (
+    <View style={{ maxWidth: 420, backgroundColor: theme.colors.surface, borderRadius: theme.radius.card, borderCurve: 'continuous', overflow: 'hidden' }}>
+      <AscentHistoryItem item={toItem(args)} divider={false} />
+    </View>
+  );
+}
+
 const meta: Meta<Args> = {
   title: 'Profile/AscentHistoryItem',
-  render: (args) => (
-    <View style={{ maxWidth: 420 }}>
-      <AscentHistoryItem item={toItem(args)} />
-    </View>
-  ),
+  render: (args) => <Frame args={args} />,
   args: { colorTag: 'blue', sendStyle: 'top', attempts: 3, isPrivate: false, hasSection: true, hasPhoto: false, longNames: false },
   argTypes: {
     colorTag: { control: 'select', options: ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'white', 'black'] },
@@ -57,11 +64,11 @@ const meta: Meta<Args> = {
     attempts: { control: { type: 'number', min: 1, max: 20 }, description: 'Only shown for attempt' },
     isPrivate: { control: 'boolean' },
     hasSection: { control: 'boolean' },
-    hasPhoto: { control: 'boolean', description: '44x44 thumbnail before the text; no gap when absent' },
+    hasPhoto: { control: 'boolean', description: '56 thumbnail = photo (TapeBadge on line 1); off = the TapeBadge sits in a 56 surfaceAlt square' },
     longNames: { control: 'boolean', description: 'Long gym + section: the route name stays visible' },
   },
 };
 export default meta;
 
-/** Switch sendStyle, toggle private / section / photo / long names; raise font scale to see the chip move to line 2. */
+/** Switch sendStyle, toggle private / section / photo / long names; raise font scale to see the disc move to line 2. */
 export const Playground: StoryObj<Args> = {};

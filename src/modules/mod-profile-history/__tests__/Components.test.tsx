@@ -18,10 +18,10 @@ const item = {
 };
 
 describe('AscentHistoryItem', () => {
-  it('shows grade and route name as separate nodes and a merged a11y label', () => {
+  it('shows the grade on the tape, the area as title and a merged a11y label', () => {
     const { getByText, getByLabelText } = render(<AscentHistoryItem item={item} />, { wrapper: Wrapper });
     expect(getByText('V4')).toBeTruthy();
-    expect(getByText('(Cave)')).toBeTruthy();
+    expect(getByText('Cave')).toBeTruthy();
     expect(getByLabelText(/V4 Red \(Cave\), Rock Lab, Flash/)).toBeTruthy();
   });
 });
