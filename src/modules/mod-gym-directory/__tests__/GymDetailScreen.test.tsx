@@ -156,7 +156,7 @@ describe('GymDetailScreen', () => {
     });
   });
 
-  it('calls onBack when the back link is pressed', async () => {
+  it('calls onBack via the header back wiring and titles the header with the gym name', async () => {
     const onBack = jest.fn();
     mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
 
@@ -166,6 +166,8 @@ describe('GymDetailScreen', () => {
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
     );
 
+    // Back is wired through the AppShell header (useAppHeader onBack), not drawn by the screen.
+    expect(screen.getByTestId('header-title').props.accessibilityLabel).toBe('MegaSTONE Climbing Gym');
     fireEvent.press(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
   });

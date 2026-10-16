@@ -15,7 +15,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AppState, FlatList, StyleSheet, View } from 'react-native';
+import { Animated, AppState, FlatList, StyleSheet, View } from 'react-native';
 
 import {
   AppText,
@@ -32,6 +32,7 @@ import {
 import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeaderRoot } from '../../mod-home/components/AppHeaderContext';
 import { fetchSavedGymIds, listGyms } from '../gym-service';
 import type { GymSummary } from '../types';
 
@@ -54,7 +55,9 @@ export default function GymListScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, screenMargin);
+  const header = useAppHeaderRoot();
+  const topPad = header.contentTopInset > 0 ? header.contentTopInset : theme.spacing.md;
+  const styles = makeStyles(theme, screenMargin, topPad, header.contentBottomInset);
 
   const [gyms, setGyms] = useState<GymSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -179,7 +182,7 @@ export default function GymListScreen({
 
   if (isLoading) {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, styles.pageTop]}>
         {skeletonPhase !== 'idle' ? (
           <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonList}>
             {[0, 1, 2, 3].map((i) => (
@@ -199,7 +202,7 @@ export default function GymListScreen({
 
   if (errorMessage) {
     return (
-      <View style={styles.root}>
+      <View style={[styles.root, styles.pageTop]}>
         <InlineError
           variant="block"
           message={errorMessage}
@@ -212,13 +215,8 @@ export default function GymListScreen({
     );
   }
 
-  return (
-    <View style={styles.root}>
-      {/* Screen title */}
-      <AppText variant="largeTitle" accessibilityRole="header" style={styles.screenTitle}>
-        {t('gymDirectory.title')}
-      </AppText>
-
+  const listHeader = (
+    <>
       {/* Search input */}
       <View style={styles.searchWrap}>
         <TextField
@@ -248,51 +246,68 @@ export default function GymListScreen({
           onPress={() => setCityFilter(cityFilter === 'New Taipei' ? null : 'New Taipei')}
         />
       </View>
+    </>
+  );
 
-      {/* Gym list */}
-      <FlatList
+  // Request a gym link
+  const listFooter = (
+    <View style={styles.requestRow}>
+      <Button
+        variant="ghost"
+        size="md"
+        on="background"
+        label={t('gymDirectory.requestGym.cta')}
+        trailingIcon={ICON.forward.outline}
+        onPress={onRequestGym}
+      />
+    </View>
+  );
+
+  return (
+    <View style={styles.root}>
+      {/* The AppShell header shows the tab title; search + chips scroll with the list. */}
+      <Animated.FlatList
         data={sortedGyms}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item: GymSummary) => item.id}
         renderItem={renderGymCard}
         contentContainerStyle={styles.listContent}
+        scrollIndicatorInsets={{ top: header.contentTopInset, bottom: header.indicatorBottomInset }}
+        onScroll={header.onScroll}
+        onContentSizeChange={header.onContentSizeChange}
+        onLayout={header.onLayout}
+        scrollEventThrottle={header.scrollEventThrottle}
         keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={listHeader}
+        ListFooterComponent={listFooter}
         ListEmptyComponent={
           <EmptyState variant="filtered" title={t('gymDirectory.noResults')} />
         }
       />
-
-      {/* Request a gym link */}
-      <View style={styles.requestRow}>
-        <Button
-          variant="ghost"
-          size="md"
-          on="background"
-          label={t('gymDirectory.requestGym.cta')}
-          trailingIcon={ICON.forward.outline}
-          onPress={onRequestGym}
-        />
-      </View>
     </View>
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  screenMargin: number,
+  topPad: number,
+  bottomInset: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
       paddingHorizontal: screenMargin,
-      paddingTop: theme.spacing.md,
+    },
+    pageTop: {
+      paddingTop: topPad,
     },
     skeletonList: {
       gap: theme.layout.cardGap,
     },
     skeletonDistrict: {
       marginTop: theme.spacing.xs,
-    },
-    screenTitle: {
-      marginBottom: theme.spacing.md,
     },
     searchWrap: {
       marginBottom: theme.spacing.smd,
@@ -306,7 +321,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     },
     listContent: {
       gap: theme.layout.cardGap,
-      paddingBottom: theme.spacing.lg,
+      paddingTop: topPad,
+      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.lg,
     },
     cardHeader: {
       flexDirection: 'row',

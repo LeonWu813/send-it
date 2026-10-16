@@ -20,12 +20,12 @@ import {
   AppText,
   Button,
   Card,
-  IconButton,
   InlineError,
   TextField,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { LAYOUT, useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useHideTabBar } from '../../mod-home/components/AppHeaderContext';
 import { submitGymRequest } from '../gym-service';
 
 interface RequestGymScreenProps {
@@ -43,6 +43,9 @@ export default function RequestGymScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, screenMargin);
+
+  useAppHeader({ title: t('gymDirectory.requestGym.title'), onBack });
+  useHideTabBar();
 
   const [screenState, setScreenState] = useState<ScreenState>('form');
   const [name, setName] = useState('');
@@ -118,16 +121,6 @@ export default function RequestGymScreen({
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Back navigation */}
-        <View style={styles.backRow}>
-          <IconButton
-            name={ICON.back.outline}
-            accessibilityLabel={t('common.back')}
-            on="background"
-            onPress={onBack}
-          />
-        </View>
-
         <AppText variant="largeTitle" accessibilityRole="header">
           {t('gymDirectory.requestGym.title')}
         </AppText>
@@ -214,11 +207,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       justifyContent: 'center',
       paddingHorizontal: screenMargin,
       paddingVertical: theme.spacing.xl,
-    },
-    backRow: {
-      flexDirection: 'row',
-      marginLeft: -theme.spacing.smd,
-      marginBottom: theme.spacing.sm,
     },
     screenSubtitle: {
       marginTop: theme.spacing.xs,

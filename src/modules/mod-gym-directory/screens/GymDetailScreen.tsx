@@ -30,6 +30,7 @@ import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import type { Gym } from '../types';
 
 interface GymDetailScreenProps {
@@ -53,7 +54,8 @@ export default function GymDetailScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, screenMargin);
+  const tabInset = useTabBarInset();
+  const styles = makeStyles(theme, screenMargin, tabInset.contentBottom);
 
   const [gym, setGym] = useState<Gym | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -108,6 +110,24 @@ export default function GymDetailScreen({
     }
   }, [gymId, isSaved]);
 
+  // v2.2: AppShell header owns back + title; the bookmark toggle is its trailing control.
+  useAppHeader({
+    title: gym?.name ?? '',
+    onBack,
+    trailing: gym ? (
+      <IconButton
+        variant="float"
+        name={isSaved ? ICON.bookmark.filled : ICON.bookmark.outline}
+        accessibilityLabel={
+          isSaved ? t('gymDirectory.bookmark.unsave') : t('gymDirectory.bookmark.save')
+        }
+        onPress={() => {
+          void handleBookmarkToggle();
+        }}
+      />
+    ) : undefined,
+  });
+
   const isMixed = gym?.gym_type === 'both';
 
   if (isLoading) {
@@ -136,14 +156,6 @@ export default function GymDetailScreen({
       <SwipeBackWrapper onBack={onBack}>
         <View style={styles.root}>
           <View style={styles.contentContainer}>
-            <View style={styles.headerRow}>
-              <IconButton
-                name={ICON.back.outline}
-                accessibilityLabel={t('common.back')}
-                on="background"
-                onPress={onBack}
-              />
-            </View>
             <InlineError
               variant="block"
               message={errorMessage ?? t('common.error')}
@@ -163,33 +175,8 @@ export default function GymDetailScreen({
       <ScrollView
         style={styles.root}
         contentContainerStyle={styles.contentContainer}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
-        {/* Header row: back navigation + bookmark toggle (AC-120, AC-121) */}
-        <View style={styles.headerRow}>
-          <IconButton
-            name={ICON.back.outline}
-            accessibilityLabel={t('common.back')}
-            on="background"
-            onPress={onBack}
-          />
-          <IconButton
-            variant="toggle"
-            name={ICON.bookmark.outline}
-            nameOn={ICON.bookmark.filled}
-            selected={isSaved}
-            color="textSecondary"
-            on="background"
-            accessibilityLabel={
-              isSaved
-                ? t('gymDirectory.bookmark.unsave')
-                : t('gymDirectory.bookmark.save')
-            }
-            onPress={() => {
-              void handleBookmarkToggle();
-            }}
-          />
-        </View>
-
         {/* Gym photo (when present) */}
         {gym.photo_url ? (
           <Image
@@ -256,7 +243,11 @@ export default function GymDetailScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  screenMargin: number,
+  bottomInset: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -265,17 +256,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     contentContainer: {
       paddingTop: theme.spacing.sm,
       paddingHorizontal: screenMargin,
-      paddingBottom: theme.spacing.xxl,
+      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.xxl,
     },
     skeletonGroup: {
       gap: theme.layout.cardGap,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: theme.spacing.sm,
-      marginHorizontal: -theme.spacing.smd,
     },
     photo: {
       width: '100%',
