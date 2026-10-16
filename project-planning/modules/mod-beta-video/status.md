@@ -2,6 +2,11 @@
 
 ## Engineering Progress
 
+### Off-spec design tooling — Storybook stories for BetaVideoGrid — 2026-10-16
+
+Added `src/modules/mod-beta-video/stories/BetaVideoGrid.stories.tsx` (fake data only, no component changes). This is off-spec design tooling requested by the UI/UX designer, on branch `design/storybook`, pending PR review. No AC impact.
+
+
 **Status**: Test fix — 2026-10-15 (fix pre-existing mock bug in fetchBetaVideosByUser test: routes join mock changed from `{ name: 'V5 Red' }` to `{ grade: 'V5', color_tag: 'red', gyms: { name: 'Sender Gym' } }` to match actual routes schema and service logic; all 106 tests pass)
 
 ### Test Fix — fetchBetaVideosByUser route mock uses grade+color_tag instead of name — 2026-10-15
