@@ -2,6 +2,16 @@
 
 ## Engineering Progress
 
+### Design system v2.2 migration (2026-10-16) — off-spec design work, pending PR review
+
+Visual/layout only; no new flows, deps, illustrations or haptics. Spec: design system v2.2 §32.10, §32.11, Appendix G.7.
+- `ModerationActions`: Block = `destructiveTonal` (no icon), Report = `ghost`, one row inside the profile header Card; blocked state = `footnote` "You blocked {name}" + `secondary` `sm` Unblock. New optional props `targetName`, `on`. Confirm sheet unchanged in flow (floating, no X, stacked destructive/cancel).
+- `ReportSheet`: neutral NoticeBox moved under the title (scrolls with content); `groupHeader` over reasons; only the submit button (and the "pick a reason" hint) is the fixed footer.
+- `OtherUserProfileScreen`: header Card (Avatar `lg`, `title3` name, `footnote` bio, moderation row), `pageSection` history title, list row min height tokens.
+- Locales: added `moderation.blockedNotice`, `moderation.blockedNoticeGeneric` (en, zh-TW).
+- Stories: ModerationActions renders in a Card and has a `targetName` control.
+- [pass] `npm run lint` (tsc), `npx jest src/modules/mod-moderation`, `check:i18n`, `storybook build`.
+
 ### AC-185 — SwipeBackWrapper wired into OtherUserProfileScreen (2026-10-15)
 
 Wrapped the outermost `<ScrollView>` in `OtherUserProfileScreen.tsx` with `<SwipeBackWrapper onBack={onBack}>` per the AC-185 requirement. The `enabled` prop is omitted (defaults to `true` — no case in this screen where swiping back should be blocked). The loading-state early return (`<View style={styles.centered}>`) is intentionally left unwrapped; it has no `onBack` interaction surface and exits before the wrapper is reached.
@@ -74,6 +84,22 @@ QA-found bug: `follows_insert_own` RLS policy had no block check; existing follo
 Fix A (migration `20260929000006_mod_009_fix_follows_block.sql`): dropped and recreated `follows_insert_own` with symmetric block check; added `trg_remove_follows_on_block` trigger to remove existing follows server-side on block INSERT.
 Fix B (`moderation-service.ts` `blockUser()`): added doc comment noting the DB trigger handles follow removal — no client-side delete needed.
 Post-fix verification: `npx tsc --noEmit` 0 errors; `npx jest --passWithNoTests` 405 tests passed, 31 suites.
+
+### Storybook stories (off-spec design tooling)
+Added `src/modules/mod-moderation/stories/ModerationActions.stories.tsx` and `ReportSheet.stories.tsx` on branch `design/storybook`. Off-spec design tooling requested by UI/UX, pending PR review. No component source changes; fake data only via the Storybook supabase stub.
+
+### Design system v1.2 (2026-10-16) — off-spec design work, pending PR review
+
+Visual + motion only (spec §32.10, §32.11, MIGRATION.md); no new flows, no service changes except the bug fixes.
+
+- **Bug fix, Rules of Hooks:** `ModerationActions` returned `null` before `useCallback` / `useEffect`. The own-profile guard now runs after all hooks (and skips the status fetch). Regression test: `__tests__/ModerationActions.test.tsx`.
+- **Bug fix, unblock contrast (1.09:1):** Unblock is now `ui/Button secondary`.
+- `ModerationActions`: Button `destructive` (`ICON.block.outline`) / `secondary` / `ghost`; Block opens BottomSheet `confirm` (uses `moderation.block.confirmBlock` + new `confirmBody`; error stays in the sheet with retry); toasts replace inline feedback; haptic `success` on block only; button `loading` replaces the centered spinner. Requires a `ToastProvider` above it (AppShell).
+- `ReportSheet`: BottomSheet `form` (keyboard avoidance + sticky footer), `ListRow radio` reasons, `TextField multiline` with 0/280 counter, NoticeBox, disabled submit + "pick a reason" hint, `InlineError` via sheet `error` (input kept), success = sheet closes + toast (replaces the in-sheet confirmation). New optional props `defaultCategory` / `defaultNote` (used by Storybook).
+- `OtherUserProfileScreen`: `Avatar`, `AppText`, `IconButton` back (`ICON.back.outline`), `InlineError`, `Card` history, `screenMargin`.
+- Locale: added `moderation.report.notePlaceholder/notice/pickReason`, `moderation.block.confirmBody`, `moderation.sheetReportHint`; reworded `sheetReport` ("Report and block"), `report.confirmation`, `report.error`, `report.category`.
+- Stories merged to one Controls-driven `Playground` each (ModerationActions: isBlocked / isOwnProfile / fail; ReportSheet: visible / reason / noteLength / submitResult).
+- Not done: spec's "discard this report?" inline confirm on close with content (new flow); the "⋯" menu hint row lives in mod-social-feed `UserProfileScreen.tsx` (key `moderation.sheetReportHint` is ready).
 
 ## QA Results
 

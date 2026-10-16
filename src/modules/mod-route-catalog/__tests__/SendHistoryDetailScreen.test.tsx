@@ -24,7 +24,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Alert } from 'react-native';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import SendHistoryDetailScreen from '../screens/SendHistoryDetailScreen';
-import { renderOptions } from '../test-utils';
+import { renderOptionsWithHeader as renderOptions } from '../test-utils';
 import type { AscentWithProfile } from '../../mod-send-logging';
 
 const mockFetchMyAscentsForRoute = fetchMyAscentsForRoute as jest.MockedFunction<typeof fetchMyAscentsForRoute>;
@@ -224,7 +224,7 @@ describe('SendHistoryDetailScreen', () => {
     await waitFor(() => {
       // Both styles should be visible
       const flashBadges = screen.queryAllByText(/Flash/i).concat(screen.queryAllByText(/閃攀/));
-      const topBadges = screen.queryAllByText(/^Top$/i).concat(screen.queryAllByText(/完攀/));
+      const topBadges = screen.queryAllByText(/^Send$/i).concat(screen.queryAllByText(/完攀/));
       expect(flashBadges.length).toBeGreaterThan(0);
       expect(topBadges.length).toBeGreaterThan(0);
     });

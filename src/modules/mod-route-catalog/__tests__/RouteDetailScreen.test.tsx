@@ -62,7 +62,7 @@ import { loadRoute, getPhotoSignedUrl, fetchSavedRouteIds, saveRoute, unsaveRout
 import { fetchUserAchievements, fetchMyAscentsForRoute, deleteAscent, summarizeAscents } from '../../mod-send-logging/send-service';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
-import { renderOptions } from '../test-utils';
+import { renderOptionsWithHeader as renderOptions } from '../test-utils';
 
 const mockLoadRoute = loadRoute as jest.MockedFunction<typeof loadRoute>;
 const mockGetPhotoSignedUrl = getPhotoSignedUrl as jest.MockedFunction<typeof getPhotoSignedUrl>;

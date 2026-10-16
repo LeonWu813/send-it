@@ -482,6 +482,31 @@ describe('BetaVideoUploader', () => {
     });
   });
 
+  it('v2.2: a failed upload keeps the card in its failed state and Retry re-uploads the same file', async () => {
+    mockLaunchImageLibrary.mockResolvedValue(validAsset());
+    mockUploadBetaVideo.mockRejectedValueOnce(new Error('boom'));
+
+    render(<BetaVideoUploader {...DEFAULT_PROPS} />, renderOptions());
+
+    const addButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Add Beta Video' ||
+        el.props.accessibilityLabel === '新增 Beta 影片',
+    );
+    fireEvent.press(addButton!);
+
+    const retry = await screen.findByText(/^(Retry|重試)$/);
+    mockUploadBetaVideo.mockResolvedValueOnce({ id: 'v2' } as never);
+    fireEvent.press(retry);
+
+    await waitFor(() => {
+      expect(mockUploadBetaVideo).toHaveBeenCalledTimes(2);
+    });
+    expect(mockUploadBetaVideo.mock.calls[1][0].localVideoUri).toBe(
+      mockUploadBetaVideo.mock.calls[0][0].localVideoUri,
+    );
+  });
+
   it('AC-031 (Rev 29): passes asset.uri directly to uploadBetaVideo — no compression, Current picker mode preserves native HEVC/HLG', async () => {
     // Rev 29: no react-native-compressor; the native file URI is passed directly.
     // preferredAssetRepresentationMode.Current is set — iOS returns the original asset

@@ -1852,3 +1852,29 @@ Note: `act()` warnings in test output are pre-existing infrastructure warnings f
 **New regressions: 0**
 
 **MOD-001 EditProfileScreen safe-area fix — QA PASS.**
+
+## Engineering Progress — Design System v1.2 Migration — 2026-10-16 (off-spec design work, pending PR review)
+
+Visual-only migration to design system v1.2 (Phase 1). No behaviour, service or auth-logic changes. Not a PRD/AC change.
+
+### Changes Implemented
+- `SignInScreen`, `SignUpScreen`: `TextField` (labels via `t()`, `secureTextEntry` eye toggle), `Button` (primary lg with `loading`, Google as secondary lg, "no account"/"have account" as ghost `on="background"`), `AppText largeTitle`, `InlineError variant="block"` for errors, `screenMargin` via `useLayout`, divider uses `stroke.hairline`. Apple button kept as system `AppleAuthenticationButton` (BLACK light / WHITE dark), height 50 (`buttonPrimaryMinHeight`), `cornerRadius = borderRadius.lg`, still above-the-fold equivalent to Google per Apple rules.
+- `EditProfileScreen`: `Avatar xl` (initial / person glyph fallback), change-avatar as ghost `Button`, `TextField` single/multiline, privacy selector as `Chip variant="choice"` in a radiogroup (selected = secondaryContainer + primary outline), `AppText sectionHeader`, `InlineError`, Cancel (secondary) / Save (primary) `Button` lg.
+- `ProfileScreen`: `Avatar xl` (decorative, name beside it), `AppText` title2/body/headline/footnote, follower/following counts as `PressableScale feedback="row"` with 44pt minHeight and `surfaceAltPressed` wash (no opacity), Edit Profile as secondary `Button md`, beta-video section header `sectionHeader`, `screenMargin` for header/footer/grid padding. No "Following" toggle button exists in this module (counts only).
+- `AuthNavigator`: loading `ActivityIndicator` -> `Spinner`.
+- Removed `textInverse`, raw fontSize/fontWeight, fixed heights, opacity pressed states, hex values. No emoji/icons were present; no expo-haptics.
+- `__tests__/ProfileScreen.test.tsx`: dropped the partial theme mock (ui/ components need the full theme), wrapped in real `ThemeProvider`, added `initReactI18next` to the i18n mock. Assertions unchanged.
+
+### Self-Check Results
+- `npx jest src/modules/mod-auth-profile`: 3 suites, 20 tests pass (pre-existing act() warning in useSession.test).
+- `npm run check:i18n`: OK. No locale keys added (all labels reuse existing keys).
+- `npm run lint` (tsc): no errors in this module; one error in `src/components/RouteCard.tsx(267)` (unused `@ts-expect-error`) belongs to another module.
+
+## Design System v2.2 Migration (off-spec design work, pending PR review)
+
+Visual-only. No behaviour, auth-logic, locale or dependency changes. Not a PRD/AC change.
+
+- `SignInScreen`, `SignUpScreen`: form fields grouped in ONE `Card` (`gap: layout.fieldGap`), each `TextField` keeps its own 1pt border. Apple system button `cornerRadius` now `RADIUS.full` (capsule, still the system button). Buttons are capsule via the shared `Button`.
+- `EditProfileScreen`: display name + bio in one grouped `Card`; privacy header uses `groupHeader`.
+- `ProfileScreen`: beta-video section header uses `pageSection`. These screens draw no title/back row, so nothing to remove; header top padding unchanged (spec G.7 does not say to change it; AppShell large title interaction to be confirmed).
+- Self-check: jest 3 suites / 20 tests pass; `tsc --noEmit` clean for this module; `check:i18n` OK.

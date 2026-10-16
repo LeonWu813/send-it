@@ -1,26 +1,24 @@
 /**
  * ModerationActions — Report + Block controls for a given user (AC-080–AC-084).
  *
- * Renders:
- *   - "Report User" button → opens ReportSheet modal
- *   - "Block" / "Unblock" toggle button (loads current block status on mount)
- *   - Confirmation message after block/unblock
+ * Design system §32.10 / §32.11:
+ * (v2.2, profile context, G.7):
+ *   - Block: ui/ Button `destructiveTonal` (no icon) → floating BottomSheet `confirm` (no X, stacked
+ *     solid-red `destructive` on top, cancel below) → toast on success.
+ *   - Unblock: `footnote` "You blocked {name}" + ui/ Button `secondary` `sm`; no confirmation, no haptic.
+ *   - Report: ui/ Button `ghost` → ReportSheet.
+ *   - Never renders for the user's own profile (hooks still run in the same order every render).
  *
- * Never renders when targetUserId === currentUserId.
- *
- * Uses useTheme() for all colors and useTranslation('common') for all strings.
+ * Requires a ToastProvider above it (mounted once by AppShell).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { Pressable } from 'react-native';
+import { View } from 'react-native';
 
+import { AppText, BottomSheet, Button, useToast } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { useMotion } from '../../../lib/motion';
 import { useTheme } from '../../../lib/theme';
 import { blockUser, isBlocked, unblockUser } from '../moderation-service';
 import ReportSheet from './ReportSheet';
@@ -36,6 +34,10 @@ export interface ModerationActionsProps {
   onBlock?: () => void;
   /** Called after a successful unblock. */
   onUnblock?: () => void;
+  /** Display name used in the blocked notice ("You blocked {name}"). Optional. */
+  targetName?: string;
+  /** Surface the buttons sit on (the profile header Card is `surface`). Default `surface`. */
+  on?: 'background' | 'surface';
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -45,20 +47,22 @@ export default function ModerationActions({
   currentUserId,
   onBlock,
   onUnblock,
+  targetName,
+  on = 'surface',
 }: ModerationActionsProps): React.JSX.Element | null {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { haptic } = useMotion();
+  const toast = useToast();
+
+  const isOwnProfile = targetUserId === currentUserId;
 
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
   const [blocked, setBlocked] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
-  const [blockFeedback, setBlockFeedback] = useState<string | null>(null);
-  const [blockError, setBlockError] = useState<string | null>(null);
+  const [blockError, setBlockError] = useState<string | undefined>(undefined);
   const [loadingStatus, setLoadingStatus] = useState(true);
-
-  // Never render for own profile.
-  if (targetUserId === currentUserId) return null;
 
   // ── Load initial block status ───────────────────────────────────────────────
 
@@ -74,87 +78,119 @@ export default function ModerationActions({
   }, [targetUserId]);
 
   useEffect(() => {
+    if (isOwnProfile) return;
     void loadBlockStatus();
-  }, [loadBlockStatus]);
+  }, [isOwnProfile, loadBlockStatus]);
 
   // ── Block / Unblock ─────────────────────────────────────────────────────────
 
-  const handleBlockToggle = useCallback(async (): Promise<void> => {
+  const handleBlock = useCallback(async (): Promise<void> => {
     setBlockLoading(true);
-    setBlockError(null);
-    setBlockFeedback(null);
-
-    const wasBlocked = blocked;
+    setBlockError(undefined);
     try {
-      if (wasBlocked) {
-        await unblockUser(targetUserId);
-        setBlocked(false);
-        setBlockFeedback(t('moderation.block.unblocked'));
-        onUnblock?.();
-      } else {
-        await blockUser(targetUserId);
-        setBlocked(true);
-        setBlockFeedback(t('moderation.block.blocked'));
-        onBlock?.();
-      }
+      await blockUser(targetUserId);
+      setBlocked(true);
+      setConfirmVisible(false);
+      haptic('success', 'moderation-block');
+      toast.show({ message: t('moderation.block.blocked'), icon: ICON.block.outline });
+      onBlock?.();
     } catch {
       setBlockError(t('moderation.block.error'));
     } finally {
       setBlockLoading(false);
     }
-  }, [blocked, targetUserId, t, onBlock, onUnblock]);
+  }, [targetUserId, haptic, toast, t, onBlock]);
+
+  const handleUnblock = useCallback(async (): Promise<void> => {
+    setBlockLoading(true);
+    try {
+      await unblockUser(targetUserId);
+      setBlocked(false);
+      toast.show({ message: t('moderation.block.unblocked') });
+      onUnblock?.();
+    } catch {
+      toast.show({ message: t('moderation.block.error'), tone: 'error' });
+    } finally {
+      setBlockLoading(false);
+    }
+  }, [targetUserId, toast, t, onUnblock]);
+
+  const closeConfirm = useCallback(() => {
+    setConfirmVisible(false);
+    setBlockError(undefined);
+  }, []);
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  // Never render for own profile (after all hooks).
+  if (isOwnProfile) return null;
+
   return (
-    <View style={styles.container}>
-      {/* Report User button */}
-      <Pressable
-        style={styles.reportButton}
-        onPress={() => setReportSheetVisible(true)}
-        accessibilityRole="button"
-        accessibilityLabel={t('moderation.reportUser')}
-      >
-        <Text style={styles.reportButtonText}>{t('moderation.reportUser')}</Text>
-      </Pressable>
-
-      {/* Block / Unblock toggle */}
-      {loadingStatus ? (
-        <ActivityIndicator
-          size="small"
-          color={theme.colors.primary}
-          style={styles.blockLoader}
-        />
-      ) : (
-        <Pressable
-          style={[styles.blockButton, blocked && styles.blockButtonUnblock]}
-          onPress={() => void handleBlockToggle()}
-          disabled={blockLoading}
-          accessibilityRole="button"
-          accessibilityLabel={
-            blocked ? t('moderation.unblockUser') : t('moderation.blockUser')
-          }
-          accessibilityState={{ disabled: blockLoading }}
+    <View>
+      {blocked ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: theme.spacing.sm,
+          }}
         >
-          {blockLoading ? (
-            <ActivityIndicator size="small" color={theme.colors.textInverse} />
-          ) : (
-            <Text style={styles.blockButtonText}>
-              {blocked ? t('moderation.unblockUser') : t('moderation.blockUser')}
-            </Text>
-          )}
-        </Pressable>
+          <AppText variant="footnote" color="textSecondary" style={{ flex: 1 }}>
+            {targetName
+              ? t('moderation.blockedNotice', { name: targetName })
+              : t('moderation.blockedNoticeGeneric')}
+          </AppText>
+          <Button
+            variant="secondary"
+            size="sm"
+            on={on}
+            label={t('moderation.unblockUser')}
+            loading={blockLoading}
+            onPress={() => void handleUnblock()}
+          />
+        </View>
+      ) : (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <Button
+              variant="destructiveTonal"
+              size="md"
+              on={on}
+              fullWidth
+              label={t('moderation.blockUser')}
+              loading={loadingStatus}
+              onPress={() => setConfirmVisible(true)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              variant="ghost"
+              size="md"
+              on={on}
+              fullWidth
+              label={t('moderation.reportUser')}
+              onPress={() => setReportSheetVisible(true)}
+            />
+          </View>
+        </View>
       )}
 
-      {/* Feedback messages */}
-      {blockFeedback !== null && (
-        <Text style={styles.feedbackText}>{blockFeedback}</Text>
-      )}
-      {blockError !== null && (
-        <Text style={styles.errorText}>{blockError}</Text>
-      )}
+      <BottomSheet
+        variant="confirm"
+        visible={confirmVisible}
+        onClose={closeConfirm}
+        title={t('moderation.block.confirmBlock')}
+        description={t('moderation.block.confirmBody')}
+        confirmLabel={t('moderation.blockUser')}
+        confirmIcon={ICON.block.outline}
+        onConfirm={() => void handleBlock()}
+        loading={blockLoading}
+        error={blockError}
+        errorActionLabel={t('common.retry')}
+        onErrorAction={() => void handleBlock()}
+      />
 
-      {/* Report sheet modal */}
       <ReportSheet
         targetUserId={targetUserId}
         visible={reportSheetVisible}
@@ -162,57 +198,4 @@ export default function ModerationActions({
       />
     </View>
   );
-}
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
-  return StyleSheet.create({
-    container: {
-      marginTop: theme.spacing.md,
-      gap: theme.spacing.sm,
-    },
-    reportButton: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.sm,
-      alignItems: 'center',
-      backgroundColor: theme.colors.surface,
-    },
-    reportButtonText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    blockButton: {
-      borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.sm,
-      alignItems: 'center',
-      backgroundColor: theme.colors.error,
-    },
-    blockButtonUnblock: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    blockButtonText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
-    blockLoader: {
-      paddingVertical: theme.spacing.sm,
-    },
-    feedbackText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.success,
-      textAlign: 'center',
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      textAlign: 'center',
-    },
-  });
 }

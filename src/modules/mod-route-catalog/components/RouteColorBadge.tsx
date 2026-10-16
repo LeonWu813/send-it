@@ -1,83 +1,121 @@
 /**
- * RouteColorBadge.
+ * RouteColorBadge (TapeBadge), design system v1.2 chapter 17 / 32.2.
  *
- * Displays a small chip showing the route's hold/tape color.
- *
- * Color rendering uses theme-aware semantic tokens — no hardcoded hex values.
- * The background color for each route color is drawn from the OS's color system
- * (React Native's named color system + theme surface fallback) so the chip is
- * visually recognisable in both light and dark mode.
- *
- * Theme rule: all 9 route colors use a named-color string accepted by React
- * Native's `color` prop (e.g. 'red', 'orange', 'white', 'black'). These are
- * device/OS-resolved named colors, not hardcoded hex literals — satisfying the
- * "no hardcoded hex colors in components" convention while being visually accurate.
- * Text color adapts to ensure readability against the chip background.
+ * Route tape colour label: the only tape-radius (6) label with text; v2.2.
+ * Fill / label / hairline come from `TAPE_DISPLAY` / `TAPE_HAIR` (display only; stored colour
+ * names are unchanged). Colour names go through i18n. Static: not pressable, no motion.
+ * Unknown colours render `surfaceAlt` / `textPrimary` / hairline with the "Other" label.
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../../lib/theme';
+import { TAPE_HAIR, resolveTape } from '../tape';
 import type { RouteColor } from '../types';
 
 interface RouteColorBadgeProps {
-  color: RouteColor;
-  /** Size variant. Defaults to 'md'. */
-  size?: 'sm' | 'md';
+  /** Stored colour name. Anything outside the 9-colour enum is shown as "Other". */
+  color: RouteColor | (string & {});
+  /** Size variant. Defaults to 'md' ('lg' = 34 high grade plate, RouteCard title). */
+  size?: 'sm' | 'md' | 'lg';
+  /**
+   * Grade variant: when set, the tape prints this text (e.g. "V4") instead of the colour name.
+   * The accessibility label becomes "V4, red". Without `grade`, the colour name is printed.
+   */
+  grade?: string;
+  /** On a photo: adds a 1.5pt `onMedia` outline. */
+  onMedia?: boolean;
 }
 
-/**
- * Maps a RouteColor to a React Native named color string.
- * React Native accepts standard CSS color names which are OS-resolved —
- * not hardcoded hex literals.
- */
-const ROUTE_COLOR_TO_RN_COLOR: Record<RouteColor, string> = {
-  red: 'red',
-  orange: 'orange',
-  yellow: 'yellow',
-  green: 'green',
-  blue: 'blue',
-  purple: 'purple',
-  pink: 'pink',
-  white: 'white',
-  black: 'black',
-};
-
-/**
- * Colors where the label text should be dark (because the chip is light).
- */
-const LIGHT_CHIP_COLORS = new Set<RouteColor>(['white', 'yellow']);
+/** Fill / hairline for the 11x11 tape swatch (colour-filter chip, thumbnail dot). */
+export function useTapeSwatch(color: string): { fill: string; hair?: string } {
+  const { theme } = useTheme();
+  const mode = theme.isDark ? 'dark' : 'light';
+  const tape = resolveTape(mode, color);
+  if (!tape.known) return { fill: theme.colors.surfaceAlt, hair: TAPE_HAIR[mode] };
+  return { fill: tape.entry.fill, hair: tape.entry.hair ? TAPE_HAIR[mode] : undefined };
+}
 
 export default function RouteColorBadge({
   color,
   size = 'md',
+  grade,
+  onMedia = false,
 }: RouteColorBadgeProps): React.JSX.Element {
+  const { t } = useTranslation('common');
   const { theme } = useTheme();
+  const mode = theme.isDark ? 'dark' : 'light';
+  const tape = resolveTape(mode, color);
 
-  const chipColor = ROUTE_COLOR_TO_RN_COLOR[color];
-  const isLightChip = LIGHT_CHIP_COLORS.has(color);
-  const labelColor = isLightChip
-    ? theme.colors.textPrimary
-    : theme.colors.textInverse;
+  const fill = tape.known ? tape.entry.fill : theme.colors.surfaceAlt;
+  const labelColor = tape.known ? tape.entry.label : theme.colors.textPrimary;
+  const hasHair = tape.known ? !!tape.entry.hair : true;
 
-  const chipSize = size === 'sm' ? styles.chipSm : styles.chipMd;
-  const textStyle = size === 'sm' ? styles.textSm : styles.textMd;
+  const name = t(`routeCatalog.colors.${tape.known ? color : 'other'}`);
+  const tl = theme.typeVariant.tapeLabel[size];
+  const text = grade ?? name;
+  const label = grade
+    ? `${grade}, ${name}`
+    : t('routeCatalog.tapeLabel', { color: name });
 
   return (
     <View
+      accessible
+      accessibilityLabel={label}
       style={[
         styles.chip,
-        chipSize,
-        { backgroundColor: chipColor },
-        // White chip gets a border so it's visible against light backgrounds
-        color === 'white' && { borderWidth: 1, borderColor: theme.colors.border },
+        {
+          backgroundColor: fill,
+          borderRadius: theme.radius.tape,
+          minHeight: theme.componentSize.tapeHeight[size],
+          paddingHorizontal: theme.componentSize.tapePadH[size],
+        },
       ]}
-      accessibilityLabel={color}
     >
-      <Text style={[styles.label, textStyle, { color: labelColor }]}>
-        {color}
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={tl.maxFontSizeMultiplier}
+        style={[
+          {
+            fontSize: tl.fontSize,
+            lineHeight: tl.lineHeight,
+            fontWeight: tl.fontWeight,
+            color: labelColor,
+            letterSpacing: 0,
+          },
+          grade ? { fontVariant: theme.typeVariant.numeric.fontVariant } : null,
+        ]}
+      >
+        {text}
       </Text>
+      {onMedia ? (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderWidth: theme.stroke.emphasis,
+              borderColor: theme.colors.onMedia,
+              borderRadius: theme.radius.tape,
+            },
+          ]}
+        />
+      ) : hasHair ? (
+        // Overlay so the 1pt hairline never changes the 22 / 26 visual height.
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderWidth: theme.stroke.thin,
+              borderColor: TAPE_HAIR[mode],
+              borderRadius: theme.radius.tape,
+            },
+          ]}
+        />
+      ) : null}
     </View>
   );
 }
@@ -85,26 +123,7 @@ export default function RouteColorBadge({
 const styles = StyleSheet.create({
   chip: {
     alignSelf: 'flex-start',
-    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  chipSm: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  chipMd: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  label: {
-    textTransform: 'capitalize',
-    fontWeight: '600',
-  },
-  textSm: {
-    fontSize: 11,
-  },
-  textMd: {
-    fontSize: 13,
   },
 });

@@ -19,39 +19,23 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { useTheme } from '../../../lib/theme';
+import {
+  AppText,
+  Card,
+  IconButton,
+  InlineError,
+  SendStatus,
+  Spinner,
+} from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
-import type { AscentStyle, AscentWithProfile } from '../../mod-send-logging';
-
-/** Gold color for flash badge — matches the flash achievement icon. */
-const FLASH_BADGE_COLOR = '#FFD700';
-
-function getStyleBadgeColor(
-  style: AscentStyle,
-  theme: ReturnType<typeof useTheme>['theme'],
-): string {
-  switch (style) {
-    case 'flash':
-      return FLASH_BADGE_COLOR;
-    case 'top':
-      return theme.colors.success;
-    case 'attempt':
-      return theme.colors.textSecondary;
-  }
-}
+import type { AscentWithProfile } from '../../mod-send-logging';
 
 interface SendHistoryDetailScreenProps {
   routeId: string;
@@ -65,7 +49,10 @@ export default function SendHistoryDetailScreen({
 }: SendHistoryDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme, 0);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, screenMargin);
+  const tabInset = useTabBarInset();
+  useAppHeader({ title: t('routeCatalog.detail.sendHistoryTitle'), onBack });
 
   const [ascents, setAscents] = useState<AscentWithProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,88 +110,62 @@ export default function SendHistoryDetailScreen({
   return (
     <SwipeBackWrapper onBack={onBack}>
     <View style={styles.root}>
-      {/* Sticky top bar */}
-      <View style={styles.topBar}>
-        <Pressable
-          onPress={onBack}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-        <Text style={styles.title}>{t('routeCatalog.detail.sendHistoryTitle')}</Text>
-        {/* Spacer to center the title */}
-        <View style={styles.titleSpacer} />
-      </View>
-
       {isLoading ? (
         <View style={styles.centeredContainer}>
-          <ActivityIndicator color={theme.colors.primary} size="large" />
+          <Spinner />
         </View>
       ) : errorMessage !== null ? (
-        <View style={styles.centeredContainer}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-          <Pressable
-            style={styles.retryButton}
-            onPress={() => { void loadAscents(); }}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.retry')}
-          >
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </Pressable>
+        <View style={styles.errorBlock}>
+          <InlineError
+            variant="block"
+            message={errorMessage}
+            actionLabel={t('common.retry')}
+            onAction={() => { void loadAscents(); }}
+          />
         </View>
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: theme.spacing.xxl + tabInset.contentBottom }]}
+          scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         >
           {ascents.length === 0 ? (
-            <Text style={styles.emptyText}>{t('routeCatalog.detail.noSends')}</Text>
+            <AppText variant="body" color="textSecondary" align="center" style={styles.emptyText}>
+              {t('routeCatalog.detail.noSends')}
+            </AppText>
           ) : (
             ascents.map((ascent) => {
-              const badgeColor = getStyleBadgeColor(ascent.style, theme);
               const displayDate = new Date(ascent.logged_at).toLocaleDateString();
               return (
-                <View key={ascent.id} style={styles.ascentRow}>
+                <Card key={ascent.id} variant="static">
                   <View style={styles.ascentRowHeader}>
-                    <View style={[styles.styleBadge, { backgroundColor: badgeColor }]}>
-                      <Text style={styles.styleBadgeText}>
-                        {t(`sends.styles.${ascent.style}`)}
-                      </Text>
-                    </View>
+                    <SendStatus sendStyle={ascent.style} variant="tag" />
                     <View style={styles.ascentRowHeaderRight}>
-                      <Text style={styles.dateText}>{displayDate}</Text>
+                      <AppText variant="footnote" color="textSecondary">{displayDate}</AppText>
                       {/* Delete button — all rows in this screen are the current user's own ascents */}
-                      <Pressable
+                      <IconButton
+                        name={ICON.delete.outline}
+                        size={20}
+                        color="textSecondary"
                         onPress={() => { handleDeleteAscent(ascent.id); }}
-                        accessibilityRole="button"
                         accessibilityLabel={t('sendLogging.delete.delete')}
-                        style={styles.deleteButton}
-                        hitSlop={8}
-                      >
-                        <Ionicons
-                          name="trash-outline"
-                          size={16}
-                          color={theme.colors.textSecondary}
-                        />
-                      </Pressable>
+                      />
                     </View>
                   </View>
                   <View style={styles.ascentMeta}>
-                    <Text style={styles.attemptsText}>
+                    <AppText variant="footnote">
                       {t('sends.attemptsCount', { count: ascent.attempts })}
-                    </Text>
+                    </AppText>
                     {ascent.is_private && (
-                      <Text style={styles.privateLabel}>{t('sends.privateLabel')}</Text>
+                      <AppText variant="caption1" color="textSecondary">{t('sends.privateLabel')}</AppText>
                     )}
                   </View>
                   {ascent.note !== null && (
                     <View style={styles.noteContainer}>
-                      <Text style={styles.noteText}>{ascent.note}</Text>
+                      <AppText variant="footnote" style={styles.noteText}>{ascent.note}</AppText>
                     </View>
                   )}
-                </View>
+                </Card>
               );
             })
           )}
@@ -216,107 +177,44 @@ export default function SendHistoryDetailScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingTop: topInset,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.sm,
-      backgroundColor: theme.colors.background,
-    },
-    backButton: {
-      // no extra padding — topBar handles spacing
-    },
-    title: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    titleSpacer: {
-      width: 24, // matches back button icon width for centering
-    },
     centeredContainer: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
     },
-    errorText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-      textAlign: 'center',
-      marginBottom: theme.spacing.md,
-    },
-    retryButton: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    retryButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
+    errorBlock: {
+      paddingHorizontal: screenMargin,
+      paddingTop: theme.spacing.md,
     },
     scrollView: {
       flex: 1,
     },
     contentContainer: {
       paddingTop: theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
+      gap: theme.layout.cardGap,
     },
     emptyText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
       paddingVertical: theme.spacing.xl,
-    },
-    ascentRow: {
-      padding: theme.spacing.md,
-      marginBottom: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
     },
     ascentRowHeader: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: theme.spacing.xs,
     },
     ascentRowHeaderRight: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: theme.spacing.sm,
-    },
-    deleteButton: {
-      padding: theme.spacing.xs,
-    },
-    styleBadge: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
-      borderRadius: theme.borderRadius.sm,
-    },
-    styleBadgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-      textTransform: 'uppercase',
-    },
-    dateText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
+      gap: theme.spacing.xs,
+      marginRight: -theme.spacing.smd,
     },
     ascentMeta: {
       flexDirection: 'row',
@@ -324,23 +222,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       gap: theme.spacing.md,
       flexWrap: 'wrap',
     },
-    attemptsText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-    },
-    privateLabel: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textDisabled,
-    },
     noteContainer: {
       marginTop: theme.spacing.sm,
       padding: theme.spacing.sm,
-      borderRadius: theme.borderRadius.sm,
-      backgroundColor: theme.colors.divider,
+      borderRadius: theme.radius.control,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     noteText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
       fontStyle: 'italic',
     },
   });

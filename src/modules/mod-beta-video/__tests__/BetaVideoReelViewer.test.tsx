@@ -72,7 +72,7 @@ jest.spyOn(PanResponder, 'create').mockImplementation((config) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
@@ -212,7 +212,8 @@ describe('BetaVideoReelViewer', () => {
       expect(screen.getByTestId('beta-video-reel-close')).toBeTruthy();
     });
 
-    fireEvent.press(screen.getByTestId('beta-video-reel-close'));
+    // The close control is a ui/ IconButton inside the testID wrapper.
+    fireEvent.press(within(screen.getByTestId('beta-video-reel-close')).getByRole('button'));
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 

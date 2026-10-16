@@ -12,27 +12,24 @@
  * present and isAvailableAsync() returns true, making the button visible and
  * App Store compliant.
  *
- * No hardcoded colors — all styling uses theme tokens.
+ * No hardcoded colors — all styling uses theme tokens and ui/ components.
  */
 
 import * as AppleAuthentication from 'expo-apple-authentication';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '../../../lib/theme';
+import { AppText, Button, Card, InlineError, TextField } from '../../../components/ui';
+import { RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import {
   signInWithApple,
   signInWithEmail,
@@ -49,7 +46,8 @@ export default function SignInScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, insets.top, screenMargin);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -134,71 +132,66 @@ export default function SignInScreen({
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>{t('app.name')}</Text>
+        <AppText variant="largeTitle" align="center" style={styles.title}>
+          {t('app.name')}
+        </AppText>
 
+        {/* Grouped form card: one Card, fields keep their own 1pt border */}
+        <Card style={styles.formCard}>
         {/* Email input */}
-        <TextInput
-          style={styles.input}
+        <TextField
+          label={t('auth.email')}
           value={email}
           onChangeText={setEmail}
           placeholder={t('auth.emailPlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
-          editable={!isLoading}
-          accessibilityLabel={t('auth.email')}
+          disabled={isLoading}
         />
 
         {/* Password input */}
-        <TextInput
-          style={styles.input}
+        <TextField
+          label={t('auth.password')}
           value={password}
           onChangeText={setPassword}
           placeholder={t('auth.passwordPlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
           secureTextEntry
-          editable={!isLoading}
-          accessibilityLabel={t('auth.password')}
+          disabled={isLoading}
         />
+        </Card>
 
         {/* Error message */}
         {errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
+          <InlineError variant="block" message={errorMessage} />
         ) : null}
 
         {/* Email sign-in button */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.primaryButtonPressed,
-            isLoading && styles.primaryButtonDisabled,
-          ]}
+        <Button
+          label={t('auth.signIn')}
           onPress={handleEmailSignIn}
+          variant="primary"
+          size="lg"
+          fullWidth
+          loading={isLoading}
           disabled={isLoading}
-          accessibilityRole="button"
           accessibilityLabel={t('auth.signIn')}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={theme.colors.textInverse} />
-          ) : (
-            <Text style={styles.primaryButtonText}>{t('auth.signIn')}</Text>
-          )}
-        </Pressable>
+        />
 
         {/* Divider */}
         <View style={styles.dividerRow}>
           <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>{t('auth.orDivider')}</Text>
+          <AppText variant="footnote" color="textSecondary">
+            {t('auth.orDivider')}
+          </AppText>
           <View style={styles.dividerLine} />
         </View>
 
         {/*
           Apple Sign-In — MUST be visually equivalent to Google Sign-In when
-          available. Hidden on simulator builds that lack the Apple Developer
-          entitlement (isAvailableAsync returns false). Visible in
-          production/TestFlight where the entitlement is present, satisfying
-          App Store requirement that Apple Sign-In is not smaller or hidden.
+          available (height 50 = Button lg). Placed above the other providers
+          per design system 14.9. Hidden on simulator builds that lack the
+          Apple Developer entitlement (isAvailableAsync returns false).
         */}
         {appleAvailable && (
           <AppleAuthentication.AppleAuthenticationButton
@@ -206,46 +199,47 @@ export default function SignInScreen({
               AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN
             }
             buttonStyle={
-              AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
+              theme.isDark
+                ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
+                : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
             }
-            cornerRadius={theme.borderRadius.md}
+            cornerRadius={RADIUS.full}
             style={styles.appleButton}
             onPress={handleAppleSignIn}
           />
         )}
 
-        {/* Google Sign-In — same height/weight as Apple button */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.googleButton,
-            pressed && styles.googleButtonPressed,
-            isLoading && styles.googleButtonDisabled,
-          ]}
+        {/* Google Sign-In — same height as Apple button */}
+        <Button
+          label={t('auth.continueWithGoogle')}
           onPress={handleGoogleSignIn}
+          variant="secondary"
+          size="lg"
+          fullWidth
           disabled={isLoading}
-          accessibilityRole="button"
           accessibilityLabel={t('auth.continueWithGoogle')}
-        >
-          <Text style={styles.googleButtonText}>
-            {t('auth.continueWithGoogle')}
-          </Text>
-        </Pressable>
+        />
 
         {/* Navigate to sign-up */}
-        <Pressable
+        <Button
+          label={t('auth.noAccount')}
           onPress={onNavigateSignUp}
+          variant="ghost"
+          on="background"
+          fullWidth
           disabled={isLoading}
-          accessibilityRole="button"
-        >
-          <Text style={styles.linkText}>{t('auth.noAccount')}</Text>
-        </Pressable>
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  topInset: number,
+  screenMargin: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -253,50 +247,16 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     scrollContent: {
       flexGrow: 1,
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.md,
     },
+    formCard: {
+      gap: theme.layout.fieldGap,
+    },
     title: {
-      fontSize: theme.fontSize.display,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      textAlign: 'center',
       marginBottom: theme.spacing.lg,
-    },
-    input: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm + 4,
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-    },
-    primaryButton: {
-      backgroundColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.sm + 4,
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: 48,
-    },
-    primaryButtonPressed: {
-      backgroundColor: theme.colors.primaryPressed,
-    },
-    primaryButtonDisabled: {
-      backgroundColor: theme.colors.primaryDisabled,
-    },
-    primaryButtonText: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
     },
     dividerRow: {
       flexDirection: 'row',
@@ -305,44 +265,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     dividerLine: {
       flex: 1,
-      height: StyleSheet.hairlineWidth,
+      height: theme.stroke.hairline,
       backgroundColor: theme.colors.border,
     },
-    dividerText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    // Apple Sign-In button — fixed height 48 to match Google button
+    // Apple Sign-In button: height 50 = Button lg, full width (design system 14.9)
     appleButton: {
-      height: 48,
+      height: theme.componentSize.buttonPrimaryMinHeight,
       width: '100%',
-    },
-    // Google Sign-In button — same height as Apple button
-    googleButton: {
-      height: 48,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    googleButtonPressed: {
-      backgroundColor: theme.colors.divider,
-    },
-    googleButtonDisabled: {
-      opacity: 0.5,
-    },
-    googleButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textPrimary,
-    },
-    linkText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-      textAlign: 'center',
-      marginTop: theme.spacing.sm,
     },
   });
 }

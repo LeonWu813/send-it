@@ -154,7 +154,7 @@ describe('GymListScreen', () => {
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
     );
 
-    fireEvent.press(screen.getByText("Can't find your gym? Request it →"));
+    fireEvent.press(screen.getByText("Can't find your gym? Request it"));
     expect(onRequestGym).toHaveBeenCalled();
   });
 

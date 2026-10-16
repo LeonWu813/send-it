@@ -1,8 +1,9 @@
 /**
  * ProfileHistoryScreen — send history + stats for a user profile.
  *
- * AC-061: stats panel (total sends, sends-by-grade bar chart, accumulated days,
- *         highest grade). Bar chart hidden when total_sends = 0.
+ * AC-061: stats panel (v2.2: top-grade hero, sends / days tiles, sends-by-grade bars).
+ *         Bars hidden when total_sends = 0; zero records -> ONE EmptyState `prompt`
+ *         replaces the stats panel AND the history section (spec 32.5).
  * AC-062: stats recalculate immediately after a new send is logged (via
  *         refetchKey prop — parent bumps it when MOD-004 logs a new ascent).
  * AC-064: followers_only privacy gate (server-side via RPC; client shows
@@ -19,19 +20,15 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Animated, ScrollView, StyleSheet, View } from 'react-native';
+import type { FlatListProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SharedRouteCard from '../../../components/RouteCard';
-import { useTheme } from '../../../lib/theme';
+import { AppText, Chip, EmptyState, InlineError, Spinner } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
+import { useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import StatsPanel from '../components/StatsPanel';
 import {
   fetchProfileHistory,
@@ -43,6 +40,17 @@ import type { HistoryAscent, HistoryVisibility, ProfileStats } from '../types';
 import { GRADE_ORDER } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+/** Scroll props forwarded to the list (e.g. the AppShell `useAppHeaderRoot()` binding). */
+export type ForwardedScrollProps = Pick<
+  FlatListProps<unknown>,
+  | 'onScroll'
+  | 'onContentSizeChange'
+  | 'onLayout'
+  | 'scrollEventThrottle'
+  | 'contentContainerStyle'
+  | 'scrollIndicatorInsets'
+>;
 
 interface ProfileHistoryScreenProps {
   /** UUID of the user whose history is being displayed. */
@@ -73,6 +81,10 @@ interface ProfileHistoryScreenProps {
    * route detail screen within the correct gym's route list.
    */
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  /** Primary action of the zero-records prompt ("Find routes"). Omitted -> the prompt has no button. */
+  onLogSend?: () => void;
+  /** Optional pass-through scroll props. Caller padding in contentContainerStyle overrides the TabBar inset. */
+  scrollProps?: ForwardedScrollProps;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -84,14 +96,18 @@ export default function ProfileHistoryScreen({
   extraListHeader,
   extraListFooter,
   onNavigateToRoute,
+  onLogSend,
+  scrollProps,
 }: ProfileHistoryScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
+  const { screenMargin } = useLayout();
   const insets = useSafeAreaInsets();
+  const tabInset = useTabBarInset();
   // When extraListHeader is provided, the host element already applies the
   // top-inset padding inside its container. Pass 0 so we don't double-pad.
   const topInsetForStyles = extraListHeader !== undefined ? 0 : insets.top;
-  const styles = makeStyles(theme, topInsetForStyles);
+  const styles = makeStyles(theme, topInsetForStyles, screenMargin);
 
   // ── State ──────────────────────────────────────────────────────────────────
 
@@ -124,9 +140,9 @@ export default function ProfileHistoryScreen({
         setVisibility('visible');
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('profileHistory.errors.loadFailed');
-      setErrorMessage(message);
+      // Never surface err.message: show the translated sentence only.
+      void err;
+      setErrorMessage(t('profileHistory.errors.loadFailed'));
       setVisibility('error');
     }
   }, [userId, isOwnProfile, t]);
@@ -141,7 +157,7 @@ export default function ProfileHistoryScreen({
   if (visibility === 'loading') {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Spinner />
       </View>
     );
   }
@@ -149,7 +165,12 @@ export default function ProfileHistoryScreen({
   if (visibility === 'error') {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>{errorMessage}</Text>
+        <InlineError
+          variant="block"
+          message={errorMessage ?? t('profileHistory.errors.loadFailed')}
+          actionLabel={t('common.retry')}
+          onAction={() => void loadData()}
+        />
       </View>
     );
   }
@@ -157,8 +178,11 @@ export default function ProfileHistoryScreen({
   if (visibility === 'hidden') {
     return (
       <View style={styles.hiddenContainer}>
-        <Text style={styles.hiddenTitle}>{t('profileHistory.hiddenTitle')}</Text>
-        <Text style={styles.hiddenBody}>{t('profileHistory.hiddenBody')}</Text>
+        <EmptyState
+          variant="private"
+          title={t('profileHistory.hiddenTitle')}
+          description={t('profileHistory.hiddenBody')}
+        />
       </View>
     );
   }
@@ -189,17 +213,14 @@ export default function ProfileHistoryScreen({
       {tabs.map((tab) => {
         const isActive = tab === activeGrade;
         return (
-          <Pressable
+          <Chip
             key={tab}
-            style={[styles.tab, isActive && styles.tabActive]}
+            variant="choice"
+            on="background"
+            label={tab === 'all' ? t('home.projectingRoutes.allGrades') : tab}
+            selected={isActive}
             onPress={() => setActiveGrade(tab)}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
-          >
-            <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-              {tab === 'all' ? t('home.projectingRoutes.allGrades') : tab}
-            </Text>
-          </Pressable>
+          />
         );
       })}
     </ScrollView>
@@ -207,27 +228,42 @@ export default function ProfileHistoryScreen({
 
   // ── List header (optional host content + stats panel + grade tabs) ───────────
 
+  // Zero records (not even attempts): one prompt replaces the stats AND the history section.
+  const hasRecords = ascents.length > 0 || (stats?.total_sends ?? 0) > 0;
+
   const ListHeader = (
     <View>
       {extraListHeader ?? null}
-      {stats !== null && <StatsPanel stats={stats} />}
-      <Text style={styles.sectionTitle}>
-        {t('profile.sendHistory')}
-      </Text>
-      {GradeTabBar}
+      {stats !== null && (
+        <StatsPanel stats={stats} hasRecords={hasRecords} onLogSend={onLogSend} />
+      )}
+      {hasRecords ? (
+        <>
+          <AppText variant="pageSection" style={styles.sectionTitle} accessibilityRole="header">
+            {t('profile.sendHistory')}
+          </AppText>
+          {GradeTabBar}
+        </>
+      ) : null}
     </View>
   );
 
   const ListEmpty = (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyText}>{t('profileHistory.empty')}</Text>
+      <EmptyState variant="inline" description={t('profileHistory.empty')} icon={ICON.sends.outline} />
     </View>
   );
 
   return (
-    <FlatList
+    <Animated.FlatList
+      {...scrollProps}
       style={styles.root}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[
+        styles.contentContainer,
+        tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom },
+        scrollProps?.contentContainerStyle,
+      ]}
+      scrollIndicatorInsets={scrollProps?.scrollIndicatorInsets ?? { bottom: tabInset.indicatorBottom }}
       data={filtered}
       keyExtractor={(item) => item.route_id}
       renderItem={({ item }) => {
@@ -254,7 +290,7 @@ export default function ProfileHistoryScreen({
         );
       }}
       ListHeaderComponent={ListHeader}
-      ListEmptyComponent={ListEmpty}
+      ListEmptyComponent={hasRecords ? ListEmpty : null}
       ListFooterComponent={extraListFooter ?? null}
       showsVerticalScrollIndicator={false}
     />
@@ -264,7 +300,7 @@ export default function ProfileHistoryScreen({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number, screenMargin: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -280,56 +316,23 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       justifyContent: 'center',
       backgroundColor: theme.colors.background,
       paddingTop: topInset + theme.spacing.md,
-    },
-    errorText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-      textAlign: 'center',
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
     },
     sectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      paddingHorizontal: theme.spacing.lg,
-      marginBottom: theme.spacing.sm,
+      paddingHorizontal: screenMargin,
+      marginBottom: theme.layout.sectionHeaderGap,
     },
     tabRow: {
       flexGrow: 0,
       marginBottom: theme.spacing.md,
     },
     tabRowContent: {
-      gap: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.lg,
-    },
-    tab: {
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    tabActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primary,
-    },
-    tabText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    tabTextActive: {
-      color: theme.colors.textInverse,
-      fontWeight: theme.fontWeight.medium,
+      columnGap: theme.spacing.sm,
+      paddingHorizontal: screenMargin,
+      paddingVertical: theme.spacing.xs,
     },
     emptyContainer: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.lg,
-    },
-    emptyText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
+      paddingHorizontal: screenMargin,
     },
     hiddenContainer: {
       flex: 1,
@@ -337,19 +340,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       justifyContent: 'center',
       backgroundColor: theme.colors.background,
       paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.xl,
-    },
-    hiddenTitle: {
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      textAlign: 'center',
-      marginBottom: theme.spacing.sm,
-    },
-    hiddenBody: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
+      paddingHorizontal: screenMargin,
     },
   });
 }

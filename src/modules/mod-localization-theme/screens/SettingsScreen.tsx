@@ -35,7 +35,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -43,7 +42,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import i18n from '../../../lib/i18n';
 import type { SupportedLanguage } from '../../../lib/i18n';
@@ -51,7 +49,9 @@ import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
 import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile/auth-service';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
+import { Button } from '../../../components/ui/Button';
 import {
   loadLanguage,
   loadThemeOverride,
@@ -70,8 +70,10 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   const [view, setView] = useState<SettingsView>('settings');
   const { t } = useTranslation('common');
   const { theme, override, setOverride } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const tabInset = useTabBarInset();
+  const headerTop = useHeaderContentInset();
+  const styles = makeStyles(theme, headerTop, tabInset.contentBottom);
+  useAppHeader({ title: t('settings.title'), onBack });
 
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(
     (i18n.language as SupportedLanguage) ?? 'zh-TW',
@@ -190,26 +192,11 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
 
   return (
     <SwipeBackWrapper onBack={onBack}>
-      {/* Navigation bar */}
-      <View style={styles.navBar}>
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.back') ?? 'Back'}
-        >
-          <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
-          <Text style={styles.backButtonText}>{t('settings.back') ?? 'Back'}</Text>
-        </Pressable>
-        <Text style={styles.navTitle}>{t('settings.title')}</Text>
-        {/* Spacer to balance the back button */}
-        <View style={styles.navSpacer} />
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
         {/* Language section (AC-091) */}
         <View style={styles.section}>
@@ -306,7 +293,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
                 onValueChange={(value) => { void handleBetaVideoPrivacyToggle(value); }}
                 disabled={!privacyFetched || privacyLoading}
                 trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor={theme.colors.background}
+                thumbColor={theme.colors.surface}
               />
             </View>
           </View>
@@ -316,76 +303,32 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
         {logoutError ? (
           <Text style={styles.logoutError}>{logoutError}</Text>
         ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.logoutButton,
-            pressed && styles.logoutButtonPressed,
-            isSigningOut && styles.logoutButtonDisabled,
-          ]}
-          onPress={() => { void handleLogout(); }}
-          disabled={isSigningOut}
-          accessibilityRole="button"
-          accessibilityLabel={t('profile.logout')}
-        >
-          {isSigningOut ? (
-            <ActivityIndicator color={theme.colors.error} />
-          ) : (
-            <Text style={styles.logoutButtonText}>{t('profile.logout')}</Text>
-          )}
-        </Pressable>
+        <View style={styles.logoutWrap}>
+          <Button
+            variant="destructive"
+            icon="log-out-outline"
+            label={t('profile.logout')}
+            loading={isSigningOut}
+            fullWidth
+            onPress={() => { void handleLogout(); }}
+          />
+        </View>
       </ScrollView>
     </SwipeBackWrapper>
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: number, bottomInset: number) {
   return StyleSheet.create({
-    navBar: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingBottom: theme.spacing.md,
-      paddingHorizontal: theme.spacing.md,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      paddingVertical: theme.spacing.xs,
-      paddingHorizontal: theme.spacing.xs,
-      borderRadius: theme.borderRadius.md,
-      minWidth: 60,
-    },
-    backButtonPressed: {
-      backgroundColor: theme.colors.surface,
-    },
-    backButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    navTitle: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    navSpacer: {
-      width: 40,
-    },
     scrollView: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     scrollContent: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.lg,
-      paddingBottom: theme.spacing.xl,
+      paddingTop: headerTop + theme.spacing.lg,
+      paddingBottom: theme.spacing.xl + bottomInset,
     },
     section: {
       marginBottom: theme.spacing.xl,
@@ -407,13 +350,14 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: theme.spacing.md,
+      minHeight: theme.layout.minTouchTarget,
+      paddingVertical: theme.layout.listRowPaddingV,
       paddingHorizontal: theme.spacing.lg,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.divider,
     },
     optionRowPressed: {
-      backgroundColor: theme.colors.surfaceElevated,
+      backgroundColor: theme.colors.surfacePressed,
     },
     optionLabel: {
       fontSize: theme.fontSize.md,
@@ -428,7 +372,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       height: 20,
       borderRadius: theme.borderRadius.full,
       borderWidth: 2,
-      borderColor: theme.colors.border,
+      borderColor: theme.colors.outline,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -458,28 +402,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textSecondary,
       marginTop: 2,
     },
-    // AC-168: Logout button
-    logoutButton: {
-      height: 44,
-      marginHorizontal: theme.spacing.lg,
+    // AC-168: Logout button wrapper (shared destructive Button)
+    logoutWrap: {
       marginTop: theme.spacing.lg,
       marginBottom: theme.spacing.xl,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.error,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    logoutButtonPressed: {
-      backgroundColor: theme.colors.surface,
-    },
-    logoutButtonDisabled: {
-      opacity: 0.5,
-    },
-    logoutButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.error,
     },
     logoutError: {
       fontSize: theme.fontSize.sm,

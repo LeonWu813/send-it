@@ -12,6 +12,12 @@
  * mocked; no real network activity.
  */
 
+const mockUseAppHeader = jest.fn();
+jest.mock('../../mod-home/components/AppHeaderContext', () => ({
+  useAppHeader: (cfg: unknown): void => { mockUseAppHeader(cfg); },
+  useTabBarInset: () => ({ contentBottom: 0, indicatorBottom: 0 }),
+}));
+
 jest.mock('../../mod-beta-video', () => ({
   fetchBetaVideosByUser: jest.fn(),
   BetaVideoGrid: () => null,
@@ -103,6 +109,13 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }): any {
     maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
   };
   return builder;
+}
+
+/** The "⋯" lives in the AppShell header `trailing` slot; read it from the last useAppHeader call. */
+function headerTrailing(): { props: { accessibilityLabel?: string; variant?: string } } | undefined {
+  const calls = mockUseAppHeader.mock.calls;
+  if (calls.length === 0) return undefined;
+  return (calls[calls.length - 1][0] as { trailing?: { props: { accessibilityLabel?: string; variant?: string } } }).trailing;
 }
 
 describe('UserProfileScreen', () => {
@@ -345,32 +358,50 @@ describe('UserProfileScreen', () => {
     });
   });
 
-  it('calls onBack when back button is pressed', async () => {
+  it('v2.2: draws no back row of its own (AppShell nested AppHeader owns back, §30)', async () => {
     setupProfileMock();
-    const onBack = jest.fn();
 
     render(
       <UserProfileScreen
         targetUserId={TARGET_USER_ID}
         session={MOCK_SESSION}
-        onBack={onBack}
+        onBack={jest.fn()}
       />,
       renderOptions(),
     );
 
     await waitFor(() => {
-      const backButton = screen.queryAllByRole('button').find(
-        (el) =>
-          el.props.accessibilityLabel === 'Back' ||
-          el.props.accessibilityLabel === '返回',
-      );
-      expect(backButton).toBeTruthy();
-      if (backButton) {
-        fireEvent.press(backButton);
-      }
+      expect(screen.getByText('Alice')).toBeTruthy();
     });
+    const backButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Back' ||
+        el.props.accessibilityLabel === '返回',
+    );
+    expect(backButton).toBeUndefined();
+  });
 
-    expect(onBack).toHaveBeenCalled();
+  it('v2.2: registers the AppShell header with display name title and onBack', async () => {
+    setupProfileMock();
+    const onBack = jest.fn();
+
+    render(
+      <UserProfileScreen targetUserId={TARGET_USER_ID} session={MOCK_SESSION} onBack={onBack} />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(mockUseAppHeader).toHaveBeenLastCalledWith(
+        expect.objectContaining({ title: 'Alice', onBack }),
+      );
+    });
+    const last = mockUseAppHeader.mock.calls[mockUseAppHeader.mock.calls.length - 1][0] as {
+      onBack: () => void;
+      trailing?: unknown;
+    };
+    last.onBack();
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(last.trailing).toBeTruthy();
   });
 
   it('AC-150: renders three-dots icon for non-own profiles', async () => {
@@ -386,11 +417,11 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeTruthy();
+      expect(headerTrailing()?.props.accessibilityLabel).toBe('More options');
+      expect(headerTrailing()?.props.variant).toBe('float');
     });
+    // exactly once: no screen-drawn duplicate
+    expect(screen.queryAllByRole('button').filter((el) => el.props.accessibilityLabel === 'More options')).toHaveLength(0);
   });
 
   it('AC-150: does not render three-dots icon for own profile', async () => {
@@ -406,10 +437,8 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeUndefined();
+      expect(mockUseAppHeader).toHaveBeenCalled();
+      expect(headerTrailing()).toBeUndefined();
     });
   });
 
@@ -455,11 +484,11 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeTruthy();
+      expect(headerTrailing()?.props.accessibilityLabel).toBe('More options');
+      expect(headerTrailing()?.props.variant).toBe('float');
     });
+    // exactly once: no screen-drawn duplicate
+    expect(screen.queryAllByRole('button').filter((el) => el.props.accessibilityLabel === 'More options')).toHaveLength(0);
   });
 
   it('AC-163: hides BetaVideoGrid for followers_only profile when viewer is not following', async () => {
@@ -552,10 +581,8 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeUndefined();
+      expect(mockUseAppHeader).toHaveBeenCalled();
+      expect(headerTrailing()).toBeUndefined();
     });
   });
 });

@@ -17,19 +17,20 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '../../../lib/theme';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
+import {
+  AppText,
+  Avatar,
+  Card,
+  EmptyState,
+  IconButton,
+  InlineError,
+  Spinner,
+} from '../../../components/ui';
 import {
   fetchActivityFeed,
   fetchLikeInfo,
@@ -53,7 +54,8 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, insets.top, screenMargin);
 
   const [items, setItems] = useState<FeedItem[]>([]);
   const [likeMap, setLikeMap] = useState<LikeMap>({});
@@ -141,7 +143,7 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Spinner size="large" color="primary" accessibilityLabel={t('common.loading')} />
       </View>
     );
   }
@@ -160,32 +162,30 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
       }
     >
       {/* Screen title */}
-      <Text style={styles.screenTitle}>{t('socialFeed.title')}</Text>
+      <AppText variant="largeTitle" style={styles.screenTitle}>
+        {t('socialFeed.title')}
+      </AppText>
 
       {/* Error banner */}
       {error !== null && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable
-            onPress={() => void handleRefresh()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.retry')}
-          >
-            <Text style={styles.retryText}>{t('common.retry')}</Text>
-          </Pressable>
-        </View>
+        <InlineError
+          variant="block"
+          message={error}
+          actionLabel={t('common.retry')}
+          onAction={() => void handleRefresh()}
+        />
       )}
 
       {/* Empty state */}
       {error === null && items.length === 0 && (
-        <Text style={styles.emptyText}>{t('socialFeed.empty')}</Text>
+        <EmptyState variant="inline" description={t('socialFeed.empty')} />
       )}
 
       {/* Feed items — AC-053: no comment UI; likes only on beta_video items */}
       {items.map((item) =>
         item.item_type === 'ascent'
-          ? renderAscentCard(item, styles, theme, t)
-          : renderBetaVideoCard(item, styles, theme, t, likeMap, handleLikeToggle),
+          ? renderAscentCard(item, styles, t)
+          : renderBetaVideoCard(item, styles, t, likeMap, handleLikeToggle),
       )}
     </ScrollView>
   );
@@ -193,76 +193,65 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
 
 // ── Feed card renderers ───────────────────────────────────────────────────────
 
+type Translate = (key: string, opts?: Record<string, unknown>) => string;
+
+function renderActorRow(
+  item: FeedItem,
+  styles: ReturnType<typeof makeStyles>,
+): React.JSX.Element {
+  return (
+    <View style={styles.actorRow}>
+      <Avatar size="md" uri={item.actor_avatar_url} name={item.actor_name} decorative />
+      <View style={styles.actorInfo}>
+        <AppText variant="subhead" weight="600" numberOfLines={1}>
+          {item.actor_name}
+        </AppText>
+        <AppText variant="caption1" color="textSecondary">
+          {formatDate(item.created_at)}
+        </AppText>
+      </View>
+    </View>
+  );
+}
+
 function renderAscentCard(
   item: FeedItem,
   styles: ReturnType<typeof makeStyles>,
-  theme: ReturnType<typeof useTheme>['theme'],
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: Translate,
 ): React.JSX.Element {
   return (
-    <View key={item.item_id} style={styles.feedCard}>
-      {/* Actor row */}
-      <View style={styles.actorRow}>
-        {item.actor_avatar_url ? (
-          <Image
-            source={{ uri: item.actor_avatar_url }}
-            style={styles.avatar}
-            accessibilityLabel={item.actor_name}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]} />
-        )}
-        <View style={styles.actorInfo}>
-          <Text style={styles.actorName}>{item.actor_name}</Text>
-          <Text style={styles.timestamp}>{formatDate(item.created_at)}</Text>
-        </View>
-      </View>
+    <Card key={item.item_id} variant="static" padding={0}>
+      {renderActorRow(item, styles)}
 
       {/* Ascent body — AC-053: NO like button on ascent items */}
       <View style={styles.cardBody}>
-        <Text style={styles.cardLabel}>{t('socialFeed.logged')}</Text>
-        <Text style={styles.grade}>{item.route_grade}</Text>
+        <AppText variant="sectionHeader">{t('socialFeed.logged')}</AppText>
+        <AppText variant="title1">{item.route_grade}</AppText>
         {item.ascent_style !== null && (
-          <Text style={styles.ascentDetail}>
+          <AppText variant="subhead" color="textSecondary" style={styles.ascentDetail}>
             {t(`sends.styles.${item.ascent_style}`)}
             {item.ascent_attempts !== null
               ? ` · ${t('sends.attemptsCount', { count: item.ascent_attempts })}`
               : ''}
-          </Text>
+          </AppText>
         )}
       </View>
-    </View>
+    </Card>
   );
 }
 
 function renderBetaVideoCard(
   item: FeedItem,
   styles: ReturnType<typeof makeStyles>,
-  theme: ReturnType<typeof useTheme>['theme'],
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: Translate,
   likeMap: LikeMap,
   onLikeToggle: (itemId: string) => void,
 ): React.JSX.Element {
   const likeInfo = likeMap[item.item_id] ?? { like_count: 0, user_has_liked: false };
 
   return (
-    <View key={item.item_id} style={styles.feedCard}>
-      {/* Actor row */}
-      <View style={styles.actorRow}>
-        {item.actor_avatar_url ? (
-          <Image
-            source={{ uri: item.actor_avatar_url }}
-            style={styles.avatar}
-            accessibilityLabel={item.actor_name}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]} />
-        )}
-        <View style={styles.actorInfo}>
-          <Text style={styles.actorName}>{item.actor_name}</Text>
-          <Text style={styles.timestamp}>{formatDate(item.created_at)}</Text>
-        </View>
-      </View>
+    <Card key={item.item_id} variant="static" padding={0}>
+      {renderActorRow(item, styles)}
 
       {/* Thumbnail */}
       {item.thumbnail_url !== null && (
@@ -274,45 +263,45 @@ function renderBetaVideoCard(
             accessibilityLabel={t('betaVideo.player.thumbnailAlt')}
           />
           <View style={styles.videoOverlay}>
-            <Text style={styles.videoLabel}>{t('betaVideo.sectionTitle')}</Text>
-            <Text style={styles.grade}>{item.route_grade}</Text>
+            <AppText variant="sectionHeader" color="onMedia">
+              {t('betaVideo.sectionTitle')}
+            </AppText>
+            <AppText variant="title2" color="onMedia">
+              {item.route_grade}
+            </AppText>
           </View>
         </View>
       )}
 
       {/* Caption */}
       {item.video_caption !== null && (
-        <Text style={styles.caption}>{item.video_caption}</Text>
+        <AppText variant="subhead" color="textSecondary" style={styles.caption}>
+          {item.video_caption}
+        </AppText>
       )}
 
       {/* Like button — AC-052: only on beta_video items; AC-053: NOT on ascents */}
       <View style={styles.likeRow}>
-        <Pressable
-          style={styles.likeButton}
-          onPress={() => onLikeToggle(item.item_id)}
-          accessibilityRole="button"
+        <IconButton
+          variant="toggle"
+          name={ICON.like.outline}
+          nameOn={ICON.like.filled}
+          selected={likeInfo.user_has_liked}
+          color="textSecondary"
           accessibilityLabel={
             likeInfo.user_has_liked
               ? t('socialFeed.unlike')
               : t('socialFeed.like')
           }
-          accessibilityState={{ selected: likeInfo.user_has_liked }}
-          hitSlop={8}
-        >
-          <Text
-            style={[
-              styles.likeIcon,
-              likeInfo.user_has_liked && { color: theme.colors.error },
-            ]}
-          >
-            {likeInfo.user_has_liked ? '♥' : '♡'}
-          </Text>
-        </Pressable>
+          onPress={() => onLikeToggle(item.item_id)}
+        />
         {likeInfo.like_count > 0 && (
-          <Text style={styles.likeCount}>{likeInfo.like_count}</Text>
+          <AppText variant="subhead" color="textSecondary" numeric>
+            {likeInfo.like_count}
+          </AppText>
         )}
       </View>
-    </View>
+    </Card>
   );
 }
 
@@ -332,7 +321,11 @@ function formatDate(iso: string): string {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  topInset: number,
+  screenMargin: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -340,7 +333,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     contentContainer: {
       paddingTop: topInset + theme.spacing.md,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
+      gap: theme.layout.cardGap,
     },
     centered: {
       flex: 1,
@@ -349,99 +344,27 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       backgroundColor: theme.colors.background,
     },
     screenTitle: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      paddingHorizontal: theme.spacing.md,
-      marginBottom: theme.spacing.md,
-    },
-    errorContainer: {
-      margin: theme.spacing.md,
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.error,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textInverse,
-      flex: 1,
-    },
-    retryText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-      marginLeft: theme.spacing.sm,
-    },
-    emptyText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      paddingHorizontal: theme.spacing.md,
-      marginTop: theme.spacing.lg,
-    },
-    feedCard: {
-      marginHorizontal: theme.spacing.md,
-      marginBottom: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-      overflow: 'hidden',
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      marginBottom: theme.spacing.sm,
     },
     actorRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      padding: theme.spacing.md,
-    },
-    avatar: {
-      width: 40,
-      height: 40,
-      borderRadius: theme.borderRadius.full,
-      marginRight: theme.spacing.sm,
-    },
-    avatarPlaceholder: {
-      backgroundColor: theme.colors.border,
+      padding: theme.layout.cardPadding,
+      gap: theme.spacing.smd,
     },
     actorInfo: {
       flex: 1,
     },
-    actorName: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    timestamp: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
-    },
     cardBody: {
-      paddingHorizontal: theme.spacing.md,
-      paddingBottom: theme.spacing.md,
-    },
-    cardLabel: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: theme.spacing.xs,
-    },
-    grade: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
+      paddingHorizontal: theme.layout.cardPadding,
+      paddingBottom: theme.layout.cardPadding,
     },
     ascentDetail: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
       marginTop: theme.spacing.xs,
     },
     thumbnailContainer: {
       width: '100%',
-      height: 200,
+      aspectRatio: 16 / 9,
       position: 'relative',
     },
     thumbnail: {
@@ -453,43 +376,19 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       bottom: 0,
       left: 0,
       right: 0,
-      backgroundColor: 'rgba(0,0,0,0.45)',
-      paddingHorizontal: theme.spacing.md,
+      backgroundColor: theme.colors.mediaScrim,
+      paddingHorizontal: theme.layout.cardPadding,
       paddingVertical: theme.spacing.sm,
     },
-    videoLabel: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
     caption: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      paddingHorizontal: theme.spacing.md,
+      paddingHorizontal: theme.layout.cardPadding,
       paddingTop: theme.spacing.sm,
     },
     likeRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderTopWidth: 1,
-      borderTopColor: theme.colors.divider,
-    },
-    likeButton: {
-      paddingRight: theme.spacing.xs,
-    },
-    likeIcon: {
-      fontSize: theme.fontSize.xl,
-      color: theme.colors.textSecondary,
-    },
-    likeCount: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      marginLeft: theme.spacing.xs,
+      paddingHorizontal: theme.spacing.sm,
+      gap: theme.layout.iconTextGap,
     },
   });
 }
-

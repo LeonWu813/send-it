@@ -2,6 +2,14 @@
 
 ## Engineering Progress
 
+### Off-spec design work, pending PR review - 2026-10-16 (design system v2.2 migration)
+
+- `GymListScreen.tsx`: city chips `on="background"` (inverted selection from Chip); content-shaped skeleton (headline, branch, district lines inside Card radius 20).
+- `GymDetailScreen.tsx`: photo and placeholder use `RADIUS.card` + `CONTINUOUS`; section labels `sectionHeader` -> `pageSection`; skeleton now mirrors photo, name, zh name, section and body lines.
+- `RequestGymScreen.tsx`: the three fields sit in one `Card` with `gap: LAYOUT.fieldGap`.
+- Not done: the screens' own back rows and GymList `largeTitle` are kept. AppHeader has no `nested`/`title`/`onBack` API yet (mod-home in progress) and GymNavigator state is not visible to AppShell; removing them now would strand the user without back. Follow-up once mod-home ships the nested header.
+- No behaviour, locale, or dependency changes. Tests: `npx jest src/modules/mod-gym-directory` 44 pass; `npm run lint` (tsc) clean for this module.
+
 ### Implementation — 2026-10-15 (AC-185 — SwipeBackWrapper wired into GymDetailScreen and RequestGymScreen)
 
 **Files modified:**
@@ -178,6 +186,10 @@ Addresses the pre-existing shared-convention gap flagged by QA in the AC-176 reg
 - [PASS] RLS-first — gyms table SELECT allowed for authenticated users; INSERT/UPDATE/DELETE reserved for service_role. gym_requests INSERT allowed for authenticated users; SELECT/UPDATE/DELETE reserved for service_role.
 - [PASS] Mixed gyms handled — double8 and 永和 seeded with gym_type='both' and bouldering_only_note; note displayed on detail screen.
 - [PASS] Code readable — service layer separated from UI, clear prop interfaces, named callback props (onSelectGym, onRequestGym, onBack).
+
+### Design-system v1.2 visual migration (off-spec design work, pending PR review)
+
+Visual-only; no behaviour or service changes. GymListScreen, GymDetailScreen, RequestGymScreen migrated to `components/ui` (AppText, Card, Chip multi, TextField search/singleLine, Button, IconButton, InlineError/NoticeBox, EmptyState filtered, Skeleton). Tokens: `useLayout().screenMargin`, `surfaceAlt` for photo placeholder, `onPrimary` via Button, `warning` bookmark removed (list marker `sm` 16 textSecondary; detail toggle `lg` primary), back = `ICON.back.outline` in 44 IconButton on `background`. Locale: removed trailing "->" from `gymDirectory.requestGym.cta` (en, zh-TW); CTA now a ghost Button with `chevron-forward`. Test updated for the new CTA text. Gaps: submit-error shows `err.message` as before (spec says translated sentence; left to avoid behaviour change); required-field validation messages remain unshown (unchanged).
 
 ## QA Results
 

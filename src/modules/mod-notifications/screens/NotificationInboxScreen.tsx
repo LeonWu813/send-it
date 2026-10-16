@@ -25,20 +25,23 @@ import { Ionicons } from '@expo/vector-icons';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { useTheme } from '../../../lib/theme';
+import {
+  AppText,
+  Avatar,
+  EmptyState,
+  InlineError,
+  PressableScale,
+  Skeleton,
+  SkeletonGroup,
+  useSkeletonPhase,
+} from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader } from '../../mod-home/components/AppHeaderContext';
 import {
   fetchNotifications,
   markNotificationsRead,
@@ -47,7 +50,6 @@ import { useUnreadCountContext } from '../UnreadCountProvider';
 import type { Notification } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
 interface NotificationInboxScreenProps {
   session: Session;
   isActive?: boolean;
@@ -76,7 +78,8 @@ export default function NotificationInboxScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, insets.top, screenMargin);
 
   // AC-173 (Rev 35): refresh the unread count after batch mark-read so the
   // bell badge in MOD-012's global header clears when the inbox is opened.
@@ -84,12 +87,16 @@ export default function NotificationInboxScreen({
   // MOD-012's AppShell). If the provider is not yet mounted (e.g. in tests that
   // render NotificationInboxScreen in isolation), a fallback no-op is used via
   // the try/catch at call time — see test-utils.tsx for the mock provider.
+  // v2.2: the AppShell overlay scope renders the nested header (back + title); no-op outside AppShell.
+  useAppHeader({ title: t('notifications.title'), onBack });
+
   const { refresh: refreshUnreadCount } = useUnreadCountContext();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const skeletonPhase = useSkeletonPhase(loading);
 
   // ── Load and mark-read ──────────────────────────────────────────────────────
 
@@ -147,8 +154,23 @@ export default function NotificationInboxScreen({
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+      <View style={styles.root}>
+        {skeletonPhase !== 'idle' && (
+          <SkeletonGroup label={t('notifications.title')} style={styles.skeletonList}>
+            {[0, 1, 2, 3].map((i) => (
+              <View key={i}>
+                <View style={styles.skeletonRow}>
+                  <Skeleton shape="circle" width={theme.avatarSize.md} height={theme.avatarSize.md} />
+                  <View style={styles.body}>
+                    <Skeleton shape="text" textVariant="subhead" width="80%" />
+                    <Skeleton shape="text" textVariant="caption1" width="30%" />
+                  </View>
+                </View>
+                {i < 3 && <View style={styles.divider} />}
+              </View>
+            ))}
+          </SkeletonGroup>
+        )}
       </View>
     );
   }
@@ -156,27 +178,10 @@ export default function NotificationInboxScreen({
   return (
     <SwipeBackWrapper onBack={onBack ?? (() => {})} enabled={onBack !== undefined}>
       <View style={styles.root}>
-        {/* Navigation bar with back button */}
-        {onBack !== undefined && (
-          <View style={styles.navBar}>
-            <Pressable
-              style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-              onPress={onBack}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.back') ?? 'Back'}
-            >
-              <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
-              <Text style={styles.backButtonText}>{t('common.back') ?? 'Back'}</Text>
-            </Pressable>
-            <Text style={styles.navTitle}>{t('notifications.title')}</Text>
-            <View style={styles.navSpacer} />
-          </View>
-        )}
-
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={
-            onBack !== undefined ? styles.contentContainerWithNav : styles.contentContainer
+            onBack !== undefined ? styles.contentContainerNested : styles.contentContainer
           }
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -189,39 +194,45 @@ export default function NotificationInboxScreen({
         >
           {/* Screen title — only shown when there is no nav bar (standalone mount) */}
           {onBack === undefined && (
-            <Text style={styles.screenTitle}>{t('notifications.title')}</Text>
+            <AppText variant="title1" accessibilityRole="header" style={styles.screenTitle}>
+              {t('notifications.title')}
+            </AppText>
           )}
 
-          {/* Error banner */}
+          {/* Error block */}
           {error !== null && (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{error}</Text>
-              <Pressable
-                onPress={() => void handleRefresh()}
-                accessibilityRole="button"
-                accessibilityLabel={t('common.retry')}
-              >
-                <Text style={styles.retryText}>{t('common.retry')}</Text>
-              </Pressable>
-            </View>
+            <InlineError
+              variant="block"
+              message={error}
+              actionLabel={t('common.retry')}
+              onAction={() => void handleRefresh()}
+              style={styles.errorBlock}
+            />
           )}
 
           {/* Empty state */}
           {error === null && notifications.length === 0 && (
-            <Text style={styles.emptyText}>{t('notifications.empty')}</Text>
+            <View style={styles.emptyCard}>
+              <EmptyState variant="inline" title={t('notifications.empty')} />
+            </View>
           )}
 
-          {/* Notification list */}
-          {notifications.map((item) => (
-            <NotificationRow
-              key={item.id}
-              item={item}
-              styles={styles}
-              theme={theme}
-              t={t}
-              onPress={handleNotificationPress}
-            />
-          ))}
+          {/* Notification list: rows sit on a surface container, never on the sand page */}
+          {notifications.length > 0 && (
+            <View style={styles.list}>
+              {notifications.map((item, index) => (
+                <NotificationRow
+                  key={item.id}
+                  item={item}
+                  styles={styles}
+                  theme={theme}
+                  t={t}
+                  divider={index < notifications.length - 1}
+                  onPress={handleNotificationPress}
+                />
+              ))}
+            </View>
+          )}
         </ScrollView>
       </View>
     </SwipeBackWrapper>
@@ -242,6 +253,7 @@ interface NotificationRowProps {
   styles: ReturnType<typeof makeStyles>;
   theme: ReturnType<typeof useTheme>['theme'];
   t: (key: string) => string;
+  divider: boolean;
   onPress: (notification: Notification) => void;
 }
 
@@ -250,59 +262,56 @@ function NotificationRow({
   styles,
   theme,
   t,
+  divider,
   onPress,
 }: NotificationRowProps): React.JSX.Element {
   const actorName = item.actor_display_name ?? t('notifications.unknownActor');
 
   return (
-    <Pressable
-      style={[styles.notificationRow, !item.is_read && styles.notificationRowUnread]}
-      onPress={() => onPress(item)}
-      accessibilityRole="button"
-      accessibilityLabel={t('notifications.betaVideoLikeA11y')}
-    >
-      {/* Unread indicator dot */}
-      {!item.is_read && <View style={styles.unreadDot} />}
-
-      {/* Actor avatar */}
-      <View style={styles.avatarContainer}>
-        {item.actor_avatar_url ? (
-          <Image
-            source={{ uri: item.actor_avatar_url }}
-            style={styles.avatar}
-            accessibilityLabel={actorName}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.avatarPlaceholder]}>
-            <Text style={styles.avatarInitial}>
-              {actorName.charAt(0).toUpperCase()}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Notification body */}
-      <View style={styles.body}>
-        <Text style={styles.bodyText}>
-          <Text style={styles.actorName}>{actorName}</Text>
-          {' '}
-          <Text>{t('notifications.betaVideoLikedBody')}</Text>
-        </Text>
-        <Text style={styles.timestamp}>{formatDate(item.created_at)}</Text>
-      </View>
-
-      {/* Push preference indicator (no UI control here — managed in Settings) */}
-      <View
-        style={[
-          styles.typeBadge,
-          { backgroundColor: theme.colors.primary + '20' },
-        ]}
+    <View>
+      <PressableScale
+        feedback="row"
+        inScroll
+        pressedColor={theme.colors.surfacePressed}
+        style={styles.notificationRow}
+        onPress={() => onPress(item)}
+        accessibilityRole="button"
+        accessibilityLabel={t('notifications.betaVideoLikeA11y')}
       >
-        <Text style={[styles.typeBadgeText, { color: theme.colors.primary }]}>
-          {t('notifications.badgeBetaVideoLike')}
-        </Text>
-      </View>
-    </Pressable>
+        {/* Unread indicator dot: 8x8 error (spec 15.9 / COMPONENT_SIZE.unreadDot) */}
+        {!item.is_read && <View style={styles.unreadDot} />}
+
+        {/* Actor avatar */}
+        <View style={styles.avatarContainer}>
+          <Avatar size="md" uri={item.actor_avatar_url} name={actorName} decorative />
+        </View>
+
+        {/* Notification body */}
+        <View style={styles.body}>
+          <AppText variant="subhead">
+            <AppText variant="subhead" weight="600">{actorName}</AppText>
+            {' '}
+            <AppText variant="subhead">{t('notifications.betaVideoLikedBody')}</AppText>
+          </AppText>
+          <AppText variant="caption1" color="textSecondary" style={styles.timestamp}>
+            {formatDate(item.created_at)}
+          </AppText>
+        </View>
+
+        {/* Type marker: like glyph + text (no emoji / text symbol) */}
+        <View style={styles.typeBadge}>
+          <Ionicons
+            name={ICON.like.filled}
+            size={theme.iconSize.sm}
+            color={theme.colors.textSecondary}
+          />
+          <AppText variant="caption1" color="textSecondary">
+            {t('notifications.badgeBetaVideoLike')}
+          </AppText>
+        </View>
+      </PressableScale>
+      {divider && <View style={styles.divider} />}
+    </View>
   );
 }
 
@@ -320,49 +329,16 @@ function formatDate(iso: string): string {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  topInset: number,
+  screenMargin: number,
+) {
+  const avatarWidth = theme.avatarSize.md;
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
-    },
-    navBar: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingBottom: theme.spacing.md,
-      paddingHorizontal: theme.spacing.md,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      paddingVertical: theme.spacing.xs,
-      paddingHorizontal: theme.spacing.xs,
-      borderRadius: theme.borderRadius.md,
-      minWidth: 60,
-    },
-    backButtonPressed: {
-      backgroundColor: theme.colors.surface,
-    },
-    backButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    navTitle: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    navSpacer: {
-      minWidth: 60,
     },
     scrollView: {
       flex: 1,
@@ -371,115 +347,87 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
     },
-    contentContainerWithNav: {
+    contentContainerNested: {
       paddingTop: theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
     },
-    centered: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: theme.colors.background,
-    },
     screenTitle: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-      paddingHorizontal: theme.spacing.md,
+      paddingHorizontal: screenMargin,
       marginBottom: theme.spacing.md,
     },
-    errorContainer: {
-      margin: theme.spacing.md,
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.error,
+    errorBlock: {
+      marginHorizontal: screenMargin,
+      marginBottom: theme.spacing.md,
+    },
+    // Grouped list container: surface, RADIUS.card, clipped (spec 25 / v2.2 ListRow)
+    list: {
+      backgroundColor: theme.colors.surface,
+      marginHorizontal: screenMargin,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
+    },
+    emptyCard: {
+      backgroundColor: theme.colors.surface,
+      marginHorizontal: screenMargin,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
+    },
+    skeletonList: {
+      backgroundColor: theme.colors.surface,
+      marginHorizontal: screenMargin,
+      marginTop: theme.spacing.md,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
+    },
+    skeletonRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textInverse,
-      flex: 1,
-    },
-    retryText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-      marginLeft: theme.spacing.sm,
-    },
-    emptyText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
+      gap: theme.spacing.smd,
+      minHeight: theme.layout.listRowMinHeight,
       paddingHorizontal: theme.spacing.md,
-      marginTop: theme.spacing.lg,
+      paddingVertical: theme.layout.listRowPaddingV,
     },
     notificationRow: {
       flexDirection: 'row',
       alignItems: 'center',
+      minHeight: theme.layout.listRowMinHeight,
       paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.divider,
-      backgroundColor: theme.colors.background,
-      position: 'relative',
+      paddingVertical: theme.layout.listRowPaddingV,
     },
-    notificationRowUnread: {
-      backgroundColor: theme.colors.surface,
+    divider: {
+      height: theme.stroke.hairline,
+      marginLeft: theme.spacing.md + avatarWidth + theme.spacing.smd,
+      backgroundColor: theme.colors.divider,
     },
     unreadDot: {
       position: 'absolute',
       left: theme.spacing.xs,
       top: '50%',
-      width: 8,
-      height: 8,
-      borderRadius: 4,
-      backgroundColor: theme.colors.primary,
+      marginTop: -theme.componentSize.unreadDot / 2,
+      width: theme.componentSize.unreadDot,
+      height: theme.componentSize.unreadDot,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.error,
     },
     avatarContainer: {
-      marginRight: theme.spacing.sm,
-    },
-    avatar: {
-      width: 40,
-      height: 40,
-      borderRadius: theme.borderRadius.full,
-    },
-    avatarPlaceholder: {
-      backgroundColor: theme.colors.border,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    avatarInitial: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
+      marginRight: theme.spacing.smd,
     },
     body: {
       flex: 1,
-    },
-    bodyText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-      lineHeight: 20,
-    },
-    actorName: {
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
+      gap: theme.spacing.xxs,
     },
     timestamp: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
+      marginTop: theme.layout.stackTight,
     },
     typeBadge: {
-      paddingHorizontal: theme.spacing.xs,
-      paddingVertical: 2,
-      borderRadius: theme.borderRadius.sm,
-      marginLeft: theme.spacing.xs,
-    },
-    typeBadgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.layout.iconTextGap,
+      marginLeft: theme.spacing.sm,
     },
   });
 }

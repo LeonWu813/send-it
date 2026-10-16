@@ -148,7 +148,7 @@ describe('BetaVideoSection', () => {
     expect(screen.toJSON()).toBeTruthy();
   });
 
-  it('shows empty state when there are no videos', async () => {
+  it('v2.2: shows the upload slot tile (first tile) when there are no videos', async () => {
     mockFetchBetaVideos.mockResolvedValue([]);
 
     render(
@@ -157,10 +157,7 @@ describe('BetaVideoSection', () => {
     );
 
     await waitFor(() => {
-      const emptyTexts = screen.queryAllByText(
-        /No beta videos yet/i,
-      ).concat(screen.queryAllByText(/還沒有 Beta 影片/));
-      expect(emptyTexts.length).toBeGreaterThan(0);
+      expect(screen.getByTestId('beta-video-grid-upload-slot')).toBeTruthy();
     });
   });
 

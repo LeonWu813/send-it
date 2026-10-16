@@ -4,11 +4,11 @@
  * Displays:
  *   - display_name + avatar (fetched from `public.users`)
  *   - ModerationActions (Report + Block) below the avatar section
- *   - Back button (top-left)
+ *   - Back + title via the AppShell header (useAppHeader)
  *   - Send history via fetchProfileHistory RPC (server-side privacy gate;
  *     returns [] if privacy blocks access — shown as empty state).
  *
- * Safe area: useSafeAreaInsets() + makeStyles(theme, topInset) pattern.
+ * Safe area: useHeaderContentInset() (0 when the AppShell header is in flow).
  *
  * AC-080: Report User → opens ReportSheet.
  * AC-082, AC-083, AC-084: Block/Unblock via ModerationActions.
@@ -17,22 +17,15 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
+import { AppText, Avatar, Card, InlineError, Spinner } from '../../../components/ui';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { fetchProfileHistory } from '../../mod-profile-history/history-service';
 import type { HistoryAscent } from '../../mod-profile-history/types';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import ModerationActions from '../components/ModerationActions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -63,8 +56,10 @@ export default function OtherUserProfileScreen({
 }: OtherUserProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const { screenMargin } = useLayout();
+  const tabInset = useTabBarInset();
+  const headerInset = useHeaderContentInset();
+  const styles = makeStyles(theme, headerInset, screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [history, setHistory] = useState<HistoryAscent[]>([]);
@@ -72,6 +67,8 @@ export default function OtherUserProfileScreen({
   const [error, setError] = useState<string | null>(null);
 
   const currentUserId = session.user.id;
+
+  useAppHeader({ title: profile?.display_name ?? '', onBack });
 
   // ── Load profile + history ──────────────────────────────────────────────────
 
@@ -110,7 +107,7 @@ export default function OtherUserProfileScreen({
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Spinner size="large" />
       </View>
     );
   }
@@ -119,67 +116,70 @@ export default function OtherUserProfileScreen({
     <SwipeBackWrapper onBack={onBack}>
       <ScrollView
         style={styles.root}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: tabInset.contentBottom || theme.spacing.xxl }]}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Back button */}
-        <Pressable
-          style={styles.backButton}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={8}
-        >
-          <Text style={styles.backButtonText}>{'‹  '}{t('common.back')}</Text>
-        </Pressable>
-
         {/* Error */}
         {error !== null && (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+            <InlineError variant="block" message={error} actionLabel={t('common.retry')} onAction={() => void loadData()} />
           </View>
         )}
 
         {profile !== null && (
           <>
-            {/* Avatar + name */}
-            <View style={styles.avatarSection}>
-              {profile.avatar_url !== null ? (
-                <Image
-                  source={{ uri: profile.avatar_url }}
-                  style={styles.avatar}
-                  accessibilityLabel={profile.display_name}
-                />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]} />
+            {/* Header card: Avatar lg + name + bio, then the moderation row (never for own profile) */}
+            <Card variant="static" style={styles.headerCard}>
+              <View style={styles.identityRow}>
+                <Avatar size="lg" uri={profile.avatar_url ?? undefined} name={profile.display_name} decorative />
+                <View style={styles.identityText}>
+                  <AppText variant="title3" numberOfLines={2}>
+                    {profile.display_name}
+                  </AppText>
+                  {profile.bio !== null && profile.bio !== '' && (
+                    <AppText variant="footnote" color="textSecondary" numberOfLines={2}>
+                      {profile.bio}
+                    </AppText>
+                  )}
+                </View>
+              </View>
+              {userId !== currentUserId && (
+                <View style={styles.actions}>
+                  <ModerationActions
+                    targetUserId={userId}
+                    currentUserId={currentUserId}
+                    targetName={profile.display_name}
+                    on="surface"
+                    onBlock={() => void loadData()}
+                  />
+                </View>
               )}
-              <Text style={styles.displayName}>{profile.display_name}</Text>
-              {profile.bio !== null && profile.bio !== '' && (
-                <Text style={styles.bio}>{profile.bio}</Text>
-              )}
-            </View>
-
-            {/* Moderation actions (Report + Block) — never shown for own profile */}
-            <ModerationActions
-              targetUserId={userId}
-              currentUserId={currentUserId}
-              onBlock={() => void loadData()}
-            />
+            </Card>
 
             {/* Send history (privacy-gated server-side; empty state if blocked) */}
             <View style={styles.historySection}>
-              <Text style={styles.historySectionTitle}>{t('profile.sendHistory')}</Text>
+              <AppText variant="pageSection" style={styles.historySectionTitle}>
+                {t('profile.sendHistory')}
+              </AppText>
               {history.length === 0 ? (
-                <Text style={styles.historyEmpty}>{t('profileHistory.empty')}</Text>
+                <AppText variant="subhead" color="textSecondary" align="center" style={styles.historyEmpty}>
+                  {t('profileHistory.empty')}
+                </AppText>
               ) : (
-                history.slice(0, 20).map((ascent) => (
-                  <View key={ascent.ascent_id} style={styles.historyItem}>
-                    <Text style={styles.historyGrade}>{ascent.grade}</Text>
-                    <Text style={styles.historyDate}>
-                      {new Date(ascent.logged_at).toLocaleDateString()}
-                    </Text>
-                  </View>
-                ))
+                <Card variant="static" padding={0}>
+                  {history.slice(0, 20).map((ascent, i, arr) => (
+                    <View
+                      key={ascent.ascent_id}
+                      style={[styles.historyItem, i < arr.length - 1 && styles.historyItemDivider]}
+                    >
+                      <AppText variant="body" weight="600">{ascent.grade}</AppText>
+                      <AppText variant="subhead" color="textSecondary">
+                        {new Date(ascent.logged_at).toLocaleDateString()}
+                      </AppText>
+                    </View>
+                  ))}
+                </Card>
               )}
             </View>
           </>
@@ -192,15 +192,15 @@ export default function OtherUserProfileScreen({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number, screenMargin: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingTop: topInset + theme.spacing.sm,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
     centered: {
@@ -209,79 +209,44 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       alignItems: 'center',
       backgroundColor: theme.colors.background,
     },
-    backButton: {
-      marginBottom: theme.spacing.md,
-      alignSelf: 'flex-start',
-    },
-    backButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-    },
     errorContainer: {
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.error,
       marginBottom: theme.spacing.md,
     },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textInverse,
+    headerCard: {
+      marginBottom: theme.layout.sectionGap,
     },
-    avatarSection: {
+    identityRow: {
+      flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: theme.spacing.lg,
+      gap: theme.spacing.md,
     },
-    avatar: {
-      width: 96,
-      height: 96,
-      borderRadius: theme.borderRadius.full,
-      marginBottom: theme.spacing.md,
+    identityText: {
+      flex: 1,
+      gap: theme.spacing.xxs,
     },
-    avatarPlaceholder: {
-      backgroundColor: theme.colors.border,
-    },
-    displayName: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.xs,
-      textAlign: 'center',
-    },
-    bio: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
+    actions: {
+      marginTop: theme.spacing.md,
     },
     historySection: {
-      marginTop: theme.spacing.xl,
+      marginTop: theme.layout.sectionGap,
     },
     historySectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
       marginBottom: theme.spacing.sm,
     },
     historyEmpty: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
       paddingVertical: theme.spacing.lg,
     },
     historyItem: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      paddingVertical: theme.spacing.sm,
-      borderBottomWidth: 1,
+      alignItems: 'center',
+      minHeight: theme.layout.listRowMinHeight,
+      paddingVertical: theme.layout.listRowPaddingV,
+      paddingHorizontal: theme.layout.cardPadding,
+    },
+    historyItemDivider: {
+      borderBottomWidth: theme.stroke.thin,
       borderBottomColor: theme.colors.divider,
-    },
-    historyGrade: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-      fontWeight: theme.fontWeight.semibold,
-    },
-    historyDate: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
     },
   });
 }

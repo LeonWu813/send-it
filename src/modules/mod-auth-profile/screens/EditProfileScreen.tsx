@@ -12,19 +12,24 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 
-import { useTheme } from '../../../lib/theme';
+import {
+  AppText,
+  Avatar,
+  Button,
+  Card,
+  Chip,
+  InlineError,
+  TextField,
+} from '../../../components/ui';
+import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useHideTabBar } from '../../mod-home/components/AppHeaderContext';
 import { uploadAvatar, upsertProfile } from '../auth-service';
 import type { PrivacySetting, UserProfile } from '../types';
 
@@ -43,7 +48,12 @@ export default function EditProfileScreen({
 }: EditProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme, 0);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, 0, screenMargin);
+
+  // v2.2: nested screen in the Profile tab; form hides the TabBar.
+  useAppHeader({ title: t('profile.editProfile'), onBack: onCancel });
+  useHideTabBar();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -129,141 +139,97 @@ export default function EditProfileScreen({
       >
         {/* Avatar */}
         <View style={styles.avatarContainer}>
-          {avatarUri ? (
-            <Image
-              source={{ uri: avatarUri }}
-              style={styles.avatar}
-              accessibilityLabel={t('profile.avatar')}
-            />
-          ) : (
-            <View style={styles.avatarPlaceholder} />
-          )}
-          <Pressable
+          <Avatar size="xl" uri={avatarUri} name={displayName} />
+          <Button
+            label={t('profile.changeAvatar')}
             onPress={handlePickAvatar}
+            variant="ghost"
+            on="background"
+            loading={isUploadingAvatar}
             disabled={isUploadingAvatar || isSaving}
-            accessibilityRole="button"
             accessibilityLabel={t('profile.changeAvatar')}
-          >
-            {isUploadingAvatar ? (
-              <ActivityIndicator color={theme.colors.primary} />
-            ) : (
-              <Text style={styles.changeAvatarText}>
-                {t('profile.changeAvatar')}
-              </Text>
-            )}
-          </Pressable>
+          />
         </View>
 
+        {/* Grouped form card: one Card, fields keep their own 1pt border */}
+        <Card style={styles.formCard}>
         {/* Display name */}
-        <Text style={styles.label}>{t('profile.displayName')}</Text>
-        <TextInput
-          style={styles.input}
+        <TextField
+          label={t('profile.displayName')}
           value={displayName}
           onChangeText={setDisplayName}
           autoCapitalize="words"
           autoCorrect={false}
-          editable={!isSaving}
-          accessibilityLabel={t('profile.displayName')}
+          disabled={isSaving}
         />
 
         {/* Bio */}
-        <Text style={styles.label}>{t('profile.bio')}</Text>
-        <TextInput
-          style={[styles.input, styles.bioInput]}
+        <TextField
+          variant="multiline"
+          label={t('profile.bio')}
           value={bio}
           onChangeText={setBio}
           placeholder={t('profile.bioPlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
-          multiline
-          numberOfLines={4}
-          editable={!isSaving}
-          accessibilityLabel={t('profile.bio')}
+          disabled={isSaving}
         />
+        </Card>
 
         {/* Privacy setting */}
-        <Text style={styles.label}>{t('profile.privacy')}</Text>
-        <View style={styles.privacyToggleRow}>
-          <Pressable
-            style={[
-              styles.privacyOption,
-              privacySetting === 'public' && styles.privacyOptionSelected,
-            ]}
+        <AppText variant="groupHeader" style={styles.sectionLabel}>
+          {t('profile.privacy')}
+        </AppText>
+        <View style={styles.privacyToggleRow} accessibilityRole="radiogroup">
+          <Chip
+            variant="choice"
+            label={t('profile.privacyPublic')}
+            selected={privacySetting === 'public'}
             onPress={() => setPrivacySetting('public')}
             disabled={isSaving}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: privacySetting === 'public' }}
-            accessibilityLabel={t('profile.privacyPublic')}
-          >
-            <Text
-              style={[
-                styles.privacyOptionText,
-                privacySetting === 'public' && styles.privacyOptionTextSelected,
-              ]}
-            >
-              {t('profile.privacyPublic')}
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[
-              styles.privacyOption,
-              privacySetting === 'followers_only' && styles.privacyOptionSelected,
-            ]}
+          />
+          <Chip
+            variant="choice"
+            label={t('profile.privacyFollowersOnly')}
+            selected={privacySetting === 'followers_only'}
             onPress={() => setPrivacySetting('followers_only')}
             disabled={isSaving}
-            accessibilityRole="radio"
-            accessibilityState={{ checked: privacySetting === 'followers_only' }}
-            accessibilityLabel={t('profile.privacyFollowersOnly')}
-          >
-            <Text
-              style={[
-                styles.privacyOptionText,
-                privacySetting === 'followers_only' &&
-                  styles.privacyOptionTextSelected,
-              ]}
-            >
-              {t('profile.privacyFollowersOnly')}
-            </Text>
-          </Pressable>
+          />
         </View>
-        <Text style={styles.privacyDescription}>
+        <AppText variant="footnote" color="textSecondary">
           {privacySetting === 'public'
             ? t('profile.privacyPublicDescription')
             : t('profile.privacyFollowersOnlyDescription')}
-        </Text>
+        </AppText>
 
         {/* Error */}
         {errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
+          <InlineError variant="block" message={errorMessage} />
         ) : null}
 
         {/* Actions */}
         <View style={styles.actionsRow}>
-          <Pressable
-            style={styles.cancelButton}
-            onPress={onCancel}
-            disabled={isSaving}
-            accessibilityRole="button"
-            accessibilityLabel={t('profile.cancel')}
-          >
-            <Text style={styles.cancelButtonText}>{t('profile.cancel')}</Text>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              styles.saveButton,
-              pressed && styles.saveButtonPressed,
-              isSaving && styles.saveButtonDisabled,
-            ]}
-            onPress={handleSave}
-            disabled={isSaving}
-            accessibilityRole="button"
-            accessibilityLabel={t('profile.save')}
-          >
-            {isSaving ? (
-              <ActivityIndicator color={theme.colors.textInverse} />
-            ) : (
-              <Text style={styles.saveButtonText}>{t('profile.save')}</Text>
-            )}
-          </Pressable>
+          <View style={styles.cancelSlot}>
+            <Button
+              label={t('profile.cancel')}
+              onPress={onCancel}
+              variant="secondary"
+              size="lg"
+              fullWidth
+              disabled={isSaving}
+              accessibilityLabel={t('profile.cancel')}
+            />
+          </View>
+          <View style={styles.saveSlot}>
+            <Button
+              label={t('profile.save')}
+              onPress={handleSave}
+              variant="primary"
+              size="lg"
+              fullWidth
+              loading={isSaving}
+              disabled={isSaving}
+              accessibilityLabel={t('profile.save')}
+            />
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -271,7 +237,11 @@ export default function EditProfileScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  topInset: number,
+  screenMargin: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -279,122 +249,36 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     scrollContent: {
       paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xl,
-      gap: theme.spacing.sm,
+      gap: theme.spacing.md,
     },
     avatarContainer: {
       alignItems: 'center',
-      marginBottom: theme.spacing.md,
       gap: theme.spacing.sm,
     },
-    avatar: {
-      width: 96,
-      height: 96,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface,
+    formCard: {
+      gap: theme.layout.fieldGap,
     },
-    avatarPlaceholder: {
-      width: 96,
-      height: 96,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    changeAvatarText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-    },
-    label: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textSecondary,
+    sectionLabel: {
       marginTop: theme.spacing.sm,
-    },
-    input: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm + 4,
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-    },
-    bioInput: {
-      height: 100,
-      textAlignVertical: 'top',
     },
     privacyToggleRow: {
       flexDirection: 'row',
-      gap: theme.spacing.sm,
-    },
-    privacyOption: {
-      flex: 1,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      alignItems: 'center',
-      backgroundColor: theme.colors.surface,
-    },
-    privacyOptionSelected: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.background,
-    },
-    privacyOptionText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textSecondary,
-    },
-    privacyOptionTextSelected: {
-      color: theme.colors.primary,
-    },
-    privacyDescription: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
+      flexWrap: 'wrap',
+      columnGap: theme.spacing.sm,
+      rowGap: theme.spacing.smd,
     },
     actionsRow: {
       flexDirection: 'row',
       gap: theme.spacing.sm,
       marginTop: theme.spacing.md,
     },
-    cancelButton: {
+    cancelSlot: {
       flex: 1,
-      height: 48,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
-    cancelButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-    },
-    saveButton: {
+    saveSlot: {
       flex: 2,
-      height: 48,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    saveButtonPressed: {
-      backgroundColor: theme.colors.primaryPressed,
-    },
-    saveButtonDisabled: {
-      backgroundColor: theme.colors.primaryDisabled,
-    },
-    saveButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
     },
   });
 }

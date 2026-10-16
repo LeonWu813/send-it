@@ -2,28 +2,46 @@
  * AscentList — displays ascents for a route on the route detail screen.
  *
  * Wires up the placeholder slot left by MOD-003 (RouteDetailScreen).
- * Each ascent shows: style badge, attempts, date, note (own only), username.
+ * Each ascent shows: avatar + name, send-style chip, date, attempts, note (own only).
  *
  * Grade is NOT shown on each ascent row — it is displayed at the route level.
  * (Grade comes from Route.grade, never from the ascent row.)
+ *
+ * Design system v2.2 (§32.8): `pageSection` title, `surface` container (card 20), ListRow `content` rows
+ * (Avatar + name `headline` + date/attempts `footnote`, SendStatus `disc` trailing, delete for own rows),
+ * floating BottomSheet `confirm` for delete (failure shows inside the sheet, the row stays),
+ * AscentRowSkeleton / EmptyState `slot` / InlineError states, and the new-row landing motion (D1).
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { AccessibilityInfo, Animated, LayoutAnimation, Platform, UIManager, View } from 'react-native';
 
-import { useTheme } from '../../../lib/theme';
+import {
+  AppText,
+  Avatar,
+  AscentRowSkeleton,
+  BottomSheet,
+  Button,
+  EmptyState,
+  IconButton,
+  InlineError,
+  ListRow,
+  SendStatus,
+  SkeletonGroup,
+  useSkeletonPhase,
+  useToast,
+} from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
+import { CONTINUOUS, RADIUS, useTheme } from '../../../lib/theme';
 import { deleteAscent, loadAscentsForRoute } from '../send-service';
 import type { AscentStyle, AscentWithProfile } from '../types';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface AscentListProps {
   routeId: string;
@@ -38,25 +56,14 @@ interface AscentListProps {
   refreshKey?: number;
 }
 
-/**
- * Gold color for the flash ascent style badge — matches the flash achievement
- * icon color used in MOD-003 (RouteListScreen, RouteDetailScreen).
- */
-const FLASH_BADGE_COLOR = '#FFD700';
+function formatDate(iso: string, language: string): string {
+  return new Date(iso).toLocaleDateString(language);
+}
 
-/** Style badge color mapping. Flash uses gold (#FFD700) to match MOD-003's flash achievement icon. */
-function getStyleBadgeColor(
-  style: AscentStyle,
-  theme: ReturnType<typeof useTheme>['theme'],
-): string {
-  switch (style) {
-    case 'flash':
-      return FLASH_BADGE_COLOR;
-    case 'top':
-      return theme.colors.success;
-    case 'attempt':
-      return theme.colors.textSecondary;
-  }
+/** Calendar day key (local) used to decide "first flash of the day". */
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
 export default function AscentList({
@@ -65,26 +72,70 @@ export default function AscentList({
   onLogSend,
   refreshKey = 0,
 }: AscentListProps): React.JSX.Element {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { duration, reduceMotion, haptic } = useMotion();
+  const toast = useToast();
 
   const [ascents, setAscents] = useState<AscentWithProfile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [landing, setLanding] = useState<{ id: string; burst: boolean } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AscentWithProfile | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
+
+  /** Ids seen by the previous successful load; null until the first load finishes. */
+  const knownIds = useRef<Set<string> | null>(null);
+  const phase = useSkeletonPhase(isLoading && ascents.length === 0);
+
+  const animateLayout = useCallback(
+    (ms: number): void => {
+      if (reduceMotion) return;
+      LayoutAnimation.configureNext({
+        duration: ms,
+        create: { type: 'easeInEaseOut', property: 'opacity' },
+        update: { type: 'easeInEaseOut' },
+        delete: { type: 'easeInEaseOut', property: 'opacity' },
+      });
+    },
+    [reduceMotion],
+  );
 
   const fetchAscents = useCallback(async (): Promise<void> => {
     setIsLoading(true);
     setErrorMessage(null);
     try {
       const data = await loadAscentsForRoute(routeId);
+      const previous = knownIds.current;
+      // D1: a refresh that brings one of the user's own new rows in is the "just logged" case.
+      const fresh =
+        previous === null ? undefined : data.find((a) => !previous.has(a.id) && a.user_id === session.user.id);
+      knownIds.current = new Set(data.map((a) => a.id));
+      if (fresh) {
+        animateLayout(duration.medium);
+        const burst =
+          fresh.style === 'flash' &&
+          !data.some(
+            (a) =>
+              a.id !== fresh.id &&
+              a.user_id === session.user.id &&
+              a.style === 'flash' &&
+              dayKey(a.logged_at) === dayKey(fresh.logged_at),
+          );
+        setLanding({ id: fresh.id, burst });
+        haptic(fresh.style === 'flash' ? 'emphasis' : fresh.style === 'top' ? 'toggle' : 'select', 'ascent-landing');
+        AccessibilityInfo.announceForAccessibility(
+          t('sends.logged', { style: t(`sends.styles.${fresh.style}`) }),
+        );
+      }
       setAscents(data);
     } catch {
       setErrorMessage(t('sends.errors.loadFailed'));
     } finally {
       setIsLoading(false);
     }
-  }, [routeId, t]);
+  }, [routeId, session.user.id, t, animateLayout, duration.medium, haptic]);
 
   // refreshKey is intentionally included here (not in useCallback) so that
   // the parent can trigger a re-fetch after a successful send log (AC-013)
@@ -93,93 +144,132 @@ export default function AscentList({
     void fetchAscents();
   }, [fetchAscents, refreshKey]);
 
+  const closeDeleteSheet = useCallback((): void => {
+    setDeleteTarget(null);
+    setDeleteError(undefined);
+  }, []);
+
   /**
-   * Optimistically remove the ascent from local state, then call deleteAscent.
-   * On failure, re-fetch the list to restore accurate state.
+   * Confirm delete inside the sheet. Success: sheet closes, the row collapses, toast "Deleted".
+   * Failure: InlineError block in the sheet (with retry), the row stays untouched.
    */
-  const handleDeleteAscent = useCallback(
-    (ascentId: string): void => {
-      Alert.alert(
-        t('sendLogging.delete.confirm'),
-        undefined,
-        [
-          {
-            text: t('sendLogging.delete.cancel'),
-            style: 'cancel',
-          },
-          {
-            text: t('sendLogging.delete.delete'),
-            style: 'destructive',
-            onPress: () => {
-              // Optimistic remove
-              setAscents((prev) => prev.filter((a) => a.id !== ascentId));
-              void deleteAscent(ascentId).catch(() => {
-                // Revert optimistic update on failure by re-fetching
-                void fetchAscents();
-              });
-            },
-          },
-        ],
-      );
-    },
-    [t, fetchAscents],
-  );
+  const confirmDelete = useCallback(async (): Promise<void> => {
+    if (!deleteTarget) return;
+    const id = deleteTarget.id;
+    setIsDeleting(true);
+    setDeleteError(undefined);
+    try {
+      await deleteAscent(id);
+      animateLayout(duration.short);
+      knownIds.current?.delete(id);
+      setAscents((prev) => prev.filter((a) => a.id !== id));
+      setDeleteTarget(null);
+      toast.show({ message: t('sends.deleted') });
+    } catch {
+      haptic('error', 'ascent-delete');
+      setDeleteError(t('sends.errors.deleteFailed'));
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [deleteTarget, animateLayout, duration.short, toast, t, haptic]);
+
+  /** Grouped container: `surface`, card 20, clipped (rows carry their own dividers). */
+  const groupStyle = {
+    backgroundColor: theme.colors.surface,
+    borderRadius: RADIUS.card,
+    ...CONTINUOUS,
+    overflow: 'hidden' as const,
+  };
+
+  const showSkeleton = isLoading && ascents.length === 0 && phase === 'skeleton';
+  const showTimeout = isLoading && ascents.length === 0 && phase === 'timeout';
+  const showError = errorMessage !== null && !isLoading;
+  const isEmpty = !isLoading && errorMessage === null && ascents.length === 0;
 
   return (
-    <View style={styles.root}>
-      {/* Section header + Log Send button — Tap 1 in the ≤4-tap flow (AC-010) */}
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>{t('sends.ascentsSectionTitle')}</Text>
-        <Pressable
-          onPress={onLogSend}
-          accessibilityRole="button"
-          accessibilityLabel={t('sends.logSend')}
-          style={styles.logButton}
-        >
-          <Text style={styles.logButtonText}>{t('sends.logSend')}</Text>
-        </Pressable>
+    <View style={{ marginTop: theme.layout.sectionGap }}>
+      {/* Section header. No primary here (§32.8); standalone use gets a ghost sm "Log Send". */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: theme.layout.sectionHeaderGap,
+        }}
+      >
+        <AppText variant="pageSection" accessibilityRole="header">
+          {t('sends.ascentsSectionTitle')}
+        </AppText>
+        {!isEmpty && (
+          <Button label={t('sends.logSend')} onPress={onLogSend} variant="ghost" size="sm" on="background" />
+        )}
       </View>
 
-      {/* Loading state */}
-      {isLoading && (
-        <ActivityIndicator
-          color={theme.colors.primary}
-          style={styles.loader}
-        />
-      )}
-
-      {/* Error state */}
-      {errorMessage !== null && !isLoading && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-          <Pressable
-            onPress={() => void fetchAscents()}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.retry')}
-            style={styles.retryButton}
-          >
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </Pressable>
+      {/* Loading */}
+      {showSkeleton && (
+        <View style={groupStyle}>
+          <SkeletonGroup label={t('sends.loading')}>
+            {[0, 1, 2].map((i) => (
+              <AscentRowSkeleton key={i} />
+            ))}
+          </SkeletonGroup>
         </View>
       )}
 
-      {/* Empty state */}
-      {!isLoading && errorMessage === null && ascents.length === 0 && (
-        <Text style={styles.emptyText}>{t('sends.noAscents')}</Text>
+      {/* Error (also the 10s skeleton timeout) */}
+      {(showError || showTimeout) && (
+        <InlineError
+          variant="block"
+          message={errorMessage ?? t('sends.errors.loadFailed')}
+          actionLabel={t('common.retry')}
+          onAction={() => void fetchAscents()}
+          actionLoading={isLoading}
+          on="surface"
+        />
+      )}
+
+      {/* Empty */}
+      {isEmpty && (
+        <EmptyState
+          variant="slot"
+          icon={ICON.sendTop.outline}
+          description={t('sends.noAscents')}
+          primaryLabel={t('sends.logSend')}
+          onPrimary={onLogSend}
+        />
       )}
 
       {/* Ascent rows */}
-      {!isLoading &&
-        errorMessage === null &&
-        ascents.map((ascent) => (
-          <AscentRow
-            key={ascent.id}
-            ascent={ascent}
-            isOwn={ascent.user_id === session.user.id}
-            theme={theme}
-            onDelete={handleDeleteAscent}
-          />
-        ))}
+      {errorMessage === null && ascents.length > 0 && (
+        <View style={groupStyle}>
+          {ascents.map((ascent, index) => (
+            <AscentRow
+              key={ascent.id}
+              ascent={ascent}
+              last={index === ascents.length - 1}
+              isOwn={ascent.user_id === session.user.id}
+              landing={landing?.id === ascent.id ? landing : null}
+              onDelete={setDeleteTarget}
+              language={i18n.language}
+            />
+          ))}
+        </View>
+      )}
+
+      <BottomSheet
+        visible={deleteTarget !== null}
+        onClose={closeDeleteSheet}
+        variant="confirm"
+        title={t('sendLogging.delete.confirm')}
+        confirmLabel={t('sendLogging.delete.delete')}
+        confirmIcon={ICON.delete.outline}
+        onConfirm={() => void confirmDelete()}
+        cancelLabel={t('sendLogging.delete.cancel')}
+        loading={isDeleting}
+        error={deleteError}
+        errorActionLabel={t('common.retry')}
+        onErrorAction={() => void confirmDelete()}
+      />
     </View>
   );
 }
@@ -188,195 +278,146 @@ export default function AscentList({
 
 interface AscentRowProps {
   ascent: AscentWithProfile;
+  last: boolean;
   isOwn: boolean;
-  theme: ReturnType<typeof useTheme>['theme'];
-  /** Called with the ascent ID when the user confirms deletion. */
-  onDelete: (ascentId: string) => void;
+  /** Non-null on the row that has just been logged: plays D1. */
+  landing: { id: string; burst: boolean } | null;
+  language: string;
+  /** Called with the ascent when the user taps delete (opens the confirm sheet). */
+  onDelete: (ascent: AscentWithProfile) => void;
 }
 
-function AscentRow({ ascent, isOwn, theme, onDelete }: AscentRowProps): React.JSX.Element {
+function AscentRow({ ascent, last, isOwn, landing, language, onDelete }: AscentRowProps): React.JSX.Element {
   const { t } = useTranslation('common');
-  const styles = makeStyles(theme);
+  const { theme } = useTheme();
+  const { duration } = useMotion();
+  const [noteExpanded, setNoteExpanded] = useState<boolean>(false);
+  const [noteTruncated, setNoteTruncated] = useState<boolean>(false);
+  const highlight = useRef(new Animated.Value(0)).current;
 
-  const badgeColor = getStyleBadgeColor(ascent.style, theme);
-  const displayDate = new Date(ascent.logged_at).toLocaleDateString();
+  // D1 highlight: hold, then fade out. Attempt rows are not highlighted.
+  useEffect(() => {
+    if (!landing || ascent.style === 'attempt') return;
+    highlight.setValue(1);
+    Animated.sequence([
+      Animated.delay(duration.highlightHold),
+      Animated.timing(highlight, {
+        toValue: 0,
+        duration: duration.long,
+        easing: bezierFor('standard'),
+        useNativeDriver: USE_NATIVE_DRIVER,
+      }),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [landing?.id]);
+
+  const displayDate = formatDate(ascent.logged_at, language);
+  const styleLabel = t(`sends.styles.${ascent.style}`);
+  const attemptsLabel = t('sends.attemptsCount', { count: ascent.attempts });
+  // VoiceOver: "<name>, <style>, <date>, <attempts>[, private][, note]" read as one node.
+  const rowLabel = [
+    ascent.display_name,
+    styleLabel,
+    displayDate,
+    attemptsLabel,
+    ascent.is_private ? t('sends.privateLabel') : null,
+    isOwn && ascent.note !== null ? ascent.note : null,
+  ]
+    .filter((p): p is string => p !== null)
+    .join(', ');
+
+  const highlightColor: 'sendTopContainer' | 'sendFlashContainer' =
+    ascent.style === 'flash' ? 'sendFlashContainer' : 'sendTopContainer';
+
+  const subtitle = [`${displayDate} · ${attemptsLabel}`, ascent.is_private ? t('sends.privateLabel') : null]
+    .filter((p): p is string => p !== null)
+    .join(' · ');
+  // Divider starts at the title's left edge: row padding (md) + avatar + gap (smd).
+  const dividerInset = theme.spacing.md + theme.avatarSize.sm + theme.spacing.smd;
 
   return (
-    <View style={styles.ascentRow}>
-      {/* Row header: style badge + delete button (own ascents only) */}
-      <View style={styles.ascentRowHeader}>
-        {/* Style badge */}
-        <View style={[styles.styleBadge, { backgroundColor: badgeColor }]}>
-          <Text style={styles.styleBadgeText}>
-            {t(`sends.styles.${ascent.style}`)}
-          </Text>
-        </View>
+    <View>
+      {landing && ascent.style !== 'attempt' && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: theme.colors[highlightColor],
+            opacity: highlight,
+          }}
+        />
+      )}
 
-        {/* Delete button — only shown to the owning user */}
-        {isOwn && (
-          <Pressable
-            onPress={() => onDelete(ascent.id)}
-            accessibilityRole="button"
-            accessibilityLabel={t('sendLogging.delete.delete')}
-            style={styles.deleteButton}
-            hitSlop={8}
-          >
-            <Ionicons
-              name="trash-outline"
-              size={16}
-              color={theme.colors.textSecondary}
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <ListRow
+          variant="content"
+          title={ascent.display_name}
+          subtitle={subtitle}
+          leading={<Avatar size="sm" name={ascent.display_name} decorative />}
+          leadingWidth={theme.avatarSize.sm}
+          trailing={
+            <SendStatus
+              variant="disc"
+              sendStyle={ascent.style as AscentStyle}
+              landing={landing?.id}
+              burst={landing?.burst}
             />
-          </Pressable>
+          }
+          divider={false}
+          accessibilityLabel={rowLabel}
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+        />
+        {/* Delete: own ascents only; others keep no empty slot. */}
+        {isOwn && (
+          <IconButton
+            name={ICON.delete.outline}
+            size={theme.iconSize.md}
+            color="textSecondary"
+            accessibilityLabel={t('sends.deleteLabel', { date: displayDate, style: styleLabel })}
+            onPress={() => onDelete(ascent)}
+            style={{ marginRight: theme.spacing.xs }}
+          />
         )}
       </View>
 
-      {/* Attempts + date */}
-      <View style={styles.ascentMeta}>
-        <Text style={styles.attemptsText}>
-          {t('sends.attemptsCount', { count: ascent.attempts })}
-        </Text>
-        <Text style={styles.dateText}>{displayDate}</Text>
-        <Text style={styles.usernameText}>{ascent.display_name}</Text>
-      </View>
-
-      {/* Note — shown only to the owning user */}
+      {/* Note: owner only; footnote, 3 lines + "More". */}
       {isOwn && ascent.note !== null && (
-        <View style={styles.noteContainer}>
-          <Text style={styles.noteText}>{ascent.note}</Text>
+        <View
+          style={{
+            paddingLeft: dividerInset,
+            paddingRight: theme.spacing.md,
+            paddingBottom: theme.layout.listRowPaddingV,
+            marginTop: -theme.spacing.xs,
+          }}
+        >
+          <AppText
+            variant="footnote"
+            color="textSecondary"
+            numberOfLines={noteExpanded ? undefined : 3}
+            onTextLayout={(e: { nativeEvent: { lines: unknown[] } }) => {
+              if (!noteExpanded) setNoteTruncated(e.nativeEvent.lines.length > 3);
+            }}
+          >
+            {ascent.note}
+          </AppText>
+          {noteTruncated && !noteExpanded && (
+            <View style={{ alignSelf: 'flex-start' }}>
+              <Button label={t('sends.noteMore')} onPress={() => setNoteExpanded(true)} variant="ghost" size="sm" />
+            </View>
+          )}
         </View>
       )}
 
-      {/* Private indicator */}
-      {ascent.is_private && (
-        <Text style={styles.privateIndicator}>{t('sends.privateLabel')}</Text>
+      {!last && (
+        <View
+          pointerEvents="none"
+          style={{ height: theme.stroke.hairline, marginLeft: dividerInset, backgroundColor: theme.colors.divider }}
+        />
       )}
     </View>
   );
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
-  return StyleSheet.create({
-    root: {
-      marginTop: theme.spacing.xl,
-    },
-    sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: theme.spacing.md,
-    },
-    sectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    logButton: {
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.primary,
-    },
-    logButtonText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textInverse,
-    },
-    loader: {
-      marginVertical: theme.spacing.md,
-    },
-    errorContainer: {
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
-      marginBottom: theme.spacing.md,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      marginBottom: theme.spacing.sm,
-    },
-    retryButton: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: theme.spacing.xs,
-      borderRadius: theme.borderRadius.sm,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    retryButtonText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-    },
-    emptyText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-      paddingVertical: theme.spacing.md,
-    },
-    ascentRow: {
-      padding: theme.spacing.md,
-      marginBottom: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    ascentRowHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: theme.spacing.xs,
-    },
-    styleBadge: {
-      alignSelf: 'flex-start',
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
-      borderRadius: theme.borderRadius.sm,
-    },
-    deleteButton: {
-      padding: theme.spacing.xs,
-    },
-    styleBadgeText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-      textTransform: 'uppercase',
-    },
-    ascentMeta: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.md,
-      flexWrap: 'wrap',
-    },
-    attemptsText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-    },
-    dateText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    usernameText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    noteContainer: {
-      marginTop: theme.spacing.sm,
-      padding: theme.spacing.sm,
-      borderRadius: theme.borderRadius.sm,
-      backgroundColor: theme.colors.divider,
-    },
-    noteText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-      fontStyle: 'italic',
-    },
-    privateIndicator: {
-      marginTop: theme.spacing.xs,
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textDisabled,
-    },
-  });
 }

@@ -97,7 +97,7 @@
       "viewRoutes": "查看路線"
     },
     "requestGym": {
-      "cta": "找不到你的岩館？來申請加入 →",
+      "cta": "找不到你的岩館？來申請加入",
       "title": "申請新增岩館",
       "subtitle": "告訴我們尚未收錄的岩館，我們的團隊將審核後加入。",
       "nameLabel": "岩館名稱",
@@ -142,8 +142,10 @@
       "purple": "紫色",
       "pink": "粉紅色",
       "white": "白色",
-      "black": "黑色"
+      "black": "黑色",
+      "other": "其他"
     },
+    "tapeLabel": "{{color}}膠帶",
     "bookmark": {
       "save": "收藏路線",
       "unsave": "取消收藏",
@@ -241,6 +243,8 @@
     "style": "完攀方式",
     "attempts": "嘗試次數",
     "attemptsFlashHint": "閃攀限定 1 次嘗試。",
+    "attemptsDescription": "從第一次試到完攀",
+    "attemptsFlashLocked": "閃攀固定 1 次",
     "attemptsCount": "{{count}} 次",
     "attemptsCount_other": "{{count}} 次",
     "date": "日期",
@@ -262,8 +266,15 @@
     "errors": {
       "saveFailed": "儲存完攀紀錄失敗，請確認網路連線後重試。",
       "loadFailed": "載入完攀紀錄失敗，請再試一次。",
-      "routeSearchFailed": "搜尋路線失敗，請再試一次。"
-    }
+      "routeSearchFailed": "搜尋路線失敗，請再試一次。",
+      "deleteFailed": "刪除失敗，請再試一次。"
+    },
+    "deleted": "已刪除",
+    "loading": "完攀紀錄載入中",
+    "searching": "路線搜尋中",
+    "logged": "已記錄：{{style}}",
+    "noteMore": "更多",
+    "deleteLabel": "刪除 {{date}} {{style}}的紀錄"
   },
   "home": {
     "banner": {
@@ -288,7 +299,8 @@
       "title": "目標路線",
       "allGrades": "全部",
       "empty": "收藏一條路線來追蹤你的目標。",
-      "emptyFiltered": "此難度沒有目標路線。"
+      "emptyFiltered": "此難度沒有目標路線。",
+      "bookmarkFailed": "無法更新收藏路線，請再試一次。"
     },
     "followingActivity": {
       "title": "追蹤動態",
@@ -313,12 +325,17 @@
     "saved": "已收藏",
     "unsaved": "收藏",
     "flashSend": "閃送",
-    "topSend": "完攀"
+    "topSend": "完攀",
+    "openHint": "開啟路線",
+    "statusFlash": "已閃攀",
+    "statusTop": "已完攀",
+    "saveAction": "收藏",
+    "unsaveAction": "取消收藏"
   },
   "betaVideo": {
     "sectionTitle": "BETA 影片",
     "addVideo": "新增 Beta 影片",
-    "noVideos": "還沒有 Beta 影片，成為第一個分享技巧的人吧！",
+    "noVideos": "還沒人分享 Beta。",
     "myVideos": "我的 Beta 影片",
     "noVideosYet": "還沒有 Beta 影片",
     "uploading": "上傳中…",
@@ -330,7 +347,7 @@
     "replaceConfirmOk": "替換",
     "replaceConfirmCancel": "取消",
     "grid": {
-      "openVideo": "開啟影片"
+      "openVideo": "播放 Beta 影片，第 {{index}} 支，共 {{total}} 支"
     },
     "player": {
       "play": "播放 Beta 影片",
@@ -343,7 +360,8 @@
       "report": "檢舉",
       "reported": "已回報",
       "reportError": "回報失敗，請再試一次",
-      "anonymous": "匿名"
+      "anonymous": "匿名",
+      "likeLabel": "按讚，{{count}} 個讚"
     },
     "userVideos": "Beta 影片",
     "errors": {
@@ -354,7 +372,12 @@
       "permissionDenied": "需要相簿存取權限才能選擇影片。",
       "videoTooLargeAfterCompression": "影片檔案過大，請壓縮至 45MB 以下。",
       "videoTooLargeForStorage": "影片超過上限，請修剪影片後再試。"
-    }
+    },
+    "emptyUpload": "上傳 Beta",
+    "loadingVideos": "Beta 影片載入中",
+    "uploadingHint": "上傳完成前請不要離開這個畫面。",
+    "uploadFailedTitle": "上傳失敗",
+    "uploadInterrupted": "上傳中斷了，影片還在。"
   },
   "socialFeed": {
     "title": "動態消息",
@@ -376,12 +399,16 @@
       "loadFailed": "載入動態消息失敗，請再試一次。",
       "profileLoadFailed": "載入個人資料失敗，請再試一次。",
       "followFailed": "更新追蹤狀態失敗，請再試一次。"
+    },
+    "moreOptions": "更多選項",
+    "menu": {
+      "actionFailed": "沒送出，再試一次。"
     }
   },
   "notifications": {
     "title": "通知",
     "empty": "目前沒有通知，別人對你的 Beta 影片按讚後會顯示在這裡。",
-    "badgeBetaVideoLike": "♥ 按讚",
+    "badgeBetaVideoLike": "按讚",
     "betaVideoLikedBody": "對你的 Beta 影片按讚了。",
     "betaVideoLikeA11y": "Beta 影片按讚通知",
     "unknownActor": "某位攀岩者",
@@ -398,11 +425,34 @@
   "profileHistory": {
     "stats": {
       "totalSends": "完攀",
-      "accumulatedDays": "累積天數",
+      "accumulatedDays": "完攀天數",
       "highestGrade": "最高難度",
       "noGrade": "—",
-      "chartTitle": "各難度完攀數",
-      "chartA11y": "顯示各難度完攀次數的長條圖"
+      "chartTitle": "各難度完攀",
+      "chartA11y": "顯示各難度完攀次數的長條圖",
+      "highestBadge": "最高",
+      "barA11y": "{{grade}}，完攀 {{count}} 次",
+      "barA11y_other": "{{grade}}，完攀 {{count}} 次",
+      "barA11yHighest": "{{grade}}，完攀 {{count}} 次，最高難度",
+      "barA11yHighest_other": "{{grade}}，完攀 {{count}} 次，最高難度",
+      "emptyBody": "記錄一次完攀，統計就會出現在這裡。",
+      "chartTotal": "累計",
+      "heroSends": "完攀 {{count}} 次",
+      "unitTimes": "次",
+      "unitDays": "天",
+      "noSendsTitle": "還沒有完攀",
+      "noSendsBody": "完攀後這裡會顯示你的最高難度",
+      "heroA11y": "最高難度 {{grade}}，完攀 {{count}} 次",
+      "sendsA11y": "完攀 {{count}} 次",
+      "daysA11y": "完攀天數 {{count}} 天",
+      "promptEyebrow": "第一筆紀錄",
+      "promptTitle": "爬了哪條？記下來。",
+      "promptBody": "到岩館找到那條路線，點「記錄完攀」。最高難度和統計會從這裡開始。",
+      "promptAction": "找路線",
+      "heroSends_other": "完攀 {{count}} 次",
+      "sendsA11y_other": "完攀 {{count}} 次",
+      "heroA11y_other": "最高難度 {{grade}}，完攀 {{count}} 次",
+      "daysA11y_other": "完攀天數 {{count}} 天"
     },
     "filter": {
       "gym": "岩館",
@@ -420,7 +470,7 @@
       "last7Days": "最近 7 天",
       "last30Days": "最近 30 天",
       "last90Days": "最近 90 天",
-      "thisYear": "今年"
+      "lastYear": "最近 1 年"
     },
     "empty": "尚無完攀紀錄。",
     "hiddenTitle": "個人頁面為私人",
@@ -433,9 +483,11 @@
     "reportUser": "檢舉用戶",
     "blockUser": "封鎖用戶",
     "unblockUser": "解除封鎖",
+    "blockedNotice": "你已封鎖{{name}}",
+    "blockedNoticeGeneric": "你已封鎖此用戶",
     "unblock": "解除封鎖",
     "noBlockedAccounts": "沒有已封鎖的帳號",
-    "sheetReport": "檢舉",
+    "sheetReport": "檢舉並封鎖",
     "sheetBlock": "封鎖",
     "sheetUnblock": "解除封鎖",
     "sheetCancel": "取消",
@@ -443,7 +495,7 @@
     "reportConfirmation": "已檢舉並封鎖此用戶",
     "report": {
       "title": "檢舉用戶",
-      "category": "類別",
+      "category": "檢舉原因",
       "categories": {
         "inappropriate": "不當內容",
         "spam": "垃圾訊息",
@@ -453,15 +505,20 @@
       "note": "補充說明（選填）",
       "submit": "提交檢舉",
       "cancel": "取消",
-      "confirmation": "已提交檢舉，感謝您。",
-      "error": "提交失敗，請再試一次。"
+      "confirmation": "已收到檢舉，謝謝你。",
+      "error": "沒送出，你寫的內容還在。",
+      "notePlaceholder": "例如：在留言裡重複貼廣告",
+      "notice": "送出後我們會審查這個帳號。這不會封鎖對方；要封鎖請用「封鎖」。",
+      "pickReason": "請先選一個原因"
     },
     "block": {
       "confirmBlock": "封鎖此用戶？",
       "blocked": "已封鎖此用戶。",
       "unblocked": "已解除封鎖。",
-      "error": "操作失敗，請再試一次。"
-    }
+      "error": "操作失敗，請再試一次。",
+      "confirmBody": "你們會互相看不到對方的內容，隨時可以解除封鎖。"
+    },
+    "sheetReportHint": "我們會審查這個帳號，你們也會立刻互相看不到對方的內容。"
   },
   "common": {
     "loading": "載入中…",
@@ -472,5 +529,39 @@
     "save": "儲存",
     "done": "完成",
     "back": "返回"
+  },
+  "ui": {
+    "close": "關閉",
+    "dismiss": "忽略",
+    "loading": "載入中",
+    "sheet": "面板",
+    "celebrationDismiss": "關閉慶祝訊息",
+    "sendStyle": {
+      "top": "完攀",
+      "flash": "閃攀",
+      "attempt": "嘗試",
+      "attemptWithCount": "嘗試 {{count}} 次",
+      "group": "完攀方式"
+    },
+    "fieldError": "{{label}}，錯誤：{{error}}",
+    "readOnly": "{{label}}，{{value}}，無法修改",
+    "showPassword": "顯示密碼",
+    "clearText": "清除",
+    "toastWithActions": "{{message}}。可用動作：{{actions}}",
+    "avatarOf": "{{name}} 的頭像",
+    "progress": "進度",
+    "stepper": {
+      "done": "完成",
+      "enterNumber": "輸入數字",
+      "decrease": "減少",
+      "increase": "增加",
+      "announceLocked": "{{label}}已固定為 {{value}}",
+      "lockedValue": "{{label}}，{{value}}，{{reason}}，無法修改"
+    }
+  },
+  "tabs": {
+    "home": "首頁",
+    "gyms": "岩館",
+    "profile": "我的"
   }
 }
