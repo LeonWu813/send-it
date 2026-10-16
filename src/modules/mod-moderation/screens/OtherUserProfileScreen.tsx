@@ -137,29 +137,37 @@ export default function OtherUserProfileScreen({
 
         {profile !== null && (
           <>
-            {/* Avatar + name */}
-            <View style={styles.avatarSection}>
-              <Avatar size="xl" uri={profile.avatar_url ?? undefined} name={profile.display_name} decorative />
-              <AppText variant="title2" align="center" style={styles.displayName}>
-                {profile.display_name}
-              </AppText>
-              {profile.bio !== null && profile.bio !== '' && (
-                <AppText variant="subhead" color="textSecondary" align="center">
-                  {profile.bio}
-                </AppText>
+            {/* Header card: Avatar lg + name + bio, then the moderation row (never for own profile) */}
+            <Card variant="static" style={styles.headerCard}>
+              <View style={styles.identityRow}>
+                <Avatar size="lg" uri={profile.avatar_url ?? undefined} name={profile.display_name} decorative />
+                <View style={styles.identityText}>
+                  <AppText variant="title3" numberOfLines={2}>
+                    {profile.display_name}
+                  </AppText>
+                  {profile.bio !== null && profile.bio !== '' && (
+                    <AppText variant="footnote" color="textSecondary" numberOfLines={2}>
+                      {profile.bio}
+                    </AppText>
+                  )}
+                </View>
+              </View>
+              {userId !== currentUserId && (
+                <View style={styles.actions}>
+                  <ModerationActions
+                    targetUserId={userId}
+                    currentUserId={currentUserId}
+                    targetName={profile.display_name}
+                    on="surface"
+                    onBlock={() => void loadData()}
+                  />
+                </View>
               )}
-            </View>
-
-            {/* Moderation actions (Report + Block) — never shown for own profile */}
-            <ModerationActions
-              targetUserId={userId}
-              currentUserId={currentUserId}
-              onBlock={() => void loadData()}
-            />
+            </Card>
 
             {/* Send history (privacy-gated server-side; empty state if blocked) */}
             <View style={styles.historySection}>
-              <AppText variant="sectionHeader" color="textSecondary" style={styles.historySectionTitle}>
+              <AppText variant="pageSection" style={styles.historySectionTitle}>
                 {t('profile.sendHistory')}
               </AppText>
               {history.length === 0 ? (
@@ -217,13 +225,20 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     errorContainer: {
       marginBottom: theme.spacing.md,
     },
-    avatarSection: {
-      alignItems: 'center',
+    headerCard: {
       marginBottom: theme.layout.sectionGap,
     },
-    displayName: {
+    identityRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.md,
+    },
+    identityText: {
+      flex: 1,
+      gap: theme.spacing.xxs,
+    },
+    actions: {
       marginTop: theme.spacing.md,
-      marginBottom: theme.spacing.xs,
     },
     historySection: {
       marginTop: theme.layout.sectionGap,
@@ -238,7 +253,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      minHeight: theme.layout.minTouchTarget,
+      minHeight: theme.layout.listRowMinHeight,
+      paddingVertical: theme.layout.listRowPaddingV,
       paddingHorizontal: theme.layout.cardPadding,
     },
     historyItemDivider: {

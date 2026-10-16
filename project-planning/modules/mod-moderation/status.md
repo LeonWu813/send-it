@@ -2,6 +2,16 @@
 
 ## Engineering Progress
 
+### Design system v2.2 migration (2026-10-16) — off-spec design work, pending PR review
+
+Visual/layout only; no new flows, deps, illustrations or haptics. Spec: design system v2.2 §32.10, §32.11, Appendix G.7.
+- `ModerationActions`: Block = `destructiveTonal` (no icon), Report = `ghost`, one row inside the profile header Card; blocked state = `footnote` "You blocked {name}" + `secondary` `sm` Unblock. New optional props `targetName`, `on`. Confirm sheet unchanged in flow (floating, no X, stacked destructive/cancel).
+- `ReportSheet`: neutral NoticeBox moved under the title (scrolls with content); `groupHeader` over reasons; only the submit button (and the "pick a reason" hint) is the fixed footer.
+- `OtherUserProfileScreen`: header Card (Avatar `lg`, `title3` name, `footnote` bio, moderation row), `pageSection` history title, list row min height tokens.
+- Locales: added `moderation.blockedNotice`, `moderation.blockedNoticeGeneric` (en, zh-TW).
+- Stories: ModerationActions renders in a Card and has a `targetName` control.
+- [pass] `npm run lint` (tsc), `npx jest src/modules/mod-moderation`, `check:i18n`, `storybook build`.
+
 ### AC-185 — SwipeBackWrapper wired into OtherUserProfileScreen (2026-10-15)
 
 Wrapped the outermost `<ScrollView>` in `OtherUserProfileScreen.tsx` with `<SwipeBackWrapper onBack={onBack}>` per the AC-185 requirement. The `enabled` prop is omitted (defaults to `true` — no case in this screen where swiping back should be blocked). The loading-state early return (`<View style={styles.centered}>`) is intentionally left unwrapped; it has no `onBack` interaction surface and exits before the wrapper is reached.

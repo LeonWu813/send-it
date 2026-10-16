@@ -1,10 +1,11 @@
 /**
  * ReportSheet — BottomSheet `form` for submitting a user-profile report (AC-080, AC-081).
  *
- * Design system §32.10 (A):
+ * Design system v2.2 §32.10 (A) / G.7:
+ *   - Neutral NoticeBox (outcome: report only, does not block) sits under the title, above the reasons,
+ *     and scrolls with the content. Only the submit button is fixed at the bottom.
  *   - Reason: ListRow `radio` rows (44pt min) for the 4 categories.
  *   - Note: TextField `multiline` with a 0/280 counter.
- *   - NoticeBox explains the outcome (report only, does not block) above the submit button.
  *   - Submit: lg primary, disabled until a reason is chosen (with a hint), loading while sending.
  *   - Failure: InlineError block above the button, input kept. Success: sheet closes + toast.
  *   - Keyboard avoidance and the sticky footer come from BottomSheet `form`.
@@ -99,9 +100,6 @@ export default function ReportSheet({
 
   const footer = (
     <View>
-      <View style={{ marginBottom: theme.spacing.md }}>
-        <NoticeBox message={t('moderation.report.notice')} />
-      </View>
       {selectedCategory === null ? (
         <AppText
           variant="footnote"
@@ -134,10 +132,15 @@ export default function ReportSheet({
       error={error}
       footer={footer}
     >
-      <AppText variant="sectionHeader" color="textSecondary">
+      <NoticeBox message={t('moderation.report.notice')} />
+      <AppText
+        variant="groupHeader"
+        color="textSecondary"
+        style={{ marginTop: theme.layout.sectionGap, marginBottom: theme.spacing.xs }}
+      >
         {t('moderation.report.category')}
       </AppText>
-      <View accessibilityRole="radiogroup" style={{ marginBottom: theme.layout.cardGap }}>
+      <View accessibilityRole="radiogroup" style={{ marginBottom: theme.layout.sectionGap }}>
         {CATEGORIES.map((cat, i) => (
           <ListRow
             key={cat}

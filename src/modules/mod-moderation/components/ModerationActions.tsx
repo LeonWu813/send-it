@@ -2,9 +2,10 @@
  * ModerationActions — Report + Block controls for a given user (AC-080–AC-084).
  *
  * Design system §32.10 / §32.11:
- *   - Block: ui/ Button `destructive` (ICON.block.outline) → BottomSheet `confirm` (destructive on
- *     top, cancel below) → toast on success.
- *   - Unblock: ui/ Button `secondary`, no confirmation, toast on success, no haptic.
+ * (v2.2, profile context, G.7):
+ *   - Block: ui/ Button `destructiveTonal` (no icon) → floating BottomSheet `confirm` (no X, stacked
+ *     solid-red `destructive` on top, cancel below) → toast on success.
+ *   - Unblock: `footnote` "You blocked {name}" + ui/ Button `secondary` `sm`; no confirmation, no haptic.
  *   - Report: ui/ Button `ghost` → ReportSheet.
  *   - Never renders for the user's own profile (hooks still run in the same order every render).
  *
@@ -15,7 +16,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
-import { BottomSheet, Button, useToast } from '../../../components/ui';
+import { AppText, BottomSheet, Button, useToast } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useMotion } from '../../../lib/motion';
 import { useTheme } from '../../../lib/theme';
@@ -33,6 +34,10 @@ export interface ModerationActionsProps {
   onBlock?: () => void;
   /** Called after a successful unblock. */
   onUnblock?: () => void;
+  /** Display name used in the blocked notice ("You blocked {name}"). Optional. */
+  targetName?: string;
+  /** Surface the buttons sit on (the profile header Card is `surface`). Default `surface`. */
+  on?: 'background' | 'surface';
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -42,6 +47,8 @@ export default function ModerationActions({
   currentUserId,
   onBlock,
   onUnblock,
+  targetName,
+  on = 'surface',
 }: ModerationActionsProps): React.JSX.Element | null {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -119,35 +126,54 @@ export default function ModerationActions({
   if (isOwnProfile) return null;
 
   return (
-    <View style={{ marginTop: theme.spacing.md, gap: theme.spacing.sm }}>
-      <Button
-        variant="ghost"
-        size="md"
-        on="background"
-        fullWidth
-        label={t('moderation.reportUser')}
-        onPress={() => setReportSheetVisible(true)}
-      />
-
+    <View>
       {blocked ? (
-        <Button
-          variant="secondary"
-          size="md"
-          fullWidth
-          label={t('moderation.unblockUser')}
-          loading={blockLoading}
-          onPress={() => void handleUnblock()}
-        />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: theme.spacing.sm,
+          }}
+        >
+          <AppText variant="footnote" color="textSecondary" style={{ flex: 1 }}>
+            {targetName
+              ? t('moderation.blockedNotice', { name: targetName })
+              : t('moderation.blockedNoticeGeneric')}
+          </AppText>
+          <Button
+            variant="secondary"
+            size="sm"
+            on={on}
+            label={t('moderation.unblockUser')}
+            loading={blockLoading}
+            onPress={() => void handleUnblock()}
+          />
+        </View>
       ) : (
-        <Button
-          variant="destructive"
-          size="md"
-          fullWidth
-          icon={ICON.block.outline}
-          label={t('moderation.blockUser')}
-          loading={loadingStatus}
-          onPress={() => setConfirmVisible(true)}
-        />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <Button
+              variant="destructiveTonal"
+              size="md"
+              on={on}
+              fullWidth
+              label={t('moderation.blockUser')}
+              loading={loadingStatus}
+              onPress={() => setConfirmVisible(true)}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button
+              variant="ghost"
+              size="md"
+              on={on}
+              fullWidth
+              label={t('moderation.reportUser')}
+              onPress={() => setReportSheetVisible(true)}
+            />
+          </View>
+        </View>
       )}
 
       <BottomSheet
