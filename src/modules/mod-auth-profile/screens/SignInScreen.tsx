@@ -28,8 +28,8 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText, Button, InlineError, TextField } from '../../../components/ui';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { AppText, Button, Card, InlineError, TextField } from '../../../components/ui';
+import { RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import {
   signInWithApple,
   signInWithEmail,
@@ -136,6 +136,8 @@ export default function SignInScreen({
           {t('app.name')}
         </AppText>
 
+        {/* Grouped form card: one Card, fields keep their own 1pt border */}
+        <Card style={styles.formCard}>
         {/* Email input */}
         <TextField
           label={t('auth.email')}
@@ -157,6 +159,7 @@ export default function SignInScreen({
           secureTextEntry
           disabled={isLoading}
         />
+        </Card>
 
         {/* Error message */}
         {errorMessage ? (
@@ -200,7 +203,7 @@ export default function SignInScreen({
                 ? AppleAuthentication.AppleAuthenticationButtonStyle.WHITE
                 : AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
             }
-            cornerRadius={theme.borderRadius.lg}
+            cornerRadius={RADIUS.full}
             style={styles.appleButton}
             onPress={handleAppleSignIn}
           />
@@ -248,6 +251,9 @@ function makeStyles(
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.md,
+    },
+    formCard: {
+      gap: theme.layout.fieldGap,
     },
     title: {
       marginBottom: theme.spacing.lg,

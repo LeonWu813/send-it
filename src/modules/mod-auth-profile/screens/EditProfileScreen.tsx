@@ -23,6 +23,7 @@ import {
   AppText,
   Avatar,
   Button,
+  Card,
   Chip,
   InlineError,
   TextField,
@@ -145,6 +146,8 @@ export default function EditProfileScreen({
           />
         </View>
 
+        {/* Grouped form card: one Card, fields keep their own 1pt border */}
+        <Card style={styles.formCard}>
         {/* Display name */}
         <TextField
           label={t('profile.displayName')}
@@ -164,9 +167,10 @@ export default function EditProfileScreen({
           placeholder={t('profile.bioPlaceholder')}
           disabled={isSaving}
         />
+        </Card>
 
         {/* Privacy setting */}
-        <AppText variant="sectionHeader" style={styles.sectionLabel}>
+        <AppText variant="groupHeader" style={styles.sectionLabel}>
           {t('profile.privacy')}
         </AppText>
         <View style={styles.privacyToggleRow} accessibilityRole="radiogroup">
@@ -247,6 +251,9 @@ function makeStyles(
     avatarContainer: {
       alignItems: 'center',
       gap: theme.spacing.sm,
+    },
+    formCard: {
+      gap: theme.layout.fieldGap,
     },
     sectionLabel: {
       marginTop: theme.spacing.sm,

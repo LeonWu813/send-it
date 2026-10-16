@@ -18,7 +18,7 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText, Button, InlineError, TextField } from '../../../components/ui';
+import { AppText, Button, Card, InlineError, TextField } from '../../../components/ui';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { signUpWithEmail } from '../auth-service';
 
@@ -87,6 +87,8 @@ export default function SignUpScreen({
           {t('app.name')}
         </AppText>
 
+        {/* Grouped form card: one Card, fields keep their own 1pt border */}
+        <Card style={styles.formCard}>
         {/* Display name */}
         <TextField
           label={t('auth.displayNameLabel')}
@@ -129,6 +131,7 @@ export default function SignUpScreen({
           secureTextEntry
           disabled={isLoading}
         />
+        </Card>
 
         {/* Error */}
         {errorMessage ? (
@@ -181,6 +184,9 @@ function makeStyles(
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.md,
+    },
+    formCard: {
+      gap: theme.layout.fieldGap,
     },
     title: {
       marginBottom: theme.spacing.lg,

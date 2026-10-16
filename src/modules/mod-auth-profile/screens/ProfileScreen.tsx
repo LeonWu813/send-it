@@ -205,7 +205,7 @@ export default function ProfileScreen({
   // AC-167: Logout button removed from ProfileScreen (moved to MOD-010 SettingsScreen).
   const profileFooter = (
     <View style={styles.videoSectionContainer}>
-      <AppText variant="sectionHeader" style={styles.videoSectionTitle}>
+      <AppText variant="pageSection" style={styles.videoSectionTitle}>
         {t('betaVideo.myVideos')}
       </AppText>
       <BetaVideoGrid

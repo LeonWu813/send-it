@@ -1869,3 +1869,12 @@ Visual-only migration to design system v1.2 (Phase 1). No behaviour, service or 
 - `npx jest src/modules/mod-auth-profile`: 3 suites, 20 tests pass (pre-existing act() warning in useSession.test).
 - `npm run check:i18n`: OK. No locale keys added (all labels reuse existing keys).
 - `npm run lint` (tsc): no errors in this module; one error in `src/components/RouteCard.tsx(267)` (unused `@ts-expect-error`) belongs to another module.
+
+## Design System v2.2 Migration (off-spec design work, pending PR review)
+
+Visual-only. No behaviour, auth-logic, locale or dependency changes. Not a PRD/AC change.
+
+- `SignInScreen`, `SignUpScreen`: form fields grouped in ONE `Card` (`gap: layout.fieldGap`), each `TextField` keeps its own 1pt border. Apple system button `cornerRadius` now `RADIUS.full` (capsule, still the system button). Buttons are capsule via the shared `Button`.
+- `EditProfileScreen`: display name + bio in one grouped `Card`; privacy header uses `groupHeader`.
+- `ProfileScreen`: beta-video section header uses `pageSection`. These screens draw no title/back row, so nothing to remove; header top padding unchanged (spec G.7 does not say to change it; AppShell large title interaction to be confirmed).
+- Self-check: jest 3 suites / 20 tests pass; `tsc --noEmit` clean for this module; `check:i18n` OK.
