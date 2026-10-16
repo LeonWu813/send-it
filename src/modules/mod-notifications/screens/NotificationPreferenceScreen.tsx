@@ -26,7 +26,7 @@ import {
   SkeletonGroup,
   useSkeletonPhase,
 } from '../../../components/ui';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
 import {
   fetchNotificationPreference,
   updateNotificationPreference,
@@ -121,7 +121,7 @@ export default function NotificationPreferenceScreen({
   return (
     <View style={styles.root}>
       {/* Section header */}
-      <AppText variant="sectionHeader" accessibilityRole="header" style={styles.sectionHeader}>
+      <AppText variant="groupHeader" accessibilityRole="header" style={styles.sectionHeader}>
         {t('notifications.preferencesTitle')}
       </AppText>
 
@@ -131,17 +131,18 @@ export default function NotificationPreferenceScreen({
       )}
 
       {/* beta_video_like toggle row (AC-057), on a surface container */}
-      <ListRow
-        variant="toggle"
-        density="content"
-        inset="screen"
-        divider={false}
-        title={t('notifications.betaVideoLikeLabel')}
-        subtitle={t('notifications.betaVideoLikeDescription')}
-        toggleValue={betaVideoLike}
-        onToggle={(value) => void handleToggle(value)}
-        disabled={saving}
-      />
+      <View style={styles.group}>
+        <ListRow
+          variant="toggle"
+          inset="grouped"
+          divider={false}
+          title={t('notifications.betaVideoLikeLabel')}
+          subtitle={t('notifications.betaVideoLikeDescription')}
+          toggleValue={betaVideoLike}
+          onToggle={(value) => void handleToggle(value)}
+          disabled={saving}
+        />
+      </View>
 
       {/* Explanatory note — inbox still shows likes even when push is off */}
       <AppText variant="footnote" color="textSecondary" style={styles.footnote}>
@@ -166,9 +167,21 @@ function makeStyles(
     },
     skeletonRow: {
       backgroundColor: theme.colors.surface,
-      paddingHorizontal: screenMargin,
-      paddingVertical: theme.spacing.md,
-      gap: theme.spacing.sm,
+      marginHorizontal: screenMargin,
+      minHeight: theme.layout.listRowMinHeight,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.layout.listRowPaddingV,
+      gap: theme.spacing.xs,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
+    },
+    group: {
+      marginHorizontal: screenMargin,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
     },
     sectionHeader: {
       paddingHorizontal: screenMargin,

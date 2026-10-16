@@ -41,7 +41,7 @@ import {
   useSkeletonPhase,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
 import {
   fetchNotifications,
   markNotificationsRead,
@@ -155,12 +155,15 @@ export default function NotificationInboxScreen({
         {skeletonPhase !== 'idle' && (
           <SkeletonGroup label={t('notifications.title')} style={styles.skeletonList}>
             {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={styles.skeletonRow}>
-                <Skeleton shape="circle" width={theme.avatarSize.md} height={theme.avatarSize.md} />
-                <View style={styles.body}>
-                  <Skeleton shape="text" textVariant="subhead" width="80%" />
-                  <Skeleton shape="text" textVariant="caption1" width="30%" />
+              <View key={i}>
+                <View style={styles.skeletonRow}>
+                  <Skeleton shape="circle" width={theme.avatarSize.md} height={theme.avatarSize.md} />
+                  <View style={styles.body}>
+                    <Skeleton shape="text" textVariant="subhead" width="80%" />
+                    <Skeleton shape="text" textVariant="caption1" width="30%" />
+                  </View>
                 </View>
+                {i < 3 && <View style={styles.divider} />}
               </View>
             ))}
           </SkeletonGroup>
@@ -226,11 +229,9 @@ export default function NotificationInboxScreen({
 
           {/* Empty state */}
           {error === null && notifications.length === 0 && (
-            <EmptyState
-              variant="firstUse"
-              icon={ICON.notifications.outline}
-              title={t('notifications.empty')}
-            />
+            <View style={styles.emptyCard}>
+              <EmptyState variant="inline" title={t('notifications.empty')} />
+            </View>
           )}
 
           {/* Notification list: rows sit on a surface container, never on the sand page */}
@@ -294,7 +295,7 @@ function NotificationRow({
         accessibilityRole="button"
         accessibilityLabel={t('notifications.betaVideoLikeA11y')}
       >
-        {/* Unread indicator dot (error colour = unread, spec 1.x) */}
+        {/* Unread indicator dot: 8x8 error (spec 15.9 / COMPONENT_SIZE.unreadDot) */}
         {!item.is_read && <View style={styles.unreadDot} />}
 
         {/* Actor avatar */}
@@ -392,40 +393,57 @@ function makeStyles(
       marginHorizontal: screenMargin,
       marginBottom: theme.spacing.md,
     },
+    // Grouped list container: surface, RADIUS.card, clipped (spec 25 / v2.2 ListRow)
     list: {
       backgroundColor: theme.colors.surface,
+      marginHorizontal: screenMargin,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
+    },
+    emptyCard: {
+      backgroundColor: theme.colors.surface,
+      marginHorizontal: screenMargin,
+      paddingHorizontal: theme.spacing.md,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
     },
     skeletonList: {
       backgroundColor: theme.colors.surface,
+      marginHorizontal: screenMargin,
       marginTop: theme.spacing.md,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
     },
     skeletonRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing.smd,
-      paddingHorizontal: screenMargin,
-      paddingVertical: theme.spacing.smd,
+      minHeight: theme.layout.listRowMinHeight,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.layout.listRowPaddingV,
     },
     notificationRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: theme.layout.minTouchTarget,
-      paddingLeft: screenMargin,
-      paddingRight: screenMargin,
-      paddingVertical: theme.spacing.smd,
+      minHeight: theme.layout.listRowMinHeight,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.layout.listRowPaddingV,
     },
     divider: {
       height: theme.stroke.hairline,
-      marginLeft: screenMargin + avatarWidth + theme.spacing.smd,
+      marginLeft: theme.spacing.md + avatarWidth + theme.spacing.smd,
       backgroundColor: theme.colors.divider,
     },
     unreadDot: {
       position: 'absolute',
       left: theme.spacing.xs,
       top: '50%',
-      marginTop: -theme.spacing.xs,
-      width: theme.spacing.sm,
-      height: theme.spacing.sm,
+      marginTop: -theme.componentSize.unreadDot / 2,
+      width: theme.componentSize.unreadDot,
+      height: theme.componentSize.unreadDot,
       borderRadius: theme.borderRadius.full,
       backgroundColor: theme.colors.error,
     },
