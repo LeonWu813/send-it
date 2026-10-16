@@ -111,6 +111,13 @@ function makeQueryBuilder(result: { data: unknown; error: unknown }): any {
   return builder;
 }
 
+/** The "⋯" lives in the AppShell header `trailing` slot; read it from the last useAppHeader call. */
+function headerTrailing(): { props: { accessibilityLabel?: string; variant?: string } } | undefined {
+  const calls = mockUseAppHeader.mock.calls;
+  if (calls.length === 0) return undefined;
+  return (calls[calls.length - 1][0] as { trailing?: { props: { accessibilityLabel?: string; variant?: string } } }).trailing;
+}
+
 describe('UserProfileScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -410,11 +417,11 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeTruthy();
+      expect(headerTrailing()?.props.accessibilityLabel).toBe('More options');
+      expect(headerTrailing()?.props.variant).toBe('float');
     });
+    // exactly once: no screen-drawn duplicate
+    expect(screen.queryAllByRole('button').filter((el) => el.props.accessibilityLabel === 'More options')).toHaveLength(0);
   });
 
   it('AC-150: does not render three-dots icon for own profile', async () => {
@@ -430,10 +437,8 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeUndefined();
+      expect(mockUseAppHeader).toHaveBeenCalled();
+      expect(headerTrailing()).toBeUndefined();
     });
   });
 
@@ -479,11 +484,11 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeTruthy();
+      expect(headerTrailing()?.props.accessibilityLabel).toBe('More options');
+      expect(headerTrailing()?.props.variant).toBe('float');
     });
+    // exactly once: no screen-drawn duplicate
+    expect(screen.queryAllByRole('button').filter((el) => el.props.accessibilityLabel === 'More options')).toHaveLength(0);
   });
 
   it('AC-163: hides BetaVideoGrid for followers_only profile when viewer is not following', async () => {
@@ -576,10 +581,8 @@ describe('UserProfileScreen', () => {
     );
 
     await waitFor(() => {
-      const dotsButton = screen.queryAllByRole('button').find(
-        (el) => el.props.accessibilityLabel === 'More options',
-      );
-      expect(dotsButton).toBeUndefined();
+      expect(mockUseAppHeader).toHaveBeenCalled();
+      expect(headerTrailing()).toBeUndefined();
     });
   });
 });

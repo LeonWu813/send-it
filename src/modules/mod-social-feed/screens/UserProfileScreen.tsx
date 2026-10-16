@@ -31,8 +31,6 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ViewStyle } from 'react-native';
 
 import { fetchProfileStats } from '../../mod-profile-history/history-service';
 import type { ProfileStats } from '../../mod-profile-history/types';
@@ -110,9 +108,8 @@ export default function UserProfileScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  const insets = useSafeAreaInsets();
   const tabInset = useTabBarInset();
-  const styles = makeStyles(theme, screenMargin, insets.top);
+  const styles = makeStyles(theme, screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [counts, setCounts] = useState<FollowerCounts>({ follower_count: 0, following_count: 0 });
@@ -307,12 +304,8 @@ export default function UserProfileScreen({
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  // 44pt IconButtons carry a 24pt glyph: pull them outward so the glyphs align to the margin.
-  const glyphInset = (theme.layout.minTouchTarget - theme.iconSize.lg) / 2;
-
-  // Header (§30): back + title + "⋯" trailing. NOTE: AppShell mounts this screen as an overlay OUTSIDE
-  // any AppHeaderTabScope, so the hook is a no-op there; the overlay keeps its own "⋯" row and a safe
-  // top inset (below) until the overlay is wrapped in a tab scope.
+  // Header (§30): back + title + "⋯" trailing. The AppShell overlay scope renders this nested header
+  // above the screen, so content starts below it (no screen-drawn back/"⋯" row, no top safe-area padding).
   useAppHeader({
     title: profile?.display_name ?? '',
     onBack,
@@ -325,20 +318,6 @@ export default function UserProfileScreen({
       />
     ) : undefined,
   });
-
-  const renderMore = (style: ViewStyle): React.JSX.Element => (
-    <View style={style}>
-      {/* AC-150: three-dots icon, only for !isOwnProfile */}
-      <View style={{ marginRight: -glyphInset }}>
-        <IconButton
-          name={ICON.more.outline}
-          accessibilityLabel={t('socialFeed.moreOptions')}
-          onPress={() => { setSheetVisible(true); }}
-          on="background"
-        />
-      </View>
-    </View>
-  );
 
   const actionSheet = !isOwnProfile ? (
     <ActionSheet
@@ -373,9 +352,6 @@ export default function UserProfileScreen({
     return (
       <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible}>
         <View style={styles.root}>
-          {/* Dots icon only when the viewer can unblock; back is the AppShell nested header */}
-          {!isOwnProfile && isBlockedByMe && renderMore(styles.blockedHeader)}
-
           {/* Blocked state message */}
           <View style={styles.centered}>
             <AppText variant="body" color="textSecondary" align="center" style={styles.profileUnavailableText}>
@@ -397,9 +373,6 @@ export default function UserProfileScreen({
         scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Dots icon; back + title are the AppShell nested header (§30) */}
-        {!isOwnProfile && renderMore(styles.headerRow)}
-
         {/* Error */}
         {error !== null && (
           <InlineError variant="block" message={error} style={styles.errorBlock} />
@@ -645,7 +618,6 @@ function ActionSheet({
 function makeStyles(
   theme: ReturnType<typeof useTheme>['theme'],
   screenMargin: number,
-  topInset: number,
 ) {
   return StyleSheet.create({
     root: {
@@ -653,7 +625,7 @@ function makeStyles(
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.sm,
+      paddingTop: theme.spacing.sm,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
@@ -662,21 +634,6 @@ function makeStyles(
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: theme.colors.background,
-    },
-    // Row holding the dots icon (back + title live in the AppShell nested header)
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      marginBottom: theme.spacing.sm,
-    },
-    // Used in blocked state where root is a plain View (not ScrollView)
-    blockedHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'flex-end',
-      paddingTop: topInset + theme.spacing.sm,
-      paddingHorizontal: screenMargin,
     },
     profileUnavailableText: {
       paddingHorizontal: screenMargin,
