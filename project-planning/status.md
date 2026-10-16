@@ -3,13 +3,12 @@
 ## Last Action
 
 ```
-agent: engineer-mod-notifications
-mode: bugfix
-module: mod-notifications (MOD-007)
+agent: tech-lead
+mode: review
+module: n/a
 result: success
-commit: 523c8e8
-timestamp: 2026-10-15T00:00:00Z
-summary: AC-185 follow-up — added SwipeBackWrapper to NotificationInboxScreen main render path. Import + JSX wrapper with enabled={onBack !== undefined} guard; onBack ?? (() => {}) fallback. 0 TypeScript errors. 46/46 mod-notifications tests pass.
+commit: 2b537b969ae224b140bd7cdcb0986d4c1553890d
+timestamp: 2026-10-16T00:00:00Z
 ```
 
 
@@ -326,6 +325,129 @@ summary: AC-185 follow-up — added SwipeBackWrapper to NotificationInboxScreen 
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-16 — Designer PR #1 review (Storybook + design system v2.2)
+
+**Context**: Read-only review of PR #1 (`design/storybook` → `main`) by designer `ffffffang`. 171 files changed, +21,331 / -8,310 lines. No files were edited, no code was run, no merge action taken. The diff was fetched from the GitHub public API. Module ownership was resolved from the Module Map.
+
+---
+
+#### Overall Scope
+
+This is not a purely visual PR. It touches:
+1. **Design tokens and shared infrastructure** — a complete replacement of `src/lib/theme.ts` (color palette, spacing, radius, layout, typography, elevation) and three new lib files (`motion.ts`, `haptics.ts`, `icons.ts`). These are project-wide shared dependencies consumed by every module.
+2. **A new shared component library** — `src/components/ui/*` (18+ new components: `AppText`, `Avatar`, `Badge`, `BottomSheet`, `Button`, `Card`, `Chip`, `CelebrationHost`, `EmptyState`, `IconButton`, `InlineError`, `ListRow`, `Particles`, `PressableScale`, `ProgressBar`, `SegmentedControl`, `SendStatus`, `Stepper`, `TextField`, `Toast`, `Skeleton`, plus index and story files). These are shared surfaces consumed by every module, not module-private components.
+3. **AppShell/AppHeader structural change** — the global header architecture changed from a simple props-driven `AppHeader` to an external store + context pattern (`AppHeaderContext`, `AppHeaderStore`, `AppHeaderTabScope`, `AppHeaderOverlayScope`, `useAppHeader`, `useAppHeaderRoot`, `useHideTabBar`, `useTabBarInset`). This changes how every module that calls `useAppHeader` must interact with the shell.
+4. **RouteCard redesign** — `src/components/RouteCard.tsx` significantly refactored; two new props added (`colorTag`, `section`) with interface changes; the existing `RouteCardRoute` interface is extended. This is a cross-module component (AC-183, MOD-012).
+5. **Per-module screen rewrites** — all 11 active modules have screen-level visual updates. Most are style-only (token substitution, component swap); a subset contain logic-adjacent changes (see per-module notes below).
+6. **Storybook infrastructure** — `@storybook/react-native-web-vite` added as a dev dependency alongside `vite`, `react-dom`, `react-native-web`. New scripts (`storybook`, `build-storybook`). Supabase stub (`stubs/supabase.ts`) replicates the client interface.
+7. **i18n additions and modifications** — both locale files have substantive changes: ~115 new keys added across modules, ~24 keys modified (some with semantically different text, not just punctuation).
+8. **Module `status.md` writes** — every module's `status.md` received Engineering Progress entries from the designer. This is outside the normal ownership model (Engineer agents own Engineering Progress sections).
+
+---
+
+#### Files Changed — Owning Module and Change Type
+
+| File / Area | Owning Module | Change Type |
+|---|---|---|
+| `.claude/agents/design-lead.md`, `ux-designer.md`, `ui-designer.md`, `motion-designer.md`, `ux-researcher.md` | Cross-cutting (agent config) | New agent definitions — outside module scope |
+| `.gitignore` | Infrastructure (Tech Lead) | 3 lines added — acceptable additions (`.storybook` output, story snapshot dirs) |
+| `.storybook/*` | Dev tooling (no module owner) | New Storybook config, stubs, docs |
+| `locales/en/common.json`, `locales/zh-TW/common.json` | MOD-010 (i18n catalog) | ~115 additions, ~24 modifications — see risks below |
+| `package.json`, `package-lock.json` | Infrastructure | 3 new runtime deps (`react-dom`, `react-native-web`), 3 new dev deps (`@storybook/react-native-web-vite`, `storybook`, `vite`) |
+| `src/lib/theme.ts` | MOD-010 / shared | Complete palette replacement (58 semantic tokens); `LIGHT_PALETTE` now exported; `DARK_PALETTE` typed against `ThemePalette`; spacing + layout + radius + typography + elevation all extended |
+| `src/lib/motion.ts` | Shared (new file) | New motion token system (`duration`, `spring`, `bezierFor`, `useMotion`) |
+| `src/lib/haptics.ts` | Shared (new file) | Haptics stub (no `expo-haptics`; logs to console) |
+| `src/lib/icons.ts` | Shared (new file) | Centralized `ICON` map over `Ionicons` names |
+| `src/components/ui/*` | Shared / MOD-012 | 18+ new shared base components + stories |
+| `src/components/RouteCard.tsx` | MOD-012 (AC-183) | Interface extended (`colorTag`, `section`); layout restructured; `TapeBadge` cross-import added from `mod-route-catalog` |
+| `src/components/__tests__/RouteCard.test.tsx` | MOD-012 | Test updated to match new interface |
+| `project-planning/modules/*/status.md` (all 10 modules) | Each module's own Engineer/QA | Engineering Progress entries added by designer — outside normal ownership |
+| `src/modules/mod-auth-profile/*` | MOD-001 | Visual: TextField, Button, Avatar token migration; AuthNavigator Spinner swap |
+| `src/modules/mod-beta-video/*` | MOD-005 | Visual + logic: BetaVideoUploader failed-state keeps modal open with Retry (behavioral change, see risks); BetaVideoGrid empty-slot + upload prop; ReelScrim new component (replaces gradient dependency) |
+| `src/modules/mod-gym-directory/*` | MOD-002 | Visual only: token/component migration |
+| `src/modules/mod-home/*` | MOD-012 | Structural: `AppShell` changed to store-based header/TabBar chrome; `AppHeader` new `variant`, `title`, `onBack`, `trailing`, `scrollY` props; `AppHeaderContext` new file (external store); `AppHeaderOverlayScope` new file; `TabBar` adds `TabBarFade`; `HomeScreen` updated |
+| `src/modules/mod-localization-theme/*` | MOD-010 | Visual: SettingsScreen, BlockedAccountsScreen; new story files for tokens and icons |
+| `src/modules/mod-moderation/*` | MOD-009 | Visual + logic: `ReportSheet` keyboard fix (behavioral); `ModerationActions` hooks-order fix (behavioral); unblock button contrast fix (visual); `sheetReport` label changed to "Report and block" (i18n behavior) |
+| `src/modules/mod-notifications/*` | MOD-007 | Visual: token migration on both notification screens |
+| `src/modules/mod-profile-history/*` | MOD-008 | Visual + StatsPanel redesign (chart, hero, empty state); `FilterBar` from `SegmentedControl`; `AscentHistoryItem` revised |
+| `src/modules/mod-route-catalog/*` | MOD-003 | Visual + new `tape-exports.ts` public API; `TapeBadge` `TAPE_DISPLAY` map; `RouteColorBadge` updated; screen token migrations |
+| `src/modules/mod-send-logging/*` | MOD-004 | Visual + logic: `LogSendScreen` redesign with `Stepper`, `RouteCard` summary (AC-131, off-spec); `AscentList` redesign; `RouteSearchScreen` updated; `AscentList` delete added (off-spec) |
+| `src/modules/mod-social-feed/*` | MOD-006 | Visual: `FeedScreen`, `UserProfileScreen`, `FollowersListScreen`, `FollowingListScreen` token migrations |
+
+---
+
+#### Conflicts and Risks
+
+**Concern 1 — Off-spec behavioral changes require PRD path, not direct merge.**
+The PR description correctly flags several off-spec items that need `tech-lead → pm → doc-sync` before they can be considered canonicalized. However they exist in the diff right now and would land on `main` if merged:
+- **AC-131** — `LogSendScreen` now shows a route summary card with grade. This is new user-visible behavior not in any current AC for MOD-004.
+- **AC-184 override** — AppHeader groups notifications + settings into a single right-side capsule; the PRD (AC-184) currently specifies bell on left + settings gear on right (two separate affordances). The current implementation deviates from the spec in `production.md` and `mod-home/spec.md`.
+- **AC-191** — RouteCard shows grade as headline on the tape badge. Per the 2026-10-15 Tech Lead review, `grade` is retained on the interface for a11y but "must not be visible." The PR renders it visually via `TapeBadge`. This conflicts with the current AC-191 constraint.
+- **AC-192** — RouteCard thumbnail is 88pt (64 on narrow screens). The current PRD (Rev 39/40) specifies 80×80. The PR uses `routeThumb` / `routeThumbCompact` from the new layout tokens; the actual pixel values depend on the new `theme.layout` token definitions, which are not in the current spec.
+- **Beta upload failure UX** — keeping the modal open with Retry is a behavioral change to AC-166's failure handling. The prior behavior (close on error) was spec'd.
+- **`AscentList` delete action** — `LogSendScreen`'s `AscentList` appears to have a delete affordance added. This is not in any current AC for MOD-004.
+- **`sheetReport` label** — changed from "Report" to "Report and block" across both locale files. This changes MOD-009 user-visible copy, touching AC scope for that module.
+- **`thisYear` filter key renamed to `lastYear`** — a key rename in the i18n filter section for MOD-008. If any production code still references `thisYear`, it will silently fall back to the key name at runtime.
+
+The human must decide which of these off-spec items to accept into the PRD before merge. Merging first and PRD-updating second creates a "code precedes spec" situation that breaks the framework's traceability.
+
+**Concern 2 — Module `status.md` files written by the designer, not the owning Engineer/QA agents.**
+Every module's `status.md` has new Engineering Progress entries. Per the ownership model, Engineering Progress is written by `engineer-mod-<name>`, not by external collaborators. These entries cannot be treated as authoritative QA or engineering records. The existing QA Pass / pending statuses in the Module Map are unaffected by the PR (they reflect mainline work), but if the PR is merged, the new entries in module `status.md` files will appear to be engineer self-checks. The Module Map statuses must not be changed on the strength of these entries.
+
+**Concern 3 — AppHeaderContext external store pattern: new cross-cutting API all modules must follow.**
+`AppHeaderContext` introduces an external store (`AppHeaderStore` class) that screens register with via `useAppHeader` / `useAppHeaderRoot`. The PR description documents this API, but: (a) it is not in any current spec or `production.md` Shared Convention; (b) every module that uses a header must adopt this API or the header will revert to the root-tab default; (c) the per-tab scoping (`AppHeaderTabScope`) means modules mounted in overlays must be wrapped in `AppHeaderOverlayScope` — this is an invisible requirement. Before this architecture can be considered an approved Shared Convention, it needs a `tech-lead → pm → doc-sync` cycle to land in `production.md`. If merged without that, engineer agents working future modules will not know to follow it.
+
+**Concern 4 — `react-dom` and `react-native-web` as runtime (not dev) dependencies.**
+`package.json` adds `react-dom` and `react-native-web` to `dependencies`, not `devDependencies`. These are Storybook runtime targets and should be `devDependencies` only — they should never be bundled into the Expo app. This risks bloating the production bundle. Confirm these are not needed at runtime by the app itself (they should not be — Storybook is a dev tool) and move them to `devDependencies`.
+
+**Concern 5 — `RouteCard` imports directly from `mod-route-catalog` internals.**
+`src/components/RouteCard.tsx` now imports `TapeBadge` and `resolveTape` from `src/modules/mod-route-catalog/tape-exports.ts`. Per the framework, cross-module imports go through public entry-point files, and shared cross-cutting components live outside the modules directory. This import creates a dependency from a shared component (`src/components/`) into a module's internals. This is an inverted dependency: the shared component depends on a module, when it should be the reverse. If MOD-003 refactors its tape logic, the shared `RouteCard` breaks. The `tape-exports.ts` file appears to be a deliberate public surface, but the direction of the dependency should be documented as an accepted exception — or the tape display logic should be lifted entirely into `src/lib/` or `src/components/ui/`.
+
+**Concern 6 — Storybook stub for Supabase replicates the client interface without type safety.**
+`.storybook/stubs/supabase.ts` implements a custom `setStubData` / `resetStubData` mechanism. If the real Supabase client interface changes (table name, column name, RPC signature), the stub will silently diverge. This is acceptable for dev tooling but should be noted: story tests cannot substitute for real PostgREST integration verification (per the existing Shared Convention on embed string verification).
+
+**Concern 7 — i18n key renames may break production if consumers reference old keys.**
+The `profile-history` filter `thisYear` key was renamed to `lastYear`. Any source file referencing `t('profileHistory.filter.thisYear')` will silently display the key name at runtime. A grep for `thisYear` across the codebase should confirm no production consumer references it. The check-i18n script passes (per the PR description), but that script checks for completeness, not for removed-key consumers.
+
+**Concern 8 — Haptics stub uses `console.log` in production builds.**
+`src/lib/haptics.ts` logs every haptic call to the console in the current implementation (no `expo-haptics` installed). The PR description notes this explicitly. This is acceptable for a dev phase, but `console.log` calls left in production builds degrade performance and produce log noise on user devices. A `__DEV__` guard or removing the log in non-dev builds should be confirmed before the PR is merged into `main`.
+
+---
+
+#### Recommendations
+
+- **Do not merge this PR until the off-spec items in Concern 1 have been resolved through the `tech-lead → pm → doc-sync` path.** The human should decide which off-spec changes are accepted into the PRD (each requires a PM tag and Doc-Sync run) and which are out of scope and need to be reverted in the PR. A targeted list is in Concern 1 above.
+- **Move `react-dom` and `react-native-web` to `devDependencies`** before merge. Confirm these are only used by Storybook and not imported by any production source file.
+- **Codify the AppHeaderContext API as a Shared Convention** (Concern 3) via the `tech-lead → pm → doc-sync` path before future engineers build modules that need a header. Otherwise the API will diverge module by module.
+- **The `RouteCard` → `mod-route-catalog` import direction** (Concern 5) should either be accepted as a documented exception in `production.md` or resolved by lifting `resolveTape` out of the module. Flag for the human to decide.
+- **Strip or guard the haptics `console.log`** (Concern 8) before merging to `main`.
+- **Engineer agents should re-own their module `status.md` Engineering Progress sections.** The designer's entries are informational but must not be treated as engineer self-checks. After merge, each module's owning engineer should review and adopt (or correct) the design entries.
+
+---
+
+#### Approved (no action needed)
+
+- The Storybook infrastructure itself is well-structured: Supabase is fully stubbed (no network calls in stories), toolbars for theme/locale/motion are appropriate for this codebase, and 54 stories covering all shared UI components is a solid starting point.
+- The design token extension in `theme.ts` follows an additive pattern — no existing keys were removed (only values changed), `LIGHT_PALETTE` is now exported with a `ThemePalette` type, and `DARK_PALETTE` is typed against it. This is structurally clean.
+- New lib files (`motion.ts`, `haptics.ts`, `icons.ts`) are appropriately placed in `src/lib/` as project-wide shared infrastructure.
+- The `AppHeaderContext` external store is architecturally sound: it avoids re-rendering the registering screen on every config update (the store is external to React state), tab-scoped isolation prevents hidden keep-alive tabs from polluting the visible tab's header, and overlay scoping (`AppHeaderOverlayScope`) handles the settings/notifications overlay pattern correctly.
+- The `src/components/ui/` component library with `index.ts` barrel export is the right structural home for shared base components.
+- Bug fixes in MOD-009 (`ModerationActions` hooks order, `ReportSheet` keyboard) are legitimate — these were pre-existing issues and the fixes look correct from the diff.
+- The PR's own test results (569/572, with 3 pre-existing failures) and `tsc --noEmit` clean are acceptable signals for code quality, though on-device verification of motion, corner curves, and VoiceOver is still required.
+- The `tape-exports.ts` public surface in MOD-003 is a reasonable approach to making tape display logic consumable outside the module — the naming and scope are intentional.
+
+---
+
+#### Proposed Shared Conventions (for Doc-Sync to carry into production.md — contingent on human acceptance)
+
+These proposals apply only if the human decides to accept the design system v2.2 work into the PRD. They should not be synced until the off-spec items in Concern 1 are resolved through the PM.
+
+- **Design tokens are the sole source of truth for all visual values.** No hardcoded hex colors, no raw `fontSize`/`fontWeight` values outside `theme.ts`. All color references go through `theme.colors.<key>` (a `PaletteKey`). All spacing through `SPACING.*`. All radii through `RADIUS.*` or `innerRadius()`. All typography through `AppText` with a named `variant`. `theme.ts` is the canonical token file.
+- **Pressed-state feedback uses color swap, not opacity.** `surfacePressed` on `surface`; `surfaceAltPressed` on `background` / secondary buttons. No `opacity` pressed states anywhere in the codebase.
+- **AppShell header API: all screens drive the global header through `useAppHeader` / `useAppHeaderRoot` from `AppHeaderContext`.** Nested screens call `useAppHeader({ title, onBack, trailing? })` and do NOT render their own back/title row. Tab-root screens call `useAppHeaderRoot()` to bind scroll collapse. Screens mounted in overlays (settings, notifications, climber profile) are wrapped in `AppHeaderOverlayScope` by `AppShell` and call the same hooks — the hook is a no-op outside AppShell. Never render an independent header component inside a screen.
+- **Motion tokens from `useMotion()` are required for all animated values.** Duration, easing, spring, and distance values come from `motion.ts` tokens only — no magic numbers. Reduce Motion must be respected: the `reduceMotion` boolean from `useMotion()` must suppress or substitute all animations that are not direct manipulation.
+- **Haptic feedback calls go through `haptics.ts` (the `useMotion().haptic` accessor).** Never call `expo-haptics` directly from a screen or component. The stub behavior is acceptable for Phase 1; installing `expo-haptics` is a Phase 2 task.
 
 ### Review — 2026-10-15 — change (Rev 39: RouteCard redesign — AC-189 batched beta-count, AC-190 batched has-send, AC-046/047 wired bookmark, AC-191 hidden grade, AC-192 80×80 thumbnail)
 
