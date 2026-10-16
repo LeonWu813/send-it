@@ -1,13 +1,16 @@
 /**
  * LogSendScreen — the send-logging form.
  *
+ * Design system v2.2 (§18A, §19.9): optional compact route summary card, icon SegmentedControl for the
+ * style, grouped form card, Stepper for attempts. The submitted payload is unchanged.
+ *
  * Entry point 2 (from Route Detail): routeId and grade are pre-populated.
  * Entry point 1 (from global "+"): caller passes routeId + grade after the
  * user selects a route via RouteSearchScreen.
  *
  * Form fields:
  *   - style selector (flash / top / attempt)
- *   - attempts number input (min 1; locked to 1 when style = flash)
+ *   - attempts Stepper (1-9999; locked to 1 when style = flash, the previous count returns on unlock)
  *   - date (defaults to today)
  *   - note (optional text, private — shown only to the owner)
  *
@@ -19,22 +22,41 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, ScrollView, View } from 'react-native';
+import { Image, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText, Button, InlineError, SendStylePicker, TextField } from '../../../components/ui';
-import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { AppText, Button, Card, InlineError, SendStylePicker, Stepper, TextField } from '../../../components/ui';
+import { CONTINUOUS, RADIUS, innerRadius, useLayout, useTheme } from '../../../lib/theme';
+import { TapeBadge } from '../../mod-route-catalog/tape-exports';
 import { logAscent } from '../send-service';
 import type { AscentStyle } from '../types';
+
+/** Display-only data for the compact route summary card (v2.2 §18A). Nothing here is submitted. */
+export interface LogSendRouteSummary {
+  /** Stored tape colour name (drives the TapeBadge fill). */
+  color: string;
+  /** Grade text printed on the tape, e.g. "V4". */
+  grade: string;
+  /** Route title, e.g. "Red · Zone A". */
+  title: string;
+  /** Gym name. */
+  subtitle?: string;
+  /** Route photo (optional; a neutral block is shown without it). */
+  photoUri?: string;
+}
 
 interface LogSendScreenProps {
   /** Pre-selected route ID — required. */
   routeId: string;
   /** Grade read from Route.grade — displayed but never stored on the ascent. */
   routeGrade: string;
+  /**
+   * Optional compact route summary card. Callers that do not pass it keep the form without any grade
+   * display (AC-131); the card is only rendered when this is provided.
+   */
+  routeSummary?: LogSendRouteSummary;
   /** Authenticated session. */
   session: Session;
   /** Called after the ascent is successfully saved. */
@@ -46,6 +68,7 @@ interface LogSendScreenProps {
 export default function LogSendScreen({
   routeId,
   routeGrade: _routeGrade,
+  routeSummary,
   session,
   onSuccess,
   onCancel,
@@ -53,14 +76,14 @@ export default function LogSendScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  const { duration } = useMotion();
   const insets = useSafeAreaInsets();
 
   // ── Form state ────────────────────────────────────────────────────────────
 
   const [style, setStyle] = useState<AscentStyle>('top');
-  // Flash forces attempts = 1 per spec validation rule.
-  const [attempts, setAttemptsRaw] = useState<string>('1');
+  const [attempts, setAttempts] = useState<number>(1);
+  /** UI-only: the count before flash locked it to 1, restored when the style changes away from flash. */
+  const attemptsBeforeFlash = useRef<number>(1);
   const [date, setDate] = useState<string>(
     new Date().toISOString().slice(0, 10), // default today: YYYY-MM-DD
   );
@@ -68,44 +91,21 @@ export default function LogSendScreen({
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Motion D2: the attempts field cross-fades (short) into / out of the locked "1" when flash toggles.
-  const attemptsFade = useRef(new Animated.Value(1)).current;
-  const wasFlash = useRef<boolean>(false);
-  useEffect(() => {
-    const isFlash = style === 'flash';
-    if (isFlash === wasFlash.current) return;
-    wasFlash.current = isFlash;
-    attemptsFade.setValue(0);
-    Animated.timing(attemptsFade, {
-      toValue: 1,
-      duration: duration.short,
-      easing: bezierFor('standard'),
-      useNativeDriver: USE_NATIVE_DRIVER,
-    }).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [style]);
-
   // ── Derived / validation ──────────────────────────────────────────────────
 
+  const isFlash = style === 'flash';
   /** Resolved attempt count — always 1 when style is flash. */
-  const resolvedAttempts: number = style === 'flash' ? 1 : Math.max(1, parseInt(attempts, 10) || 1);
+  const resolvedAttempts: number = isFlash ? 1 : Math.min(9999, Math.max(1, attempts));
 
   function handleStyleSelect(selected: AscentStyle): void {
-    setStyle(selected);
+    if (selected === style) return;
     if (selected === 'flash') {
-      // Flash forces exactly 1 attempt.
-      setAttemptsRaw('1');
+      attemptsBeforeFlash.current = attempts;
+      setAttempts(1);
+    } else if (isFlash) {
+      setAttempts(attemptsBeforeFlash.current);
     }
-  }
-
-  function handleAttemptsChange(value: string): void {
-    // Clamp immediately so '0' or empty never displays — min 1 at all times.
-    const parsed = parseInt(value, 10);
-    if (value === '' || isNaN(parsed)) {
-      setAttemptsRaw('1');
-    } else {
-      setAttemptsRaw(String(Math.max(1, parsed)));
-    }
+    setStyle(selected);
   }
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -137,6 +137,9 @@ export default function LogSendScreen({
 
   // ── Render ────────────────────────────────────────────────────────────────
 
+  const attemptsLabel = t('sends.attempts');
+  const thumbSize = theme.componentSize.routeThumbCompact;
+
   return (
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.colors.background }}
@@ -167,28 +170,77 @@ export default function LogSendScreen({
         </View>
       </View>
 
-      {/* Style selector — Tap 2 in the ≤4-tap flow */}
-      <AppText variant="sectionHeader" style={{ marginBottom: theme.spacing.sm }}>
-        {t('sends.style')}
-      </AppText>
-      <SendStylePicker value={style} onChange={handleStyleSelect} />
+      {/* Compact route summary: card 20, padding 8, thumbnail innerRadius(20, 8) = 12, tape 6. */}
+      {routeSummary && (
+        <Card
+          variant="static"
+          padding={theme.layout.routeCardPadding}
+          style={{ marginBottom: theme.layout.cardGap }}
+        >
+          <View
+            accessible
+            accessibilityLabel={[routeSummary.grade, routeSummary.title, routeSummary.subtitle]
+              .filter((p): p is string => !!p)
+              .join(', ')}
+            style={{ flexDirection: 'row', alignItems: 'center', columnGap: theme.spacing.smd }}
+          >
+            <View
+              style={{
+                width: thumbSize,
+                height: thumbSize,
+                borderRadius: innerRadius(RADIUS.card, theme.layout.routeCardPadding),
+                ...CONTINUOUS,
+                overflow: 'hidden',
+                backgroundColor: theme.colors.surfaceAlt,
+              }}
+            >
+              {routeSummary.photoUri ? (
+                <Image source={{ uri: routeSummary.photoUri }} style={{ width: thumbSize, height: thumbSize }} accessibilityIgnoresInvertColors />
+              ) : null}
+            </View>
+            <View>
+              <TapeBadge color={routeSummary.color} grade={routeSummary.grade} size="lg" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText variant="headline" numberOfLines={1}>
+                {routeSummary.title}
+              </AppText>
+              {routeSummary.subtitle ? (
+                <AppText variant="footnote" color="textSecondary" numberOfLines={1}>
+                  {routeSummary.subtitle}
+                </AppText>
+              ) : null}
+            </View>
+          </View>
+        </Card>
+      )}
 
-      {/* Attempts input — locked to 1 for flash */}
-      <Animated.View style={{ marginTop: theme.layout.sectionGap, opacity: attemptsFade }}>
-        <TextField
-          label={t('sends.attempts')}
-          value={style === 'flash' ? '1' : attempts}
-          onChangeText={handleAttemptsChange}
-          keyboardType="number-pad"
-          returnKeyType="done"
-          readOnly={style === 'flash'}
-          helper={style === 'flash' ? t('sends.attemptsFlashHint') : undefined}
-          maxLength={4}
+      {/* Grouped form card: ONE card, fields gap 16, each field keeps its own border. */}
+      <Card variant="static" style={{ rowGap: theme.layout.fieldGap }}>
+        {/* Style selector — Tap 2 in the ≤4-tap flow */}
+        <View style={{ rowGap: theme.spacing.sm }}>
+          <AppText variant="fieldLabel">{t('sends.style')}</AppText>
+          <SendStylePicker value={style} onChange={handleStyleSelect} />
+        </View>
+
+        {/* Attempts — locked to 1 for flash; the previous count returns on unlock. */}
+        <Stepper
+          label={attemptsLabel}
+          description={t('sends.attemptsDescription')}
+          value={isFlash ? 1 : attempts}
+          onChange={setAttempts}
+          valueText={(n) => t('sends.attemptsCount', { count: n })}
+          locked={isFlash}
+          lockedDescription={t('sends.attemptsFlashLocked')}
+          lockedAnnouncement={t('ui.stepper.announceLocked', {
+            label: attemptsLabel,
+            value: t('sends.attemptsCount', { count: 1 }),
+          })}
+          doneLabel={t('ui.stepper.done')}
+          hapticSource="stepper-attempts"
         />
-      </Animated.View>
 
-      {/* Date input (ISO date string YYYY-MM-DD). No date picker exists today. */}
-      <View style={{ marginTop: theme.layout.sectionGap }}>
+        {/* Date input (ISO date string YYYY-MM-DD). No date picker exists today. */}
         <TextField
           label={t('sends.date')}
           value={date}
@@ -197,10 +249,8 @@ export default function LogSendScreen({
           maxLength={10}
           keyboardType="numbers-and-punctuation"
         />
-      </View>
 
-      {/* Note input — marked as private in the UI */}
-      <View style={{ marginTop: theme.layout.sectionGap }}>
+        {/* Note input — marked as private in the UI */}
         <TextField
           variant="multiline"
           label={t('sends.note')}
@@ -210,7 +260,7 @@ export default function LogSendScreen({
           maxLength={500}
           showCount
         />
-      </View>
+      </Card>
 
       {/* Error message — AC-012: always shown on failure */}
       {errorMessage !== null && (
@@ -220,7 +270,7 @@ export default function LogSendScreen({
       )}
 
       {/* Submit — Tap 4 (confirm) in the ≤4-tap flow */}
-      <View style={{ marginTop: theme.spacing.xl }}>
+      <View style={{ marginTop: theme.layout.sectionGap }}>
         <Button
           label={t('sends.submit')}
           onPress={() => void handleSubmit()}

@@ -11,6 +11,15 @@
 
 > Off-spec design tooling (pending PR review): added Storybook stories for AscentList at `src/modules/mod-send-logging/stories/AscentList.stories.tsx` (branch design/storybook). No component source changes.
 
+### Design system v2.2 (off-spec design work, pending PR review) (2026-10-16)
+
+- LogSendScreen: optional compact route summary card (`routeSummary` prop, card 20, padding 8, thumbnail innerRadius 12, TapeBadge); SendStylePicker (icon SegmentedControl); grouped form Card (gap 16); attempts via `ui` Stepper (1-9999, flash lock + announcement, previous count restored when leaving flash, UI state only). Submitted payload unchanged (`resolvedAttempts`, `is_private: true`).
+- AscentList: `pageSection` title, grouped card 20, ListRow `content` + Avatar + SendStatus disc, floating confirm sheet, AscentRowSkeleton, EmptyState `slot`.
+- RouteSearchScreen: grouped ListRow `content` results with TapeBadge thumbnail, AscentRowSkeleton.
+- Locale keys added: `sends.attemptsDescription`, `sends.attemptsFlashLocked`; en `sends.style/attempts/date/note` changed to sentence case.
+- Tests: 50/50 pass (LogSendScreen attempts tests rewritten for the Stepper; AscentList empty-state test for `slot`). tsc, check:i18n, storybook build OK.
+- Open: AC-131 vs design (summary card shows grade) needs a PM decision; the card renders only when a caller passes `routeSummary` (RouteDetailScreen does not yet).
+
 ### Bugfix — Bug E (attempts clamping) + Bug G (delete button in send history) (2026-10-04)
 
 **Mode:** bugfix (two human QA bugs)

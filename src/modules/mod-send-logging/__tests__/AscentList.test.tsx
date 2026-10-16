@@ -91,10 +91,11 @@ describe('AscentList', () => {
     render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText(/No sends yet|還沒有紀錄/)).toBeTruthy();
+      // The slot empty state is ONE pressable card: its label is "<sentence>. <hint>".
+      expect(screen.getByLabelText(/No sends yet|還沒有紀錄/)).toBeTruthy();
     });
-    // The inline empty state carries the (ghost) log button.
-    expect(screen.getAllByRole('button', { name: /Log Send|記錄完攀/ }).length).toBeGreaterThan(0);
+    fireEvent.press(screen.getByLabelText(/No sends yet|還沒有紀錄/));
+    expect(DEFAULT_PROPS.onLogSend).toHaveBeenCalled();
   });
 
   it('shows style badge, attempts, date, and username for each ascent', async () => {

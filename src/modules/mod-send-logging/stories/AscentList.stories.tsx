@@ -71,14 +71,16 @@ type ListState = 'populated' | 'empty' | 'error';
 interface PlaygroundArgs {
   state: ListState;
   rowCount: number;
+  /** Only the signed-in user's rows (delete button + note on every row) instead of the mixed list. */
+  ownOnly: boolean;
   /** Bump to simulate the parent incrementing refreshKey after a log (plays the new-row landing). */
   refreshKey: number;
 }
 
 /** Seeds the stub synchronously during render so the component's fetch effect sees it. */
-function Seeded({ state, rowCount, refreshKey }: PlaygroundArgs): React.JSX.Element {
+function Seeded({ state, rowCount, ownOnly, refreshKey }: PlaygroundArgs): React.JSX.Element {
   // The stub returns a non-array for `error`, so the service's `.map` throws and the real error UI shows.
-  setStubData('ascents', state === 'error' ? 'boom' : state === 'empty' ? [] : rowsFor(rowCount));
+  setStubData('ascents', state === 'error' ? 'boom' : state === 'empty' ? [] : (ownOnly ? rowsFor(rowCount).map((r) => ({ ...r, user_id: ME, users: { display_name: 'Me' } })) : rowsFor(rowCount)));
   return (
     <ToastProvider>
       <View style={{ padding: 16, maxWidth: 420 }}>
@@ -91,20 +93,21 @@ function Seeded({ state, rowCount, refreshKey }: PlaygroundArgs): React.JSX.Elem
 const meta: Meta<PlaygroundArgs> = {
   title: 'SendLogging/AscentList',
   parameters: { layout: 'fullscreen' },
-  args: { state: 'populated', rowCount: 5, refreshKey: 0 },
+  args: { state: 'populated', rowCount: 5, ownOnly: false, refreshKey: 0 },
   argTypes: {
     state: { control: 'inline-radio', options: ['populated', 'empty', 'error'] },
     rowCount: { control: { type: 'range', min: 1, max: 40, step: 1 } },
+    ownOnly: { control: 'boolean' },
     refreshKey: { control: { type: 'number', min: 0, max: 20 } },
   },
   // Remount on state / row count so the fetch effect runs against freshly seeded data.
-  render: (args) => <Seeded key={`${args.state}-${args.rowCount}`} {...args} />,
+  render: (args) => <Seeded key={`${args.state}-${args.rowCount}-${args.ownOnly}`} {...args} />,
 };
 export default meta;
 type Story = StoryObj<PlaygroundArgs>;
 
 /**
  * Try: switch state (populated / empty / error), drag rowCount; press the trash icon on "Me" rows for
- * the confirm sheet; raise refreshKey after adding a row to see the landing motion.
+ * the floating confirm sheet; raise refreshKey after adding a row to see the landing motion.
  */
 export const Playground: Story = {};

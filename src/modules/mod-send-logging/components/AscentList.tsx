@@ -7,9 +7,10 @@
  * Grade is NOT shown on each ascent row — it is displayed at the route level.
  * (Grade comes from Route.grade, never from the ascent row.)
  *
- * Design system v1.2 (§32.8): surface container, hairline-divided rows, SendStyleChip,
- * BottomSheet `confirm` for delete (failure shows inside the sheet, the row stays),
- * Skeleton / EmptyState / InlineError states, and the new-row landing motion (D1).
+ * Design system v2.2 (§32.8): `pageSection` title, `surface` container (card 20), ListRow `content` rows
+ * (Avatar + name `headline` + date/attempts `footnote`, SendStatus `disc` trailing, delete for own rows),
+ * floating BottomSheet `confirm` for delete (failure shows inside the sheet, the row stays),
+ * AscentRowSkeleton / EmptyState `slot` / InlineError states, and the new-row landing motion (D1).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -20,21 +21,21 @@ import { AccessibilityInfo, Animated, LayoutAnimation, Platform, UIManager, View
 import {
   AppText,
   Avatar,
+  AscentRowSkeleton,
   BottomSheet,
   Button,
-  Card,
   EmptyState,
   IconButton,
   InlineError,
-  SendStyleChip,
-  Skeleton,
+  ListRow,
+  SendStatus,
   SkeletonGroup,
   useSkeletonPhase,
   useToast,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
-import { useTheme } from '../../../lib/theme';
+import { CONTINUOUS, RADIUS, useTheme } from '../../../lib/theme';
 import { deleteAscent, loadAscentsForRoute } from '../send-service';
 import type { AscentStyle, AscentWithProfile } from '../types';
 
@@ -54,8 +55,6 @@ interface AscentListProps {
    */
   refreshKey?: number;
 }
-
-type Theme = ReturnType<typeof useTheme>['theme'];
 
 function formatDate(iso: string, language: string): string {
   return new Date(iso).toLocaleDateString(language);
@@ -174,6 +173,14 @@ export default function AscentList({
     }
   }, [deleteTarget, animateLayout, duration.short, toast, t, haptic]);
 
+  /** Grouped container: `surface`, card 20, clipped (rows carry their own dividers). */
+  const groupStyle = {
+    backgroundColor: theme.colors.surface,
+    borderRadius: RADIUS.card,
+    ...CONTINUOUS,
+    overflow: 'hidden' as const,
+  };
+
   const showSkeleton = isLoading && ascents.length === 0 && phase === 'skeleton';
   const showTimeout = isLoading && ascents.length === 0 && phase === 'timeout';
   const showError = errorMessage !== null && !isLoading;
@@ -190,7 +197,7 @@ export default function AscentList({
           marginBottom: theme.layout.sectionHeaderGap,
         }}
       >
-        <AppText variant="sectionHeader" accessibilityRole="header">
+        <AppText variant="pageSection" accessibilityRole="header">
           {t('sends.ascentsSectionTitle')}
         </AppText>
         {!isEmpty && (
@@ -200,13 +207,13 @@ export default function AscentList({
 
       {/* Loading */}
       {showSkeleton && (
-        <Card padding={0}>
+        <View style={groupStyle}>
           <SkeletonGroup label={t('sends.loading')}>
             {[0, 1, 2].map((i) => (
-              <AscentRowSkeleton key={i} theme={theme} first={i === 0} />
+              <AscentRowSkeleton key={i} />
             ))}
           </SkeletonGroup>
-        </Card>
+        </View>
       )}
 
       {/* Error (also the 10s skeleton timeout) */}
@@ -224,29 +231,29 @@ export default function AscentList({
       {/* Empty */}
       {isEmpty && (
         <EmptyState
-          variant="inline"
+          variant="slot"
+          icon={ICON.sendTop.outline}
           description={t('sends.noAscents')}
-          secondaryLabel={t('sends.logSend')}
-          onSecondary={onLogSend}
-          on="background"
+          primaryLabel={t('sends.logSend')}
+          onPrimary={onLogSend}
         />
       )}
 
       {/* Ascent rows */}
       {errorMessage === null && ascents.length > 0 && (
-        <Card padding={0}>
+        <View style={groupStyle}>
           {ascents.map((ascent, index) => (
             <AscentRow
               key={ascent.id}
               ascent={ascent}
-              first={index === 0}
+              last={index === ascents.length - 1}
               isOwn={ascent.user_id === session.user.id}
               landing={landing?.id === ascent.id ? landing : null}
               onDelete={setDeleteTarget}
               language={i18n.language}
             />
           ))}
-        </Card>
+        </View>
       )}
 
       <BottomSheet
@@ -267,35 +274,11 @@ export default function AscentList({
   );
 }
 
-// ── Skeleton row ───────────────────────────────────────────────────────────────
-
-function AscentRowSkeleton({ theme, first }: { theme: Theme; first: boolean }): React.JSX.Element {
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        columnGap: theme.layout.cardGap,
-        paddingHorizontal: theme.layout.cardPadding,
-        paddingVertical: theme.spacing.smd,
-        borderTopWidth: first ? 0 : theme.stroke.hairline,
-        borderTopColor: theme.colors.divider,
-      }}
-    >
-      <Skeleton shape="circle" width={theme.avatarSize.sm} height={theme.avatarSize.sm} />
-      <View style={{ flex: 1 }}>
-        <Skeleton shape="text" textVariant="subhead" width="40%" />
-        <Skeleton shape="text" textVariant="caption1" width="65%" />
-      </View>
-    </View>
-  );
-}
-
 // ── AscentRow sub-component ────────────────────────────────────────────────────
 
 interface AscentRowProps {
   ascent: AscentWithProfile;
-  first: boolean;
+  last: boolean;
   isOwn: boolean;
   /** Non-null on the row that has just been logged: plays D1. */
   landing: { id: string; burst: boolean } | null;
@@ -304,7 +287,7 @@ interface AscentRowProps {
   onDelete: (ascent: AscentWithProfile) => void;
 }
 
-function AscentRow({ ascent, first, isOwn, landing, language, onDelete }: AscentRowProps): React.JSX.Element {
+function AscentRow({ ascent, last, isOwn, landing, language, onDelete }: AscentRowProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { duration } = useMotion();
@@ -346,18 +329,14 @@ function AscentRow({ ascent, first, isOwn, landing, language, onDelete }: Ascent
   const highlightColor: 'sendTopContainer' | 'sendFlashContainer' =
     ascent.style === 'flash' ? 'sendFlashContainer' : 'sendTopContainer';
 
+  const subtitle = [`${displayDate} · ${attemptsLabel}`, ascent.is_private ? t('sends.privateLabel') : null]
+    .filter((p): p is string => p !== null)
+    .join(' · ');
+  // Divider starts at the title's left edge: row padding (md) + avatar + gap (smd).
+  const dividerInset = theme.spacing.md + theme.avatarSize.sm + theme.spacing.smd;
+
   return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'flex-start',
-        paddingLeft: theme.layout.cardPadding,
-        paddingRight: isOwn ? theme.spacing.xs : theme.layout.cardPadding,
-        paddingVertical: theme.spacing.smd,
-        borderTopWidth: first ? 0 : theme.stroke.hairline,
-        borderTopColor: theme.colors.divider,
-      }}
-    >
+    <View>
       {landing && ascent.style !== 'attempt' && (
         <Animated.View
           pointerEvents="none"
@@ -373,78 +352,70 @@ function AscentRow({ ascent, first, isOwn, landing, language, onDelete }: Ascent
         />
       )}
 
-      <View
-        accessible
-        accessibilityLabel={rowLabel}
-        accessibilityActions={noteTruncated && !noteExpanded ? [{ name: 'expand', label: t('sends.noteMore') }] : undefined}
-        onAccessibilityAction={(e) => {
-          if (e.nativeEvent.actionName === 'expand') setNoteExpanded(true);
-        }}
-        style={{ flex: 1, flexDirection: 'row', columnGap: theme.layout.cardGap }}
-      >
-        <Avatar size="sm" name={ascent.display_name} decorative />
-        <View style={{ flex: 1 }}>
-          <AppText variant="subhead" weight="600" numberOfLines={1}>
-            {ascent.display_name}
-          </AppText>
-          {/* Chip leads the second line (also the VoiceOver order). */}
-          <View
-            style={{
-              flexDirection: 'row',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-              columnGap: theme.spacing.sm,
-              rowGap: theme.spacing.xs,
-              marginTop: theme.spacing.xs,
-            }}
-          >
-            <SendStyleChip
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <ListRow
+          variant="content"
+          title={ascent.display_name}
+          subtitle={subtitle}
+          leading={<Avatar size="sm" name={ascent.display_name} decorative />}
+          leadingWidth={theme.avatarSize.sm}
+          trailing={
+            <SendStatus
+              variant="disc"
               sendStyle={ascent.style as AscentStyle}
               landing={landing?.id}
               burst={landing?.burst}
             />
-            <AppText variant="caption1" color="textSecondary">
-              {`${displayDate} · ${attemptsLabel}`}
-            </AppText>
-            {ascent.is_private && (
-              <AppText variant="caption1" color="textSecondary">
-                {t('sends.privateLabel')}
-              </AppText>
-            )}
-          </View>
+          }
+          divider={false}
+          accessibilityLabel={rowLabel}
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+        />
+        {/* Delete: own ascents only; others keep no empty slot. */}
+        {isOwn && (
+          <IconButton
+            name={ICON.delete.outline}
+            size={theme.iconSize.md}
+            color="textSecondary"
+            accessibilityLabel={t('sends.deleteLabel', { date: displayDate, style: styleLabel })}
+            onPress={() => onDelete(ascent)}
+            style={{ marginRight: theme.spacing.xs }}
+          />
+        )}
+      </View>
 
-          {/* Note — shown only to the owning user; 3 lines + "More" */}
-          {isOwn && ascent.note !== null && (
-            <View style={{ marginTop: theme.spacing.sm }}>
-              <AppText
-                variant="footnote"
-                color="textSecondary"
-                numberOfLines={noteExpanded ? undefined : 3}
-                onTextLayout={(e: { nativeEvent: { lines: unknown[] } }) => {
-                  if (!noteExpanded) setNoteTruncated(e.nativeEvent.lines.length > 3);
-                }}
-              >
-                {ascent.note}
-              </AppText>
-              {noteTruncated && !noteExpanded && (
-                <View style={{ alignSelf: 'flex-start' }}>
-                  <Button label={t('sends.noteMore')} onPress={() => setNoteExpanded(true)} variant="ghost" size="sm" />
-                </View>
-              )}
+      {/* Note: owner only; footnote, 3 lines + "More". */}
+      {isOwn && ascent.note !== null && (
+        <View
+          style={{
+            paddingLeft: dividerInset,
+            paddingRight: theme.spacing.md,
+            paddingBottom: theme.layout.listRowPaddingV,
+            marginTop: -theme.spacing.xs,
+          }}
+        >
+          <AppText
+            variant="footnote"
+            color="textSecondary"
+            numberOfLines={noteExpanded ? undefined : 3}
+            onTextLayout={(e: { nativeEvent: { lines: unknown[] } }) => {
+              if (!noteExpanded) setNoteTruncated(e.nativeEvent.lines.length > 3);
+            }}
+          >
+            {ascent.note}
+          </AppText>
+          {noteTruncated && !noteExpanded && (
+            <View style={{ alignSelf: 'flex-start' }}>
+              <Button label={t('sends.noteMore')} onPress={() => setNoteExpanded(true)} variant="ghost" size="sm" />
             </View>
           )}
         </View>
-      </View>
+      )}
 
-      {/* Delete — own ascents only; others keep no empty slot. */}
-      {isOwn && (
-        <IconButton
-          name={ICON.delete.outline}
-          size={theme.iconSize.md}
-          color="textSecondary"
-          accessibilityLabel={t('sends.deleteLabel', { date: displayDate, style: styleLabel })}
-          onPress={() => onDelete(ascent)}
-          style={{ marginTop: -theme.spacing.xs }}
+      {!last && (
+        <View
+          pointerEvents="none"
+          style={{ height: theme.stroke.hairline, marginLeft: dividerInset, backgroundColor: theme.colors.divider }}
         />
       )}
     </View>

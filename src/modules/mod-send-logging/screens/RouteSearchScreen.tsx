@@ -5,6 +5,9 @@
  * page), they must first search and select a route before logging a send.
  *
  * After selection the caller navigates to LogSendScreen with the chosen route.
+ *
+ * Design system v2.2: capsule search field, grouped `surface` card 20 of ListRow `content` rows
+ * (56 thumbnail = TapeBadge on `surfaceAlt`, `headline` title, `footnote` section), AscentRowSkeleton.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -16,17 +19,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   AppText,
   Button,
-  Card,
   EmptyState,
   InlineError,
   ListRow,
-  Skeleton,
+  AscentRowSkeleton,
   SkeletonGroup,
   TextField,
   useSkeletonPhase,
 } from '../../../components/ui';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { listRoutes } from '../../mod-route-catalog/route-service';
+import { TapeBadge } from '../../mod-route-catalog/tape-exports';
 import type { RouteSummary } from '../../mod-route-catalog/types';
 
 interface RouteSearchScreenProps {
@@ -72,6 +75,14 @@ export default function RouteSearchScreen({
       setIsLoading(false);
     }
   }, [gymIdInput, t]);
+
+  /** Grouped container: `surface`, card 20, clipped. */
+  const groupStyle = {
+    backgroundColor: theme.colors.surface,
+    borderRadius: RADIUS.card,
+    ...CONTINUOUS,
+    overflow: 'hidden' as const,
+  };
 
   const canSearch = gymIdInput.trim() !== '';
 
@@ -129,11 +140,11 @@ export default function RouteSearchScreen({
         {/* Loading */}
         {isLoading && phase !== 'idle' && (
           <SkeletonGroup label={t('sends.searching')}>
-            {[0, 1, 2].map((i) => (
-              <View key={i} style={{ marginBottom: theme.layout.cardGap }}>
-                <Skeleton shape="card" height={56} surface="page" />
-              </View>
-            ))}
+            <View style={groupStyle}>
+              {[0, 1, 2].map((i) => (
+                <AscentRowSkeleton key={i} />
+              ))}
+            </View>
           </SkeletonGroup>
         )}
 
@@ -149,11 +160,23 @@ export default function RouteSearchScreen({
 
         {/* Results list */}
         {!isLoading && errorMessage === null && results.length > 0 && (
-          <Card padding={0}>
+          <View style={groupStyle}>
             {results.map((item, index) => (
               <ListRow
                 key={item.id}
-                variant="navigation"
+                variant="content"
+                thumbnail={
+                  <View
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: theme.colors.surfaceAlt,
+                    }}
+                  >
+                    <TapeBadge color={item.color_tag} grade={item.grade} size="sm" />
+                  </View>
+                }
                 title={`${item.grade} ${item.color_tag}`}
                 subtitle={item.section_label ?? undefined}
                 divider={index < results.length - 1}
@@ -162,7 +185,7 @@ export default function RouteSearchScreen({
                 inScroll
               />
             ))}
-          </Card>
+          </View>
         )}
 
         {!isLoading && errorMessage === null && hasSearched && results.length === 0 && (
