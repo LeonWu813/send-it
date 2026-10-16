@@ -83,7 +83,9 @@ import { ICON } from '../../../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
+import TapeBadge from '../../mod-route-catalog/components/TapeBadge';
 import { ACTION_SIZE, ReelAction } from './ReelAction';
+import { ReelScrim } from './ReelScrim';
 import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed/social-feed-service';
 import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import type { BetaVideo } from '../types';
@@ -110,6 +112,10 @@ export interface BetaVideoReelViewerProps {
    * Combined with gymName as "{routeName} · {gymName}".
    */
   routeName?: string;
+  /** Optional route tape colour (v2.2 info row: TapeBadge `md` with a white outline). Omitted: no badge. */
+  routeColor?: string;
+  /** Optional grade printed on the tape (e.g. "V4"). */
+  routeGrade?: string;
   /**
    * AC-134: Gym name shown in Row 2 of the bottom-left overlay.
    * Combined with routeName as "{routeName} · {gymName}".
@@ -242,6 +248,8 @@ export default function BetaVideoReelViewer({
   onDismiss,
   session,
   routeName,
+  routeColor,
+  routeGrade,
   gymName,
   onNavigateToRoute,
   onNavigateToUser,
@@ -827,6 +835,9 @@ export default function BetaVideoReelViewer({
               </View>
             ) : null}
 
+            {/* Bottom scrim: 220pt mediaScrimStrong -> transparent (v2.2). */}
+            <ReelScrim />
+
             {/* ── Bottom row: left info + right sidebar ────────────────────── */}
             {currentVideo ? (
               <View
@@ -842,6 +853,40 @@ export default function BetaVideoReelViewer({
                 {/* Left column: poster identity (AC-134) */}
                 <View style={styles.infoColumn} onLayout={handleInfoLayout}>
 
+                  {/*
+                   * AC-134 / AC-136: Row 2 — "{routeName} · {gymName}".
+                   * Bug 2 fix: uses displayRouteName/displayGymName which fall back
+                   * to per-video route_name/gym_name when host props are absent,
+                   * enabling Row 2 in profile context (fetchBetaVideosByUser joins).
+                   * Wrapped in a Pressable; tapping navigates to the route detail
+                   * screen (AC-136). onNavigateToRoute is undefined when the user is
+                   * already on the route detail screen — tap is a no-op in that case.
+                   */}
+                  {(displayRouteName != null || displayGymName != null) ? (
+                    <Pressable
+                      style={styles.routeRow}
+                      onPress={() => {
+                        if (onNavigateToRoute && currentVideo.route_id) {
+                          onNavigateToRoute(currentVideo.route_id);
+                        }
+                      }}
+                      accessibilityRole={onNavigateToRoute ? 'button' : 'text'}
+                      testID="reel-route-gym-label"
+                    >
+                      {routeColor ? (
+                        <View style={{ marginRight: theme.spacing.sm }}>
+                          <TapeBadge color={routeColor} grade={routeGrade} size="md" onMedia />
+                        </View>
+                      ) : null}
+                      <MarqueeText
+                        text={[displayRouteName, displayGymName].filter(Boolean).join(' · ')}
+                        containerWidth={routeColor ? Math.max(0, marqueeWidth - 64) : marqueeWidth}
+                        reduceMotion={reduceMotion}
+                        style={styles.captionText}
+                        testID="reel-route-gym-text"
+                      />
+                    </Pressable>
+                  ) : null}
                   {/*
                    * Row 1: avatar + display_name (AC-135 revised, AC-164, Bug 2).
                    * When reelContext === 'route' AND !isOwnVideo: tapping navigates
@@ -885,35 +930,6 @@ export default function BetaVideoReelViewer({
                     </AppText>
                   </Pressable>
 
-                  {/*
-                   * AC-134 / AC-136: Row 2 — "{routeName} · {gymName}".
-                   * Bug 2 fix: uses displayRouteName/displayGymName which fall back
-                   * to per-video route_name/gym_name when host props are absent,
-                   * enabling Row 2 in profile context (fetchBetaVideosByUser joins).
-                   * Wrapped in a Pressable; tapping navigates to the route detail
-                   * screen (AC-136). onNavigateToRoute is undefined when the user is
-                   * already on the route detail screen — tap is a no-op in that case.
-                   */}
-                  {(displayRouteName != null || displayGymName != null) ? (
-                    <Pressable
-                      style={styles.routeRow}
-                      onPress={() => {
-                        if (onNavigateToRoute && currentVideo.route_id) {
-                          onNavigateToRoute(currentVideo.route_id);
-                        }
-                      }}
-                      accessibilityRole={onNavigateToRoute ? 'button' : 'text'}
-                      testID="reel-route-gym-label"
-                    >
-                      <MarqueeText
-                        text={[displayRouteName, displayGymName].filter(Boolean).join(' · ')}
-                        containerWidth={marqueeWidth}
-                        reduceMotion={reduceMotion}
-                        style={styles.captionText}
-                        testID="reel-route-gym-text"
-                      />
-                    </Pressable>
-                  ) : null}
                 </View>
 
                 {/* Right sidebar: like placeholder + report button (AC-138) */}
@@ -1021,9 +1037,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       flex: 1,
       marginRight: theme.spacing.sm,
       gap: theme.spacing.xs,
-      backgroundColor: c.mediaScrim,
-      borderRadius: theme.borderRadius.lg,
-      padding: theme.spacing.sm,
     },
     posterRow: {
       flexDirection: 'row',
@@ -1047,13 +1060,11 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     },
     reportErrorText: {
       marginTop: theme.spacing.xs,
-      backgroundColor: c.mediaScrim,
-      borderRadius: theme.borderRadius.sm,
-      paddingHorizontal: theme.spacing.xs,
     },
     routeRow: {
       minHeight: theme.layout.minTouchTarget,
-      justifyContent: 'center',
+      flexDirection: 'row',
+      alignItems: 'center',
     },
     /**
      * Loading background inside the Animated.View, below the metadata overlay in z-order. Covers the

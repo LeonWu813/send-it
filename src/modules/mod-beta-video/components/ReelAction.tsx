@@ -126,15 +126,7 @@ export function ReelAction({
         {likeMotion && burstKey > 0 ? <ParticleBurst kind="like" playKey={burstKey} /> : null}
       </PressableScale>
       {caption !== undefined ? (
-        <View
-          style={{
-            marginTop: theme.spacing.xs,
-            backgroundColor: c.mediaScrim,
-            borderRadius: theme.borderRadius.sm,
-            paddingHorizontal: theme.spacing.xs,
-            paddingVertical: theme.spacing.xxs,
-          }}
-        >
+        <View style={{ marginTop: theme.spacing.xs }}>
           <AppText variant="caption1" weight="600" numeric color="onMedia" testID={captionTestID}>
             {caption}
           </AppText>

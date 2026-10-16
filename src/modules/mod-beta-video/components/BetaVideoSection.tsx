@@ -78,6 +78,9 @@ interface BetaVideoSectionProps {
    * Passed through to BetaVideoReelViewer.
    */
   routeName?: string;
+  /** Optional route tape colour / grade for the Reel info row (TapeBadge). Passed through. */
+  routeColor?: string;
+  routeGrade?: string;
   /**
    * AC-134: Gym name displayed in Row 2 of the reel viewer overlay.
    * Passed through to BetaVideoReelViewer.
@@ -109,6 +112,8 @@ export default function BetaVideoSection({
   session,
   onRegisterUploadLauncher,
   routeName,
+  routeColor,
+  routeGrade,
   gymName,
   onNavigateToRoute,
   onNavigateToUser,
@@ -238,7 +243,7 @@ export default function BetaVideoSection({
     <View style={{ marginTop: theme.layout.sectionGap, paddingHorizontal: screenMargin }}>
       {/* Section header */}
       <AppText
-        variant="sectionHeader"
+        variant="pageSection"
         accessibilityRole="header"
         style={{ marginBottom: theme.layout.sectionHeaderGap }}
       >
@@ -264,6 +269,7 @@ export default function BetaVideoSection({
         onPressVideo={handlePressVideo}
         horizontalPadding={GRID_PADDING}
         loading={isLoading}
+        onUpload={() => { void selectHandlerRef.current?.(); }}
         emptyState={
           !loadError ? (
             <EmptyState
@@ -297,6 +303,7 @@ export default function BetaVideoSection({
            */}
           <BetaVideoUploader
             routeId={routeId}
+            routeName={routeName}
             userId={session.user.id}
             onUploadSuccess={handleUploadSuccess}
             onUploadError={onUploadError}
@@ -315,6 +322,8 @@ export default function BetaVideoSection({
             onDismiss={() => { setOpenIndex(null); }}
             session={session}
             routeName={routeName}
+            routeColor={routeColor}
+            routeGrade={routeGrade}
             gymName={gymName}
             onNavigateToRoute={onNavigateToRoute}
             onNavigateToUser={onNavigateToUser}

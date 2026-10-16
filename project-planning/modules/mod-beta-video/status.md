@@ -2,6 +2,14 @@
 
 ## Engineering Progress
 
+### Off-spec design work: design system v2.2 applied to mod-beta-video (pending PR review) — 2026-10-16
+
+- BetaVideoGrid: 3:4 tiles (`mediaTileAspect`), gap 2, one outer View clips the inset grid at `media` 12; per-tile badge and play disc removed; press = `mediaScrim` overlay (press 100 / release 120, `unstable_pressDelay` 50, no scale); empty route + new optional `onUpload` prop = first tile is the upload slot (`add` + `emptyUpload`, existing launcher) + dashed placeholder. BetaVideoSection passes `onUpload` (existing `selectHandlerRef`) and uses `pageSection` header.
+- BetaVideoUploader: modal body is `ui` `UploadProgressCard`; failed state keeps the card (Retry re-runs the same asset through the same upload path, Cancel closes). Validation, limits, AC-166 dialog, `onUploadError` unchanged. New optional `routeName` prop.
+- Reel: new `ReelScrim` (220pt stepped-band approximation of mediaScrimStrong -> transparent; no gradient dependency); info column loses its box; route line first (optional `routeColor` / `routeGrade` props render TapeBadge `md` `onMedia`), then poster Avatar 32; like/report captions lose their pill. Back button, 44 scrim action discs, like motion already v2.2.
+- Locales: `betaVideo.uploadFailedTitle`, `betaVideo.uploadInterrupted` (en, zh-TW). Stories: BetaVideoGrid (upload slot control), ReelOverlay updated.
+- Tests: 107/107 (BetaVideoSection empty-state test replaced by upload-slot test; added Retry test).
+
 ### Off-spec design work: design system v1.2 applied to mod-beta-video, Reel overlay contrast fix (pending PR review) — 2026-10-16
 
 Visual + motion only (no flow, service, upload-logic or size-limit changes; no illustrations; no expo-haptics, stub driver only). Branch `design/storybook`, off-spec design work pending PR review. No AC impact. Phase 1 body only, nothing from Appendix F.

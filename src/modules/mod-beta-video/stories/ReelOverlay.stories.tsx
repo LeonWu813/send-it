@@ -7,7 +7,9 @@ import { Avatar } from '../../../components/ui/Avatar';
 import { IconButton } from '../../../components/ui/IconButton';
 import { ICON } from '../../../lib/icons';
 import { LIGHT_PALETTE, useTheme } from '../../../lib/theme';
+import TapeBadge from '../../mod-route-catalog/components/TapeBadge';
 import { ACTION_SIZE, ReelAction } from '../components/ReelAction';
+import { ReelScrim } from '../components/ReelScrim';
 
 // A static preview of the Reel viewer's overlay (BetaVideoReelViewer imports expo-video, which
 // Storybook cannot load). It uses the same pieces and the same safe-area layout rules as the
@@ -76,6 +78,8 @@ function Demo(args: DemoArgs): React.JSX.Element {
         </View>
       ) : null}
 
+      <ReelScrim />
+
       <View
         style={{
           position: 'absolute',
@@ -86,25 +90,21 @@ function Demo(args: DemoArgs): React.JSX.Element {
           alignItems: 'flex-end',
         }}
       >
-        <View
-          style={{
-            flex: 1,
-            marginRight: theme.spacing.sm,
-            gap: theme.spacing.xs,
-            backgroundColor: c.mediaScrim,
-            borderRadius: theme.borderRadius.lg,
-            padding: theme.spacing.sm,
-          }}
-        >
+        <View style={{ flex: 1, marginRight: theme.spacing.sm, gap: theme.spacing.xs }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: theme.layout.minTouchTarget }}>
+            <View style={{ marginRight: theme.spacing.sm }}>
+              <TapeBadge color="red" grade="V4" size="md" onMedia />
+            </View>
+            <AppText variant="headline" color="onMedia" numberOfLines={1} style={{ flex: 1 }}>
+              紅色 · A 區
+            </AppText>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, minHeight: theme.layout.minTouchTarget }}>
             <Avatar size="sm" name="小明" decorative />
             <AppText variant="footnote" weight="600" color="onMedia" numberOfLines={1} style={{ flex: 1 }}>
               小明
             </AppText>
           </View>
-          <AppText variant="footnote" color="onMedia" numberOfLines={1}>
-            V3 測試路線 · 測試岩館
-          </AppText>
         </View>
 
         <View style={{ width: ACTION_SIZE, alignItems: 'center', gap: theme.spacing.md }}>
