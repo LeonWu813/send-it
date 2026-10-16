@@ -407,7 +407,13 @@
       "highestGrade": "最高難度",
       "noGrade": "—",
       "chartTitle": "各難度完攀數",
-      "chartA11y": "顯示各難度完攀次數的長條圖"
+      "chartA11y": "顯示各難度完攀次數的長條圖",
+      "highestBadge": "最高",
+      "barA11y": "{{grade}}，完攀 {{count}} 次",
+      "barA11y_other": "{{grade}}，完攀 {{count}} 次",
+      "barA11yHighest": "{{grade}}，完攀 {{count}} 次，最高難度",
+      "barA11yHighest_other": "{{grade}}，完攀 {{count}} 次，最高難度",
+      "emptyBody": "記錄一次完攀，統計就會出現在這裡。"
     },
     "filter": {
       "gym": "岩館",
@@ -425,7 +431,7 @@
       "last7Days": "最近 7 天",
       "last30Days": "最近 30 天",
       "last90Days": "最近 90 天",
-      "thisYear": "今年"
+      "lastYear": "最近 1 年"
     },
     "empty": "尚無完攀紀錄。",
     "hiddenTitle": "個人頁面為私人",
@@ -440,7 +446,7 @@
     "unblockUser": "解除封鎖",
     "unblock": "解除封鎖",
     "noBlockedAccounts": "沒有已封鎖的帳號",
-    "sheetReport": "檢舉",
+    "sheetReport": "檢舉並封鎖",
     "sheetBlock": "封鎖",
     "sheetUnblock": "解除封鎖",
     "sheetCancel": "取消",
@@ -448,7 +454,7 @@
     "reportConfirmation": "已檢舉並封鎖此用戶",
     "report": {
       "title": "檢舉用戶",
-      "category": "類別",
+      "category": "檢舉原因",
       "categories": {
         "inappropriate": "不當內容",
         "spam": "垃圾訊息",
@@ -458,15 +464,20 @@
       "note": "補充說明（選填）",
       "submit": "提交檢舉",
       "cancel": "取消",
-      "confirmation": "已提交檢舉，感謝您。",
-      "error": "提交失敗，請再試一次。"
+      "confirmation": "已收到檢舉，謝謝你。",
+      "error": "沒送出，你寫的內容還在。",
+      "notePlaceholder": "例如：在留言裡重複貼廣告",
+      "notice": "送出後我們會審查這個帳號。這不會封鎖對方；要封鎖請用「封鎖」。",
+      "pickReason": "請先選一個原因"
     },
     "block": {
       "confirmBlock": "封鎖此用戶？",
       "blocked": "已封鎖此用戶。",
       "unblocked": "已解除封鎖。",
-      "error": "操作失敗，請再試一次。"
-    }
+      "error": "操作失敗，請再試一次。",
+      "confirmBody": "你們會互相看不到對方的內容，隨時可以解除封鎖。"
+    },
+    "sheetReportHint": "我們會審查這個帳號，你們也會立刻互相看不到對方的內容。"
   },
   "common": {
     "loading": "載入中…",
