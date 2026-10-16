@@ -328,7 +328,9 @@
     "topSend": "完攀",
     "openHint": "開啟路線",
     "statusFlash": "已閃攀",
-    "statusTop": "已完攀"
+    "statusTop": "已完攀",
+    "saveAction": "收藏",
+    "unsaveAction": "取消收藏"
   },
   "betaVideo": {
     "sectionTitle": "BETA 影片",

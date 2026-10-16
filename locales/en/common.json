@@ -328,7 +328,9 @@
     "topSend": "Top",
     "openHint": "Open route",
     "statusFlash": "Flashed",
-    "statusTop": "Sent"
+    "statusTop": "Sent",
+    "saveAction": "Save",
+    "unsaveAction": "Remove from saved"
   },
   "betaVideo": {
     "sectionTitle": "BETA VIDEOS",
