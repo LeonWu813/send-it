@@ -2,68 +2,64 @@ import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
 import { View } from 'react-native';
 
-import { ForcedTheme } from '../../../../.storybook/ForcedTheme';
 import AscentHistoryItem from '../components/AscentHistoryItem';
 import type { HistoryAscent } from '../types';
 
-const base: HistoryAscent = {
-  ascent_id: 'a1',
-  route_id: 'r1',
-  gym_id: 'g1',
-  gym_name: 'Boulder Planet',
-  grade: 'V3',
-  color_tag: 'blue',
-  section_label: 'Cave',
-  photo_url: null,
-  style: 'top',
-  attempts: 3,
-  note: null,
-  logged_at: '2026-09-20T10:30:00Z',
-  is_private: false,
-};
+interface Args {
+  sendStyle: HistoryAscent['style'];
+  attempts: number;
+  isPrivate: boolean;
+  hasSection: boolean;
+  hasPhoto: boolean;
+  longNames: boolean;
+}
 
-const meta: Meta<typeof AscentHistoryItem> = {
+const PHOTO =
+  'data:image/svg+xml;utf8,' +
+  encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="88" height="88"><rect width="88" height="88" fill="#bbb"/></svg>');
+
+function toItem(a: Args): HistoryAscent {
+  return {
+    ascent_id: 'a1',
+    route_id: 'r1',
+    gym_id: 'g1',
+    gym_name: a.longNames
+      ? 'The Extremely Long Named Bouldering and Climbing Gymnasium of Greater Taipei City'
+      : 'Boulder Planet',
+    grade: 'V3',
+    color_tag: 'blue',
+    section_label: a.hasSection
+      ? a.longNames
+        ? 'Overhanging North Wall Competition Training Area Section B'
+        : 'Cave'
+      : null,
+    photo_url: a.hasPhoto ? PHOTO : null,
+    style: a.sendStyle,
+    attempts: a.sendStyle === 'attempt' ? a.attempts : a.sendStyle === 'flash' ? 1 : 3,
+    note: null,
+    logged_at: '2026-09-20T10:30:00Z',
+    is_private: a.isPrivate,
+  };
+}
+
+const meta: Meta<Args> = {
   title: 'Profile/AscentHistoryItem',
-  component: AscentHistoryItem,
-  args: { item: base },
-  decorators: [(Story) => <View style={{ maxWidth: 420 }}><Story /></View>],
-};
-export default meta;
-type Story = StoryObj<typeof AscentHistoryItem>;
-
-// Note: the flash chip uses theme `warning` (not the flash gold) - shown as-is per design review.
-export const Flash: Story = { args: { item: { ...base, style: 'flash', attempts: 1 } } };
-export const Top: Story = {};
-export const Attempt: Story = { args: { item: { ...base, style: 'attempt', attempts: 5 } } };
-export const Private: Story = { args: { item: { ...base, is_private: true } } };
-export const NoSection: Story = { args: { item: { ...base, section_label: null, grade: 'V5', color_tag: 'red' } } };
-// The component does not render photo_url / video; this documents that a thumbnail makes no difference.
-export const WithPhotoUrl: Story = {
-  args: { item: { ...base, photo_url: 'https://example.invalid/route.jpg' } },
-};
-export const LongNames: Story = {
-  args: {
-    item: {
-      ...base,
-      gym_name: 'The Extremely Long Named Bouldering and Climbing Gymnasium of Greater Taipei City',
-      section_label: 'Overhanging North Wall Competition Training Area Section B',
-      is_private: true,
-    },
-  },
-};
-
-export const LightAndDark: Story = {
   render: (args) => (
-    <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-      {(['light', 'dark'] as const).map((mode) => (
-        <ForcedTheme key={mode} mode={mode}>
-          <View style={{ width: 400 }}>
-            <AscentHistoryItem item={{ ...args.item, style: 'flash' }} />
-            <AscentHistoryItem item={args.item} />
-            <AscentHistoryItem item={{ ...args.item, style: 'attempt' }} />
-          </View>
-        </ForcedTheme>
-      ))}
+    <View style={{ maxWidth: 420 }}>
+      <AscentHistoryItem item={toItem(args)} />
     </View>
   ),
+  args: { sendStyle: 'top', attempts: 3, isPrivate: false, hasSection: true, hasPhoto: false, longNames: false },
+  argTypes: {
+    sendStyle: { control: 'inline-radio', options: ['top', 'flash', 'attempt'] },
+    attempts: { control: { type: 'number', min: 1, max: 20 }, description: 'Only shown for attempt' },
+    isPrivate: { control: 'boolean' },
+    hasSection: { control: 'boolean' },
+    hasPhoto: { control: 'boolean', description: '44x44 thumbnail before the text; no gap when absent' },
+    longNames: { control: 'boolean', description: 'Long gym + section: the route name stays visible' },
+  },
 };
+export default meta;
+
+/** Switch sendStyle, toggle private / section / photo / long names; raise font scale to see the chip move to line 2. */
+export const Playground: StoryObj<Args> = {};

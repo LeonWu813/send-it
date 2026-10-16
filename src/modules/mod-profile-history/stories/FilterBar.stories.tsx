@@ -1,45 +1,60 @@
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import FilterBar from '../components/FilterBar';
 import { EMPTY_FILTERS } from '../types';
 import type { HistoryFilters } from '../types';
 
-const gyms = [
+const GYMS = [
   { id: 'g1', name: 'Boulder Planet' },
   { id: 'g2', name: 'Camp 4 Climbing Gym' },
-  { id: 'g3', name: 'Rock Lab' },
+  { id: 'g3', name: 'The Extremely Long Named Bouldering and Climbing Gymnasium of Greater Taipei' },
 ];
+
+interface Args {
+  gymId: 'none' | 'g1' | 'g2' | 'g3';
+  grade: 'none' | 'V0' | 'V3' | 'V4' | 'V8';
+  dateDays: 0 | 7 | 30 | 90 | 365;
+  gymCount: number;
+}
 
 const daysAgo = (d: number): string => new Date(Date.now() - d * 86400000).toISOString();
 
-// Stateful wrapper so chips and pickers react to clicks in the canvas.
-function Interactive({ filters: initial, gyms: g }: { filters: HistoryFilters; gyms: typeof gyms }): React.JSX.Element {
-  const [filters, setFilters] = useState(initial);
+function initialFilters({ gymId, grade, dateDays }: Args): HistoryFilters {
+  return {
+    gym_id: gymId === 'none' ? null : gymId,
+    grade: grade === 'none' ? null : grade,
+    date_from: dateDays ? daysAgo(dateDays) : null,
+    date_to: dateDays ? daysAgo(0) : null,
+  };
+}
+
+// Local state so chips and pickers react in the canvas; controls reset the selection.
+function Interactive(args: Args): React.JSX.Element {
+  const [filters, setFilters] = useState<HistoryFilters>(() => initialFilters(args));
+  useEffect(() => {
+    setFilters(initialFilters(args));
+  }, [args.gymId, args.grade, args.dateDays]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <View style={{ paddingVertical: 16, maxWidth: 420 }}>
-      <FilterBar filters={filters} gyms={g} onFiltersChange={setFilters} />
+      <FilterBar filters={filters} gyms={GYMS.slice(0, args.gymCount)} onFiltersChange={setFilters} />
     </View>
   );
 }
 
-const meta: Meta<typeof FilterBar> = {
+const meta: Meta<Args> = {
   title: 'Profile/FilterBar',
-  component: FilterBar,
-  render: (args) => <Interactive filters={args.filters} gyms={args.gyms} />,
-  args: { gyms, filters: EMPTY_FILTERS, onFiltersChange: () => {} },
+  render: (args) => <Interactive {...args} />,
+  args: { gymId: 'none', grade: 'none', dateDays: 0, gymCount: 3 },
+  argTypes: {
+    gymId: { control: 'select', options: ['none', 'g1', 'g2', 'g3'], description: 'g3 has a very long name (no truncation of the value)' },
+    grade: { control: 'select', options: ['none', 'V0', 'V3', 'V4', 'V8'] },
+    dateDays: { control: 'select', options: [0, 7, 30, 90, 365] },
+    gymCount: { control: { type: 'number', min: 0, max: 3 }, description: 'Gym list length; 0 shows only "All gyms"' },
+  },
 };
 export default meta;
-type Story = StoryObj<typeof FilterBar>;
 
-export const NoFilters: Story = {};
-export const GymSelected: Story = { args: { filters: { ...EMPTY_FILTERS, gym_id: 'g2' } } };
-export const GradeSelected: Story = { args: { filters: { ...EMPTY_FILTERS, grade: 'V4' } } };
-export const DateSelected: Story = {
-  args: { filters: { ...EMPTY_FILTERS, date_from: daysAgo(30), date_to: daysAgo(0) } },
-};
-export const AllSelected: Story = {
-  args: { filters: { gym_id: 'g1', grade: 'V3', date_from: daysAgo(7), date_to: daysAgo(0) } },
-};
-export const NoGyms: Story = { args: { gyms: [] } };
+/** Tap a chip to open its sheet and pick a value; tap the separate x to clear. Set the initial selections with the controls. */
+export const Playground: StoryObj<Args> = {};

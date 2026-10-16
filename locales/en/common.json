@@ -264,8 +264,15 @@
     "errors": {
       "saveFailed": "Failed to save your send. Please check your connection and try again.",
       "loadFailed": "Failed to load sends. Please try again.",
-      "routeSearchFailed": "Failed to search routes. Please try again."
-    }
+      "routeSearchFailed": "Failed to search routes. Please try again.",
+      "deleteFailed": "Failed to delete your send. Please try again."
+    },
+    "deleted": "Deleted",
+    "loading": "Loading sends",
+    "searching": "Searching routes",
+    "logged": "Logged: {{style}}",
+    "noteMore": "More",
+    "deleteLabel": "Delete {{date}} {{style}} send"
   },
   "home": {
     "banner": {
@@ -381,6 +388,12 @@
       "loadFailed": "Failed to load activity feed. Please try again.",
       "profileLoadFailed": "Failed to load profile. Please try again.",
       "followFailed": "Failed to update follow status. Please try again."
+    },
+    "moreOptions": "More options",
+    "menu": {
+      "reportAndBlock": "Report and block",
+      "reportAndBlockHint": "We'll review this account, and you'll both stop seeing each other's content right away.",
+      "actionFailed": "Didn't go through. Try again."
     }
   },
   "notifications": {

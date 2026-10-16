@@ -1,21 +1,27 @@
 /**
- * AscentHistoryItem — single row in the send history list.
+ * AscentHistoryItem — single row in the send history list (spec §32.7).
  *
- * Displays:
- *   - Grade badge + route color indicator
- *   - Gym name and optional section label
- *   - Send style chip (flash / top / attempt)
- *   - Logged date
- *   - Private indicator when is_private = true
+ * Layout (row sits on a `surface` container):
+ *   [photo 44] grade + route name        [SendStyleChip]
+ *              date · gym  (lock + Private)
  *
- * Uses theme tokens only — no hardcoded colors or spacing.
+ * - Grade is its own non-shrinking node; the route name shrinks (1 line, 2 lines
+ *   at fontScale >= 1.6) but never disappears.
+ * - At fontScale >= 1.6 the SendStyleChip moves to the start of the second line.
+ * - One merged VoiceOver label for the whole row.
+ *
+ * Not built: TapeBadge (route-catalog has not shipped TAPE_DISPLAY yet), so the
+ * route colour is carried by the localized colour name in the route label.
  */
 
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { useTheme } from '../../../lib/theme';
+import { AppText, SendStyleChip } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
 import type { HistoryAscent } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -24,12 +30,14 @@ interface AscentHistoryItemProps {
   item: HistoryAscent;
 }
 
+/** Thumbnail edge (spec 44x44). */
+const THUMB_SIZE = 44;
+/** AX threshold from the spec. */
+const AX_FONT_SCALE = 1.6;
+
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
-/**
- * Format a UTC ISO timestamp as a short locale date string.
- * e.g. "Sep 20, 2026"
- */
+/** Short locale date, e.g. "Sep 20, 2026". */
 function formatDate(isoString: string): string {
   try {
     return new Date(isoString).toLocaleDateString(undefined, {
@@ -49,46 +57,89 @@ export default function AscentHistoryItem({
 }: AscentHistoryItemProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { screenMargin } = useLayout();
+  const { fontScale } = useWindowDimensions();
+  const ax = fontScale >= AX_FONT_SCALE;
+  const styles = makeStyles(theme, screenMargin);
 
-  // Build route label per production.md Route Display Name Format:
-  // "{grade} {LocalizedColor}" with section in parentheses when present.
-  // e.g. "V3 Blue (Cave)"
-  const colorLabel = item.color_tag
-    ? t(`routeCatalog.colors.${item.color_tag}`)
-    : '';
-  const sectionLabel = item.section_label ? ` (${item.section_label})` : '';
-  const routeLabel = `${item.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionLabel}`;
+  // Route name per production.md Route Display Name Format: "{LocalizedColor} (Section)".
+  // The grade is rendered as its own node.
+  const colorLabel = item.color_tag ? t(`routeCatalog.colors.${item.color_tag}`) : '';
+  const sectionLabel = item.section_label ? `(${item.section_label})` : '';
+  const routeName = [colorLabel, sectionLabel].filter(Boolean).join(' ');
+
+  const date = formatDate(item.logged_at);
+  const styleLabel = t(`sends.styles.${item.style}`);
+
+  // "V4 Red (Cave), Boulder Planet, Flash, Sep 20, 2026, Private"
+  const a11yLabel = [
+    `${item.grade}${routeName ? ` ${routeName}` : ''}`,
+    item.gym_name,
+    styleLabel,
+    date,
+    item.is_private ? t('sends.privateLabel') : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
+
+  const chip = (
+    <SendStyleChip
+      sendStyle={item.style}
+      attempts={item.style === 'attempt' ? item.attempts : undefined}
+    />
+  );
 
   return (
-    <View style={styles.row} accessibilityRole="none">
-      {/* Grade badge */}
-      <View style={styles.gradeBadge}>
-        <Text style={styles.gradeText}>{item.grade}</Text>
-      </View>
+    <View style={styles.row} accessible accessibilityLabel={a11yLabel}>
+      {item.photo_url ? (
+        <Image
+          source={{ uri: item.photo_url }}
+          style={styles.thumb}
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+        />
+      ) : null}
 
-      {/* Middle: gym + route info */}
       <View style={styles.middle}>
-        <Text style={styles.gymName} numberOfLines={1}>
-          {item.gym_name}
-        </Text>
-        <Text style={styles.routeLabel} numberOfLines={1}>
-          {routeLabel}
-        </Text>
+        {/* Line 1: grade + route name */}
+        <View style={styles.line}>
+          <AppText variant="subhead" weight="600" numeric style={styles.grade}>
+            {item.grade}
+          </AppText>
+          {routeName ? (
+            <AppText
+              variant="subhead"
+              weight="600"
+              numberOfLines={ax ? 2 : 1}
+              style={styles.routeName}
+            >
+              {routeName}
+            </AppText>
+          ) : null}
+        </View>
+
+        {/* Line 2: [chip at AX] date · gym, private */}
+        <View style={styles.line2}>
+          {ax ? chip : null}
+          <AppText variant="caption1" color="textSecondary" numberOfLines={1} style={styles.meta}>
+            {`${date} · ${item.gym_name}`}
+          </AppText>
+          {item.is_private ? (
+            <View style={styles.privateRow}>
+              <Ionicons
+                name={ICON.locked.outline}
+                size={theme.iconSize.xs}
+                color={theme.colors.textSecondary}
+              />
+              <AppText variant="caption1" color="textSecondary">
+                {t('sends.privateLabel')}
+              </AppText>
+            </View>
+          ) : null}
+        </View>
       </View>
 
-      {/* Right: style chip + date + private */}
-      <View style={styles.right}>
-        <View style={[styles.styleChip, item.style === 'flash' && styles.styleChipFlash]}>
-          <Text style={styles.styleChipText}>
-            {t(`sends.styles.${item.style}`)}
-          </Text>
-        </View>
-        <Text style={styles.date}>{formatDate(item.logged_at)}</Text>
-        {item.is_private && (
-          <Text style={styles.privateLabel}>{t('sends.privateLabel')}</Text>
-        )}
-      </View>
+      {!ax ? <View style={styles.trailing}>{chip}</View> : null}
     </View>
   );
 }
@@ -96,70 +147,57 @@ export default function AscentHistoryItem({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.lg,
-      borderBottomWidth: 1,
+      minHeight: theme.layout.minTouchTarget,
+      paddingVertical: theme.spacing.smd,
+      paddingHorizontal: screenMargin,
+      borderBottomWidth: theme.stroke.thin,
       borderBottomColor: theme.colors.divider,
-      gap: theme.spacing.sm,
+      columnGap: theme.spacing.smd,
     },
-    gradeBadge: {
-      width: 44,
-      height: 44,
+    thumb: {
+      width: THUMB_SIZE,
+      height: THUMB_SIZE,
       borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
+      backgroundColor: theme.colors.surfaceAlt,
       flexShrink: 0,
-    },
-    gradeText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textInverse,
     },
     middle: {
       flex: 1,
+      minWidth: 0,
     },
-    gymName: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textPrimary,
+    line: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      columnGap: theme.spacing.sm,
     },
-    routeLabel: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
-    },
-    right: {
-      alignItems: 'flex-end',
+    grade: {
       flexShrink: 0,
-      gap: 4,
     },
-    styleChip: {
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface,
+    routeName: {
+      flexShrink: 1,
     },
-    styleChipFlash: {
-      backgroundColor: theme.colors.warning,
+    line2: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      columnGap: theme.spacing.sm,
+      marginTop: theme.spacing.xxs,
     },
-    styleChipText: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textPrimary,
-      fontWeight: theme.fontWeight.medium,
+    meta: {
+      flexShrink: 1,
     },
-    date: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
+    privateRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      columnGap: theme.layout.iconTextGap,
     },
-    privateLabel: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textDisabled,
+    trailing: {
+      flexShrink: 0,
     },
   });
 }

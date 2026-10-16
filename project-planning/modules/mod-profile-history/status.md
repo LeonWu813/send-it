@@ -84,6 +84,17 @@
 - AC-062: refetchKey prop on ProfileHistoryScreen; parent increments after MOD-004 ascent insert to trigger immediate re-render without manual refresh
 - AC-064: server-side privacy gate in both RPCs; non-followers of followers_only profiles receive zero rows
 
+### Design System v1.2 (off-spec design work, pending PR review) - 2026-10-16
+
+Visual + motion only; no service, flow or filter-logic changes. Body (Phase 1) only.
+- StatsPanel (§32.5): AppText type scale, highest bar `textPrimary` + "Highest" label, others `border`, no track, 4pt nub for 0-count grades between V0 and highest, bar-grow D7 once per session (stagger 30, max 8, highest `settle`, no number rolling, Reduce Motion = final state), per-bar a11y labels, 2-column summary at fontScale >= 1.6, zero sends = EmptyState `firstUse`.
+- FilterBar (§32.6): `ui/` Chip `filter` + separate clear button, wrapping row (columnGap 8, rowGap 12, screenMargin), pickers = BottomSheet `list-single` with `useSheetSelect`. "This Year" label changed to "Last Year" / "最近 1 年" (key `thisYear` -> `lastYear`); filter logic unchanged (365 days). Chip shows the preset name when the range matches a preset.
+- AscentHistoryItem (§32.7): SendStyleChip (no `warning` fill), grade and route name as separate nodes (name shrinks, never disappears), lock icon + `textSecondary` private marker, 44x44 thumbnail when `photo_url` exists, SendStyleChip on line 2 at fontScale >= 1.6, merged VoiceOver label.
+- ProfileHistoryScreen: AppText/sectionHeader, Chip `choice` grade tabs, EmptyState (`private`, `inline`), InlineError + retry for load failure (translated text, not `err.message`), Spinner, screenMargin.
+- Stories: one Controls-driven Playground each. Locale keys added: `profileHistory.stats.{highestBadge,barA11y*,emptyBody}`, `profileHistory.filter.lastYear`.
+- Not done: TapeBadge in the item (not shipped by route-catalog; route colour is in the name), results cross-fade (FilterBar is not used by the screen and does not own results), delete sheet (module has no delete), `FLASH_BADGE_COLOR` (lives in mod-route-catalog / mod-send-logging / src/components/RouteCard.tsx, not this module).
+
+
 ## QA Results
 
 **QA verdict: FAIL**

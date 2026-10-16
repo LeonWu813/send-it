@@ -264,8 +264,15 @@
     "errors": {
       "saveFailed": "儲存完攀紀錄失敗，請確認網路連線後重試。",
       "loadFailed": "載入完攀紀錄失敗，請再試一次。",
-      "routeSearchFailed": "搜尋路線失敗，請再試一次。"
-    }
+      "routeSearchFailed": "搜尋路線失敗，請再試一次。",
+      "deleteFailed": "刪除失敗，請再試一次。"
+    },
+    "deleted": "已刪除",
+    "loading": "完攀紀錄載入中",
+    "searching": "路線搜尋中",
+    "logged": "已記錄：{{style}}",
+    "noteMore": "更多",
+    "deleteLabel": "刪除 {{date}} {{style}}的紀錄"
   },
   "home": {
     "banner": {
@@ -381,6 +388,12 @@
       "loadFailed": "載入動態消息失敗，請再試一次。",
       "profileLoadFailed": "載入個人資料失敗，請再試一次。",
       "followFailed": "更新追蹤狀態失敗，請再試一次。"
+    },
+    "moreOptions": "更多選項",
+    "menu": {
+      "reportAndBlock": "檢舉並封鎖",
+      "reportAndBlockHint": "我們會審查這個帳號，你們也會立刻互相看不到對方的內容。",
+      "actionFailed": "沒送出，再試一次。"
     }
   },
   "notifications": {
