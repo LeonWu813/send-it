@@ -31,7 +31,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ICON } from '../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../lib/motion';
 import { RADIUS, innerRadius, useTheme } from '../lib/theme';
-import { TapeBadge, resolveTape } from '../modules/mod-route-catalog/tape-exports';
+import { TapeBadge, resolveTape } from '@/lib/tape';
 import { getPhotoSignedUrl } from '../modules/mod-route-catalog/route-service';
 import { AppText } from './ui/AppText';
 import { Card } from './ui/Card';

@@ -23,7 +23,7 @@ import { Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { AppText, SendStatus } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { TapeBadge } from '../../mod-route-catalog/tape-exports';
+import { TapeBadge } from '@/lib/tape';
 import type { HistoryAscent } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────

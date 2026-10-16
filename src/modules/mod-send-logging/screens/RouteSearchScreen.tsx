@@ -29,7 +29,7 @@ import {
 } from '../../../components/ui';
 import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { listRoutes } from '../../mod-route-catalog/route-service';
-import { TapeBadge } from '../../mod-route-catalog/tape-exports';
+import { TapeBadge } from '@/lib/tape';
 import type { RouteSummary } from '../../mod-route-catalog/types';
 
 interface RouteSearchScreenProps {

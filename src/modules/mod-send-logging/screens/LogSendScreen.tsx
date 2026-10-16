@@ -29,7 +29,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText, Button, Card, InlineError, SendStylePicker, Stepper, TextField } from '../../../components/ui';
 import { CONTINUOUS, RADIUS, innerRadius, useLayout, useTheme } from '../../../lib/theme';
-import { TapeBadge } from '../../mod-route-catalog/tape-exports';
+import { TapeBadge } from '@/lib/tape';
 import { logAscent } from '../send-service';
 import type { AscentStyle } from '../types';
 
