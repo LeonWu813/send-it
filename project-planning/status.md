@@ -7,7 +7,7 @@ agent: tech-lead
 mode: review
 module: n/a
 result: success
-commit: 2b537b969ae224b140bd7cdcb0986d4c1553890d
+commit: f72a1319a8c3e022d3fd278df62e4ea0f506bc8c
 timestamp: 2026-10-16T00:00:00Z
 ```
 
@@ -448,6 +448,62 @@ These proposals apply only if the human decides to accept the design system v2.2
 - **AppShell header API: all screens drive the global header through `useAppHeader` / `useAppHeaderRoot` from `AppHeaderContext`.** Nested screens call `useAppHeader({ title, onBack, trailing? })` and do NOT render their own back/title row. Tab-root screens call `useAppHeaderRoot()` to bind scroll collapse. Screens mounted in overlays (settings, notifications, climber profile) are wrapped in `AppHeaderOverlayScope` by `AppShell` and call the same hooks — the hook is a no-op outside AppShell. Never render an independent header component inside a screen.
 - **Motion tokens from `useMotion()` are required for all animated values.** Duration, easing, spring, and distance values come from `motion.ts` tokens only — no magic numbers. Reduce Motion must be respected: the `reduceMotion` boolean from `useMotion()` must suppress or substitute all animations that are not direct manipulation.
 - **Haptic feedback calls go through `haptics.ts` (the `useMotion().haptic` accessor).** Never call `expo-haptics` directly from a screen or component. The stub behavior is acceptable for Phase 1; installing `expo-haptics` is a Phase 2 task.
+
+### Review — 2026-10-16 — Designer PR #1 follow-up: two Shared Conventions + PM action list
+
+**Context**: Follow-up to the 2026-10-16 PR #1 review above. Proposes two Shared Conventions to be adopted into `production.md` once the human has accepted the relevant off-spec items through the `tech-lead → pm → doc-sync` path. Also records the PM action items that must be actioned as a `[SUBSTANTIVE]` PRD update before Doc-Sync runs. Advisory only — no source code, prd.md, spec.md, or production.md edited.
+
+---
+
+#### Proposed Shared Conventions (for Doc-Sync to carry into production.md)
+
+These two conventions are derived directly from the design system v2.2 PR and are contingent on the human accepting the design system work. Do not sync to `production.md` until the PM has tagged the accepted off-spec items `[SUBSTANTIVE]`.
+
+---
+
+**Convention 1 — AppHeader must be driven via AppHeaderContext — never via local state or direct prop drilling.**
+
+The global AppHeader (AC-184, owned by MOD-012) is driven by an external store — `AppHeaderContext`. Any screen that needs to customise the header (override the title, show/hide the back button, swap action icons) must do so via `useAppHeader()` from `src/lib/AppHeaderContext`. Screens that render inside an overlay or modal must use `AppHeaderOverlayScope` so their header mutations are scoped and cleaned up on unmount. Direct prop-drilling into the AppHeader component or local `useState` for header state is not permitted — it bypasses the scoped cleanup and causes stale header state when navigating back. The AppHeader root (rendered once in AppShell) must call `useAppHeaderRoot()`.
+
+**Rationale**: The PR introduces this architecture in `src/modules/mod-home/AppHeaderContext.tsx` and `AppHeaderOverlayScope.tsx`. Without a documented Shared Convention, engineer agents working on future modules will not know to follow the `useAppHeader` hook protocol, will render independent header rows, and will cause stale-header defects on back-navigation from overlays. This is the same category of "invisible requirement" as the `useSession` singleton and the keep-alive `isActive` prop — it must be codified before the next module is built. The external-store approach (the store object is not React state) is architecturally sound: it avoids re-rendering the registering screen on every config update and tab-scoped isolation via `AppHeaderTabScope` prevents hidden keep-alive tabs from polluting the active tab's header.
+
+**Ownership note**: `src/lib/AppHeaderContext.tsx` (cross-cutting singleton) is the correct home for this file. It follows the `src/lib/` convention for cross-cutting singletons (`supabase.ts`, `theme.ts`, `i18n.ts`). If the file currently lives inside `src/modules/mod-home/`, it should be relocated to `src/lib/` as part of the merge. The PR currently places related files in `mod-home/`; the Tech Lead proposes the canonical location is `src/lib/AppHeaderContext.ts` — but the human decides.
+
+---
+
+**Convention 2 — All tape/hold-color display logic must import from `src/lib/tape.ts` — never roll ad-hoc color display.**
+
+The canonical tape badge component (`TapeBadge`), the color resolver (`resolveTape`), and the color map (`ROUTE_COLOR_TO_RN_COLOR`) live in `src/lib/tape.ts`. Any screen, component, or service that needs to display a route's hold/tape color (whether as a badge, a label, or a color swatch) must import from `src/lib/tape.ts`. Modules must not define their own `color_tag` display logic (e.g. local `capitalize` helpers, inline i18n lookups like `routeCatalog.colors.${color_tag}`, or ad-hoc color maps). The existing `RouteColorBadge` component in `mod-route-catalog` will be deprecated in favour of `TapeBadge` from `src/lib/tape.ts` once the PR is merged and the lift is complete.
+
+**Rationale**: The PR introduces tape badge logic inside `src/modules/mod-route-catalog/tape-exports.ts`. The shared `RouteCard` component (which sits above all modules in `src/components/`) imports from it — an inverted dependency: a shared component depends on a module's internals, reversing the conventional direction. If MOD-003 refactors its tape logic, the shared `RouteCard` breaks silently. The correct fix is to lift `TapeBadge`, `resolveTape`, and `ROUTE_COLOR_TO_RN_COLOR` out of `mod-route-catalog` and into `src/lib/tape.ts` (a neutral, non-module location), so all consumers — `RouteCard`, any future module displaying `color_tag` — import from a stable, centrally-owned path. The `tape-exports.ts` name signals the intent; the location is wrong. This also prevents the "multiple modules with their own ad-hoc color display" pattern from taking hold: without a canonical location, engineer agents will each inline `color_tag` logic, producing divergent rendering.
+
+**Ownership note**: `src/lib/tape.ts` is owned by no single module — MOD-012 (the aggregator/shell module) should own `src/lib/` and `src/components/` per the existing `App-Level Shared Presentational Components` convention. The lift from `mod-route-catalog/tape-exports.ts` → `src/lib/tape.ts` is an Engineer task (scoped to whoever merges the PR), not a PR block.
+
+---
+
+#### PM Action Required — Accepted off-spec items from PR #1
+
+The following items identified in the PR diff were off-spec at the time of the review. The human must decide which to accept. For every item the human accepts, PM must action it as a `[SUBSTANTIVE]` PRD update (assigning or revising the relevant AC) before Doc-Sync runs. Items the human rejects must be reverted in the PR branch before merge.
+
+Candidate accepted items (human to confirm):
+
+1. **AC-184 revised** — AppHeader layout: notifications + settings grouped into a capsule on the right side (not bell-left + settings-right as currently spec'd). If accepted, PM revises AC-184 in MOD-012 to describe the capsule layout.
+2. **AC-191 revised** — Grade shown on tape badge (rendered visually). Per the current 2026-10-15 Tech Lead review, grade must not be visible. If the designer's rendering is accepted, PM revises AC-191 to permit grade display via `TapeBadge`.
+3. **AC-192 revised** — Thumbnail sizing follows designer spec: 88pt standard / 64pt compact (not the current 80×80 square spec). If accepted, PM revises AC-192.
+4. **AC-131 revised** — `LogSendScreen` shows a route summary card (grade + color + section). Currently not in any AC for MOD-004. If accepted, PM adds or revises AC-131 in MOD-004 to describe the route summary card.
+5. **AC-166 revised** — Upload failure keeps the modal open with a Retry action (not close-on-error as currently spec'd). If accepted, PM revises AC-166 in MOD-005.
+6. **New AC (MOD-004)** — `AscentList` inline delete action. The backend (`deleteAscent`) already exists. If accepted, PM adds a new AC to MOD-004 for the delete affordance.
+7. **AC copy (MOD-009)** — "Report" label changed to "Report and block" (`sheetReport` key, both locale files). If accepted, PM records the copy change in MOD-009's relevant AC.
+8. **i18n key rename** — `profile-history` filter `thisYear` → `lastYear` (MOD-008 / MOD-010 locale files). If accepted and any production consumer references `thisYear`, the engineer must update those call sites. PM records the key rename in the relevant AC or as a convention note.
+
+No Doc-Sync run should occur for the design-system conventions or off-spec items until PM has applied the `[SUBSTANTIVE]` tag and at least one of the two Proposed Shared Conventions above has been accepted by the human.
+
+---
+
+**Approved (no new action needed beyond the existing PR #1 review)**:
+- The overall AppHeaderContext external-store architecture is sound (see PR #1 review Approved section above).
+- Storybook infrastructure, design token extension, and `src/components/ui/` component library placement are all structurally correct.
+- `tape-exports.ts` intent is correct; only the file's location needs changing (lift to `src/lib/tape.ts`).
 
 ### Review — 2026-10-15 — change (Rev 39: RouteCard redesign — AC-189 batched beta-count, AC-190 batched has-send, AC-046/047 wired bookmark, AC-191 hidden grade, AC-192 80×80 thumbnail)
 
