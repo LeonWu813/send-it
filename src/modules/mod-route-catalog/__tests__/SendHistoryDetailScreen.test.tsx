@@ -24,7 +24,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Alert } from 'react-native';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import SendHistoryDetailScreen from '../screens/SendHistoryDetailScreen';
-import { renderOptions } from '../test-utils';
+import { renderOptionsWithHeader as renderOptions } from '../test-utils';
 import type { AscentWithProfile } from '../../mod-send-logging';
 
 const mockFetchMyAscentsForRoute = fetchMyAscentsForRoute as jest.MockedFunction<typeof fetchMyAscentsForRoute>;

@@ -34,6 +34,7 @@ import {
   submitRoute,
   uploadRoutePhoto,
 } from '../route-service';
+import { useAppHeader, useHideTabBar } from '../../mod-home/components/AppHeaderContext';
 import { useTapeSwatch } from '../components/RouteColorBadge';
 import type { RouteColor, RouteGrade, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
@@ -69,6 +70,8 @@ export default function RouteSubmitScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, screenMargin);
+  useHideTabBar();
+  useAppHeader({ title: t('routes.submit.title'), onBack });
 
   // Form state — pre-filled from filter state if provided (AC-043)
   const [selectedGrade, setSelectedGrade] = useState<RouteGrade | null>(
@@ -243,18 +246,6 @@ export default function RouteSubmitScreen({
       contentContainerStyle={styles.contentContainer}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Back navigation */}
-      <View style={styles.backRow}>
-        <IconButton
-          name={ICON.back.outline}
-          size={24}
-          on="background"
-          onPress={onBack}
-          accessibilityLabel={t('common.back')}
-        />
-      </View>
-
-      <AppText variant="title1" style={styles.screenTitle}>{t('routes.submit.title')}</AppText>
       <AppText variant="body" color="textSecondary" style={styles.gymNameSubtitle}>{gymName}</AppText>
 
       {/* Grade chips — AC-023: V-scale only */}
@@ -456,14 +447,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       paddingTop: theme.spacing.md,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
-    },
-    backRow: {
-      alignItems: 'flex-start',
-      marginLeft: -theme.spacing.smd,
-      marginBottom: theme.spacing.xs,
-    },
-    screenTitle: {
-      marginBottom: theme.spacing.xs,
     },
     gymNameSubtitle: {
       marginBottom: theme.layout.sectionGap,

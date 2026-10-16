@@ -54,6 +54,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import RouteColorBadge from '../components/RouteColorBadge';
 import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
@@ -111,6 +112,7 @@ export default function RouteDetailScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, screenMargin);
+  const tabInset = useTabBarInset();
 
   const [route, setRoute] = useState<Route | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -272,6 +274,24 @@ export default function RouteDetailScreen({
     uploadLauncherRef.current?.();
   }
 
+  useAppHeader({
+    title: route ? formatRouteName(route.grade, route.color_tag, route.section_label, t) : '',
+    onBack,
+    trailing: route ? (
+      <IconButton
+        variant="float"
+        name={isSaved ? ICON.bookmark.filled : ICON.bookmark.outline}
+        size={24}
+        onPress={() => { void handleBookmarkToggle(); }}
+        accessibilityLabel={
+          isSaved
+            ? t('routeCatalog.bookmark.unsave')
+            : t('routeCatalog.bookmark.save')
+        }
+      />
+    ) : undefined,
+  });
+
   if (isLoading) {
     return (
       <SwipeBackWrapper onBack={onBack}>
@@ -286,15 +306,6 @@ export default function RouteDetailScreen({
     return (
       <SwipeBackWrapper onBack={onBack}>
         <View style={styles.root}>
-          <View style={styles.topBar}>
-            <IconButton
-              name={ICON.back.outline}
-              size={24}
-              on="background"
-              onPress={onBack}
-              accessibilityLabel={t('common.back')}
-            />
-          </View>
           <View style={styles.errorBlock}>
             <InlineError
               variant="block"
@@ -322,35 +333,10 @@ export default function RouteDetailScreen({
   return (
     <SwipeBackWrapper onBack={onBack} enabled={!isLogSendVisible}>
     <View style={styles.root}>
-      {/* Sticky top bar — stays fixed above the scroll area (back + bookmark). */}
-      <View style={styles.topBar}>
-        <IconButton
-          name={ICON.back.outline}
-          size={24}
-          on="background"
-          onPress={onBack}
-          accessibilityLabel={t('common.back')}
-        />
-        {/* AC-046: bookmark toggle — filled primary = saved, outline = unsaved */}
-        <IconButton
-          variant="toggle"
-          name={ICON.bookmark.outline}
-          nameOn={ICON.bookmark.filled}
-          selected={isSaved}
-          size={24}
-          on="background"
-          onPress={() => { void handleBookmarkToggle(); }}
-          accessibilityLabel={
-            isSaved
-              ? t('routeCatalog.bookmark.unsave')
-              : t('routeCatalog.bookmark.save')
-          }
-        />
-      </View>
-
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: theme.spacing.xxl + tabInset.contentBottom }]}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
 
       {/* Route photo — rendered only when a signed URL was successfully generated. */}
@@ -500,6 +486,8 @@ export default function RouteDetailScreen({
         onRegisterUploadLauncher={handleRegisterUploadLauncher}
         onUploadError={(msg) => { setUploadErrorMessage(msg); }}
         routeName={routeName}
+        routeColor={route.color_tag}
+        routeGrade={route.grade}
         gymName={gymName}
         onNavigateToUser={onNavigateToUser}
       />
@@ -520,15 +508,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
   return StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    /** Sticky top bar: back + bookmark stay visible while scrolling. 44pt IconButtons. */
-    topBar: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingHorizontal: screenMargin - theme.spacing.sm,
-      paddingBottom: theme.spacing.xs,
       backgroundColor: theme.colors.background,
     },
     scrollView: {

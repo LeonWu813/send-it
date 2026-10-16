@@ -25,16 +25,15 @@ import RouteCard from '../../../components/RouteCard';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import type { RouteCardRoute } from '../../../components/RouteCard';
 import {
-  AppText,
   Button,
   Chip,
   EmptyState,
-  IconButton,
   InlineError,
   Spinner,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import { useTapeSwatch } from '../components/RouteColorBadge';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import {
@@ -114,6 +113,8 @@ export default function RouteListScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, screenMargin);
+  const tabInset = useTabBarInset();
+  useAppHeader({ title: gymName, onBack });
 
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -315,6 +316,7 @@ export default function RouteListScreen({
       grade: item.grade,
       photo_url: item.photo_url ?? null,
       colorTag: item.color_tag,
+      section: item.section_label,
     };
 
     // RouteCard (Rev 39/40) handles bookmark icon and send badge natively via props.
@@ -421,27 +423,14 @@ export default function RouteListScreen({
   return (
     <SwipeBackWrapper onBack={onBack ?? (() => {})}>
       <View style={styles.root}>
-        {/* Screen header */}
-        <View style={styles.header}>
-          {onBack ? (
-            <IconButton
-              name={ICON.back.outline}
-              size={24}
-              on="background"
-              onPress={onBack}
-              accessibilityLabel={t('common.back')}
-            />
-          ) : null}
-          <AppText variant="title2" numberOfLines={1} style={styles.screenTitle}>{gymName}</AppText>
-        </View>
-
         <FlatList
           data={sortedRoutes}
           keyExtractor={(item) => item.id}
           renderItem={renderRouteCard}
           ListHeaderComponent={listHeader}
           ListFooterComponent={addRouteCta}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabInset.contentBottom || theme.spacing.md }]}
+          scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <EmptyState variant="filtered" title={t('routeCatalog.noResults')} />
@@ -489,17 +478,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       alignItems: 'center',
       justifyContent: 'center',
       paddingHorizontal: screenMargin,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingLeft: screenMargin - theme.spacing.sm,
-      paddingRight: screenMargin,
-      paddingBottom: theme.spacing.xs,
-      gap: theme.spacing.xs,
-    },
-    screenTitle: {
-      flex: 1,
     },
     filterBlock: {
       paddingBottom: theme.spacing.xs,

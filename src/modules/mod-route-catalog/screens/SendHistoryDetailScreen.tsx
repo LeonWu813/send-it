@@ -33,6 +33,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import type { AscentWithProfile } from '../../mod-send-logging';
 
@@ -50,6 +51,8 @@ export default function SendHistoryDetailScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, screenMargin);
+  const tabInset = useTabBarInset();
+  useAppHeader({ title: t('routeCatalog.detail.sendHistoryTitle'), onBack });
 
   const [ascents, setAscents] = useState<AscentWithProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,22 +110,6 @@ export default function SendHistoryDetailScreen({
   return (
     <SwipeBackWrapper onBack={onBack}>
     <View style={styles.root}>
-      {/* Sticky top bar */}
-      <View style={styles.topBar}>
-        <IconButton
-          name={ICON.back.outline}
-          size={24}
-          on="background"
-          onPress={onBack}
-          accessibilityLabel={t('common.back')}
-        />
-        <AppText variant="headline" align="center" style={styles.title}>
-          {t('routeCatalog.detail.sendHistoryTitle')}
-        </AppText>
-        {/* Spacer to center the title (matches the 44pt back button) */}
-        <View style={styles.titleSpacer} />
-      </View>
-
       {isLoading ? (
         <View style={styles.centeredContainer}>
           <Spinner />
@@ -139,7 +126,8 @@ export default function SendHistoryDetailScreen({
       ) : (
         <ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: theme.spacing.xxl + tabInset.contentBottom }]}
+          scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         >
           {ascents.length === 0 ? (
             <AppText variant="body" color="textSecondary" align="center" style={styles.emptyText}>
@@ -194,19 +182,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
-    },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      paddingHorizontal: screenMargin - theme.spacing.sm,
-      paddingBottom: theme.spacing.xs,
-      backgroundColor: theme.colors.background,
-    },
-    title: {
-      flex: 1,
-    },
-    titleSpacer: {
-      width: theme.layout.minTouchTarget,
     },
     centeredContainer: {
       flex: 1,
