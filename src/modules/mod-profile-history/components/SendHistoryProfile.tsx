@@ -19,6 +19,7 @@
 import React from 'react';
 
 import ProfileHistoryScreen from '../screens/ProfileHistoryScreen';
+import type { ForwardedScrollProps } from '../screens/ProfileHistoryScreen';
 
 interface SendHistoryProfileProps {
   /** UUID of the user whose history to display. */
@@ -50,6 +51,12 @@ interface SendHistoryProfileProps {
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
   /** Primary action of the zero-records prompt ("Find routes"). */
   onLogSend?: () => void;
+  /**
+   * Pass-through to the internal Animated.FlatList: onScroll, onContentSizeChange, onLayout,
+   * scrollEventThrottle, contentContainerStyle, scrollIndicatorInsets (spread useAppHeaderRoot()).
+   * Caller padding in contentContainerStyle overrides the built-in TabBar inset.
+   */
+  scrollProps?: ForwardedScrollProps;
 }
 
 /**
@@ -66,6 +73,7 @@ export default function SendHistoryProfile({
   listFooterComponent,
   onNavigateToRoute,
   onLogSend,
+  scrollProps,
 }: SendHistoryProfileProps): React.JSX.Element {
   return (
     <ProfileHistoryScreen
@@ -76,6 +84,7 @@ export default function SendHistoryProfile({
       extraListFooter={listFooterComponent}
       onNavigateToRoute={onNavigateToRoute}
       onLogSend={onLogSend}
+      scrollProps={scrollProps}
     />
   );
 }

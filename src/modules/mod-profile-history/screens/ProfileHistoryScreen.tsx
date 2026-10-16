@@ -20,7 +20,8 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FlatList, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, ScrollView, StyleSheet, View } from 'react-native';
+import type { FlatListProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SharedRouteCard from '../../../components/RouteCard';
@@ -39,6 +40,17 @@ import type { HistoryAscent, HistoryVisibility, ProfileStats } from '../types';
 import { GRADE_ORDER } from '../types';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+/** Scroll props forwarded to the list (e.g. the AppShell `useAppHeaderRoot()` binding). */
+export type ForwardedScrollProps = Pick<
+  FlatListProps<unknown>,
+  | 'onScroll'
+  | 'onContentSizeChange'
+  | 'onLayout'
+  | 'scrollEventThrottle'
+  | 'contentContainerStyle'
+  | 'scrollIndicatorInsets'
+>;
 
 interface ProfileHistoryScreenProps {
   /** UUID of the user whose history is being displayed. */
@@ -71,6 +83,8 @@ interface ProfileHistoryScreenProps {
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
   /** Primary action of the zero-records prompt ("Find routes"). Omitted -> the prompt has no button. */
   onLogSend?: () => void;
+  /** Optional pass-through scroll props. Caller padding in contentContainerStyle overrides the TabBar inset. */
+  scrollProps?: ForwardedScrollProps;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -83,6 +97,7 @@ export default function ProfileHistoryScreen({
   extraListFooter,
   onNavigateToRoute,
   onLogSend,
+  scrollProps,
 }: ProfileHistoryScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -240,10 +255,15 @@ export default function ProfileHistoryScreen({
   );
 
   return (
-    <FlatList
+    <Animated.FlatList
+      {...scrollProps}
       style={styles.root}
-      contentContainerStyle={[styles.contentContainer, tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom }]}
-      scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
+      contentContainerStyle={[
+        styles.contentContainer,
+        tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom },
+        scrollProps?.contentContainerStyle,
+      ]}
+      scrollIndicatorInsets={scrollProps?.scrollIndicatorInsets ?? { bottom: tabInset.indicatorBottom }}
       data={filtered}
       keyExtractor={(item) => item.route_id}
       renderItem={({ item }) => {
