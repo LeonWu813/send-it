@@ -97,7 +97,7 @@
       "viewRoutes": "View Routes"
     },
     "requestGym": {
-      "cta": "Can't find your gym? Request it →",
+      "cta": "Can't find your gym? Request it",
       "title": "Request a Gym",
       "subtitle": "Let us know about a gym we haven't added yet. Requests are reviewed by our team.",
       "nameLabel": "Gym Name",
@@ -142,8 +142,10 @@
       "purple": "Purple",
       "pink": "Pink",
       "white": "White",
-      "black": "Black"
+      "black": "Black",
+      "other": "Other"
     },
+    "tapeLabel": "{{color}} tape",
     "bookmark": {
       "save": "Save route",
       "unsave": "Unsave route",
@@ -238,13 +240,15 @@
     "selectRoute": "Select a Route",
     "grade": "GRADE",
     "gradeNote": "Grade comes from the route — not editable.",
-    "style": "STYLE",
-    "attempts": "ATTEMPTS",
+    "style": "Style",
+    "attempts": "Attempts",
     "attemptsFlashHint": "Flash = 1 attempt only.",
+    "attemptsDescription": "From your first try to the send",
+    "attemptsFlashLocked": "Flash is fixed at 1",
     "attemptsCount": "{{count}} attempt",
     "attemptsCount_other": "{{count}} attempts",
-    "date": "DATE",
-    "note": "NOTE (private to you)",
+    "date": "Date",
+    "note": "Note (private to you)",
     "notePlaceholder": "Optional notes for yourself…",
     "private": "Private",
     "privateDescription": "Hide this send from other climbers.",
@@ -262,8 +266,15 @@
     "errors": {
       "saveFailed": "Failed to save your send. Please check your connection and try again.",
       "loadFailed": "Failed to load sends. Please try again.",
-      "routeSearchFailed": "Failed to search routes. Please try again."
-    }
+      "routeSearchFailed": "Failed to search routes. Please try again.",
+      "deleteFailed": "Failed to delete your send. Please try again."
+    },
+    "deleted": "Deleted",
+    "loading": "Loading sends",
+    "searching": "Searching routes",
+    "logged": "Logged: {{style}}",
+    "noteMore": "More",
+    "deleteLabel": "Delete {{date}} {{style}} send"
   },
   "home": {
     "banner": {
@@ -288,7 +299,8 @@
       "title": "Projecting",
       "allGrades": "All",
       "empty": "Save a route to track your projects.",
-      "emptyFiltered": "No projecting routes at this grade."
+      "emptyFiltered": "No projecting routes at this grade.",
+      "bookmarkFailed": "Couldn't update your saved routes. Try again."
     },
     "followingActivity": {
       "title": "Following Activity",
@@ -313,12 +325,17 @@
     "saved": "Saved",
     "unsaved": "Save",
     "flashSend": "Flash",
-    "topSend": "Top"
+    "topSend": "Top",
+    "openHint": "Open route",
+    "statusFlash": "Flashed",
+    "statusTop": "Sent",
+    "saveAction": "Save",
+    "unsaveAction": "Remove from saved"
   },
   "betaVideo": {
     "sectionTitle": "BETA VIDEOS",
     "addVideo": "Add Beta Video",
-    "noVideos": "No beta videos yet — be the first to share your technique!",
+    "noVideos": "No one has shared beta yet.",
     "myVideos": "My Beta Videos",
     "noVideosYet": "No beta videos yet",
     "uploading": "Uploading…",
@@ -330,7 +347,7 @@
     "replaceConfirmOk": "Replace",
     "replaceConfirmCancel": "Cancel",
     "grid": {
-      "openVideo": "Open video"
+      "openVideo": "Play beta video, {{index}} of {{total}}"
     },
     "player": {
       "play": "Play beta video",
@@ -343,7 +360,8 @@
       "report": "Report",
       "reported": "Reported",
       "reportError": "Could not report. Try again.",
-      "anonymous": "Anonymous"
+      "anonymous": "Anonymous",
+      "likeLabel": "Like, {{count}} likes"
     },
     "userVideos": "Beta Videos",
     "errors": {
@@ -354,7 +372,12 @@
       "permissionDenied": "Photo library access is required to select a video.",
       "videoTooLargeAfterCompression": "Video is too large, please keep it under 45 MB.",
       "videoTooLargeForStorage": "Video is too large. Please trim it and try again."
-    }
+    },
+    "emptyUpload": "Upload beta",
+    "loadingVideos": "Loading beta videos",
+    "uploadingHint": "Please stay on this screen until the upload finishes.",
+    "uploadFailedTitle": "Upload failed",
+    "uploadInterrupted": "Upload was interrupted. Your video is still here."
   },
   "socialFeed": {
     "title": "Activity Feed",
@@ -376,12 +399,16 @@
       "loadFailed": "Failed to load activity feed. Please try again.",
       "profileLoadFailed": "Failed to load profile. Please try again.",
       "followFailed": "Failed to update follow status. Please try again."
+    },
+    "moreOptions": "More options",
+    "menu": {
+      "actionFailed": "Didn't go through. Try again."
     }
   },
   "notifications": {
     "title": "Notifications",
     "empty": "No notifications yet. Like activity from others will appear here.",
-    "badgeBetaVideoLike": "♥ Like",
+    "badgeBetaVideoLike": "Like",
     "betaVideoLikedBody": "liked your beta video.",
     "betaVideoLikeA11y": "Beta video like notification",
     "unknownActor": "Someone",
@@ -401,8 +428,31 @@
       "accumulatedDays": "Days Climbed",
       "highestGrade": "Top Grade",
       "noGrade": "—",
-      "chartTitle": "SENDS BY GRADE",
-      "chartA11y": "Bar chart showing send count per grade"
+      "chartTitle": "Sends by Grade",
+      "chartA11y": "Bar chart showing send count per grade",
+      "highestBadge": "Highest",
+      "barA11y": "{{grade}}, {{count}} send",
+      "barA11y_other": "{{grade}}, {{count}} sends",
+      "barA11yHighest": "{{grade}}, {{count}} send, highest grade",
+      "barA11yHighest_other": "{{grade}}, {{count}} sends, highest grade",
+      "emptyBody": "Log a send and your stats will show up here.",
+      "chartTotal": "Total",
+      "heroSends": "{{count}} send",
+      "unitTimes": "times",
+      "unitDays": "days",
+      "noSendsTitle": "No sends yet",
+      "noSendsBody": "Your top grade will show here once you send.",
+      "heroA11y": "Top grade {{grade}}, {{count}} send",
+      "sendsA11y": "{{count}} send",
+      "daysA11y": "Days climbed, {{count}} day",
+      "promptEyebrow": "First record",
+      "promptTitle": "Which route did you climb? Log it.",
+      "promptBody": "Find the route at the gym and tap Log send. Your top grade and stats start from here.",
+      "promptAction": "Find routes",
+      "heroSends_other": "{{count}} sends",
+      "sendsA11y_other": "{{count}} sends",
+      "heroA11y_other": "Top grade {{grade}}, {{count}} sends",
+      "daysA11y_other": "Days climbed, {{count}} days"
     },
     "filter": {
       "gym": "Gym",
@@ -420,7 +470,7 @@
       "last7Days": "Last 7 Days",
       "last30Days": "Last 30 Days",
       "last90Days": "Last 90 Days",
-      "thisYear": "This Year"
+      "lastYear": "Last Year"
     },
     "empty": "No sends recorded yet.",
     "hiddenTitle": "Profile is Private",
@@ -433,9 +483,11 @@
     "reportUser": "Report User",
     "blockUser": "Block User",
     "unblockUser": "Unblock User",
+    "blockedNotice": "You blocked {{name}}",
+    "blockedNoticeGeneric": "You blocked this user",
     "unblock": "Unblock",
     "noBlockedAccounts": "No blocked accounts",
-    "sheetReport": "Report",
+    "sheetReport": "Report and block",
     "sheetBlock": "Block",
     "sheetUnblock": "Unblock",
     "sheetCancel": "Cancel",
@@ -443,7 +495,7 @@
     "reportConfirmation": "User reported and blocked",
     "report": {
       "title": "Report User",
-      "category": "Category",
+      "category": "Reason for report",
       "categories": {
         "inappropriate": "Inappropriate",
         "spam": "Spam",
@@ -453,15 +505,20 @@
       "note": "Additional note (optional)",
       "submit": "Submit Report",
       "cancel": "Cancel",
-      "confirmation": "Report submitted. Thank you.",
-      "error": "Failed to submit report. Please try again."
+      "confirmation": "Report received. Thank you.",
+      "error": "Not sent. What you wrote is still here.",
+      "notePlaceholder": "e.g. Keeps posting ads in comments",
+      "notice": "We'll review this account after you submit. This won't block them; to block, use Block.",
+      "pickReason": "Pick a reason first"
     },
     "block": {
       "confirmBlock": "Block this user?",
       "blocked": "User blocked.",
       "unblocked": "User unblocked.",
-      "error": "Action failed. Please try again."
-    }
+      "error": "Action failed. Please try again.",
+      "confirmBody": "You'll stop seeing each other's content. You can unblock any time."
+    },
+    "sheetReportHint": "We'll review this account, and you'll stop seeing each other's content right away."
   },
   "common": {
     "loading": "Loading…",
@@ -472,5 +529,39 @@
     "save": "Save",
     "done": "Done",
     "back": "Back"
+  },
+  "ui": {
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "loading": "Loading",
+    "sheet": "Panel",
+    "celebrationDismiss": "Dismiss celebration",
+    "sendStyle": {
+      "top": "Send",
+      "flash": "Flash",
+      "attempt": "Attempt",
+      "attemptWithCount": "Attempt ×{{count}}",
+      "group": "Send style"
+    },
+    "fieldError": "{{label}}, error: {{error}}",
+    "readOnly": "{{label}}, {{value}}, read only",
+    "showPassword": "Show password",
+    "clearText": "Clear",
+    "toastWithActions": "{{message}}. Actions available: {{actions}}",
+    "avatarOf": "{{name}}'s avatar",
+    "progress": "Progress",
+    "stepper": {
+      "done": "Done",
+      "enterNumber": "Enter a number",
+      "decrease": "Decrease",
+      "increase": "Increase",
+      "announceLocked": "{{label}} fixed at {{value}}",
+      "lockedValue": "{{label}}, {{value}}, {{reason}}, cannot be changed"
+    }
+  },
+  "tabs": {
+    "home": "Home",
+    "gyms": "Gyms",
+    "profile": "Profile"
   }
 }

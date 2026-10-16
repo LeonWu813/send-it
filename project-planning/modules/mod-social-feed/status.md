@@ -14,6 +14,16 @@
 **AC-186 + cleanup commit**: pending — `feat(mod-social-feed): AC-186 — get_like_info_batch RPC and service wrapper; remove AC-123/124 refs`
 **Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup); 2026-10-15 (AC-185 SwipeBackWrapper wiring)
 
+### Design system v2.2 migration (2026-10-16) - off-spec design work, pending PR review
+
+Visual/structure only, no behaviour change (follow/unfollow, AC-150/151/152/153 sheet and block logic untouched).
+- `UserProfileScreen`: removed the screen-drawn back button/row (AppShell `nested` AppHeader, §30, owns back; swipe-back unchanged); the "..." IconButton stays in a right-aligned row. Profile header is now a `Card` (Avatar `lg` 64 with initials fallback, `title3` name, `footnote` bio, counts, Follow capsule `md`; Following stays text-only `secondary`). Chart title and video section title use `pageSection`; bar radii use `theme.radius.full`. "..." menu already a `list-single` BottomSheet (§32.10).
+- `FollowersListScreen` / `FollowingListScreen`: removed back/title nav bar; rows use `ListRow variant="content"` (min 52).
+- `FeedScreen`: unchanged (compiles).
+- Test: replaced "calls onBack when back button is pressed" with "draws no back row of its own".
+- Not done: no block `destructiveTonal` button added (this screen has no block button, only the "..." menu rows; adding one would be a behaviour change). FeedScreen still uses deprecated `sectionHeader` alias inside cards.
+- Dependency: back + title now rely on engineer-mod-home's AppShell nested AppHeader for the profile/followers/following overlays.
+
 ### AC-163 Bug Fix — BetaVideoGrid privacy gate (2026-10-13, QA Run 4)
 
 **Bug**: `BetaVideoGrid` rendered unconditionally for any non-blocked profile, including `followers_only` profiles viewed by non-followers. `fetchBetaVideosByUser` applies no follower-relationship gate server-side. A non-follower viewing a `followers_only` profile saw the full video grid instead of the hidden/403 state per AC-064.
@@ -949,3 +959,7 @@ Safe-area inset removal touches only the `useSafeAreaInsets()` call and the `mak
 **Overall verdict: PASS** — the safe-area fix is correct and introduced no regressions. The screen test suite failures are a pre-existing test-infrastructure issue (missing `@react-native-async-storage/async-storage` Jest mock, introduced by commit `8d4c6e4` which post-dates the safe-area fix). Route to engineer to add the AsyncStorage mock to the Jest configuration.
 
 **MOD-006 FollowersListScreen/FollowingListScreen safe-area fix — QA PASS.**
+
+## Design System v1.2 Migration (off-spec design work, pending PR review)
+
+Visual-only migration of FeedScreen (dead code), UserProfileScreen, FollowersListScreen, FollowingListScreen to `ui/` (AppText, Avatar, Button, IconButton, ListRow, BottomSheet `list-single`, Card, EmptyState, InlineError, Spinner), theme tokens, `ICON`, `useLayout().screenMargin`, 44pt targets. Follow button: primary; "Following" is a text-only secondary Button (a11y label stays "Unfollow"). The "..." menu is now a BottomSheet `list-single` with `ellipsis-horizontal` trigger; "Report and block" keeps one-tap behaviour and shows `moderation.sheetReportHint`; cancel row removed (sheet close button). Sheet errors now show translated `socialFeed.menu.actionFailed`. Locale keys added: `socialFeed.moreOptions`, `socialFeed.menu.actionFailed`. Not done: success toast "Reported and blocked {name}" (needs ToastProvider; avoided to keep no behaviour change). Tests 60/60, tsc clean for this module.

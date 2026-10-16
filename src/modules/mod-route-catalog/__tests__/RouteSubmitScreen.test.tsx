@@ -116,7 +116,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
 
     const colorLabels = [
-      'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'white', 'black',
+      'Red', 'Orange', 'Yellow', 'Green', 'Blue', 'Purple', 'Pink', 'White', 'Black',
     ];
     for (const color of colorLabels) {
       const found = screen.queryAllByText(color);
@@ -138,7 +138,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       (el) => el.props.accessibilityLabel === 'V4',
     );
     expect(v4Chip).toBeTruthy();
-    expect(v4Chip?.props.accessibilityState?.selected).toBe(true);
+    expect(v4Chip?.props.accessibilityState?.checked).toBe(true);
   });
 
   it('pre-selects the color chip when initialColorTag prop is provided (AC-043)', () => {
@@ -149,10 +149,10 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
 
     const colorChips = screen.queryAllByRole('radio');
     const greenChip = colorChips.find(
-      (el) => el.props.accessibilityLabel === 'green',
+      (el) => el.props.accessibilityLabel === 'Green',
     );
     expect(greenChip).toBeTruthy();
-    expect(greenChip?.props.accessibilityState?.selected).toBe(true);
+    expect(greenChip?.props.accessibilityState?.checked).toBe(true);
   });
 
   it('opens with no chip pre-selected when no initialGrade/initialColorTag provided (AC-043)', () => {
@@ -160,7 +160,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
 
     const radioChips = screen.queryAllByRole('radio');
     const anySelected = radioChips.some(
-      (el) => el.props.accessibilityState?.selected === true,
+      (el) => el.props.accessibilityState?.checked === true,
     );
     expect(anySelected).toBe(false);
   });
@@ -178,12 +178,12 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     const v5Chip = gradeChips.find(
       (el) => el.props.accessibilityLabel === 'V5',
     );
-    expect(v5Chip?.props.accessibilityState?.selected).toBe(true);
+    expect(v5Chip?.props.accessibilityState?.checked).toBe(true);
 
     const v4Chip = gradeChips.find(
       (el) => el.props.accessibilityLabel === 'V4',
     );
-    expect(v4Chip?.props.accessibilityState?.selected).toBe(false);
+    expect(v4Chip?.props.accessibilityState?.checked).toBe(false);
   });
 
   // ── AC-021: validation — photo required ───────────────────────────────────
@@ -211,7 +211,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
 
     // Select grade + color
     fireEvent.press(screen.getByText('V3'));
-    fireEvent.press(screen.getAllByText('red')[0]);
+    fireEvent.press(screen.getAllByText('Red')[0]);
 
     const addRouteBtn = screen.queryAllByRole('button').find(
       (el) =>
@@ -232,7 +232,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
 
     // Only select color — no grade
-    fireEvent.press(screen.getAllByText('blue')[0]);
+    fireEvent.press(screen.getAllByText('Blue')[0]);
 
     const addRouteBtn = screen.queryAllByRole('button').find(
       (el) =>
@@ -362,7 +362,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
 
     // Select grade, color, pick photo
     fireEvent.press(screen.getByText('V3'));
-    fireEvent.press(screen.getAllByText('red')[0]);
+    fireEvent.press(screen.getAllByText('Red')[0]);
 
     const chooseBtn = screen.queryAllByRole('button').find(
       (el) =>
@@ -441,7 +441,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
 
     // Select V3 grade and red color — matches the existing active route
     fireEvent.press(screen.getByText('V3'));
-    fireEvent.press(screen.getAllByText('red')[0]);
+    fireEvent.press(screen.getAllByText('Red')[0]);
 
     await waitFor(() => {
       // Inline notice title should appear (not an Alert modal)
@@ -468,7 +468,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
 
     fireEvent.press(screen.getByText('V4'));
-    fireEvent.press(screen.getAllByText('blue')[0]);
+    fireEvent.press(screen.getAllByText('Blue')[0]);
 
     await waitFor(() => {
       const notice = screen.queryByText(/Possible Duplicate|可能重複/);
@@ -494,7 +494,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
 
     // First select V3 red — notice should appear
     fireEvent.press(screen.getByText('V3'));
-    fireEvent.press(screen.getAllByText('red')[0]);
+    fireEvent.press(screen.getAllByText('Red')[0]);
 
     await waitFor(() => {
       expect(screen.queryByText(/Possible Duplicate|可能重複/)).toBeTruthy();

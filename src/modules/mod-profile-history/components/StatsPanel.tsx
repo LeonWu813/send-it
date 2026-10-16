@@ -1,98 +1,373 @@
 /**
- * StatsPanel — displays aggregate send stats for a profile.
+ * StatsPanel — aggregate send stats for a profile (design system v2.2, spec §32.5).
  *
- * Renders:
- *   - Total sends, current streak, highest grade (summary row)
- *   - Sends-by-grade bar chart (horizontal bars, V-scale ordered)
+ * Data: existing `ProfileStats` fields only (total_sends, sends_by_grade, accumulated_days,
+ * highest_grade). The hero shows "N sends at the top grade", never a date.
  *
- * Props:
- *   stats — ProfileStats object from fetchProfileStats.
+ * Layout: tinted hero tile (`display` top grade) + two static tiles (`numeric1` + half-size `unit`)
+ * + a distribution card (6pt bars on `surfaceAlt` tracks; neutral `outline` fill, only the top-grade
+ * row uses `sendTop` and carries the "Highest" pill in the grade column).
  *
- * Uses theme tokens only — no hardcoded colors or spacing.
+ * States: normal, attempts-only (total_sends = 0 but records exist: structure kept, no button),
+ * zero records (`hasRecords = false`: ONE EmptyState `prompt`).
+ *
+ * Motion D7: displacement reveal. The fill has its final width inside an `overflow: hidden` capsule
+ * track and `translateX` runs -W -> 0 (native driver), so the head stays round. `medium` + `enter`,
+ * stagger 30, at most 7 steps (<= 510ms), top row last with `settle`. Once per session. Reduce
+ * Motion: bars are final, the distribution card fades in over `short`.
+ *
+ * Tokens only: no hex, font sizes or radii.
  */
 
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { useTheme } from '../../../lib/theme';
+import { AppText, Card, EmptyState } from '../../../components/ui';
+import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
+import { useLayout, useTheme } from '../../../lib/theme';
 import type { ProfileStats } from '../types';
+import { GRADE_ORDER } from '../types';
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-/** Minimum bar width (px) so zero-count bars are still visible as a hairline. */
-const BAR_MIN_WIDTH = 2;
-/** Fixed height of each grade bar row. */
-const BAR_ROW_HEIGHT = 24;
-/** Maximum bar track width — the bar fills proportionally within this. */
-const BAR_TRACK_WIDTH = 160;
+/** Stagger steps: the 8th row onward start with the 8th (30 x 7 + 300 = 510ms). */
+const MAX_STAGGER_STEPS = 7;
+/** AX threshold (spec: fontScale >= 1.6). */
+const AX_FONT_SCALE = 1.6;
+/** Distribution row layout (spec 32.5). */
+const ROW_HEIGHT = 30;
+const GRADE_COL_WIDTH = 72;
+const COUNT_COL_WIDTH = 26;
+const COL_GAP = 12;
+/** Hero : small tile ratio on wide screens. */
+const HERO_FLEX = 1.1;
+
+/** Bars animate once per app session. */
+let barsPlayed = false;
+
+/** Test / story helper: lets the bar reveal play again. */
+export function resetStatsBarAnimation(): void {
+  barsPlayed = false;
+}
+
+// ── Bar ────────────────────────────────────────────────────────────────────────
+
+interface BarProps {
+  ratio: number;
+  highest: boolean;
+  zero: boolean;
+  order: number;
+  play: boolean;
+}
+
+function Bar({ ratio, highest, zero, order, play }: BarProps): React.JSX.Element {
+  const { theme } = useTheme();
+  const { duration, spring, reduceMotion } = useMotion();
+  const animate = play && !reduceMotion && !zero;
+  const reveal = useRef(new Animated.Value(animate ? 0 : 1)).current;
+  const [trackW, setTrackW] = useState(0);
+  const started = useRef(false);
+  const c = theme.colors;
+  const height = theme.componentSize.statsBarHeight;
+
+  useEffect(() => {
+    if (!animate || trackW === 0 || started.current) return;
+    started.current = true;
+    const delay = Math.min(order, MAX_STAGGER_STEPS) * duration.stagger;
+    const anim = highest
+      ? Animated.spring(reveal, {
+          toValue: 1,
+          ...spring.settle,
+          ...SPRING_REST,
+          overshootClamping: true,
+          delay,
+          useNativeDriver: USE_NATIVE_DRIVER,
+        })
+      : Animated.timing(reveal, {
+          toValue: 1,
+          delay,
+          duration: duration.medium,
+          easing: bezierFor('enter'),
+          useNativeDriver: USE_NATIVE_DRIVER,
+        });
+    // No cleanup: React strict-mode's double effect would stop it and `started` blocks a restart.
+    anim.start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [animate, trackW]);
+
+  const fillW = trackW * ratio;
+
+  return (
+    <View
+      onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
+      style={{
+        flex: 1,
+        height,
+        borderRadius: theme.radius.full,
+        backgroundColor: c.surfaceAlt,
+        overflow: 'hidden',
+      }}
+    >
+      {zero ? (
+        // 0 sends: a 6x6 `outline` starting dot on the track, no animation.
+        <View style={{ width: height, height, borderRadius: theme.radius.full, backgroundColor: c.outline }} />
+      ) : trackW > 0 ? (
+        <Animated.View
+          style={{
+            width: fillW,
+            height,
+            borderRadius: theme.radius.full,
+            backgroundColor: highest ? c.sendTop : c.outline,
+            transform: [{ translateX: reveal.interpolate({ inputRange: [0, 1], outputRange: [-fillW, 0] }) }],
+          }}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+// ── Tile number + unit ─────────────────────────────────────────────────────────
+
+/** Number (numeric1) + half-size unit. Same row; at AX the unit wraps below, it is never dropped. */
+function NumberUnit({ value, unit }: { value: number; unit: string }): React.JSX.Element {
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 4 }}>
+      <AppText variant="numeric1" numeric>
+        {String(value)}
+      </AppText>
+      <AppText variant="headline" weight="400" color="textSecondary">
+        {unit}
+      </AppText>
+    </View>
+  );
+}
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 interface StatsPanelProps {
   stats: ProfileStats;
+  /**
+   * False when the user has no ascent records at all (not even attempts): the whole panel becomes one
+   * EmptyState `prompt`. Default true (total_sends = 0 then means "attempts only").
+   */
+  hasRecords?: boolean;
+  /** The single primary action of the zero-records prompt ("Find routes"). Omitted -> no button. */
+  onLogSend?: () => void;
 }
 
-export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Element {
+export default function StatsPanel({
+  stats,
+  hasRecords = true,
+  onLogSend,
+}: StatsPanelProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { fontScale, width } = useWindowDimensions();
+  const { duration, reduceMotion } = useMotion();
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, screenMargin);
+  const ax = fontScale >= AX_FONT_SCALE;
+  const narrow = width < theme.layout.compactWidthBreakpoint;
+  const c = theme.colors;
 
-  const maxCount = Math.max(...stats.sends_by_grade.filter((g) => g.count > 0).map((g) => g.count), 1);
+  // Only the first mounted panel of the session plays the reveal.
+  const play = useRef(!barsPlayed).current;
+  useEffect(() => {
+    if (stats.total_sends > 0) barsPlayed = true;
+  }, [stats.total_sends]);
+
+  // Reduce Motion: the distribution card fades in instead.
+  const fade = useRef(new Animated.Value(play && reduceMotion ? 0 : 1)).current;
+  useEffect(() => {
+    if (!(play && reduceMotion) || stats.total_sends === 0) return;
+    Animated.timing(fade, {
+      toValue: 1,
+      duration: duration.short,
+      easing: bezierFor('enter'),
+      useNativeDriver: USE_NATIVE_DRIVER,
+    }).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduceMotion]);
+
+  if (!hasRecords) {
+    return (
+      <View style={styles.container}>
+        <EmptyState
+          variant="prompt"
+          eyebrow={t('profileHistory.stats.promptEyebrow')}
+          title={t('profileHistory.stats.promptTitle')}
+          description={t('profileHistory.stats.promptBody')}
+          primaryLabel={onLogSend ? t('profileHistory.stats.promptAction') : undefined}
+          onPrimary={onLogSend}
+        />
+      </View>
+    );
+  }
+
+  const attemptsOnly = stats.total_sends === 0;
+
+  const countOf = (grade: string): number =>
+    stats.sends_by_grade.find((g) => g.grade === grade)?.count ?? 0;
+  const summaryTop = GRADE_ORDER.indexOf(stats.highest_grade as (typeof GRADE_ORDER)[number]);
+  const topIndex =
+    summaryTop >= 0
+      ? summaryTop
+      : Math.max(...GRADE_ORDER.map((g, i) => (countOf(g) > 0 ? i : -1)));
+  const v0Index = GRADE_ORDER.indexOf('V0');
+  // V0 .. highest are always shown (zero = 6pt dot); VB only when it has sends.
+  const rows = GRADE_ORDER.map((grade, i) => ({ grade, i, count: countOf(grade) })).filter(
+    ({ i, count }) => count > 0 || (i >= v0Index && i <= topIndex),
+  );
+  const maxCount = Math.max(...rows.map((r) => r.count), 1);
+  const topCount = topIndex >= 0 ? countOf(GRADE_ORDER[topIndex]) : 0;
+  const topGrade = stats.highest_grade ?? t('profileHistory.stats.noGrade');
+
+  // ── Hero ───────────────────────────────────────────────────────────────────
+  const hero = (
+    <Card
+      variant="tinted"
+      style={[
+        styles.hero,
+        { flex: ax ? undefined : narrow ? 1 : HERO_FLEX },
+        ax ? { alignSelf: 'stretch' } : null,
+      ]}
+    >
+      <View
+        style={styles.heroInner}
+        accessible
+        accessibilityLabel={
+          attemptsOnly
+            ? `${t('profileHistory.stats.highestGrade')}, ${t('profileHistory.stats.noSendsTitle')}`
+            : t('profileHistory.stats.heroA11y', { grade: topGrade, count: topCount })
+        }
+      >
+        <AppText variant="subhead" weight="600" color="onPrimaryContainer">
+          {t('profileHistory.stats.highestGrade')}
+        </AppText>
+        {attemptsOnly ? (
+          <View style={styles.heroBottom}>
+            <AppText variant="title2" color="onPrimaryContainer">
+              {t('profileHistory.stats.noSendsTitle')}
+            </AppText>
+            <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
+              {t('profileHistory.stats.noSendsBody')}
+            </AppText>
+          </View>
+        ) : (
+          <View style={styles.heroBottom}>
+            <AppText variant="display" numeric color="onPrimaryContainer">
+              {topGrade}
+            </AppText>
+            <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
+              {t('profileHistory.stats.heroSends', { count: topCount })}
+            </AppText>
+          </View>
+        )}
+      </View>
+    </Card>
+  );
+
+  // ── Small tiles ────────────────────────────────────────────────────────────
+  const tile = (
+    key: string,
+    label: string,
+    value: number,
+    unit: string,
+    a11y: string,
+  ): React.JSX.Element => (
+    <Card key={key} variant="static" padding={0} style={styles.tile}>
+      <View style={styles.tileInner} accessible accessibilityLabel={a11y}>
+        <AppText variant="footnote" weight="600" color="textSecondary">
+          {label}
+        </AppText>
+        <NumberUnit value={value} unit={unit} />
+      </View>
+    </Card>
+  );
+
+  const tiles = [
+    tile(
+      'sends',
+      t('profileHistory.stats.totalSends'),
+      stats.total_sends,
+      t('profileHistory.stats.unitTimes'),
+      t('profileHistory.stats.sendsA11y', { count: stats.total_sends }),
+    ),
+    tile(
+      'days',
+      t('profileHistory.stats.accumulatedDays'),
+      stats.accumulated_days,
+      t('profileHistory.stats.unitDays'),
+      t('profileHistory.stats.daysA11y', { count: stats.accumulated_days }),
+    ),
+  ];
 
   return (
     <View style={styles.container}>
-      {/* ── Summary row ──────────────────────────────────────────────────── */}
-      <View style={styles.summaryRow}>
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.total_sends}</Text>
-          <Text style={styles.statLabel}>{t('profileHistory.stats.totalSends')}</Text>
-        </View>
-
-        <View style={styles.statDivider} />
-
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>{stats.accumulated_days}</Text>
-          <Text style={styles.statLabel}>{t('profileHistory.stats.accumulatedDays')}</Text>
-        </View>
-
-        <View style={styles.statDivider} />
-
-        <View style={styles.statItem}>
-          <Text style={styles.statValue}>
-            {stats.highest_grade ?? t('profileHistory.stats.noGrade')}
-          </Text>
-          <Text style={styles.statLabel}>{t('profileHistory.stats.highestGrade')}</Text>
-        </View>
-      </View>
-
-      {/* ── Bar chart — only shown when there are sends ─────────────────── */}
-      {stats.total_sends > 0 && (
+      {ax ? (
         <>
-          <Text style={styles.chartTitle}>{t('profileHistory.stats.chartTitle')}</Text>
-          <View style={styles.chart} accessibilityLabel={t('profileHistory.stats.chartA11y')}>
-            {stats.sends_by_grade.filter(({ count }) => count > 0).map(({ grade, count }) => {
-              const barWidth = Math.max(
-                BAR_MIN_WIDTH,
-                Math.round((count / maxCount) * BAR_TRACK_WIDTH),
-              );
-              return (
-                <View key={grade} style={styles.barRow}>
-                  <Text style={styles.gradeLabel}>{grade}</Text>
-                  <View style={styles.barTrack}>
-                    <View
-                      style={[
-                        styles.bar,
-                        { width: barWidth },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.barCount}>{count}</Text>
-                </View>
-              );
-            })}
-          </View>
+          {hero}
+          <View style={styles.row}>{tiles}</View>
         </>
+      ) : (
+        <View style={styles.row}>
+          {hero}
+          <View style={styles.tileColumn}>{tiles}</View>
+        </View>
+      )}
+
+      {/* ── Distribution (hidden when there are no sends) ───────────────────── */}
+      {attemptsOnly ? null : (
+        <Animated.View style={{ opacity: fade }}>
+          <Card variant="static">
+            <View style={styles.chartHeader}>
+              <AppText variant="title3" accessibilityRole="header" style={styles.flex}>
+                {t('profileHistory.stats.chartTitle')}
+              </AppText>
+              <AppText variant="footnote" color="textSecondary">
+                {t('profileHistory.stats.chartTotal')}
+              </AppText>
+            </View>
+            <View accessibilityLabel={t('profileHistory.stats.chartA11y')}>
+              {rows.map(({ grade, i, count }, order) => {
+                const highest = i === topIndex;
+                const a11y = t(
+                  highest ? 'profileHistory.stats.barA11yHighest' : 'profileHistory.stats.barA11y',
+                  { grade, count },
+                );
+                return (
+                  <View key={grade} style={styles.barRow} accessible accessibilityLabel={a11y}>
+                    <View style={styles.gradeCol}>
+                      <AppText variant="subhead" weight="600" numeric>
+                        {grade}
+                      </AppText>
+                      {highest ? (
+                        <View style={[styles.pill, { backgroundColor: c.primaryContainer }]}>
+                          <AppText variant="caption1" weight="600" color="onPrimaryContainer">
+                            {t('profileHistory.stats.highestBadge')}
+                          </AppText>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Bar
+                      ratio={count / maxCount}
+                      highest={highest}
+                      zero={count === 0}
+                      order={order}
+                      play={play}
+                    />
+                    <View style={styles.countCol}>
+                      <AppText variant="subhead" weight="600" numeric align="right">
+                        {count}
+                      </AppText>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </Card>
+        </Animated.View>
       )}
     </View>
   );
@@ -101,79 +376,68 @@ export default function StatsPanel({ stats }: StatsPanelProps): React.JSX.Elemen
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
+    // Cards never carry their own margin: the parent gaps them (cardGap 8).
     container: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-      padding: theme.spacing.md,
-      marginBottom: theme.spacing.lg,
+      gap: theme.spacing.sm,
+      marginBottom: theme.layout.sectionGap,
+      paddingHorizontal: screenMargin,
     },
-    summaryRow: {
+    row: {
       flexDirection: 'row',
-      justifyContent: 'space-around',
-      alignItems: 'center',
-      marginBottom: theme.spacing.lg,
+      gap: theme.spacing.sm,
     },
-    statItem: {
-      alignItems: 'center',
+    flex: { flex: 1 },
+    hero: {
+      minHeight: theme.componentSize.statsPrimaryMinHeight,
+    },
+    heroInner: {
       flex: 1,
+      justifyContent: 'space-between',
     },
-    statValue: {
-      fontSize: theme.fontSize.xxl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
+    heroBottom: {
+      marginTop: theme.spacing.md,
     },
-    statLabel: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
+    heroSub: {
       marginTop: theme.spacing.xs,
-      textAlign: 'center',
     },
-    statDivider: {
-      width: 1,
-      height: 40,
-      backgroundColor: theme.colors.border,
+    tileColumn: {
+      flex: 1,
+      gap: theme.spacing.sm,
     },
-    chartTitle: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      marginBottom: theme.spacing.sm,
+    tile: {
+      flex: 1,
+      minWidth: 0,
     },
-    chart: {
+    tileInner: {
+      paddingVertical: theme.spacing.smd,
+      paddingHorizontal: 14,
       gap: theme.spacing.xs,
+    },
+    chartHeader: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      marginBottom: theme.spacing.sm,
     },
     barRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      height: BAR_ROW_HEIGHT,
+      minHeight: ROW_HEIGHT,
+      columnGap: COL_GAP,
     },
-    gradeLabel: {
-      width: 32,
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
+    gradeCol: {
+      width: GRADE_COL_WIDTH,
+      flexDirection: 'row',
+      alignItems: 'center',
+      columnGap: theme.spacing.xs,
     },
-    barTrack: {
-      flex: 1,
-      height: 12,
-      backgroundColor: theme.colors.divider,
-      borderRadius: theme.borderRadius.sm,
-      overflow: 'hidden',
+    pill: {
+      paddingHorizontal: theme.spacing.sm,
+      borderRadius: theme.radius.full,
     },
-    bar: {
-      height: '100%',
-      backgroundColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.sm,
-    },
-    barEmpty: {
-      backgroundColor: theme.colors.border,
-    },
-    barCount: {
-      width: 28,
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      textAlign: 'right',
+    countCol: {
+      width: COUNT_COL_WIDTH,
     },
   });
 }

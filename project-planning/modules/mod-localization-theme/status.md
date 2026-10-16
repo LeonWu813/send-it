@@ -2,6 +2,60 @@
 
 ## Engineering Progress
 
+### Design-system foundation G3 (design system v2.2 shared foundation) — 2026-10-16 (off-spec design-system work pending PR review)
+
+Same authorization as G1/G2: off-spec visual + motion work requested directly by the human designer, not routed through tech-lead/pm/doc-sync; PR review covers it. Source: `send-it-design/ux-team/design-system/send-it-design-system.md` v2.2, Appendix G + Part 2 + `png-v2/c-*.png`. Phase 1 only; nothing from Appendix F. No illustrations, no `expo-haptics`, no new dependencies (opaque TabBar capsule, no glass / blur). Planning docs were not edited.
+
+- `src/lib/theme.ts`: `RADIUS` roles + `innerRadius()` + `CONTINUOUS`, 58-key palette (`segmentedThumb`), `display` / `numeric1`, `groupHeader` / `pageSection` / `unit` / `tapeLabel` / `fieldLabel`, `ELEVATION.control`, G.2 sizes (`chipHeight` 36, `segmentedHeight`, `stepper*`, `listThumb`, ...), `LAYOUT` (`listRowMinHeight`, `sheetInset`, `routeCardPadding`, ...), `AVATAR_SIZE.lg`; deprecated aliases kept: `BORDER_RADIUS`, `TYPE_VARIANT.sectionHeader`, `chipBorder`, `chipSelectedBorder`, `tapeSwatchRadius`, `FONT_SIZE`, `textInverse`.
+- `src/lib/motion.ts`: `press` 100, `release` 120, `spring.glide`, `scale.pressWide`, `distance`, `useMotion()` time-scales press / release, M1 + M12 comments. `src/lib/icons.ts`: `remove`, `image`, `betaCount`.
+- `ui/`: Button (capsule, `destructiveTonal`), PressableScale (press / release / pressWide), IconButton (`tonal`, `float`, `small`, `media` 32, `IconButtonGroup`), Chip (inverted selected, 36), SegmentedControl (new), Stepper (new), SendStatus (`SendStyleChip` kept as re-export; `SendStylePicker` is now the icon SegmentedControl), TextField (12 radius, `fieldLabel`, search capsule), BottomSheet (floating / attached), Toast (capsule, width tween, 1 action), ListRow (`content`), Card (20, `tinted`), ProgressBar (6) + `UploadProgressCard`, InlineError / NoticeBox (no bar, neutral notice, `warning`), Skeleton (+ 4 layouts), EmptyState (`slot`, `prompt`), Avatar (`lg`).
+- Stories: Controls + `AllStates` per component, Tokens story updated (RADIUS + innerRadius, `ELEVATION.control`, `distance`). `.storybook/MIGRATION.md` has a v2.2 section. i18n: `ui.stepper.*`.
+
+Checks: `npm run lint` clean; `npm test` all pass except the pre-existing `supabase.test.ts` env failure (token test updated); `npm run check:i18n` OK; `storybook build` OK; every `ui-*` / `foundations-*` story loaded in headless Chrome (light + dark) with no console errors.
+
+---
+
+### Design-system foundation G2 (final design system v1.1/v1.2 alignment) — 2026-10-16 (off-spec design-system work pending PR review)
+
+Same authorization as G1: off-spec visual + motion work requested directly by the human designer, not routed through tech-lead/pm/doc-sync; PR review covers it. Source: `send-it-design/ux-team/design-system/send-it-design-system.md` (section 0.6 checklist, Appendix A/B, Part 2). Phase 1 only; nothing from Appendix F. No illustrations, no `expo-haptics`, no new product flows. Planning docs were not edited.
+
+- `src/lib/theme.ts`: palette now 57 keys (`surfaceAltPressed`, `mediaTrack`); `STROKE`, `AVATAR_SIZE`; new `COMPONENT_SIZE` keys (`buttonSmMinHeight`, `textFieldMinHeight`, `emptyStateMaxWidth`, `radioSize`, `radioDot`, `noticeBarWidth`, `tapeSwatch`, `tapeSwatchRadius`, `tapePadH`, `likeBurst`); `theme.stroke` / `theme.avatarSize`; `caption2` comment. `TAPE_DISPLAY` / `TAPE_HAIR` left to engineer-mod-route-catalog.
+- `src/lib/motion.ts`: `MOTION.shake`, `duration.celebrationCard` 5000, `shake` in `useMotion()`, `SPRING_REST`. `haptics.ts` unchanged (per spec).
+- `src/lib/icons.ts` (new): `ICON` dictionary (spec 9.8 / A.9, 49 concepts, 63 glyphs, one glyph per concept) + `iconName()`.
+- `src/components/ui/` fixed per section 0.6: AppText (no `'700'`), PressableScale (`standard` easing, `underlay`), Button (`size`, `on`, `surfaceAltPressed`, spinner `short`+`standard`, `trailingIcon`), IconButton (`plain|toggle|media`, `on`, `badge`), Chip (`filter|choice|multi`, two-layer native-driver fill, token swatch, clear button, `size`), BottomSheet (close button, `screenMargin`, safe-area bottom, no shadow, `overshootClamping` + rest thresholds, draggable under Reduce Motion, backdrop follows drag, grabber D6, `content|list-single|form|confirm`, stacked confirm buttons, `error`), Toast (no rgba pressed overlay, swipe-down dismiss, no clamp, stacked actions at font scale >= 1.6, `accessibilityActions`, icon pop D4, error not replaced by success), Skeleton (`shape` radii, default group label), CelebrationHost (`trophy`, `iconScale`, light shadow xor dark border, 5s hold paused on touch, tap = view, close button).
+- New in `ui/`: `useShake`, `Badge`, `TextField`, `ListRow` (+`Radio`), `Card`, `ProgressBar` (+`Spinner`), `Avatar`, `EmptyState`, `InlineError` (+`NoticeBox`), `SendStyleChip` (+`SendStylePicker`). Stories (one Controls-driven story each) in `ui/stories/`.
+- Storybook: Tokens story updated, new Foundations/Icons story, `.storybook/MIGRATION.md` rewritten, README pointer.
+- i18n: added `ui.sendStyle.*`, `ui.fieldError`, `ui.readOnly`, `ui.showPassword`, `ui.clearText`, `ui.toastWithActions`, `ui.avatarOf`, `ui.progress` (en + zh-TW).
+- Tests: `src/lib/__tests__/design-tokens.test.ts` (palette parity, new tokens, ICON glyph existence and uniqueness).
+
+Checks: `npm run lint` clean; `npm test` all pass except the pre-existing `supabase.test.ts` env failure; `npm run check:i18n` OK; `storybook build` OK; every `ui-*` and `foundations-*` story loaded in headless Chrome (light + dark) with no console errors.
+
+Not done / deviations: see the hand-off report (CelebrationHost tap semantics follow the spec: card tap = view + close button; AppHeader, TabBar, RouteCard, AscentList, BetaVideoUploader, UserProfileScreen rows of 0.6 belong to other modules).
+
+---
+
+### Design-system foundation G1 — 2026-10-16 (off-spec design-system work pending PR review)
+
+Implements 07-final-design-system.md (visual + motion only), approved by the human designer; not routed through tech-lead/pm/doc-sync. Warm sand B palette; no illustrations; no `expo-haptics`.
+
+- `src/lib/theme.ts`: 55-key light/dark palettes (exported), `TYPE_SCALE`, `TYPE_VARIANT`, `SPACING` additions, `LAYOUT`, `ICON_SIZE`, `ELEVATION`, `COMPONENT_SIZE`, `useLayout()`; `FONT_SIZE` and `textInverse` kept as deprecated aliases.
+- `src/lib/motion.ts` (`MOTION`, `useMotion`, `MotionProvider`), `src/lib/haptics.ts` (stub driver).
+- `src/components/ui/`: AppText, PressableScale, Button, IconButton, Chip, BottomSheet, Toast (+ToastProvider), Skeleton, CelebrationHost, ParticleBurst; stories in `ui/stories/`.
+- Storybook: Reduce Motion + Speed toolbars, logging haptic driver, Tokens story, README, MIGRATION.md.
+- Own module migrated: Settings/BlockedAccounts use surfacePressed, surfaceAlt, outline, shared Button for logout, 44pt targets.
+- Added `ui.*` i18n keys (en + zh-TW).
+
+---
+
+### Storybook infrastructure — 2026-10-16 (off-spec design tooling, pending PR review)
+
+Added on branch `design/storybook` at the UI/UX designer's request. NOT routed through tech-lead/pm/doc-sync; PR review covers it. No runtime app code changed (`src/lib/theme.ts` and `i18n.ts` untouched).
+
+- Added `.storybook/` (main.ts, preview.tsx, ForcedTheme.tsx, stubs/, README.md), `stories/Tokens.stories.tsx`, `storybook` / `build-storybook` scripts, dev deps (storybook, @storybook/react-native-web-vite, vite) and deps react-dom / react-native-web (via `expo install`).
+- Supabase and AsyncStorage are stubbed for Storybook only.
+
+---
+
 ### Bugfix — 2026-10-15 (Jest AsyncStorage mock — cross-project regression fix)
 
 **Added Jest moduleNameMapper entry for `@react-native-async-storage/async-storage`**

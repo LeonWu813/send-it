@@ -9,6 +9,7 @@ import React from 'react';
 
 // Initialize i18n before component renders
 import '../../lib/i18n';
+import { ToastProvider } from '../../components/ui';
 import { ThemeProvider } from '../../lib/theme';
 
 interface WrapperProps {
@@ -18,10 +19,15 @@ interface WrapperProps {
 /**
  * Wraps children with the providers required by send logging screens:
  * - ThemeProvider (required for useTheme())
+ * - ToastProvider (AscentList shows a "Deleted" toast)
  * - i18n (initialized via side-effect import above)
  */
 export function TestProviders({ children }: WrapperProps): React.JSX.Element {
-  return <ThemeProvider>{children}</ThemeProvider>;
+  return (
+    <ThemeProvider>
+      <ToastProvider>{children}</ToastProvider>
+    </ThemeProvider>
+  );
 }
 
 /**

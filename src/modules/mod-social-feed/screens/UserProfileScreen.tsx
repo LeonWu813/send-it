@@ -13,30 +13,24 @@
  * The get_profile_stats RPC enforces privacy server-side; followers_only non-followers
  * receive zeroed stats — no special consumer-side handling needed.
  *
- * Three-dots sheet (AC-150): Bottom action sheet with Report (AC-151) and
+ * Three-dots sheet (AC-150): BottomSheet `list-single` (design system §32.10) with
+ * "Report and block" (AC-151, one tap, with a consequence subtitle) and the
  * Block/Unblock toggle (AC-152). Only rendered when !isOwnProfile.
  *
  * Blocked state (AC-153): fetchBlockedUserIds() called in loadProfile() Promise.all.
  * If a block exists in either direction, shows "This profile isn't available".
  *
- * Safe area: useSafeAreaInsets() + makeStyles(theme, topInset) pattern.
+ * Design system v2.2 (§30, §32.10, §32.11): no screen-drawn back row; the AppShell `nested`
+ * AppHeader owns back + title (swipe-back stays via SwipeBackWrapper). The profile header is a
+ * Card (Avatar lg 64 + title3 name + footnote bio, counts, capsule Follow button). The "⋯" menu is a
+ * floating `list-single` sheet. Page sections use `pageSection`.
  */
 
 import type { Session } from '@supabase/supabase-js';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import { fetchProfileStats } from '../../mod-profile-history/history-service';
 import type { ProfileStats } from '../../mod-profile-history/types';
@@ -53,8 +47,22 @@ import {
   unblockUser,
 } from '../../mod-moderation/moderation-service';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
+import {
+  AppText,
+  Avatar,
+  BottomSheet,
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  InlineError,
+  ListRow,
+  Spinner,
+} from '../../../components/ui';
 import {
   fetchFollowerCounts,
   fetchIsFollowing,
@@ -99,8 +107,9 @@ export default function UserProfileScreen({
 }: UserProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const { screenMargin } = useLayout();
+  const tabInset = useTabBarInset();
+  const styles = makeStyles(theme, screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [counts, setCounts] = useState<FollowerCounts>({ follower_count: 0, following_count: 0 });
@@ -259,9 +268,8 @@ export default function UserProfileScreen({
       setIsProfileBlocked(true);
       setIsBlockedByMe(true);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('socialFeed.errors.profileLoadFailed');
-      setSheetError(message);
+      void err;
+      setSheetError(t('socialFeed.menu.actionFailed'));
     } finally {
       setSheetLoading(false);
     }
@@ -287,9 +295,8 @@ export default function UserProfileScreen({
         setIsBlockedByMe(true);
       }
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('socialFeed.errors.profileLoadFailed');
-      setSheetError(message);
+      void err;
+      setSheetError(t('socialFeed.menu.actionFailed'));
     } finally {
       setSheetLoading(false);
     }
@@ -297,11 +304,39 @@ export default function UserProfileScreen({
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  // Header (§30): back + title + "⋯" trailing. The AppShell overlay scope renders this nested header
+  // above the screen, so content starts below it (no screen-drawn back/"⋯" row, no top safe-area padding).
+  useAppHeader({
+    title: profile?.display_name ?? '',
+    onBack,
+    trailing: !isOwnProfile && (!isProfileBlocked || isBlockedByMe) ? (
+      <IconButton
+        variant="float"
+        name={ICON.more.outline}
+        accessibilityLabel={t('socialFeed.moreOptions')}
+        onPress={() => { setSheetVisible(true); }}
+      />
+    ) : undefined,
+  });
+
+  const actionSheet = !isOwnProfile ? (
+    <ActionSheet
+      visible={sheetVisible}
+      onClose={() => { setSheetVisible(false); setSheetError(null); }}
+      isBlockedByMe={isBlockedByMe}
+      sheetLoading={sheetLoading}
+      sheetError={sheetError}
+      onReport={() => { void handleReport(); }}
+      onBlockToggle={() => { void handleBlockToggle(); }}
+      t={t}
+    />
+  ) : null;
+
   if (loading) {
     return (
       <SwipeBackWrapper onBack={onBack}>
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <Spinner size="large" color="primary" accessibilityLabel={t('common.loading')} />
         </View>
       </SwipeBackWrapper>
     );
@@ -317,53 +352,14 @@ export default function UserProfileScreen({
     return (
       <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible}>
         <View style={styles.root}>
-          {/* Header row: back button + optional dots icon */}
-          <View style={styles.blockedHeader}>
-            <Pressable
-              style={styles.backButton}
-              onPress={onBack}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.back')}
-              hitSlop={8}
-            >
-              <Text style={styles.backButtonText}>{t('common.back')}</Text>
-            </Pressable>
-            {/* Three-dots icon only shown when isBlockedByMe (viewer can unblock) */}
-            {!isOwnProfile && isBlockedByMe && (
-              <Pressable
-                style={styles.dotsButton}
-                onPress={() => { setSheetVisible(true); }}
-                accessibilityRole="button"
-                accessibilityLabel="More options"
-                hitSlop={8}
-              >
-                <Ionicons name="ellipsis-vertical" size={22} color={theme.colors.textPrimary} />
-              </Pressable>
-            )}
-          </View>
-
           {/* Blocked state message */}
           <View style={styles.centered}>
-            <Text style={styles.profileUnavailableText}>
+            <AppText variant="body" color="textSecondary" align="center" style={styles.profileUnavailableText}>
               {t('moderation.profileUnavailable')}
-            </Text>
+            </AppText>
           </View>
 
-          {/* Bottom action sheet (Modal) */}
-          {!isOwnProfile && (
-            <ActionSheet
-              visible={sheetVisible}
-              onClose={() => { setSheetVisible(false); setSheetError(null); }}
-              isBlockedByMe={isBlockedByMe}
-              sheetLoading={sheetLoading}
-              sheetError={sheetError}
-              onReport={() => { void handleReport(); }}
-              onBlockToggle={() => { void handleBlockToggle(); }}
-              theme={theme}
-              insets={insets}
-              t={t}
-            />
-          )}
+          {actionSheet}
         </View>
       </SwipeBackWrapper>
     );
@@ -373,111 +369,79 @@ export default function UserProfileScreen({
     <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible && !showReel}>
       <ScrollView
         style={styles.root}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom }]}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header row: back button + dots icon */}
-        <View style={styles.headerRow}>
-          <Pressable
-            style={styles.backButton}
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-            hitSlop={8}
-          >
-            <Text style={styles.backButtonText}>{t('common.back')}</Text>
-          </Pressable>
-
-          {/* AC-150: three-dots icon, only for !isOwnProfile */}
-          {!isOwnProfile && (
-            <Pressable
-              style={styles.dotsButton}
-              onPress={() => { setSheetVisible(true); }}
-              accessibilityRole="button"
-              accessibilityLabel="More options"
-              hitSlop={8}
-            >
-              <Ionicons name="ellipsis-vertical" size={22} color={theme.colors.textPrimary} />
-            </Pressable>
-          )}
-        </View>
-
         {/* Error */}
         {error !== null && (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
+          <InlineError variant="block" message={error} style={styles.errorBlock} />
         )}
 
         {profile !== null && (
           <>
-            {/* Avatar + name */}
-            <View style={styles.avatarSection}>
-              {profile.avatar_url !== null ? (
-                <Image
-                  source={{ uri: profile.avatar_url }}
-                  style={styles.avatar}
-                  accessibilityLabel={profile.display_name}
+            {/* Profile header Card (§32.11): Avatar lg + name + info, counts, Follow button */}
+            <Card variant="static" style={styles.profileCard}>
+              <View style={styles.identityRow}>
+                <Avatar
+                  size="lg"
+                  uri={profile.avatar_url}
+                  name={profile.display_name}
+                  decorative
                 />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]} />
-              )}
-              <Text style={styles.displayName}>{profile.display_name}</Text>
-              {profile.bio !== null && profile.bio !== '' && (
-                <Text style={styles.bio}>{profile.bio}</Text>
-              )}
-              {profile.privacy_setting === 'followers_only' && (
-                <Text style={styles.privateBadge}>
-                  {t('socialFeed.privateProfile')}
-                </Text>
-              )}
-            </View>
-
-            {/* Follower counts (AC-050: update immediately) */}
-            <View style={styles.countsRow}>
-              <View style={styles.countItem}>
-                <Text style={styles.countValue}>{counts.follower_count}</Text>
-                <Text style={styles.countLabel}>{t('socialFeed.followers')}</Text>
+                <View style={styles.identityText}>
+                  <AppText variant="title3" numberOfLines={2}>
+                    {profile.display_name}
+                  </AppText>
+                  {profile.bio !== null && profile.bio !== '' && (
+                    <AppText variant="footnote" color="textSecondary" style={styles.bio}>
+                      {profile.bio}
+                    </AppText>
+                  )}
+                  {profile.privacy_setting === 'followers_only' && (
+                    <View style={styles.privateBadge}>
+                      <Ionicons
+                        name={ICON.locked.outline}
+                        size={theme.iconSize.xs}
+                        color={theme.colors.textSecondary}
+                      />
+                      <AppText variant="caption1" color="textSecondary">
+                        {t('socialFeed.privateProfile')}
+                      </AppText>
+                    </View>
+                  )}
+                </View>
               </View>
-              <View style={styles.countDivider} />
-              <View style={styles.countItem}>
-                <Text style={styles.countValue}>{counts.following_count}</Text>
-                <Text style={styles.countLabel}>{t('socialFeed.following')}</Text>
-              </View>
-            </View>
 
-            {/* Follow / Unfollow button — hidden for own profile */}
-            {!isOwnProfile && (
-              <Pressable
-                style={[
-                  styles.followButton,
-                  isFollowing && styles.followButtonActive,
-                  followLoading && styles.followButtonDisabled,
-                ]}
-                onPress={() => void handleFollowToggle()}
-                disabled={followLoading}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  isFollowing
-                    ? t('socialFeed.unfollow')
-                    : t('socialFeed.follow')
-                }
-                accessibilityState={{ disabled: followLoading }}
-              >
-                {followLoading ? (
-                  <ActivityIndicator size="small" color={theme.colors.textInverse} />
-                ) : (
-                  <Text
-                    style={[
-                      styles.followButtonText,
-                      isFollowing && styles.followButtonTextActive,
-                    ]}
-                  >
-                    {isFollowing ? t('socialFeed.unfollow') : t('socialFeed.follow')}
-                  </Text>
-                )}
-              </Pressable>
-            )}
+              {/* Follower counts (AC-050: update immediately) */}
+              <View style={styles.countsRow}>
+                <View style={styles.countItem}>
+                  <AppText variant="title2" numeric>{counts.follower_count}</AppText>
+                  <AppText variant="caption1" color="textSecondary">{t('socialFeed.followers')}</AppText>
+                </View>
+                <View style={styles.countDivider} />
+                <View style={styles.countItem}>
+                  <AppText variant="title2" numeric>{counts.following_count}</AppText>
+                  <AppText variant="caption1" color="textSecondary">{t('socialFeed.following')}</AppText>
+                </View>
+              </View>
+
+              {/* Follow / Following button — hidden for own profile.
+                  Following = text-only secondary capsule; its accessibility label stays "Unfollow". */}
+              {!isOwnProfile && (
+                <Button
+                  variant={isFollowing ? 'secondary' : 'primary'}
+                  size="md"
+                  fullWidth
+                  label={isFollowing ? t('socialFeed.following') : t('socialFeed.follow')}
+                  accessibilityLabel={
+                    isFollowing ? t('socialFeed.unfollow') : t('socialFeed.follow')
+                  }
+                  loading={followLoading}
+                  onPress={() => void handleFollowToggle()}
+                />
+              )}
+            </Card>
 
             {/* Stats section — shown when stats loaded successfully */}
             {stats !== null && (
@@ -488,20 +452,26 @@ export default function UserProfileScreen({
                 {/* Summary row: Total Sends / Days Climbed / Best Grade */}
                 <View style={styles.statsRow}>
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{stats.total_sends}</Text>
-                    <Text style={styles.statLabel}>{t('profileHistory.stats.totalSends')}</Text>
+                    <AppText variant="title2" numeric>{stats.total_sends}</AppText>
+                    <AppText variant="caption1" color="textSecondary" align="center" style={styles.statLabel}>
+                      {t('profileHistory.stats.totalSends')}
+                    </AppText>
                   </View>
                   <View style={styles.statItemDivider} />
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>{stats.accumulated_days}</Text>
-                    <Text style={styles.statLabel}>{t('profileHistory.stats.accumulatedDays')}</Text>
+                    <AppText variant="title2" numeric>{stats.accumulated_days}</AppText>
+                    <AppText variant="caption1" color="textSecondary" align="center" style={styles.statLabel}>
+                      {t('profileHistory.stats.accumulatedDays')}
+                    </AppText>
                   </View>
                   <View style={styles.statItemDivider} />
                   <View style={styles.statItem}>
-                    <Text style={styles.statValue}>
+                    <AppText variant="title2" numeric>
                       {stats.highest_grade ?? t('profileHistory.stats.noGrade')}
-                    </Text>
-                    <Text style={styles.statLabel}>{t('profileHistory.stats.highestGrade')}</Text>
+                    </AppText>
+                    <AppText variant="caption1" color="textSecondary" align="center" style={styles.statLabel}>
+                      {t('profileHistory.stats.highestGrade')}
+                    </AppText>
                   </View>
                 </View>
 
@@ -511,7 +481,9 @@ export default function UserProfileScreen({
                     style={styles.chartContainer}
                     accessibilityLabel={t('profileHistory.stats.chartA11y')}
                   >
-                    <Text style={styles.chartTitle}>{t('profileHistory.stats.chartTitle')}</Text>
+                    <AppText variant="pageSection" style={styles.chartTitle}>
+                      {t('profileHistory.stats.chartTitle')}
+                    </AppText>
                     {stats.sends_by_grade
                       .filter(({ count }) => count > 0)
                       .map(({ grade, count }) => {
@@ -521,11 +493,15 @@ export default function UserProfileScreen({
                         );
                         return (
                           <View key={grade} style={styles.barRow}>
-                            <Text style={styles.barGradeLabel}>{grade}</Text>
+                            <AppText variant="caption2" color="textSecondary" style={styles.barGradeLabel}>
+                              {grade}
+                            </AppText>
                             <View style={styles.barTrack}>
                               <View style={[styles.bar, { width: barWidth }]} />
                             </View>
-                            <Text style={styles.barCount}>{count}</Text>
+                            <AppText variant="caption2" color="textSecondary" numeric align="right" style={styles.barCount}>
+                              {count}
+                            </AppText>
                           </View>
                         );
                       })}
@@ -539,7 +515,9 @@ export default function UserProfileScreen({
                 followers_only profiles when the viewer is not a follower. */}
             {profile.privacy_setting === 'followers_only' && !isFollowing ? null : (
               <View style={styles.videoSection}>
-                <Text style={styles.videoSectionTitle}>{t('betaVideo.userVideos')}</Text>
+                <AppText variant="pageSection" style={styles.videoSectionTitle}>
+                  {t('betaVideo.userVideos')}
+                </AppText>
                 <BetaVideoGrid
                   videos={betaVideos}
                   onPressVideo={(index) => {
@@ -547,7 +525,7 @@ export default function UserProfileScreen({
                     setShowReel(true);
                   }}
                   emptyState={
-                    <Text style={styles.videoSectionEmpty}>{t('betaVideo.noVideosYet')}</Text>
+                    <EmptyState variant="inline" description={t('betaVideo.noVideosYet')} />
                   }
                 />
               </View>
@@ -566,21 +544,8 @@ export default function UserProfileScreen({
         reelContext="profile"
       />
 
-      {/* AC-150: Bottom action sheet modal — rendered outside ScrollView */}
-      {!isOwnProfile && (
-        <ActionSheet
-          visible={sheetVisible}
-          onClose={() => { setSheetVisible(false); setSheetError(null); }}
-          isBlockedByMe={isBlockedByMe}
-          sheetLoading={sheetLoading}
-          sheetError={sheetError}
-          onReport={() => { void handleReport(); }}
-          onBlockToggle={() => { void handleBlockToggle(); }}
-          theme={theme}
-          insets={insets}
-          t={t}
-        />
-      )}
+      {/* AC-150: action sheet — rendered outside ScrollView */}
+      {actionSheet}
     </SwipeBackWrapper>
   );
 }
@@ -595,11 +560,13 @@ interface ActionSheetProps {
   sheetError: string | null;
   onReport: () => void;
   onBlockToggle: () => void;
-  theme: ReturnType<typeof useTheme>['theme'];
-  insets: { bottom: number };
   t: (key: string) => string;
 }
 
+/**
+ * "..." menu (design system §32.10 B): BottomSheet `list-single`. "Report and block" keeps its
+ * one-tap behaviour but now says what will happen in its subtitle. No cancel row (close button).
+ */
 function ActionSheet({
   visible,
   onClose,
@@ -608,96 +575,58 @@ function ActionSheet({
   sheetError,
   onReport,
   onBlockToggle,
-  theme,
-  insets,
   t,
 }: ActionSheetProps): React.JSX.Element {
-  const sheetStyles = makeSheetStyles(theme, insets.bottom);
-
   return (
-    <Modal
+    <BottomSheet
       visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
+      onClose={onClose}
+      variant="list-single"
+      loading={sheetLoading}
+      error={sheetError ?? undefined}
     >
-      {/* Full-screen translucent overlay — tappable to dismiss */}
-      <Pressable style={sheetStyles.overlay} onPress={onClose}>
-        {/* Sheet panel — tap does NOT propagate to overlay */}
-        <Pressable
-          style={sheetStyles.sheet}
-          onPress={(e) => { e.stopPropagation(); }}
-          accessibilityRole="none"
-        >
-          {/* Drag handle */}
-          <View style={sheetStyles.handleContainer}>
-            <View style={sheetStyles.handle} />
-          </View>
+      {/* Report and block — AC-151 */}
+      <ListRow
+        variant="action"
+        on="elevated"
+        destructive
+        leadingIcon={ICON.report.outline}
+        title={t('moderation.sheetReport')}
+        subtitle={t('moderation.sheetReportHint')}
+        disabled={sheetLoading}
+        onPress={onReport}
+      />
 
-          {/* Inline error message */}
-          {sheetError !== null && (
-            <View style={sheetStyles.errorRow}>
-              <Text style={sheetStyles.errorText}>{sheetError}</Text>
-            </View>
-          )}
-
-          {/* Report option — AC-151 */}
-          <Pressable
-            style={sheetStyles.optionRow}
-            onPress={onReport}
-            disabled={sheetLoading}
-            accessibilityRole="button"
-          >
-            {sheetLoading ? (
-              <ActivityIndicator size="small" color={theme.colors.error} />
-            ) : (
-              <Text style={sheetStyles.reportText}>{t('moderation.sheetReport')}</Text>
-            )}
-          </Pressable>
-
-          {/* Block / Unblock toggle — AC-152 */}
-          <Pressable
-            style={sheetStyles.optionRow}
-            onPress={onBlockToggle}
-            disabled={sheetLoading}
-            accessibilityRole="button"
-          >
-            {sheetLoading ? (
-              <ActivityIndicator size="small" color={theme.colors.textPrimary} />
-            ) : (
-              <Text style={sheetStyles.optionText}>
-                {isBlockedByMe ? t('moderation.sheetUnblock') : t('moderation.sheetBlock')}
-              </Text>
-            )}
-          </Pressable>
-
-          {/* Cancel row */}
-          <Pressable
-            style={sheetStyles.optionRow}
-            onPress={onClose}
-            disabled={sheetLoading}
-            accessibilityRole="button"
-          >
-            <Text style={sheetStyles.optionText}>{t('moderation.sheetCancel')}</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      {/* Block / Unblock toggle — AC-152 */}
+      <ListRow
+        variant="action"
+        on="elevated"
+        destructive={!isBlockedByMe}
+        leadingIcon={ICON.block.outline}
+        title={isBlockedByMe ? t('moderation.sheetUnblock') : t('moderation.sheetBlock')}
+        disabled={sheetLoading}
+        divider={false}
+        onPress={onBlockToggle}
+      />
+    </BottomSheet>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  screenMargin: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.sm,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
     centered: {
@@ -706,268 +635,112 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       alignItems: 'center',
       backgroundColor: theme.colors.background,
     },
-    // Header row containing back button and dots icon
-    headerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: theme.spacing.md,
-    },
-    // Used in blocked state where root is a plain View (not ScrollView)
-    blockedHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-    },
-    backButton: {
-      alignSelf: 'flex-start',
-    },
-    backButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-    },
-    dotsButton: {
-      alignSelf: 'flex-start',
-    },
     profileUnavailableText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
     },
-    errorContainer: {
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.error,
+    errorBlock: {
       marginBottom: theme.spacing.md,
     },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textInverse,
+    profileCard: {
+      marginBottom: theme.layout.sectionGap,
     },
-    avatarSection: {
+    identityRow: {
+      flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: theme.spacing.lg,
+      gap: theme.spacing.md,
     },
-    avatar: {
-      width: 96,
-      height: 96,
-      borderRadius: theme.borderRadius.full,
-      marginBottom: theme.spacing.md,
-    },
-    avatarPlaceholder: {
-      backgroundColor: theme.colors.border,
-    },
-    displayName: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.xs,
-      textAlign: 'center',
+    identityText: {
+      flex: 1,
+      alignItems: 'flex-start',
     },
     bio: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-      marginBottom: theme.spacing.xs,
+      marginTop: theme.spacing.xs,
     },
     privateBadge: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      borderWidth: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.layout.iconTextGap,
+      borderWidth: theme.stroke.thin,
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 2,
-      marginTop: theme.spacing.xs,
+      paddingVertical: theme.spacing.xxs,
+      marginTop: theme.spacing.sm,
     },
     countsRow: {
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: theme.spacing.lg,
+      marginVertical: theme.spacing.md,
     },
     countItem: {
       alignItems: 'center',
       paddingHorizontal: theme.spacing.xl,
     },
-    countValue: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-    },
-    countLabel: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
-    },
     countDivider: {
-      width: 1,
-      height: 32,
-      backgroundColor: theme.colors.border,
-    },
-    followButton: {
-      paddingVertical: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-    },
-    followButtonActive: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    followButtonDisabled: {
-      opacity: 0.5,
-    },
-    followButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
-    followButtonTextActive: {
-      color: theme.colors.textPrimary,
+      alignSelf: 'stretch',
+      width: theme.stroke.hairline,
+      backgroundColor: theme.colors.divider,
     },
     // ── Stats section ────────────────────────────────────────────────────────
     statsDivider: {
-      height: 1,
-      backgroundColor: theme.colors.border,
-      marginTop: theme.spacing.lg,
-      marginBottom: theme.spacing.lg,
+      height: theme.stroke.hairline,
+      backgroundColor: theme.colors.divider,
+      marginVertical: theme.layout.sectionGap,
     },
     statsRow: {
       flexDirection: 'row',
       justifyContent: 'space-around',
       alignItems: 'center',
-      marginBottom: theme.spacing.lg,
+      marginBottom: theme.layout.sectionGap,
     },
     statItem: {
       alignItems: 'center',
       flex: 1,
     },
-    statValue: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-    },
     statLabel: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
       marginTop: theme.spacing.xs,
-      textAlign: 'center',
     },
     statItemDivider: {
-      width: 1,
-      height: 40,
-      backgroundColor: theme.colors.border,
+      alignSelf: 'stretch',
+      width: theme.stroke.hairline,
+      backgroundColor: theme.colors.divider,
     },
     chartContainer: {
-      marginBottom: theme.spacing.lg,
+      marginBottom: theme.layout.sectionGap,
     },
     chartTitle: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      marginBottom: theme.spacing.sm,
+      marginBottom: theme.layout.sectionHeaderGap,
     },
     barRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      height: 24,
+      minHeight: theme.spacing.lg,
     },
     barGradeLabel: {
-      width: 32,
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
+      minWidth: theme.spacing.xl,
     },
     barTrack: {
       flex: 1,
-      height: 12,
-      backgroundColor: theme.colors.divider,
-      borderRadius: theme.borderRadius.sm,
+      height: theme.spacing.smd,
+      backgroundColor: theme.colors.surfaceAlt,
+      borderRadius: theme.radius.full,
       overflow: 'hidden',
     },
     bar: {
       height: '100%',
       backgroundColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.sm,
+      borderRadius: theme.radius.full,
     },
     barCount: {
-      width: 28,
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
-      textAlign: 'right',
+      minWidth: theme.spacing.lg + theme.spacing.xs,
     },
     // ── Beta video grid section (AC-163) ─────────────────────────────────────
     videoSection: {
-      paddingTop: theme.spacing.lg,
+      paddingTop: theme.layout.sectionGap,
     },
     videoSectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      marginBottom: theme.spacing.sm,
-    },
-    videoSectionEmpty: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-      paddingVertical: theme.spacing.lg,
-      paddingHorizontal: theme.spacing.lg,
-    },
-  });
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeSheetStyles(theme: ReturnType<typeof useTheme>['theme'], bottomInset: number) {
-  return StyleSheet.create({
-    overlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'flex-end',
-    },
-    sheet: {
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      backgroundColor: theme.colors.surface,
-      borderTopLeftRadius: theme.borderRadius.lg,
-      borderTopRightRadius: theme.borderRadius.lg,
-      paddingBottom: bottomInset + theme.spacing.lg,
-    },
-    handleContainer: {
-      alignItems: 'center',
-      paddingTop: theme.spacing.sm,
-      paddingBottom: theme.spacing.md,
-    },
-    handle: {
-      width: 40,
-      height: 4,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.border,
-    },
-    errorRow: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.sm,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-    },
-    optionRow: {
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-    },
-    reportText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-    },
-    optionText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
+      marginBottom: theme.layout.sectionHeaderGap,
     },
   });
 }

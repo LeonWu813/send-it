@@ -177,7 +177,7 @@ describe('RequestGymScreen', () => {
     expect(onBack).toHaveBeenCalled();
   });
 
-  it('calls onBack when the back link is pressed from the form', () => {
+  it('calls onBack via the header back wiring from the form', () => {
     const onBack = jest.fn();
     render(
       <RequestGymScreen session={MOCK_SESSION} onBack={onBack} />,

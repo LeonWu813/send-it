@@ -419,6 +419,21 @@ Route to resolution: PM/Tech Lead must pin the navigation contract (how target_i
 
 - **Deno Edge Function + root tsconfig coexistence**: the project tsconfig includes `**/*.ts` which picks up Deno Edge Functions. Adding `@ts-nocheck` to Edge Function files is the minimum fix without touching the root tsconfig. A cleaner long-term solution is to add `"exclude": ["supabase/functions/**"]` to root tsconfig.json and use a separate Deno tsconfig in `supabase/functions/`. This pattern comes up in any Supabase project that has both a RN/Node client and Deno Edge Functions.
 
+### Design System v1.2 migration (off-spec design work, pending PR review)
+
+Visual-only migration; no behaviour or service changes (UnreadCountProvider untouched).
+- NotificationInboxScreen: AppText type roles, `ui/` Avatar, Skeleton (SkeletonGroup + useSkeletonPhase), EmptyState (notifications icon), InlineError block with retry; rows on a `surface` container with `surfacePressed` row feedback, hairline divider inset past avatar; unread dot uses `error`; back = 44pt IconButton `ICON.back.outline` (lg, textPrimary); `useLayout().screenMargin`; like marker = `ICON.like.filled` sm + text (no emoji).
+- NotificationPreferenceScreen: ListRow toggle (content density) on surface, sectionHeader/footnote AppText, InlineError block, Skeleton loading. Saving spinner replaced by disabled toggle.
+- Locales: `notifications.badgeBetaVideoLike` drops the leading heart character (en + zh-TW).
+- Tests: 46/46 pass; `npm run lint` and `npm run check:i18n` clean.
+
+### Design system v2.2 migration (off-spec design work, pending PR review)
+
+- NotificationInboxScreen: grouped list container (surface, RADIUS.card, continuous curve, clipped, screenMargin inset); rows `listRowMinHeight` 52 / `listRowPaddingV` 14, padding md, dividers start at the title's left edge; unread dot uses `componentSize.unreadDot` 8 (error); skeleton now matches the grouped rows (avatar md + 2 lines + dividers); empty state is a content-shaped surface card with an `inline` EmptyState (no icon / illustration); Avatar initials already via `name`.
+- NotificationPreferenceScreen: `groupHeader` variant, toggle row inside a grouped card (`inset="grouped"`, settings density), skeleton in a card with min height 52.
+- Not done: the inbox's own back/title row is KEPT because the v2.2 nested AppHeader (single 44pt row) is not yet in AppShell (notifications overlay renders without it); remove the navBar once engineer-mod-home ships it.
+- No behaviour changes; tsc, check:i18n, `npx jest src/modules/mod-notifications` (46 tests) pass.
+
 ## QA Results
 
 **QA run: 2026-09-24 — workflow: functional-test**

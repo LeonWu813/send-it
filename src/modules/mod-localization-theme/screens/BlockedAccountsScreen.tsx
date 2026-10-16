@@ -1,8 +1,7 @@
 /**
  * BlockedAccountsScreen — list of users the current user has blocked (AC-155).
  *
- * Nav bar: chevron-back + back label text (same pattern as SettingsScreen) +
- * centered title ("Blocked Accounts" / "已封鎖的帳號").
+ * Header: AppShell nested header via useAppHeader (back + title).
  *
  * On mount: fetches fetchMyBlockedUsers() from mod-moderation.
  * Loading state: ActivityIndicator centered.
@@ -15,7 +14,6 @@
  * useSafeAreaInsets() + useTheme() — no hardcoded hex.
  */
 
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -27,7 +25,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   fetchMyBlockedUsers,
@@ -35,6 +32,7 @@ import {
 } from '../../mod-moderation/moderation-service';
 import type { BlockedUser } from '../../mod-moderation/moderation-service';
 import { useTheme } from '../../../lib/theme';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -102,7 +100,8 @@ function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       paddingVertical: theme.spacing.md,
       paddingHorizontal: theme.spacing.lg,
-      backgroundColor: theme.colors.background,
+      // card-less list: rows sit on surface, not directly on the sand background
+      backgroundColor: theme.colors.surface,
       borderBottomWidth: 1,
       borderBottomColor: theme.colors.divider,
     },
@@ -113,7 +112,7 @@ function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
       marginRight: theme.spacing.md,
     },
     avatarPlaceholder: {
-      backgroundColor: theme.colors.border,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     displayName: {
       flex: 1,
@@ -125,11 +124,12 @@ function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
       borderWidth: 1,
       borderColor: theme.colors.primary,
       borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.xs,
+      minHeight: theme.layout.minTouchTarget,
+      justifyContent: 'center',
       paddingHorizontal: theme.spacing.md,
     },
     unblockButtonPressed: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfacePressed,
     },
     unblockButtonText: {
       fontSize: theme.fontSize.sm,
@@ -146,8 +146,10 @@ export default function BlockedAccountsScreen({
 }: BlockedAccountsScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const tabInset = useTabBarInset();
+  const headerTop = useHeaderContentInset();
+  const styles = makeStyles(theme, headerTop);
+  useAppHeader({ title: t('settings.blockedAccounts'), onBack });
 
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,27 +236,14 @@ export default function BlockedAccountsScreen({
           </View>
         }
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: headerTop, paddingBottom: tabInset.contentBottom }}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       />
     );
   }
 
   return (
     <SwipeBackWrapper onBack={onBack}>
-      {/* Navigation bar */}
-      <View style={styles.navBar}>
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.back')}
-        >
-          <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
-          <Text style={styles.backButtonText}>{t('settings.back')}</Text>
-        </Pressable>
-        <Text style={styles.navTitle}>{t('settings.blockedAccounts')}</Text>
-        <View style={styles.navSpacer} />
-      </View>
-
       {renderContent()}
     </SwipeBackWrapper>
   );
@@ -263,45 +252,8 @@ export default function BlockedAccountsScreen({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: number) {
   return StyleSheet.create({
-    navBar: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingBottom: theme.spacing.md,
-      paddingHorizontal: theme.spacing.md,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      paddingVertical: theme.spacing.xs,
-      paddingHorizontal: theme.spacing.xs,
-      borderRadius: theme.borderRadius.md,
-      minWidth: 60,
-    },
-    backButtonPressed: {
-      backgroundColor: theme.colors.surface,
-    },
-    backButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    navTitle: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    navSpacer: {
-      minWidth: 60,
-    },
     centered: {
       flex: 1,
       justifyContent: 'center',
@@ -327,7 +279,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       borderColor: theme.colors.primary,
     },
     retryButtonPressed: {
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfacePressed,
     },
     retryButtonText: {
       fontSize: theme.fontSize.md,

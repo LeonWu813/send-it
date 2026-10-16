@@ -7,20 +7,20 @@
  * The component receives a signed video URL and signed thumbnail URL (callers
  * must sign storage paths before passing them in). It uses expo-video's VideoView
  * component for inline playback (SDK 57 successor to expo-av).
+ *
+ * Design system v1.2 (off-spec design work): everything on the video / thumbnail uses the fixed
+ * media tokens (`onMedia` on `mediaScrim`), type roles come from AppText, glyph sizes from ICON.
  */
 
 import { VideoView, useVideoPlayer } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+import { AppText } from '../../../components/ui/AppText';
+import { PressableScale } from '../../../components/ui/PressableScale';
+import { Spinner } from '../../../components/ui/ProgressBar';
+import { ICON } from '../../../lib/icons';
 import { useTheme } from '../../../lib/theme';
 
 interface BetaVideoPlayerProps {
@@ -78,10 +78,10 @@ export default function BetaVideoPlayer({
     <View style={styles.container} testID={testID}>
       {!isPlaying ? (
         /* Thumbnail + play button overlay */
-        <Pressable
+        <PressableScale
+          feedback="row"
           style={styles.thumbnailContainer}
           onPress={handlePlayPress}
-          accessibilityRole="button"
           accessibilityLabel={t('betaVideo.player.play')}
         >
           {thumbnailUrl ? (
@@ -96,15 +96,17 @@ export default function BetaVideoPlayer({
           )}
           {/* Duration badge */}
           <View style={styles.durationBadge}>
-            <Text style={styles.durationText}>{formatDuration(durationSeconds)}</Text>
+            <AppText variant="caption1" weight="600" numeric color="onMedia">
+              {formatDuration(durationSeconds)}
+            </AppText>
           </View>
           {/* Play button overlay */}
           <View style={styles.playOverlay}>
             <View style={styles.playButton}>
-              <Ionicons name="play" size={28} color={theme.colors.textInverse} />
+              <Ionicons name={ICON.play.filled} size={theme.iconSize.xl} color={theme.colors.onMedia} />
             </View>
           </View>
-        </Pressable>
+        </PressableScale>
       ) : (
         /* Active video player */
         <View style={styles.videoContainer}>
@@ -116,14 +118,16 @@ export default function BetaVideoPlayer({
           />
           {isBuffering ? (
             <View style={styles.bufferingOverlay}>
-              <ActivityIndicator color={theme.colors.textInverse} size="large" />
+              <Spinner color="onMedia" size="large" />
             </View>
           ) : null}
         </View>
       )}
       {/* Optional caption */}
       {caption ? (
-        <Text style={styles.caption}>{caption}</Text>
+        <AppText variant="footnote" color="textSecondary" style={styles.caption}>
+          {caption}
+        </AppText>
       ) : null}
     </View>
   );
@@ -136,7 +140,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       marginBottom: theme.spacing.md,
       borderRadius: theme.borderRadius.md,
       overflow: 'hidden',
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     thumbnailContainer: {
       width: '100%',
@@ -148,21 +152,16 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       height: '100%',
     },
     thumbnailPlaceholder: {
-      backgroundColor: theme.colors.textDisabled,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     durationBadge: {
       position: 'absolute',
       bottom: theme.spacing.sm,
       right: theme.spacing.sm,
-      backgroundColor: theme.colors.overlay,
+      backgroundColor: theme.colors.mediaScrim,
       borderRadius: theme.borderRadius.sm,
       paddingHorizontal: theme.spacing.xs,
-      paddingVertical: 2,
-    },
-    durationText: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
+      paddingVertical: theme.spacing.xxs,
     },
     playOverlay: {
       position: 'absolute',
@@ -173,11 +172,12 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    // 44pt target + smd: a disc comfortably larger than the 28pt glyph.
     playButton: {
-      width: 56,
-      height: 56,
-      borderRadius: 28,
-      backgroundColor: theme.colors.overlay,
+      width: theme.layout.minTouchTarget + theme.spacing.smd,
+      height: theme.layout.minTouchTarget + theme.spacing.smd,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.mediaScrim,
       alignItems: 'center',
       justifyContent: 'center',
     },
@@ -197,11 +197,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       bottom: 0,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: theme.colors.overlay,
+      backgroundColor: theme.colors.mediaScrim,
     },
     caption: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
       paddingHorizontal: theme.spacing.sm,
       paddingVertical: theme.spacing.xs,
     },

@@ -1,25 +1,22 @@
 /**
- * FilterBar — horizontal filter row for send history.
+ * FilterBar — filter row for send history (spec §32.6).
  *
- * Renders pill-shaped filter chips for gym, grade, and date range.
- * Tapping a chip opens a simple picker overlay (ActionSheet-style options list).
- * All three filters work independently and in combination (AC-060).
+ * Three `filter` Chips (gym, grade, date). A chip with a value is INVERTED (textPrimary fill,
+ * `background` text) and shows that value plus a separate 30pt clear button (touch 44, never nested). Tapping a chip opens a
+ * BottomSheet `list-single` whose first row is "All ...". All three filters
+ * work independently and in combination (AC-060).
  *
- * Uses theme tokens only — no hardcoded colors or spacing.
+ * Pickers are floating `list-single` sheets (the sheet itself switches to attached above 6 options).
+ * Motion D3 (chip width, clear-button pop) lives in the `ui/` Chip.
+ * Tokens only.
  */
 
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { useTheme } from '../../../lib/theme';
+import { BottomSheet, Chip, ListRow, useSheetSelect } from '../../../components/ui';
+import { useLayout, useTheme } from '../../../lib/theme';
 import type { GymSummary } from '../history-service';
 import type { HistoryFilters } from '../types';
 import { GRADE_ORDER } from '../types';
@@ -34,6 +31,11 @@ interface FilterBarProps {
 
 type ActivePicker = 'gym' | 'grade' | 'date' | null;
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Preset windows. 365 days is "last year" (a rolling window, not the calendar year). */
+const DATE_PRESET_DAYS = [7, 30, 90, 365] as const;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function FilterBar({
@@ -43,234 +45,194 @@ export default function FilterBar({
 }: FilterBarProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, screenMargin);
 
   const [activePicker, setActivePicker] = useState<ActivePicker>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const closeSheet = (): void => setSheetOpen(false);
+  const select = useSheetSelect(closeSheet);
+
+  function open(picker: Exclude<ActivePicker, null>): void {
+    setActivePicker(picker);
+    setSheetOpen(true);
+  }
 
   // ── Date range presets ───────────────────────────────────────────────────
 
-  const DATE_PRESETS = [
-    { label: t('profileHistory.filter.last7Days'),  days: 7 },
-    { label: t('profileHistory.filter.last30Days'), days: 30 },
-    { label: t('profileHistory.filter.last90Days'), days: 90 },
-    { label: t('profileHistory.filter.thisYear'),   days: 365 },
-  ];
+  const presetLabel = (days: number): string =>
+    t(
+      days === 7
+        ? 'profileHistory.filter.last7Days'
+        : days === 30
+          ? 'profileHistory.filter.last30Days'
+          : days === 90
+            ? 'profileHistory.filter.last90Days'
+            : 'profileHistory.filter.lastYear',
+    );
 
   function applyDatePreset(days: number): void {
     const now = new Date();
-    const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
-    onFiltersChange({
-      ...filters,
-      date_from: from.toISOString(),
-      date_to: now.toISOString(),
-    });
-    setActivePicker(null);
+    const from = new Date(now.getTime() - days * DAY_MS);
+    onFiltersChange({ ...filters, date_from: from.toISOString(), date_to: now.toISOString() });
   }
 
-  function clearDate(): void {
-    onFiltersChange({ ...filters, date_from: null, date_to: null });
-    setActivePicker(null);
+  /** Which preset the current range corresponds to (null = custom range). */
+  function activePresetDays(): number | null {
+    if (!filters.date_from) return null;
+    const to = filters.date_to ? new Date(filters.date_to).getTime() : Date.now();
+    const days = Math.round((to - new Date(filters.date_from).getTime()) / DAY_MS);
+    return (DATE_PRESET_DAYS as readonly number[]).includes(days) ? days : null;
   }
 
-  // ── Chip label helpers ──────────────────────────────────────────────────
+  // ── Chip value labels ───────────────────────────────────────────────────
 
-  function gymLabel(): string {
-    if (!filters.gym_id) return t('profileHistory.filter.gym');
-    const found = gyms.find((g) => g.id === filters.gym_id);
-    return found?.name ?? t('profileHistory.filter.gym');
-  }
+  const gymValue = filters.gym_id ? gyms.find((g) => g.id === filters.gym_id)?.name : undefined;
+  const gymHasValue = filters.gym_id !== null;
+  const gymLabel = gymValue ?? t('profileHistory.filter.gym');
+  const gradeLabel = filters.grade ?? t('profileHistory.filter.grade');
 
-  function gradeLabel(): string {
-    return filters.grade ?? t('profileHistory.filter.grade');
-  }
+  const presetDays = activePresetDays();
+  const dateLabel = !filters.date_from
+    ? t('profileHistory.filter.date')
+    : presetDays !== null
+      ? presetLabel(presetDays)
+      : new Date(filters.date_from).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
-  function dateLabel(): string {
-    if (!filters.date_from) return t('profileHistory.filter.date');
-    const from = new Date(filters.date_from);
-    return from.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  }
+  const optionCount =
+    activePicker === 'gym'
+      ? gyms.length + 1
+      : activePicker === 'grade'
+        ? GRADE_ORDER.length + 1
+        : DATE_PRESET_DAYS.length + 1;
 
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
     <>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.row}
-        contentContainerStyle={styles.rowContent}
+      <View style={styles.row}>
+        <Chip
+          variant="filter"
+          on="background"
+          label={gymLabel}
+          selected={gymHasValue}
+          onPress={() => open('gym')}
+          onClear={() => onFiltersChange({ ...filters, gym_id: null })}
+          clearAccessibilityLabel={t('profileHistory.filter.clearGym')}
+          accessibilityLabel={`${t('profileHistory.filter.gymA11y')}, ${gymLabel}`}
+        />
+        <Chip
+          variant="filter"
+          on="background"
+          label={gradeLabel}
+          selected={filters.grade !== null}
+          onPress={() => open('grade')}
+          onClear={() => onFiltersChange({ ...filters, grade: null })}
+          clearAccessibilityLabel={t('profileHistory.filter.clearGrade')}
+          accessibilityLabel={`${t('profileHistory.filter.gradeA11y')}, ${gradeLabel}`}
+        />
+        <Chip
+          variant="filter"
+          on="background"
+          label={dateLabel}
+          selected={filters.date_from !== null}
+          onPress={() => open('date')}
+          onClear={() => onFiltersChange({ ...filters, date_from: null, date_to: null })}
+          clearAccessibilityLabel={t('profileHistory.filter.clearDate')}
+          accessibilityLabel={`${t('profileHistory.filter.dateA11y')}, ${dateLabel}`}
+        />
+      </View>
+
+      {/* ── Picker: BottomSheet list-single ───────────────────────────────── */}
+      <BottomSheet
+        visible={sheetOpen}
+        variant="list-single"
+        optionCount={optionCount}
+        onClose={closeSheet}
+        onClosed={() => setActivePicker(null)}
+        title={
+          activePicker === 'gym'
+            ? t('profileHistory.filter.gym')
+            : activePicker === 'grade'
+              ? t('profileHistory.filter.grade')
+              : t('profileHistory.filter.date')
+        }
       >
-        {/* Gym filter chip */}
-        <Pressable
-          style={[styles.chip, filters.gym_id !== null && styles.chipActive]}
-          onPress={() => setActivePicker(activePicker === 'gym' ? null : 'gym')}
-          accessibilityRole="button"
-          accessibilityLabel={t('profileHistory.filter.gymA11y')}
-          accessibilityState={{ selected: filters.gym_id !== null }}
-        >
-          <Text style={[styles.chipText, filters.gym_id !== null && styles.chipTextActive]}>
-            {gymLabel()}
-          </Text>
-          {filters.gym_id !== null && (
-            <Pressable
-              onPress={() => onFiltersChange({ ...filters, gym_id: null })}
-              hitSlop={8}
-              accessibilityLabel={t('profileHistory.filter.clearGym')}
-            >
-              <Text style={styles.chipClear}>  ×</Text>
-            </Pressable>
-          )}
-        </Pressable>
+        {activePicker === 'gym' && (
+          <>
+            <ListRow
+              on="elevated"
+              inset="grouped"
+              variant="selectable"
+              title={t('profileHistory.filter.allGyms')}
+              selected={filters.gym_id === null}
+              onPress={() => select(() => onFiltersChange({ ...filters, gym_id: null }))}
+            />
+            {gyms.map((gym, i) => (
+              <ListRow
+                key={gym.id}
+                on="elevated"
+                inset="grouped"
+                variant="selectable"
+                title={gym.name}
+                selected={filters.gym_id === gym.id}
+                divider={i < gyms.length - 1}
+                onPress={() => select(() => onFiltersChange({ ...filters, gym_id: gym.id }))}
+              />
+            ))}
+          </>
+        )}
 
-        {/* Grade filter chip */}
-        <Pressable
-          style={[styles.chip, filters.grade !== null && styles.chipActive]}
-          onPress={() => setActivePicker(activePicker === 'grade' ? null : 'grade')}
-          accessibilityRole="button"
-          accessibilityLabel={t('profileHistory.filter.gradeA11y')}
-          accessibilityState={{ selected: filters.grade !== null }}
-        >
-          <Text style={[styles.chipText, filters.grade !== null && styles.chipTextActive]}>
-            {gradeLabel()}
-          </Text>
-          {filters.grade !== null && (
-            <Pressable
-              onPress={() => onFiltersChange({ ...filters, grade: null })}
-              hitSlop={8}
-              accessibilityLabel={t('profileHistory.filter.clearGrade')}
-            >
-              <Text style={styles.chipClear}>  ×</Text>
-            </Pressable>
-          )}
-        </Pressable>
+        {activePicker === 'grade' && (
+          <>
+            <ListRow
+              on="elevated"
+              inset="grouped"
+              variant="selectable"
+              title={t('profileHistory.filter.allGrades')}
+              selected={filters.grade === null}
+              onPress={() => select(() => onFiltersChange({ ...filters, grade: null }))}
+            />
+            {GRADE_ORDER.map((g, i) => (
+              <ListRow
+                key={g}
+                on="elevated"
+                inset="grouped"
+                variant="selectable"
+                title={g}
+                selected={filters.grade === g}
+                divider={i < GRADE_ORDER.length - 1}
+                onPress={() => select(() => onFiltersChange({ ...filters, grade: g }))}
+              />
+            ))}
+          </>
+        )}
 
-        {/* Date filter chip */}
-        <Pressable
-          style={[styles.chip, filters.date_from !== null && styles.chipActive]}
-          onPress={() => setActivePicker(activePicker === 'date' ? null : 'date')}
-          accessibilityRole="button"
-          accessibilityLabel={t('profileHistory.filter.dateA11y')}
-          accessibilityState={{ selected: filters.date_from !== null }}
-        >
-          <Text style={[styles.chipText, filters.date_from !== null && styles.chipTextActive]}>
-            {dateLabel()}
-          </Text>
-          {filters.date_from !== null && (
-            <Pressable
-              onPress={() => onFiltersChange({ ...filters, date_from: null, date_to: null })}
-              hitSlop={8}
-              accessibilityLabel={t('profileHistory.filter.clearDate')}
-            >
-              <Text style={styles.chipClear}>  ×</Text>
-            </Pressable>
-          )}
-        </Pressable>
-      </ScrollView>
-
-      {/* ── Picker modal ───────────────────────────────────────────────────── */}
-      <Modal
-        visible={activePicker !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setActivePicker(null)}
-      >
-        <Pressable style={styles.backdrop} onPress={() => setActivePicker(null)}>
-          <View style={styles.pickerSheet}>
-            {/* Gym picker */}
-            {activePicker === 'gym' && (
-              <>
-                <Text style={styles.pickerTitle}>{t('profileHistory.filter.gym')}</Text>
-                <ScrollView>
-                  <Pressable
-                    style={styles.pickerItem}
-                    onPress={() => {
-                      onFiltersChange({ ...filters, gym_id: null });
-                      setActivePicker(null);
-                    }}
-                  >
-                    <Text style={styles.pickerItemText}>{t('profileHistory.filter.allGyms')}</Text>
-                  </Pressable>
-                  {gyms.map((gym) => (
-                    <Pressable
-                      key={gym.id}
-                      style={styles.pickerItem}
-                      onPress={() => {
-                        onFiltersChange({ ...filters, gym_id: gym.id });
-                        setActivePicker(null);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerItemText,
-                          filters.gym_id === gym.id && styles.pickerItemActive,
-                        ]}
-                      >
-                        {gym.name}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </>
-            )}
-
-            {/* Grade picker */}
-            {activePicker === 'grade' && (
-              <>
-                <Text style={styles.pickerTitle}>{t('profileHistory.filter.grade')}</Text>
-                <ScrollView>
-                  <Pressable
-                    style={styles.pickerItem}
-                    onPress={() => {
-                      onFiltersChange({ ...filters, grade: null });
-                      setActivePicker(null);
-                    }}
-                  >
-                    <Text style={styles.pickerItemText}>{t('profileHistory.filter.allGrades')}</Text>
-                  </Pressable>
-                  {GRADE_ORDER.map((g) => (
-                    <Pressable
-                      key={g}
-                      style={styles.pickerItem}
-                      onPress={() => {
-                        onFiltersChange({ ...filters, grade: g });
-                        setActivePicker(null);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.pickerItemText,
-                          filters.grade === g && styles.pickerItemActive,
-                        ]}
-                      >
-                        {g}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              </>
-            )}
-
-            {/* Date picker */}
-            {activePicker === 'date' && (
-              <>
-                <Text style={styles.pickerTitle}>{t('profileHistory.filter.date')}</Text>
-                {DATE_PRESETS.map((preset) => (
-                  <Pressable
-                    key={preset.days}
-                    style={styles.pickerItem}
-                    onPress={() => applyDatePreset(preset.days)}
-                  >
-                    <Text style={styles.pickerItemText}>{preset.label}</Text>
-                  </Pressable>
-                ))}
-                <Pressable style={styles.pickerItem} onPress={clearDate}>
-                  <Text style={styles.pickerItemText}>{t('profileHistory.filter.allTime')}</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-        </Pressable>
-      </Modal>
+        {activePicker === 'date' && (
+          <>
+            <ListRow
+              on="elevated"
+              inset="grouped"
+              variant="selectable"
+              title={t('profileHistory.filter.allTime')}
+              selected={filters.date_from === null}
+              onPress={() => select(() => onFiltersChange({ ...filters, date_from: null, date_to: null }))}
+            />
+            {DATE_PRESET_DAYS.map((days, i) => (
+              <ListRow
+                key={days}
+                on="elevated"
+                inset="grouped"
+                variant="selectable"
+                title={presetLabel(days)}
+                selected={presetDays === days}
+                divider={i < DATE_PRESET_DAYS.length - 1}
+                onPress={() => select(() => applyDatePreset(days))}
+              />
+            ))}
+          </>
+        )}
+      </BottomSheet>
     </>
   );
 }
@@ -278,71 +240,16 @@ export default function FilterBar({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
     row: {
-      flexGrow: 0,
-      marginBottom: theme.spacing.md,
-    },
-    rowContent: {
-      gap: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.lg,
-    },
-    chip: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       alignItems: 'center',
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    chipActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primary,
-    },
-    chipText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    chipTextActive: {
-      color: theme.colors.textInverse,
-    },
-    chipClear: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textInverse,
-    },
-    backdrop: {
-      flex: 1,
-      backgroundColor: theme.colors.overlay,
-      justifyContent: 'flex-end',
-    },
-    pickerSheet: {
-      backgroundColor: theme.colors.surfaceElevated,
-      borderTopLeftRadius: theme.borderRadius.xl,
-      borderTopRightRadius: theme.borderRadius.xl,
-      padding: theme.spacing.lg,
-      maxHeight: 400,
-    },
-    pickerTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
+      columnGap: theme.spacing.sm,
+      rowGap: theme.spacing.sm,
+      paddingHorizontal: screenMargin,
       marginBottom: theme.spacing.md,
-    },
-    pickerItem: {
-      paddingVertical: theme.spacing.md,
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.divider,
-    },
-    pickerItemText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-    },
-    pickerItemActive: {
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.semibold,
     },
   });
 }

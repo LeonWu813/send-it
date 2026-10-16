@@ -20,6 +20,10 @@
  *         call), a confirmation dialog is shown before opening the picker.
  *         Confirming proceeds to the picker; cancelling dismisses with no action.
  *         No disabled-button state; no "delete first" static message.
+ * Design system v1.2 (off-spec design work): the add button is a ui/ Button, inline errors are
+ * ui/ InlineError, the progress modal is a `surfaceElevated` card with a ui/ ProgressBar. Upload
+ * failures show the translated `betaVideo.errors.uploadFailed` sentence, never `err.message`.
+ * Flow and logic are unchanged.
  * AC-169 (Rev 24): upfront native file size gate — runs before upload begins.
  *         If native file size >= 45 MB or cannot be read, upload is rejected.
  *         Fails closed: size === 0 means unreadable, treated as oversized.
@@ -27,19 +31,15 @@
 
 import { File as ExpoFile } from 'expo-file-system';
 import * as ImagePicker from 'expo-image-picker';
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Alert,
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useTheme } from '../../../lib/theme';
+import { Alert, Modal, View } from 'react-native';
+import { Button } from '../../../components/ui/Button';
+import { InlineError } from '../../../components/ui/InlineError';
+import { UploadProgressCard } from '../../../components/ui/ProgressBar';
+import { ICON } from '../../../lib/icons';
+import { useMotion } from '../../../lib/motion';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { checkExistingBetaVideo, uploadBetaVideo } from '../beta-video-service';
 import type { BetaVideo, UploadProgress } from '../types';
 
@@ -75,6 +75,8 @@ interface BetaVideoUploaderProps {
    * When false (default), the inline error text is rendered here as before.
    */
   suppressInlineError?: boolean;
+  /** Route name shown in the upload card (v2.2 UploadProgressCard). */
+  routeName?: string;
 }
 
 // AC-161: no per-upload visibility/privacy toggle exists in this component.
@@ -89,13 +91,18 @@ export default function BetaVideoUploader({
   onRegisterSelectHandler,
   hideButton = false,
   suppressInlineError = false,
+  routeName,
 }: BetaVideoUploaderProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { screenMargin } = useLayout();
+  const { haptic } = useMotion();
 
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
+  // v2.2: the chosen asset is kept so a failed upload can be retried from the card (same file, same limits).
+  const [pendingAsset, setPendingAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [uploadFailed, setUploadFailed] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // AC-166 (Rev 28): check whether the user already has a video for this route on
@@ -161,6 +168,55 @@ export default function BetaVideoUploader({
     }
     return null;
   }
+
+  const runUpload = useCallback(async (asset: ImagePicker.ImagePickerAsset): Promise<void> => {
+    const durationSeconds = (asset.duration ?? 0) / 1000;
+
+    setPendingAsset(asset);
+    setUploadFailed(false);
+    setProgress(null);
+    setIsUploading(true);
+
+    try {
+      // AC-031 (Rev 24): upload the original native file as-is — no compression step.
+      // AC-166 (Rev 28) / AC-165: the uploadBetaVideo service uses upsert (ON CONFLICT
+      // on user_id,route_id), so no manual delete step is needed here. The upsert
+      // handles both the new-video and the replace case at the DB level.
+      // The confirmation dialog (shown above when hasExistingVideo === true) ensures
+      // the user has explicitly confirmed the replacement before reaching this point.
+      const video = await uploadBetaVideo(
+        {
+          route_id: routeId,
+          localVideoUri: asset.uri,   // native file, no compression
+          localThumbnailUri: asset.uri, // Phase 1 placeholder: same URI as video (AC-031 Phase 1 simplification)
+          duration_seconds: Math.max(durationSeconds, 0.1), // guard against 0
+        },
+        userId,
+        (prog) => {
+          // AC-036 (Rev 24): upload progress maps directly 0–100% (no compression phase).
+          setProgress({ percent: prog.percent, phase: prog.phase });
+        },
+      );
+      // Bug 1 fix (AC-166): after a first successful upload within the same
+      // session, hasExistingVideo is still false (the mount-time check ran before
+      // the video existed). Set it to true here so subsequent upload attempts in
+      // this session correctly show the replace-confirmation dialog.
+      setHasExistingVideo(true);
+      haptic('toggle', 'beta-upload');
+      onUploadSuccess(video);
+      setPendingAsset(null);
+    } catch {
+      // Friendly sentence for the user; the service's raw message is not shown.
+      const msg = t('betaVideo.errors.uploadFailed');
+      haptic('error', 'beta-upload');
+      setErrorMessage(msg);
+      onUploadError?.(msg);
+      // Stay on the card in its failed state (Retry / Cancel); success closes it below.
+      setUploadFailed(true);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [routeId, userId, onUploadSuccess, onUploadError, t, haptic]);
 
   const handleSelectVideo = useCallback(async (): Promise<void> => {
     setErrorMessage(null);
@@ -248,46 +304,8 @@ export default function BetaVideoUploader({
       return;
     }
 
-    // Duration in seconds for storage
-    const durationSeconds = (asset.duration ?? 0) / 1000;
-
-    setIsUploading(true);
-
-    try {
-      // AC-031 (Rev 24): upload the original native file as-is — no compression step.
-      // AC-166 (Rev 28) / AC-165: the uploadBetaVideo service uses upsert (ON CONFLICT
-      // on user_id,route_id), so no manual delete step is needed here. The upsert
-      // handles both the new-video and the replace case at the DB level.
-      // The confirmation dialog (shown above when hasExistingVideo === true) ensures
-      // the user has explicitly confirmed the replacement before reaching this point.
-      const video = await uploadBetaVideo(
-        {
-          route_id: routeId,
-          localVideoUri: asset.uri,   // native file, no compression
-          localThumbnailUri: asset.uri, // Phase 1 placeholder: same URI as video (AC-031 Phase 1 simplification)
-          duration_seconds: Math.max(durationSeconds, 0.1), // guard against 0
-        },
-        userId,
-        (prog) => {
-          // AC-036 (Rev 24): upload progress maps directly 0–100% (no compression phase).
-          setProgress({ percent: prog.percent, phase: prog.phase });
-        },
-      );
-      // Bug 1 fix (AC-166): after a first successful upload within the same
-      // session, hasExistingVideo is still false (the mount-time check ran before
-      // the video existed). Set it to true here so subsequent upload attempts in
-      // this session correctly show the replace-confirmation dialog.
-      setHasExistingVideo(true);
-      onUploadSuccess(video);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t('betaVideo.errors.uploadFailed');
-      setErrorMessage(msg);
-      onUploadError?.(msg);
-    } finally {
-      setIsUploading(false);
-      setProgress(null);
-    }
-  }, [hasExistingVideo, routeId, userId, onUploadSuccess, onUploadError, t]);
+    await runUpload(asset);
+  }, [hasExistingVideo, t, onUploadError, runUpload]);
 
   /**
    * AC-130: Register handleSelectVideo with the parent so the external launcher
@@ -308,102 +326,60 @@ export default function BetaVideoUploader({
           AC-130: hideButton=true suppresses this button when the trigger is the
           external header button registered via onRegisterSelectHandler. */}
       {hideButton ? null : (
-        <Pressable
-          style={styles.addButton}
-          onPress={() => { void handleSelectVideo(); }}
-          disabled={isUploading}
-          accessibilityRole="button"
-          accessibilityLabel={t('betaVideo.addVideo')}
-          accessibilityState={{ disabled: isUploading }}
-        >
-          <Ionicons
-            name="videocam-outline"
-            size={18}
-            color={theme.colors.primary}
+        <View style={{ marginTop: theme.spacing.sm }}>
+          <Button
+            variant="secondary"
+            size="md"
+            icon={ICON.upload.outline}
+            label={t('betaVideo.addVideo')}
+            onPress={() => { void handleSelectVideo(); }}
+            disabled={isUploading}
           />
-          <Text style={styles.addButtonText}>
-            {t('betaVideo.addVideo')}
-          </Text>
-        </Pressable>
+        </View>
       )}
 
       {/* Inline error message — suppressed when the parent handles error display (Fix 2). */}
       {errorMessage && !suppressInlineError ? (
-        <Text style={styles.errorText}>{errorMessage}</Text>
+        <View style={{ marginTop: theme.spacing.sm }}>
+          <InlineError variant="block" message={errorMessage} />
+        </View>
       ) : null}
 
-      {/* AC-036 (Rev 24): Progress overlay — single "Uploading…" phase, blocks further interaction */}
+      {/* AC-036 (Rev 24): Progress overlay — single "Uploading…" phase, blocks further interaction.
+          Not dismissable while uploading: no close button, a tap on the overlay does nothing. */}
       <Modal
-        visible={isUploading}
+        visible={isUploading || uploadFailed}
         transparent
         animationType="fade"
         onRequestClose={() => { /* intentionally non-dismissable during upload */ }}
       >
-        <View style={styles.progressOverlay}>
-          <View style={styles.progressCard}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.progressTitle}>
-              {t('betaVideo.uploading')}
-            </Text>
-            {progress ? (
-              <Text style={styles.progressPercent}>
-                {t('betaVideo.uploadProgress', { percent: progress.percent })}
-              </Text>
-            ) : null}
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: theme.colors.overlay,
+            alignItems: 'center',
+            justifyContent: 'center',
+            paddingHorizontal: screenMargin,
+          }}
+        >
+          <View accessibilityViewIsModal style={{ width: '100%', alignItems: 'center' }}>
+          <UploadProgressCard
+            thumbnailUri={pendingAsset?.uri}
+            title={uploadFailed ? t('betaVideo.uploadFailedTitle') : t('betaVideo.uploading')}
+            routeName={routeName ?? ''}
+            percent={progress?.percent ?? 0}
+            failed={uploadFailed}
+            caption={t('betaVideo.uploadingHint')}
+            errorCaption={t('betaVideo.uploadInterrupted')}
+            retryLabel={t('common.retry')}
+            cancelLabel={t('common.cancel')}
+            onRetry={() => { if (pendingAsset) void runUpload(pendingAsset); }}
+            onCancel={() => { setUploadFailed(false); setPendingAsset(null); setProgress(null); }}
+            progressLabel={t('betaVideo.uploading')}
+          />
           </View>
         </View>
       </Modal>
     </>
   );
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
-  return StyleSheet.create({
-    addButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.xs,
-      paddingVertical: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      alignSelf: 'flex-start',
-      marginTop: theme.spacing.sm,
-    },
-    addButtonText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.primary,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      marginTop: theme.spacing.xs,
-    },
-    progressOverlay: {
-      flex: 1,
-      backgroundColor: theme.colors.overlay,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    progressCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-      padding: theme.spacing.xl,
-      alignItems: 'center',
-      minWidth: 200,
-      gap: theme.spacing.md,
-    },
-    progressTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    progressPercent: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-  });
 }

@@ -7,28 +7,31 @@
  *
  * AC-004 (gym detail portion): gym showing name, city/district, address,
  * map pin, gym type, and (if present) photo when a user opens the gym.
- * AC-120: bookmark icon reflecting saved state (filled yellow / gray outline).
+ * AC-120: bookmark icon reflecting saved state (filled primary / outline textSecondary).
  * AC-121: tapping the bookmark icon optimistically toggles save/unsave.
  */
 
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 
-import i18n from '../../../lib/i18n';
-import { useTheme } from '../../../lib/theme';
-import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
-import type { Gym } from '../types';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
+import {
+  AppText,
+  Button,
+  IconButton,
+  InlineError,
+  NoticeBox,
+  Skeleton,
+  SkeletonGroup,
+  useSkeletonPhase,
+} from '../../../components/ui';
+import i18n from '../../../lib/i18n';
+import { ICON } from '../../../lib/icons';
+import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
+import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import type { Gym } from '../types';
 
 interface GymDetailScreenProps {
   gymId: string;
@@ -50,10 +53,13 @@ export default function GymDetailScreen({
 }: GymDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme, 0);
+  const { screenMargin } = useLayout();
+  const tabInset = useTabBarInset();
+  const styles = makeStyles(theme, screenMargin, tabInset.contentBottom);
 
   const [gym, setGym] = useState<Gym | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const skeletonPhase = useSkeletonPhase(isLoading);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // AC-120, AC-121: saved-gym bookmark state
@@ -104,13 +110,42 @@ export default function GymDetailScreen({
     }
   }, [gymId, isSaved]);
 
+  // v2.2: AppShell header owns back + title; the bookmark toggle is its trailing control.
+  useAppHeader({
+    title: gym?.name ?? '',
+    onBack,
+    trailing: gym ? (
+      <IconButton
+        variant="float"
+        name={isSaved ? ICON.bookmark.filled : ICON.bookmark.outline}
+        accessibilityLabel={
+          isSaved ? t('gymDirectory.bookmark.unsave') : t('gymDirectory.bookmark.save')
+        }
+        onPress={() => {
+          void handleBookmarkToggle();
+        }}
+      />
+    ) : undefined,
+  });
+
   const isMixed = gym?.gym_type === 'both';
 
   if (isLoading) {
     return (
       <SwipeBackWrapper onBack={onBack} enabled={false}>
-        <View style={styles.centeredContainer}>
-          <ActivityIndicator color={theme.colors.primary} size="large" />
+        <View style={styles.root}>
+          <View style={styles.contentContainer}>
+            {skeletonPhase !== 'idle' ? (
+              <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonGroup}>
+                <Skeleton shape="card" surface="page" height={160} />
+                <Skeleton shape="text" textVariant="title1" width="70%" surface="page" />
+                <Skeleton shape="text" textVariant="title3" width="45%" surface="page" />
+                <Skeleton shape="text" textVariant="title3" width="30%" surface="page" />
+                <Skeleton shape="text" textVariant="body" width="60%" surface="page" />
+                <Skeleton shape="text" textVariant="body" width="80%" surface="page" />
+              </SkeletonGroup>
+            ) : null}
+          </View>
         </View>
       </SwipeBackWrapper>
     );
@@ -119,26 +154,17 @@ export default function GymDetailScreen({
   if (errorMessage || !gym) {
     return (
       <SwipeBackWrapper onBack={onBack}>
-        <View style={styles.centeredContainer}>
-          <Pressable
-            onPress={onBack}
-            style={styles.backLink}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-          >
-            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-          </Pressable>
-          <Text style={styles.errorText}>
-            {errorMessage ?? t('common.error')}
-          </Text>
-          <Pressable
-            style={styles.retryButton}
-            onPress={fetchGym}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.retry')}
-          >
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </Pressable>
+        <View style={styles.root}>
+          <View style={styles.contentContainer}>
+            <InlineError
+              variant="block"
+              message={errorMessage ?? t('common.error')}
+              actionLabel={t('common.retry')}
+              onAction={() => {
+                void fetchGym();
+              }}
+            />
+          </View>
         </View>
       </SwipeBackWrapper>
     );
@@ -149,235 +175,126 @@ export default function GymDetailScreen({
       <ScrollView
         style={styles.root}
         contentContainerStyle={styles.contentContainer}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
-      {/* Header row: back navigation + bookmark toggle (AC-120, AC-121) */}
-      <View style={styles.headerRow}>
-        <Pressable
-          onPress={onBack}
-          style={styles.backLink}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-        <Pressable
-          onPress={() => { void handleBookmarkToggle(); }}
-          style={styles.bookmarkButton}
-          accessibilityRole="button"
-          accessibilityLabel={
-            isSaved
-              ? t('gymDirectory.bookmark.unsave')
-              : t('gymDirectory.bookmark.save')
-          }
-          accessibilityState={{ selected: isSaved }}
-        >
-          <Ionicons
-            name={isSaved ? 'bookmark' : 'bookmark-outline'}
-            size={28}
-            color={isSaved ? theme.colors.warning : theme.colors.textSecondary}
+        {/* Gym photo (when present) */}
+        {gym.photo_url ? (
+          <Image
+            source={{ uri: gym.photo_url }}
+            style={styles.photo}
+            accessibilityLabel={gym.name}
+            resizeMode="cover"
           />
-        </Pressable>
-      </View>
+        ) : (
+          <View style={styles.photoPlaceholder}>
+            <AppText variant="footnote" color="textDisabled">
+              {t('gymDirectory.detail.noPhoto')}
+            </AppText>
+          </View>
+        )}
 
-      {/* Gym photo (when present) */}
-      {gym.photo_url ? (
-        <Image
-          source={{ uri: gym.photo_url }}
-          style={styles.photo}
-          accessibilityLabel={gym.name}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={styles.photoPlaceholder}>
-          <Text style={styles.photoPlaceholderText}>
-            {t('gymDirectory.detail.noPhoto')}
-          </Text>
+        {/* Name + branch */}
+        <AppText variant="title1">{gym.name}</AppText>
+        <AppText variant="title3" color="textSecondary">
+          {gym.name_zh}
+        </AppText>
+        {gym.branch_label ? (
+          <AppText variant="callout" color="textSecondary" style={styles.branchLabel}>
+            {gym.branch_label}
+          </AppText>
+        ) : null}
+
+        {/* Location section */}
+        <AppText variant="pageSection" style={styles.sectionLabel}>
+          {t('gymDirectory.detail.location')}
+        </AppText>
+        <AppText variant="body">
+          {localizedCity(gym)} · {localizedDistrict(gym)}
+        </AppText>
+        <AppText variant="body">{gym.address_text}</AppText>
+        <AppText variant="footnote" color="textSecondary" numeric style={styles.coordinates}>
+          {t('gymDirectory.detail.coordinates')}: {gym.lat.toFixed(4)},{' '}
+          {gym.lng.toFixed(4)}
+        </AppText>
+
+        {/* Grade system */}
+        <AppText variant="pageSection" style={styles.sectionLabel}>
+          {t('gymDirectory.detail.gradingSystem')}
+        </AppText>
+        <AppText variant="body">{gym.official_grading_system}</AppText>
+
+        {/* Mixed gym note */}
+        {isMixed && gym.bouldering_only_note ? (
+          <NoticeBox message={gym.bouldering_only_note} style={styles.noteBox} />
+        ) : null}
+
+        {/* View Routes CTA */}
+        <View style={styles.cta}>
+          <Button
+            variant="primary"
+            fullWidth
+            label={t('gymDirectory.detail.viewRoutes')}
+            onPress={() => onViewRoutes(gym.id, gym.name)}
+          />
         </View>
-      )}
-
-      {/* Name + branch */}
-      <Text style={styles.gymName}>{gym.name}</Text>
-      <Text style={styles.gymNameZh}>{gym.name_zh}</Text>
-      {gym.branch_label ? (
-        <Text style={styles.branchLabel}>{gym.branch_label}</Text>
-      ) : null}
-
-      {/* Location section */}
-      <Text style={styles.sectionLabel}>
-        {t('gymDirectory.detail.location')}
-      </Text>
-      <Text style={styles.infoText}>
-        {localizedCity(gym)} · {localizedDistrict(gym)}
-      </Text>
-      <Text style={styles.infoText}>{gym.address_text}</Text>
-      <Text style={styles.coordinates}>
-        {t('gymDirectory.detail.coordinates')}: {gym.lat.toFixed(4)},{' '}
-        {gym.lng.toFixed(4)}
-      </Text>
-
-      {/* Grade system */}
-      <Text style={styles.sectionLabel}>
-        {t('gymDirectory.detail.gradingSystem')}
-      </Text>
-      <Text style={styles.infoText}>{gym.official_grading_system}</Text>
-
-      {/* Mixed gym note */}
-      {isMixed && gym.bouldering_only_note ? (
-        <View style={styles.noteBox}>
-          <Text style={styles.noteText}>{gym.bouldering_only_note}</Text>
-        </View>
-      ) : null}
-
-      {/* View Routes CTA */}
-      <Pressable
-        style={styles.viewRoutesButton}
-        onPress={() => onViewRoutes(gym.id, gym.name)}
-        accessibilityRole="button"
-        accessibilityLabel={t('gymDirectory.detail.viewRoutes')}
-      >
-        <Text style={styles.viewRoutesButtonText}>
-          {t('gymDirectory.detail.viewRoutes')}
-        </Text>
-      </Pressable>
       </ScrollView>
     </SwipeBackWrapper>
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  screenMargin: number,
+  bottomInset: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.xxl,
+      paddingTop: theme.spacing.sm,
+      paddingHorizontal: screenMargin,
+      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.xxl,
     },
-    centeredContainer: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.lg,
-    },
-    headerRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: theme.spacing.md,
-    },
-    backLink: {
-      // no extra margin — headerRow handles spacing
-    },
-    bookmarkButton: {
-      padding: theme.spacing.xs,
+    skeletonGroup: {
+      gap: theme.layout.cardGap,
     },
     photo: {
       width: '100%',
-      height: 200,
-      borderRadius: theme.borderRadius.lg,
+      aspectRatio: 2,
+      borderRadius: RADIUS.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
       marginBottom: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     photoPlaceholder: {
       width: '100%',
-      height: 160,
-      borderRadius: theme.borderRadius.lg,
-      backgroundColor: theme.colors.surface,
+      minHeight: 160,
+      borderRadius: RADIUS.card,
+      ...CONTINUOUS,
+      backgroundColor: theme.colors.surfaceAlt,
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: theme.spacing.md,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    photoPlaceholderText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textDisabled,
-    },
-    gymName: {
-      fontSize: theme.fontSize.xxl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      marginBottom: 2,
-    },
-    gymNameZh: {
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.textSecondary,
-      marginBottom: 2,
     },
     branchLabel: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      marginBottom: theme.spacing.md,
+      marginTop: theme.spacing.xxs,
     },
     sectionLabel: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginTop: theme.spacing.lg,
-      marginBottom: theme.spacing.xs,
-    },
-    infoText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-      marginBottom: 4,
+      marginTop: theme.layout.sectionGap,
+      marginBottom: theme.layout.sectionHeaderGap,
     },
     coordinates: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      fontVariant: ['tabular-nums'],
-      marginTop: 4,
+      marginTop: theme.spacing.xs,
     },
     noteBox: {
-      backgroundColor: theme.colors.surface,
-      borderLeftWidth: 3,
-      borderLeftColor: theme.colors.warning,
-      borderRadius: theme.borderRadius.sm,
-      padding: theme.spacing.md,
-      marginTop: theme.spacing.lg,
+      marginTop: theme.layout.sectionGap,
     },
-    noteText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      lineHeight: 20,
-    },
-    errorText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-      textAlign: 'center',
-      marginBottom: theme.spacing.md,
-    },
-    retryButton: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    retryButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-    },
-    viewRoutesButton: {
+    cta: {
       marginTop: theme.spacing.xl,
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-    },
-    viewRoutesButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.background,
     },
   });
 }

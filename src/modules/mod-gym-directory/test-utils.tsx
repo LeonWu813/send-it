@@ -5,23 +5,58 @@
  * so that components using useTheme() and useTranslation() work in tests.
  */
 
-import React from 'react';
+import React, { useRef } from 'react';
+import { Pressable, Text, View } from 'react-native';
 
 // Initialize i18n before component renders
 import '../../lib/i18n';
 import { ThemeProvider } from '../../lib/theme';
+import {
+  AppHeaderProvider,
+  AppHeaderStore,
+  AppHeaderTabScope,
+  useAppHeaderStoreVersion,
+} from '../mod-home/components/AppHeaderContext';
 
 interface WrapperProps {
   children: React.ReactNode;
 }
 
+/** Minimal stand-in for AppShell's header: renders the registered back button, title and trailing. */
+function HeaderHost({ store }: { store: AppHeaderStore }): React.JSX.Element {
+  useAppHeaderStoreVersion(store);
+  const config = store.top('gyms')?.config;
+  return (
+    <View>
+      {config?.onBack ? (
+        <Pressable accessibilityLabel="Back" onPress={config.onBack}>
+          <Text>back</Text>
+        </Pressable>
+      ) : null}
+      {config?.onBack ? <View testID="header-title" accessibilityLabel={config.title} /> : null}
+      {config?.trailing}
+    </View>
+  );
+}
+
 /**
  * Wraps children with the providers required by gym directory screens:
  * - ThemeProvider (required for useTheme())
+ * - AppHeader store + a header host so useAppHeader wiring (back, title, trailing) is testable
  * - i18n (initialized via side-effect import above)
  */
 export function TestProviders({ children }: WrapperProps): React.JSX.Element {
-  return <ThemeProvider>{children}</ThemeProvider>;
+  const store = useRef(new AppHeaderStore(0, 0)).current;
+  return (
+    <ThemeProvider>
+      <AppHeaderProvider value={store}>
+        <AppHeaderTabScope tab="gyms">
+          <HeaderHost store={store} />
+          {children}
+        </AppHeaderTabScope>
+      </AppHeaderProvider>
+    </ThemeProvider>
+  );
 }
 
 /**
