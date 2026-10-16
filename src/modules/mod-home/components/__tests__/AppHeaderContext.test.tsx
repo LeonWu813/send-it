@@ -87,3 +87,55 @@ describe('AppHeaderOverlayScope', () => {
     expect(screen.getByText('body')).toBeTruthy();
   });
 });
+
+describe('useHeaderContentInset', () => {
+  const { useHeaderContentInset, useAppHeaderRoot } = require('../AppHeaderContext');
+  const { AppHeaderOverlayScope } = require('../AppHeaderOverlayScope');
+  const { TestProviders } = require('../../test-utils');
+
+  function Inset(): React.JSX.Element {
+    return <Text testID="inset">{String(useHeaderContentInset())}</Text>;
+  }
+  function Root(): null {
+    useAppHeaderRoot();
+    return null;
+  }
+  const wrap = (store: AppHeaderStore, children: React.ReactNode) => (
+    <AppHeaderProvider value={store}>
+      <AppHeaderTabScope tab="gyms">{children}</AppHeaderTabScope>
+    </AppHeaderProvider>
+  );
+
+  it('is 0 outside AppShell', () => {
+    render(<Inset />);
+    expect(screen.getByTestId('inset').props.children).toBe('0');
+  });
+
+  it('is 0 for tab roots without a scroll binding and for nested tab screens', () => {
+    const store = new AppHeaderStore(47, 34);
+    render(wrap(store, <><Inset /><Screen title="Nested" onBack={jest.fn()} /></>));
+    expect(screen.getByTestId('inset').props.children).toBe('0');
+  });
+
+  it('is the header height for a scroll-bound tab root, and 0 once a nested screen registers', () => {
+    const store = new AppHeaderStore(47, 34);
+    const root = render(wrap(store, <><Inset /><Root /></>));
+    // The jest preset reports fontScale 2 (AX): 47 + 58 + 50.
+    expect(Number(screen.getByTestId('inset').props.children)).toBeGreaterThanOrEqual(105);
+    root.unmount();
+  });
+
+  it('is 0 inside an overlay scope', () => {
+    const store = new AppHeaderStore(47, 34);
+    render(
+      wrap(
+        store,
+        <AppHeaderOverlayScope topInset={47} bottomInset={34} onNavigateToNotifications={jest.fn()} onNavigateToSettings={jest.fn()}>
+          <Inset />
+        </AppHeaderOverlayScope>,
+      ),
+      { wrapper: TestProviders },
+    );
+    expect(screen.getByTestId('inset').props.children).toBe('0');
+  });
+});

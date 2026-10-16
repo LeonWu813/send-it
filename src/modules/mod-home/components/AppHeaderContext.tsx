@@ -299,3 +299,34 @@ function rootHeaderHeightFor(topInset: number, fontScale: number): number {
 export function useAppHeaderStoreVersion(store: AppHeaderStore): number {
   return React.useSyncExternalStore(store.subscribe, store.getVersion, store.getVersion);
 }
+
+/**
+ * Top padding a screen must add for the global header in its CURRENT context:
+ *   - overlay (`AppHeaderOverlayScope`): 0. The nested header sits in flow above the overlay content.
+ *   - tab, nested screen (registered with `onBack`): 0. The nested header sits in flow above the tab content.
+ *   - tab root that did NOT call `useAppHeaderRoot`: 0. The root header is in flow (static large title).
+ *   - tab root that called `useAppHeaderRoot` (scroll-bound): the header floats over the list, so this is the
+ *     header height (`insets.top + 58`, +50 at font scale >= 1.6). `useAppHeaderRoot().contentTopInset` is the
+ *     same number; use whichever the screen already has.
+ *   - outside AppShell (stories, tests): 0.
+ * A screen never needs `rootHeaderHeight(...)` itself; add exactly this value and nothing else.
+ */
+export function useHeaderContentInset(): number {
+  const store = useContext(StoreContext);
+  const tab = useContext(TabContext);
+  const overlay = useContext(OverlayContext);
+  const { fontScale } = useWindowDimensions();
+  const snapshot = (): number => {
+    if (!store || !tab || overlay) return 0;
+    const top = store.top(tab);
+    if (top?.config.onBack) return 0;
+    return store.rootScrollFor(tab) ? rootHeaderHeightFor(store.topInset, fontScale) : 0;
+  };
+  return React.useSyncExternalStore(
+    store ? store.subscribe : noopSubscribe,
+    snapshot,
+    snapshot,
+  );
+}
+
+const noopSubscribe = (): (() => void) => () => {};
