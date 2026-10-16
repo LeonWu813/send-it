@@ -23,26 +23,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Alert, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { useTheme } from '../../../lib/theme';
-import RouteColorBadge from '../components/RouteColorBadge';
+import { AppText, Button, Chip, IconButton, NoticeBox, TextField } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
 import {
   listRoutes,
   submitRoute,
   uploadRoutePhoto,
 } from '../route-service';
+import { TAPE_HAIR, resolveTape } from '../tape';
 import type { RouteColor, RouteGrade, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
 
@@ -75,7 +67,8 @@ export default function RouteSubmitScreen({
 }: RouteSubmitScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme, 0);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, screenMargin);
 
   // Form state — pre-filled from filter state if provided (AC-043)
   const [selectedGrade, setSelectedGrade] = useState<RouteGrade | null>(
@@ -251,319 +244,292 @@ export default function RouteSubmitScreen({
       keyboardShouldPersistTaps="handled"
     >
       {/* Back navigation */}
-      <Pressable
-        onPress={onBack}
-        style={styles.backLink}
-        accessibilityRole="button"
-        accessibilityLabel={t('common.back')}
-      >
-        <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-      </Pressable>
+      <View style={styles.backRow}>
+        <IconButton
+          name={ICON.back.outline}
+          size={24}
+          on="background"
+          onPress={onBack}
+          accessibilityLabel={t('common.back')}
+        />
+      </View>
 
-      <Text style={styles.screenTitle}>{t('routes.submit.title')}</Text>
-      <Text style={styles.gymNameSubtitle}>{gymName}</Text>
+      <AppText variant="title1" style={styles.screenTitle}>{t('routes.submit.title')}</AppText>
+      <AppText variant="body" color="textSecondary" style={styles.gymNameSubtitle}>{gymName}</AppText>
 
       {/* Grade chips — AC-023: V-scale only */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t('routes.submit.gradeLabel')}</Text>
+        <AppText variant="sectionHeader" style={styles.sectionLabel}>{t('routes.submit.gradeLabel')}</AppText>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipRow}
+          accessibilityRole="radiogroup"
         >
-          {ROUTE_GRADES.map((grade) => {
-            const isSelected = selectedGrade === grade;
-            return (
-              <Pressable
-                key={grade}
-                style={[styles.gradeChip, isSelected && styles.gradeChipActive]}
-                onPress={() => {
-                  setSelectedGrade(grade);
-                  setGradeError(null);
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={grade}
-              >
-                <Text
-                  style={[
-                    styles.gradeChipText,
-                    isSelected && styles.gradeChipTextActive,
-                  ]}
-                >
-                  {grade}
-                </Text>
-              </Pressable>
-            );
-          })}
+          {ROUTE_GRADES.map((grade) => (
+            <Chip
+              key={grade}
+              variant="choice"
+              label={grade}
+              selected={selectedGrade === grade}
+              onPress={() => {
+                setSelectedGrade(grade);
+                setGradeError(null);
+              }}
+            />
+          ))}
         </ScrollView>
         {gradeError ? (
-          <Text style={styles.errorText}>{gradeError}</Text>
+          <InlineFieldError message={gradeError} />
         ) : null}
       </View>
 
-      {/* Hold-color chips — AC-022: fixed enum, with color dots */}
+      {/* Hold-color picker — AC-022: fixed enum, tape swatches */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</Text>
+        <AppText variant="sectionHeader" style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</AppText>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipRow}
+          accessibilityRole="radiogroup"
         >
-          {ROUTE_COLORS.map((color) => {
-            const isSelected = selectedColor === color;
-            return (
-              <Pressable
-                key={color}
-                style={[
-                  styles.colorChip,
-                  isSelected && styles.colorChipSelected,
-                ]}
-                onPress={() => {
-                  setSelectedColor(color);
-                  setColorError(null);
-                }}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: isSelected }}
-                accessibilityLabel={color}
-              >
-                <RouteColorBadge color={color} size="sm" />
-                {isSelected && (
-                  <View style={styles.colorCheckmark}>
-                    <Text style={styles.colorCheckmarkText}>✓</Text>
-                  </View>
-                )}
-              </Pressable>
-            );
-          })}
+          {ROUTE_COLORS.map((color) => (
+            <ColorOption
+              key={color}
+              color={color}
+              selected={selectedColor === color}
+              onPress={() => {
+                setSelectedColor(color);
+                setColorError(null);
+              }}
+            />
+          ))}
         </ScrollView>
         {colorError ? (
-          <Text style={styles.errorText}>{colorError}</Text>
+          <InlineFieldError message={colorError} />
         ) : null}
       </View>
 
       {/* Inline photo picker — AC-021 */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>{t('routes.submit.photo.title')}</Text>
+        <AppText variant="sectionHeader" style={styles.sectionLabel}>{t('routes.submit.photo.title')}</AppText>
 
         {photoUri ? (
           /* Preview + Change Photo */
-          <View>
+          <View style={styles.photoBlock}>
             <Image
               source={{ uri: photoUri }}
               style={styles.photoPreview}
               resizeMode="cover"
               accessibilityLabel={t('routes.submit.photo.preview')}
+              accessibilityIgnoresInvertColors
             />
-            <Pressable
-              style={styles.changePhotoButton}
+            <Button
+              variant="ghost"
+              size="md"
+              on="background"
+              label={t('routeCatalog.submit.changePhoto')}
               onPress={() => void handlePickPhoto()}
-              accessibilityRole="button"
-              accessibilityLabel={t('routeCatalog.submit.changePhoto')}
-            >
-              <Text style={styles.changePhotoText}>
-                {t('routeCatalog.submit.changePhoto')}
-              </Text>
-            </Pressable>
+            />
           </View>
         ) : (
           /* Take Photo / Choose from Library buttons */
           <View style={styles.photoButtonRow}>
-            <Pressable
-              style={[styles.secondaryButton, styles.photoButtonFlex]}
-              onPress={() => void handleTakePhoto()}
-              accessibilityRole="button"
-              accessibilityLabel={t('routes.submit.photo.takePhoto')}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {t('routes.submit.photo.takePhoto')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.secondaryButton, styles.photoButtonFlex]}
-              onPress={() => void handlePickPhoto()}
-              accessibilityRole="button"
-              accessibilityLabel={t('routes.submit.photo.choosePhoto')}
-            >
-              <Text style={styles.secondaryButtonText}>
-                {t('routes.submit.photo.choosePhoto')}
-              </Text>
-            </Pressable>
+            <View style={styles.photoButtonFlex}>
+              <Button
+                variant="secondary"
+                size="md"
+                fullWidth
+                label={t('routes.submit.photo.takePhoto')}
+                onPress={() => void handleTakePhoto()}
+              />
+            </View>
+            <View style={styles.photoButtonFlex}>
+              <Button
+                variant="secondary"
+                size="md"
+                fullWidth
+                label={t('routes.submit.photo.choosePhoto')}
+                onPress={() => void handlePickPhoto()}
+              />
+            </View>
           </View>
         )}
 
         {/* AC-021: inline photo-required error */}
         {photoError ? (
-          <Text style={styles.errorText}>{photoError}</Text>
+          <InlineFieldError message={photoError} />
         ) : null}
       </View>
 
       {/* Optional section label */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>
-          {t('routes.submit.sectionLabel')}
-        </Text>
-        <TextInput
-          style={styles.textInput}
+        <TextField
+          label={t('routes.submit.sectionLabel')}
           value={sectionLabel}
           onChangeText={setSectionLabel}
           placeholder={t('routeCatalog.submit.sectionPlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
           maxLength={80}
           autoCorrect={false}
-          accessibilityLabel={t('routes.submit.sectionLabel')}
         />
       </View>
 
       {/* AC-021: inline validation message when photo is absent and user has not yet selected one */}
       {!photoUri && !photoError ? (
-        <Text style={styles.photoRequiredHint}>
+        <AppText variant="footnote" color="textSecondary" align="center" style={styles.photoRequiredHint}>
           {t('routeCatalog.submit.photoRequired')}
-        </Text>
+        </AppText>
       ) : null}
 
       {/* AC-187: non-blocking inline duplicate notice — reactive to grade/color selection */}
       {isDuplicate ? (
         <View style={styles.duplicateNotice}>
-          <Text style={styles.duplicateNoticeTitle}>
-            {t('routes.duplicateWarning.title')}
-          </Text>
-          <Text style={styles.duplicateNoticeBody}>
-            {t('routes.duplicateWarning.body', {
+          <NoticeBox
+            warning
+            message={`${t('routes.duplicateWarning.title')}. ${t('routes.duplicateWarning.body', {
               grade: selectedGrade,
               color: t(`routeCatalog.colors.${selectedColor}`),
-            })}
-          </Text>
+            })}`}
+          />
         </View>
       ) : null}
 
       {/* Add Route button — disabled until a photo is selected (AC-021) */}
-      <Pressable
-        style={[
-          styles.primaryButton,
-          (!photoUri || isSubmitting) && styles.primaryButtonDisabled,
-        ]}
-        onPress={() => void handleAddRoute()}
-        disabled={!photoUri || isSubmitting}
-        accessibilityRole="button"
-        accessibilityLabel={t('routeCatalog.submit.addRoute')}
-        accessibilityState={{ disabled: !photoUri || isSubmitting }}
-      >
-        {isSubmitting ? (
-          <ActivityIndicator size="small" color={theme.colors.textInverse} />
-        ) : (
-          <Text style={styles.primaryButtonText}>
-            {t('routeCatalog.submit.addRoute')}
-          </Text>
-        )}
-      </Pressable>
+      <View style={styles.primaryAction}>
+        <Button
+          variant="primary"
+          fullWidth
+          label={t('routeCatalog.submit.addRoute')}
+          onPress={() => void handleAddRoute()}
+          loading={isSubmitting}
+          disabled={!photoUri || isSubmitting}
+        />
+      </View>
     </ScrollView>
     </SwipeBackWrapper>
   );
 }
 
+/** Field-level validation message (error icon + text, never colour alone). */
+function InlineFieldError({ message }: { message: string }): React.JSX.Element {
+  const { theme } = useTheme();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.layout.iconTextGap, marginTop: theme.spacing.xs }}>
+      <Ionicons name={ICON.error.outline} size={theme.iconSize.sm} color={theme.colors.error} />
+      <AppText variant="footnote" color="error" style={{ flex: 1 }}>{message}</AppText>
+    </View>
+  );
+}
+
+/**
+ * Tape colour option for the picker: a 44pt-target tape block with the localized colour name.
+ * Selected = `checkmark` (md, tape label colour) + 1.5pt primary outline.
+ */
+function ColorOption({
+  color,
+  selected,
+  onPress,
+}: {
+  color: RouteColor;
+  selected: boolean;
+  onPress: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation('common');
+  const { theme } = useTheme();
+  const mode = theme.isDark ? 'dark' : 'light';
+  const tape = resolveTape(mode, color);
+  const labelColor = tape.known ? tape.entry.label : theme.colors.textPrimary;
+  const fill = tape.known ? tape.entry.fill : theme.colors.surfaceAlt;
+  const hair = tape.known && tape.entry.hair ? TAPE_HAIR[mode] : undefined;
+  const name = t(`routeCatalog.colors.${color}`);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={name}
+      style={{
+        minHeight: theme.layout.minTouchTarget,
+        justifyContent: 'center',
+        borderRadius: theme.borderRadius.md,
+        borderWidth: theme.stroke.emphasis,
+        borderColor: selected ? theme.colors.primary : 'transparent',
+        padding: theme.spacing.xs,
+      }}
+    >
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          columnGap: theme.spacing.xs,
+          backgroundColor: fill,
+          borderRadius: theme.borderRadius.sm,
+          paddingHorizontal: theme.componentSize.tapePadH.md,
+          paddingVertical: theme.spacing.xs,
+        }}
+      >
+        <AppText variant="caption1" weight="600" style={{ color: labelColor }}>
+          {name}
+        </AppText>
+        {selected ? (
+          <Ionicons name={ICON.selected.outline} size={theme.iconSize.md} color={labelColor} />
+        ) : null}
+        {hair ? (
+          <View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              { borderWidth: theme.stroke.thin, borderColor: hair, borderRadius: theme.borderRadius.sm },
+            ]}
+          />
+        ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingTop: theme.spacing.md,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
-    backLink: {
-      marginBottom: theme.spacing.md,
+    backRow: {
+      alignItems: 'flex-start',
+      marginLeft: -theme.spacing.smd,
+      marginBottom: theme.spacing.xs,
     },
     screenTitle: {
-      fontSize: theme.fontSize.xxl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
       marginBottom: theme.spacing.xs,
     },
     gymNameSubtitle: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      marginBottom: theme.spacing.lg,
+      marginBottom: theme.layout.sectionGap,
     },
     section: {
-      marginBottom: theme.spacing.lg,
+      marginBottom: theme.layout.sectionGap,
     },
     sectionLabel: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
       marginBottom: theme.spacing.sm,
     },
     chipRow: {
-      gap: theme.spacing.xs,
+      columnGap: theme.spacing.sm,
+      paddingVertical: theme.spacing.xs,
       paddingRight: theme.spacing.sm,
     },
-    gradeChip: {
-      paddingHorizontal: theme.spacing.sm + 4,
-      paddingVertical: theme.spacing.xs + 2,
-      borderRadius: theme.borderRadius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    gradeChipActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primary,
-    },
-    gradeChipText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    gradeChipTextActive: {
-      color: theme.colors.textInverse,
-      fontWeight: theme.fontWeight.semibold,
-    },
-    colorChip: {
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 2,
-      borderColor: 'transparent',
-      padding: 4,
-    },
-    colorChipSelected: {
-      borderColor: theme.colors.primary,
-    },
-    colorCheckmark: {
-      position: 'absolute',
-      top: -4,
-      right: -4,
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      backgroundColor: theme.colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    colorCheckmarkText: {
-      fontSize: 11,
-      color: theme.colors.textInverse,
-      fontWeight: theme.fontWeight.bold,
+    photoBlock: {
+      gap: theme.spacing.sm,
     },
     photoPreview: {
       width: '100%',
       height: 260,
       borderRadius: theme.borderRadius.lg,
-      backgroundColor: theme.colors.surface,
-      marginBottom: theme.spacing.sm,
-    },
-    changePhotoButton: {
-      alignItems: 'center',
-      paddingVertical: theme.spacing.sm,
-    },
-    changePhotoText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     photoButtonRow: {
       flexDirection: 'row',
@@ -572,72 +538,14 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     photoButtonFlex: {
       flex: 1,
     },
-    secondaryButton: {
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      paddingVertical: theme.spacing.sm + 4,
-      alignItems: 'center',
-    },
-    secondaryButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    textInput: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm + 4,
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-    },
-    primaryButton: {
-      backgroundColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.md,
-      alignItems: 'center',
-      marginTop: theme.spacing.md,
-    },
-    primaryButtonDisabled: {
-      opacity: 0.6,
-    },
-    primaryButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      marginTop: theme.spacing.xs,
-    },
     photoRequiredHint: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
       marginBottom: theme.spacing.xs,
-      textAlign: 'center',
     },
     duplicateNotice: {
-      backgroundColor: '#FFF8E1',
-      borderWidth: 1,
-      borderColor: '#F9A825',
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
       marginBottom: theme.spacing.sm,
     },
-    duplicateNoticeTitle: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: '#7B5E00',
-      marginBottom: 2,
-    },
-    duplicateNoticeBody: {
-      fontSize: theme.fontSize.sm,
-      color: '#7B5E00',
+    primaryAction: {
+      marginTop: theme.spacing.md,
     },
   });
 }

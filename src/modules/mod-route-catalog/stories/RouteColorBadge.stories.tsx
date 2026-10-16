@@ -1,20 +1,24 @@
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 
 import { ForcedTheme } from '../../../../.storybook/ForcedTheme';
+import { AppText } from '../../../components/ui';
 import { useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import { ROUTE_COLORS } from '../types';
 
 // Off-spec design tooling. Fake data only.
 const SIZES = ['sm', 'md'] as const;
+// 'unknown' demonstrates the "Other" fallback (surfaceAlt + hairline).
+const COLOR_OPTIONS = [...ROUTE_COLORS, 'unknown'];
 
 const meta: Meta<typeof RouteColorBadge> = {
   title: 'Route Catalog/RouteColorBadge',
   component: RouteColorBadge,
+  args: { color: 'red', size: 'md' },
   argTypes: {
-    color: { control: 'select', options: [...ROUTE_COLORS] },
+    color: { control: 'select', options: COLOR_OPTIONS },
     size: { control: 'inline-radio', options: [...SIZES] },
   },
 };
@@ -22,35 +26,34 @@ export default meta;
 
 type Story = StoryObj<typeof RouteColorBadge>;
 
-export const Single: Story = { args: { color: 'red', size: 'md' } };
-
-function Caption({ children }: { children: string }): React.JSX.Element {
-  const { theme } = useTheme();
-  return <Text style={{ color: theme.colors.textSecondary, fontSize: 12, width: 64 }}>{children}</Text>;
-}
+/** Change colour and size with the controls; use the toolbar for theme and language. The badge is static (no press). */
+export const Playground: Story = {
+  render: (args) => (
+    <View style={{ padding: 16 }}>
+      <RouteColorBadge {...args} />
+    </View>
+  ),
+};
 
 function Grid(): React.JSX.Element {
+  const { theme } = useTheme();
   return (
-    <View style={{ gap: 12 }}>
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <View style={{ width: 64 }} />
-        {SIZES.map((s) => (
-          <View key={s} style={{ width: 90 }}><Caption>{s}</Caption></View>
-        ))}
-      </View>
-      {ROUTE_COLORS.map((c) => (
-        <View key={c} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Caption>{c}</Caption>
+    <View style={{ gap: theme.spacing.smd }}>
+      {[...ROUTE_COLORS, 'unknown'].map((c) => (
+        <View key={c} style={{ flexDirection: 'row', alignItems: 'center', columnGap: theme.spacing.smd }}>
+          <View style={{ width: 64 }}>
+            <AppText variant="caption1" color="textSecondary">{c}</AppText>
+          </View>
           {SIZES.map((s) => (
-            <View key={s} style={{ width: 90 }}><RouteColorBadge color={c} size={s} /></View>
+            <View key={s} style={{ width: 90 }}>
+              <RouteColorBadge color={c} size={s} />
+            </View>
           ))}
         </View>
       ))}
     </View>
   );
 }
-
-export const AllColorsAndSizes: Story = { render: () => <Grid /> };
 
 function Panel({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
   return (
@@ -63,17 +66,25 @@ function Panel({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
 function PanelBody({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
   const { theme } = useTheme();
   return (
-    <View style={{ backgroundColor: theme.colors.background, padding: 16, borderRadius: 8, flex: 1, gap: 8 }}>
-      <Text style={{ color: theme.colors.textPrimary, fontWeight: '700' }}>{mode}</Text>
+    <View
+      style={{
+        backgroundColor: theme.colors.surface,
+        padding: theme.spacing.md,
+        borderRadius: theme.borderRadius.lg,
+        flex: 1,
+        gap: theme.spacing.sm,
+      }}
+    >
+      <AppText variant="headline">{mode}</AppText>
       <Grid />
     </View>
   );
 }
 
-/** Known issue: in dark, label contrast breaks for white/yellow/black, weak for blue/purple. */
-export const LightVsDark: Story = {
+/** All 9 tapes plus the unknown fallback, sm and md, light beside dark, on a white card (hairlines show on white/yellow/pink in light, black in dark). */
+export const AllTapesBySizeLightVsDark: Story = {
   render: () => (
-    <View style={{ flexDirection: 'row', gap: 16 }}>
+    <View style={{ flexDirection: 'row', gap: 16, padding: 16 }}>
       <Panel mode="light" />
       <Panel mode="dark" />
     </View>

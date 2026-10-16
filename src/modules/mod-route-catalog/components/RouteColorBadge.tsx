@@ -1,83 +1,83 @@
 /**
- * RouteColorBadge.
+ * RouteColorBadge (TapeBadge), design system v1.2 chapter 17 / 32.2.
  *
- * Displays a small chip showing the route's hold/tape color.
- *
- * Color rendering uses theme-aware semantic tokens — no hardcoded hex values.
- * The background color for each route color is drawn from the OS's color system
- * (React Native's named color system + theme surface fallback) so the chip is
- * visually recognisable in both light and dark mode.
- *
- * Theme rule: all 9 route colors use a named-color string accepted by React
- * Native's `color` prop (e.g. 'red', 'orange', 'white', 'black'). These are
- * device/OS-resolved named colors, not hardcoded hex literals — satisfying the
- * "no hardcoded hex colors in components" convention while being visually accurate.
- * Text color adapts to ensure readability against the chip background.
+ * Route tape colour label: the only square-cornered (radius sm) label with text.
+ * Fill / label / hairline come from `TAPE_DISPLAY` / `TAPE_HAIR` (display only; stored colour
+ * names are unchanged). Colour names go through i18n. Static: not pressable, no motion.
+ * Unknown colours render `surfaceAlt` / `textPrimary` / hairline with the "Other" label.
  */
 
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { StyleSheet, View } from 'react-native';
 
+import { AppText } from '../../../components/ui';
 import { useTheme } from '../../../lib/theme';
+import { TAPE_HAIR, resolveTape } from '../tape';
 import type { RouteColor } from '../types';
 
 interface RouteColorBadgeProps {
-  color: RouteColor;
+  /** Stored colour name. Anything outside the 9-colour enum is shown as "Other". */
+  color: RouteColor | (string & {});
   /** Size variant. Defaults to 'md'. */
   size?: 'sm' | 'md';
 }
 
-/**
- * Maps a RouteColor to a React Native named color string.
- * React Native accepts standard CSS color names which are OS-resolved —
- * not hardcoded hex literals.
- */
-const ROUTE_COLOR_TO_RN_COLOR: Record<RouteColor, string> = {
-  red: 'red',
-  orange: 'orange',
-  yellow: 'yellow',
-  green: 'green',
-  blue: 'blue',
-  purple: 'purple',
-  pink: 'pink',
-  white: 'white',
-  black: 'black',
-};
-
-/**
- * Colors where the label text should be dark (because the chip is light).
- */
-const LIGHT_CHIP_COLORS = new Set<RouteColor>(['white', 'yellow']);
+/** Fill / hairline for the 11x11 tape swatch (colour-filter chip, thumbnail dot). */
+export function useTapeSwatch(color: string): { fill: string; hair?: string } {
+  const { theme } = useTheme();
+  const mode = theme.isDark ? 'dark' : 'light';
+  const tape = resolveTape(mode, color);
+  if (!tape.known) return { fill: theme.colors.surfaceAlt, hair: TAPE_HAIR[mode] };
+  return { fill: tape.entry.fill, hair: tape.entry.hair ? TAPE_HAIR[mode] : undefined };
+}
 
 export default function RouteColorBadge({
   color,
   size = 'md',
 }: RouteColorBadgeProps): React.JSX.Element {
+  const { t } = useTranslation('common');
   const { theme } = useTheme();
+  const mode = theme.isDark ? 'dark' : 'light';
+  const tape = resolveTape(mode, color);
 
-  const chipColor = ROUTE_COLOR_TO_RN_COLOR[color];
-  const isLightChip = LIGHT_CHIP_COLORS.has(color);
-  const labelColor = isLightChip
-    ? theme.colors.textPrimary
-    : theme.colors.textInverse;
+  const fill = tape.known ? tape.entry.fill : theme.colors.surfaceAlt;
+  const labelColor = tape.known ? tape.entry.label : theme.colors.textPrimary;
+  const hasHair = tape.known ? !!tape.entry.hair : true;
 
-  const chipSize = size === 'sm' ? styles.chipSm : styles.chipMd;
-  const textStyle = size === 'sm' ? styles.textSm : styles.textMd;
+  const name = t(`routeCatalog.colors.${tape.known ? color : 'other'}`);
 
   return (
     <View
+      accessible
+      accessibilityLabel={t('routeCatalog.tapeLabel', { color: name })}
       style={[
         styles.chip,
-        chipSize,
-        { backgroundColor: chipColor },
-        // White chip gets a border so it's visible against light backgrounds
-        color === 'white' && { borderWidth: 1, borderColor: theme.colors.border },
+        {
+          backgroundColor: fill,
+          borderRadius: theme.borderRadius.sm,
+          paddingHorizontal: theme.componentSize.tapePadH[size],
+          paddingVertical: size === 'sm' ? theme.spacing.xxs : theme.spacing.xs,
+        },
       ]}
-      accessibilityLabel={color}
     >
-      <Text style={[styles.label, textStyle, { color: labelColor }]}>
-        {color}
-      </Text>
+      <AppText variant="caption1" weight="600" style={{ color: labelColor }} numberOfLines={1}>
+        {name}
+      </AppText>
+      {hasHair ? (
+        // Overlay so the 1pt hairline never changes the 22 / 26 visual height.
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderWidth: theme.stroke.thin,
+              borderColor: TAPE_HAIR[mode],
+              borderRadius: theme.borderRadius.sm,
+            },
+          ]}
+        />
+      ) : null}
     </View>
   );
 }
@@ -85,26 +85,7 @@ export default function RouteColorBadge({
 const styles = StyleSheet.create({
   chip: {
     alignSelf: 'flex-start',
-    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  chipSm: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  chipMd: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  label: {
-    textTransform: 'capitalize',
-    fontWeight: '600',
-  },
-  textSm: {
-    fontSize: 11,
-  },
-  textMd: {
-    fontSize: 13,
   },
 });

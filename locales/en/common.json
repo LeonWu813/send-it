@@ -297,7 +297,8 @@
       "title": "Projecting",
       "allGrades": "All",
       "empty": "Save a route to track your projects.",
-      "emptyFiltered": "No projecting routes at this grade."
+      "emptyFiltered": "No projecting routes at this grade.",
+      "bookmarkFailed": "Couldn't update your saved routes. Try again."
     },
     "followingActivity": {
       "title": "Following Activity",
@@ -330,7 +331,7 @@
   "betaVideo": {
     "sectionTitle": "BETA VIDEOS",
     "addVideo": "Add Beta Video",
-    "noVideos": "No beta videos yet — be the first to share your technique!",
+    "noVideos": "No one has shared beta yet.",
     "myVideos": "My Beta Videos",
     "noVideosYet": "No beta videos yet",
     "uploading": "Uploading…",
@@ -342,7 +343,7 @@
     "replaceConfirmOk": "Replace",
     "replaceConfirmCancel": "Cancel",
     "grid": {
-      "openVideo": "Open video"
+      "openVideo": "Play beta video, {{index}} of {{total}}"
     },
     "player": {
       "play": "Play beta video",
@@ -355,7 +356,8 @@
       "report": "Report",
       "reported": "Reported",
       "reportError": "Could not report. Try again.",
-      "anonymous": "Anonymous"
+      "anonymous": "Anonymous",
+      "likeLabel": "Like, {{count}} likes"
     },
     "userVideos": "Beta Videos",
     "errors": {
@@ -366,7 +368,10 @@
       "permissionDenied": "Photo library access is required to select a video.",
       "videoTooLargeAfterCompression": "Video is too large, please keep it under 45 MB.",
       "videoTooLargeForStorage": "Video is too large. Please trim it and try again."
-    }
+    },
+    "emptyUpload": "Upload beta",
+    "loadingVideos": "Loading beta videos",
+    "uploadingHint": "Please stay on this screen until the upload finishes."
   },
   "socialFeed": {
     "title": "Activity Feed",

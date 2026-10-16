@@ -3245,3 +3245,12 @@ The test-runner AsyncStorage mock infrastructure bug (previously reported as a c
 | No gold-plating | PASS | PASS |
 
 **Overall verdict: PASS. AC-187 fix verified. All five scoped items (AC-187/189/190/047-Rev39/181-Rev39) pass. No regressions. 110/110 tests pass. MOD-003 ready for human QA.**
+
+## Design System v1.2 (off-spec design work, pending PR review)
+
+Visual + motion only; no flows, services or DB changes. No illustrations, no expo-haptics, Phase 1 only.
+- `tape.ts`: `TAPE_DISPLAY`, `TAPE_HAIR`, `resolveTape` (display-only; stored colour names unchanged). `tape-exports.ts` is the cross-module entry (TapeBadge, `useTapeSwatch`, TAPE_*).
+- `RouteColorBadge` is the TapeBadge: tape fill/label/hair, i18n colour names (`routeCatalog.colors.*`, new `other`), `routeCatalog.tapeLabel` a11y, caption1 600, radius sm, sm 22 / md 26, hairline overlay, static.
+- RouteListScreen, RouteDetailScreen, RouteSubmitScreen, SendHistoryDetailScreen migrated to ui/ components, `AppText`, `ICON`, `useLayout().screenMargin`, `surfaceAlt`, `onPrimary`, `sendFlash`/`sendTop` (no `#FFD700`). Colour filter chips use Chip swatch (pop). RouteList passes `colorTag` to the redesigned RouteCard.
+- Tests updated for the new semantics (localized colour names, `checked` radio state, SendStyleChip label "Send", hidden RouteCard text). Delete confirm stays an `Alert` (BottomSheet confirm is a flow change).
+- Stories: `RouteColorBadge.stories.tsx` rewritten (Playground + all tapes x sizes light vs dark).

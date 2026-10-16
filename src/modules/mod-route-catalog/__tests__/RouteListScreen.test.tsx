@@ -168,7 +168,7 @@ describe('RouteListScreen', () => {
 
     await waitFor(() => {
       // r-002 has section_label: 'Cave' — formatted name should include "(Cave)".
-      const caveTexts = screen.queryAllByText(/Cave/);
+      const caveTexts = screen.queryAllByText(/Cave/, { includeHiddenElements: true });
       expect(caveTexts.length).toBeGreaterThan(0);
     });
   });
@@ -373,8 +373,8 @@ describe('RouteListScreen', () => {
 
     await waitFor(() => {
       // RouteCard renders "3 Beta Videos" (routeCard.betaCount i18n key)
-      const betaTexts = screen.queryAllByText(/3 Beta Videos/i).concat(
-        screen.queryAllByText(/3 條路線影片/),
+      const betaTexts = screen.queryAllByText(/3 Beta Videos/i, { includeHiddenElements: true }).concat(
+        screen.queryAllByText(/3 條路線影片/, { includeHiddenElements: true }),
       );
       expect(betaTexts.length).toBeGreaterThan(0);
     });
@@ -449,7 +449,7 @@ describe('RouteListScreen', () => {
     });
 
     // The grade chips appear in the header — press V3 chip (not card grade text)
-    const checkboxes = screen.queryAllByRole('checkbox');
+    const checkboxes = screen.queryAllByRole('radio');
     const gradeChip = checkboxes.find(
       (el) => el.props.accessibilityLabel === 'V3',
     );

@@ -16,25 +16,26 @@
  * US-006: browse currently active routes at a gym.
  */
 
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import {
-  ActivityIndicator,
-  AppState,
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { AppState, FlatList, ScrollView, StyleSheet, View } from 'react-native';
 
-import { useTheme } from '../../../lib/theme';
 import RouteCard from '../../../components/RouteCard';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import type { RouteCardRoute } from '../../../components/RouteCard';
+import {
+  AppText,
+  Button,
+  Chip,
+  EmptyState,
+  IconButton,
+  InlineError,
+  Spinner,
+} from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
+import { useTapeSwatch } from '../components/RouteColorBadge';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import {
   fetchBetaVideoCounts,
@@ -69,19 +70,6 @@ const newBetaCache = new Map<string, NewBetaCacheEntry>();
 export function clearNewBetaCacheForTesting(): void {
   newBetaCache.clear();
 }
-
-/** Map each RouteColor enum value to a React Native named color string. */
-const COLOR_SWATCH: Record<RouteColor, string> = {
-  red: 'red',
-  orange: 'orange',
-  yellow: 'yellow',
-  green: 'green',
-  blue: 'blue',
-  purple: 'purple',
-  pink: 'pink',
-  white: 'white',
-  black: 'black',
-};
 
 /**
  * AC-045: Compose the display name for a route at render time.
@@ -124,7 +112,8 @@ export default function RouteListScreen({
 }: RouteListScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme, 0);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, screenMargin);
 
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -325,6 +314,7 @@ export default function RouteListScreen({
       name: routeName,
       grade: item.grade,
       photo_url: item.photo_url ?? null,
+      colorTag: item.color_tag,
     };
 
     // RouteCard (Rev 39/40) handles bookmark icon and send badge natively via props.
@@ -345,56 +335,36 @@ export default function RouteListScreen({
   }
 
   function renderGradeChip(grade: RouteGrade): React.JSX.Element {
-    const isActive = gradeFilter === grade;
     return (
-      <Pressable
+      <Chip
         key={grade}
-        style={[styles.chip, isActive && styles.chipActive]}
+        variant="choice"
+        label={grade}
+        selected={gradeFilter === grade}
         onPress={() => toggleGradeFilter(grade)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: isActive }}
-        accessibilityLabel={grade}
-      >
-        <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-          {grade}
-        </Text>
-      </Pressable>
+      />
     );
   }
 
   function renderColorChip(color: RouteColor): React.JSX.Element {
-    const isActive = colorFilter === color;
-    const colorLabel = t(`routeCatalog.colors.${color}`);
     return (
-      <Pressable
+      <ColorFilterChip
         key={color}
-        style={[styles.colorChip, isActive && styles.colorChipActive]}
+        color={color}
+        selected={colorFilter === color}
         onPress={() => toggleColorFilter(color)}
-        accessibilityRole="checkbox"
-        accessibilityState={{ checked: isActive }}
-        accessibilityLabel={colorLabel}
-      >
-        <View
-          style={[
-            styles.colorDot,
-            { backgroundColor: COLOR_SWATCH[color] },
-            color === 'white' && styles.colorDotBordered,
-          ]}
-        />
-        <Text style={[styles.chipText, isActive && styles.chipTextActive]}>
-          {colorLabel}
-        </Text>
-      </Pressable>
+      />
     );
   }
 
   const listHeader = (
-    <View>
+    <View style={styles.filterBlock}>
       {/* Grade filter chips — all grades always shown */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
+        accessibilityRole="radiogroup"
       >
         {ROUTE_GRADES.map(renderGradeChip)}
       </ScrollView>
@@ -404,6 +374,7 @@ export default function RouteListScreen({
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.filterRow}
+        accessibilityRole="radiogroup"
       >
         {ROUTE_COLORS.map(renderColorChip)}
       </ScrollView>
@@ -412,22 +383,24 @@ export default function RouteListScreen({
 
   /** Always-visible "Can't find it? Add a new route" CTA at the bottom. */
   const addRouteCta = (
-    <Pressable
-      style={styles.addRouteCta}
-      onPress={() =>
-        onSubmitRoute(gradeFilter ?? undefined, colorFilter ?? undefined)
-      }
-      accessibilityRole="button"
-      accessibilityLabel={t('routeCatalog.addRoute')}
-    >
-      <Text style={styles.addRouteCtaText}>{t('routeCatalog.addRoute')}</Text>
-    </Pressable>
+    <View style={styles.addRouteCta}>
+      <Button
+        variant="secondary"
+        size="md"
+        fullWidth
+        icon={ICON.add.outline}
+        label={t('routeCatalog.addRoute')}
+        onPress={() =>
+          onSubmitRoute(gradeFilter ?? undefined, colorFilter ?? undefined)
+        }
+      />
+    </View>
   );
 
   if (isLoading) {
     return (
       <View style={styles.centeredContainer}>
-        <ActivityIndicator color={theme.colors.primary} size="large" />
+        <Spinner />
       </View>
     );
   }
@@ -435,15 +408,12 @@ export default function RouteListScreen({
   if (errorMessage) {
     return (
       <View style={styles.centeredContainer}>
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <Pressable
-          style={styles.retryButton}
-          onPress={fetchRoutes}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.retry')}
-        >
-          <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-        </Pressable>
+        <InlineError
+          variant="block"
+          message={errorMessage}
+          actionLabel={t('common.retry')}
+          onAction={fetchRoutes}
+        />
       </View>
     );
   }
@@ -454,16 +424,15 @@ export default function RouteListScreen({
         {/* Screen header */}
         <View style={styles.header}>
           {onBack ? (
-            <Pressable
+            <IconButton
+              name={ICON.back.outline}
+              size={24}
+              on="background"
               onPress={onBack}
-              style={styles.backLink}
-              accessibilityRole="button"
               accessibilityLabel={t('common.back')}
-            >
-              <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-            </Pressable>
+            />
           ) : null}
-          <Text style={styles.screenTitle}>{gymName}</Text>
+          <AppText variant="title2" numberOfLines={1} style={styles.screenTitle}>{gymName}</AppText>
         </View>
 
         <FlatList
@@ -475,7 +444,7 @@ export default function RouteListScreen({
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
-            <Text style={styles.emptyText}>{t('routeCatalog.noResults')}</Text>
+            <EmptyState variant="filtered" title={t('routeCatalog.noResults')} />
           }
         />
       </View>
@@ -483,8 +452,32 @@ export default function RouteListScreen({
   );
 }
 
+/** Tape colour filter chip: 11x11 tape swatch (pops on select) + localized colour name. */
+function ColorFilterChip({
+  color,
+  selected,
+  onPress,
+}: {
+  color: RouteColor;
+  selected: boolean;
+  onPress: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation('common');
+  const swatch = useTapeSwatch(color);
+  return (
+    <Chip
+      variant="choice"
+      label={t(`routeCatalog.colors.${color}`)}
+      swatch={swatch.fill}
+      swatchHair={swatch.hair}
+      selected={selected}
+      onPress={onPress}
+    />
+  );
+}
+
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -495,174 +488,38 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       backgroundColor: theme.colors.background,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: topInset + theme.spacing.md,
-      paddingBottom: theme.spacing.md,
+      paddingLeft: screenMargin - theme.spacing.sm,
+      paddingRight: screenMargin,
+      paddingBottom: theme.spacing.xs,
       gap: theme.spacing.xs,
-    },
-    backLink: {
-      marginRight: theme.spacing.xs,
     },
     screenTitle: {
       flex: 1,
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
+    },
+    filterBlock: {
+      paddingBottom: theme.spacing.xs,
     },
     filterRow: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.sm,
-      gap: theme.spacing.xs,
-    },
-    chip: {
-      paddingHorizontal: theme.spacing.sm + 4,
-      paddingVertical: theme.spacing.xs + 2,
-      borderRadius: theme.borderRadius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    chipActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primary,
-    },
-    chipText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-    chipTextActive: {
-      color: theme.colors.textInverse,
-      fontWeight: theme.fontWeight.semibold,
-    },
-    colorChip: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: theme.spacing.sm + 4,
-      paddingVertical: theme.spacing.xs + 2,
-      borderRadius: theme.borderRadius.full,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      backgroundColor: theme.colors.surface,
-    },
-    colorChipActive: {
-      borderColor: theme.colors.primary,
-      backgroundColor: theme.colors.primary,
-    },
-    colorDot: {
-      width: 12,
-      height: 12,
-      borderRadius: 6,
-    },
-    colorDotBordered: {
-      borderWidth: 1,
-      borderColor: theme.colors.border,
+      paddingHorizontal: screenMargin,
+      paddingVertical: theme.spacing.xs,
+      columnGap: theme.spacing.sm,
     },
     listContent: {
       paddingBottom: theme.spacing.md,
     },
-    // AC-181: wrapper around RouteCard to allow overlay positioning.
     cardWrapper: {
-      marginHorizontal: theme.spacing.lg,
-      marginBottom: theme.spacing.sm,
-      position: 'relative',
-    },
-    // AC-046: achievement icon pinned to the top-right corner of the card.
-    achievementOverlay: {
-      position: 'absolute',
-      top: theme.spacing.sm,
-      right: theme.spacing.md + 48 + theme.spacing.sm, // right of thumbnail
-      zIndex: 1,
-    },
-    // AC-047: saved bookmark indicator pinned to the top-right corner of the card.
-    savedOverlay: {
-      position: 'absolute',
-      top: theme.spacing.sm,
-      right: theme.spacing.sm,
-      zIndex: 1,
-    },
-    // Legacy card styles kept for any remaining inline card rendering paths.
-    card: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      padding: theme.spacing.md,
-      marginHorizontal: theme.spacing.lg,
-      marginBottom: theme.spacing.sm,
-    },
-    cardPressed: {
-      opacity: 0.85,
-    },
-    cardHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: theme.spacing.sm,
-      marginBottom: theme.spacing.xs,
-    },
-    routeNameRow: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-    },
-    routeName: {
-      flexShrink: 1,
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    dateText: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textDisabled,
-      marginTop: 2,
-    },
-    emptyText: {
-      textAlign: 'center',
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      marginTop: theme.spacing.xl,
-      paddingHorizontal: theme.spacing.lg,
+      marginHorizontal: screenMargin,
+      marginBottom: theme.layout.cardGap,
     },
     addRouteCta: {
-      marginHorizontal: theme.spacing.lg,
-      marginTop: theme.spacing.lg,
+      marginHorizontal: screenMargin,
+      marginTop: theme.layout.sectionGap,
       marginBottom: theme.spacing.xxl,
-      paddingVertical: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      alignItems: 'center',
-    },
-    addRouteCtaText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    errorText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-      textAlign: 'center',
-      marginBottom: theme.spacing.md,
-    },
-    retryButton: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    retryButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
     },
   });
 }

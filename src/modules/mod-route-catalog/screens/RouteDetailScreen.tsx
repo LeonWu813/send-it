@@ -41,19 +41,20 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, View } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { useTheme } from '../../../lib/theme';
+import {
+  AppText,
+  Button,
+  IconButton,
+  InlineError,
+  PressableScale,
+  Spinner,
+} from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
+import { useLayout, useTheme } from '../../../lib/theme';
+import RouteColorBadge from '../components/RouteColorBadge';
 import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
 import {
@@ -108,7 +109,8 @@ export default function RouteDetailScreen({
 }: RouteDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme, 0);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, screenMargin);
 
   const [route, setRoute] = useState<Route | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -274,7 +276,7 @@ export default function RouteDetailScreen({
     return (
       <SwipeBackWrapper onBack={onBack}>
         <View style={styles.centeredContainer}>
-          <ActivityIndicator color={theme.colors.primary} size="large" />
+          <Spinner />
         </View>
       </SwipeBackWrapper>
     );
@@ -283,26 +285,24 @@ export default function RouteDetailScreen({
   if (errorMessage || !route) {
     return (
       <SwipeBackWrapper onBack={onBack}>
-        <View style={styles.centeredContainer}>
-          <Pressable
-            onPress={onBack}
-            style={styles.backLink}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.back')}
-          >
-            <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-          </Pressable>
-          <Text style={styles.errorText}>
-            {errorMessage ?? t('common.error')}
-          </Text>
-          <Pressable
-            style={styles.retryButton}
-            onPress={fetchRoute}
-            accessibilityRole="button"
-            accessibilityLabel={t('common.retry')}
-          >
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </Pressable>
+        <View style={styles.root}>
+          <View style={styles.topBar}>
+            <IconButton
+              name={ICON.back.outline}
+              size={24}
+              on="background"
+              onPress={onBack}
+              accessibilityLabel={t('common.back')}
+            />
+          </View>
+          <View style={styles.errorBlock}>
+            <InlineError
+              variant="block"
+              message={errorMessage ?? t('common.error')}
+              actionLabel={t('common.retry')}
+              onAction={fetchRoute}
+            />
+          </View>
         </View>
       </SwipeBackWrapper>
     );
@@ -324,32 +324,28 @@ export default function RouteDetailScreen({
     <View style={styles.root}>
       {/* Sticky top bar — stays fixed above the scroll area (back + bookmark). */}
       <View style={styles.topBar}>
-        <Pressable
+        <IconButton
+          name={ICON.back.outline}
+          size={24}
+          on="background"
           onPress={onBack}
-          style={styles.backLink}
-          accessibilityRole="button"
           accessibilityLabel={t('common.back')}
-        >
-          <Ionicons name="chevron-back" size={24} color={theme.colors.primary} />
-        </Pressable>
-        {/* AC-046: bookmark toggle — filled yellow = saved, outline gray = unsaved */}
-        <Pressable
+        />
+        {/* AC-046: bookmark toggle — filled primary = saved, outline = unsaved */}
+        <IconButton
+          variant="toggle"
+          name={ICON.bookmark.outline}
+          nameOn={ICON.bookmark.filled}
+          selected={isSaved}
+          size={24}
+          on="background"
           onPress={() => { void handleBookmarkToggle(); }}
-          style={styles.bookmarkButton}
-          accessibilityRole="button"
           accessibilityLabel={
             isSaved
               ? t('routeCatalog.bookmark.unsave')
               : t('routeCatalog.bookmark.save')
           }
-          accessibilityState={{ selected: isSaved }}
-        >
-          <Ionicons
-            name={isSaved ? 'bookmark' : 'bookmark-outline'}
-            size={28}
-            color={isSaved ? theme.colors.warning : theme.colors.textSecondary}
-          />
-        </Pressable>
+        />
       </View>
 
       <ScrollView
@@ -362,7 +358,8 @@ export default function RouteDetailScreen({
         <Image
           source={{ uri: photoUri }}
           style={styles.photo}
-          accessibilityLabel={`${route.grade} ${route.color_tag} route photo`}
+          accessibilityLabel={`${route.grade} ${t(`routeCatalog.colors.${route.color_tag}`)} route photo`}
+          accessibilityIgnoresInvertColors
           resizeMode="cover"
         />
       ) : null}
@@ -370,95 +367,102 @@ export default function RouteDetailScreen({
       {/* Status badge (retired only — active is the default state) */}
       {isRetired && (
         <View style={styles.retiredStatusBadge}>
-          <Text style={styles.retiredStatusText}>
+          <AppText variant="caption1" weight="600" color="textSecondary">
             {t('routes.status.retired')}
-          </Text>
+          </AppText>
         </View>
       )}
 
       {/* AC-125 / AC-045: route name (large) + AC-046: achievement icon */}
       <View style={styles.routeNameRow}>
-        <Text style={styles.routeNameText}>{routeName}</Text>
+        <AppText variant="title1" style={styles.routeNameText}>{routeName}</AppText>
         {achievement === 'flash' ? (
-          <Ionicons name="flash" size={22} color="#FFD700" />
+          <Ionicons name={ICON.sendFlash.filled} size={theme.iconSize.md} color={theme.colors.sendFlash} />
         ) : achievement === 'top' ? (
-          <Ionicons name="checkmark-circle" size={22} color={theme.colors.success} />
+          <Ionicons name={ICON.sendTop.filled} size={theme.iconSize.md} color={theme.colors.sendTop} />
         ) : achievement === 'attempt' ? (
-          <Ionicons name="ellipse-outline" size={22} color={theme.colors.textSecondary} />
+          <Ionicons name={ICON.sendAttempt.outline} size={theme.iconSize.md} color={theme.colors.textSecondary} />
         ) : null}
       </View>
 
-      {/* AC-125: gym name as subtitle directly beneath the route name */}
-      <Text style={styles.gymSubtitle}>{gymName}</Text>
+      {/* AC-125: gym name as subtitle directly beneath the route name, with the tape badge */}
+      <View style={styles.subtitleRow}>
+        <RouteColorBadge color={route.color_tag} size="md" />
+        <AppText variant="body" color="textSecondary" style={styles.gymSubtitle}>{gymName}</AppText>
+      </View>
 
       {/* Section label (if present) — keep as informational detail */}
       {route.section_label ? (
         <>
-          <Text style={styles.sectionLabel}>
+          <AppText variant="sectionHeader" style={styles.sectionLabel}>
             {t('routes.detail.section')}
-          </Text>
-          <Text style={styles.infoText}>{route.section_label}</Text>
+          </AppText>
+          <AppText variant="body">{route.section_label}</AppText>
         </>
       ) : null}
 
       {/* Retired info */}
       {isRetired && route.retired_at ? (
         <>
-          <Text style={styles.sectionLabel}>
+          <AppText variant="sectionHeader" style={styles.sectionLabel}>
             {t('routes.detail.retiredOn')}
-          </Text>
-          <Text style={styles.infoText}>
+          </AppText>
+          <AppText variant="body">
             {new Date(route.retired_at).toLocaleDateString()}
-          </Text>
+          </AppText>
         </>
       ) : null}
 
       {/* ── AC-127: Two-column send summary ──────────────────────────────────── */}
       <View style={styles.summaryRow}>
         {/* Sends card */}
-        <Pressable
+        <PressableScale
+          feedback="row"
+          pressedColor={theme.colors.surfacePressed}
           style={styles.summaryCard}
           onPress={() => { onViewSendHistory(route.id); }}
-          accessibilityRole="button"
           accessibilityLabel={t('routeCatalog.detail.sends')}
           testID="sends-summary-card"
         >
-          <Text style={styles.summaryValue}>{summary.sends}</Text>
-          <Text style={styles.summaryLabel}>{t('routeCatalog.detail.sends')}</Text>
-        </Pressable>
+          <AppText variant="title1" numeric>{summary.sends}</AppText>
+          <AppText variant="footnote" color="textSecondary">{t('routeCatalog.detail.sends')}</AppText>
+        </PressableScale>
         {/* Attempts card */}
-        <Pressable
+        <PressableScale
+          feedback="row"
+          pressedColor={theme.colors.surfacePressed}
           style={styles.summaryCard}
           onPress={() => { onViewSendHistory(route.id); }}
-          accessibilityRole="button"
           accessibilityLabel={t('routeCatalog.detail.attempts')}
           testID="attempts-summary-card"
         >
-          <Text style={styles.summaryValue}>{summary.attempts}</Text>
-          <Text style={styles.summaryLabel}>{t('routeCatalog.detail.attempts')}</Text>
-        </Pressable>
+          <AppText variant="title1" numeric>{summary.attempts}</AppText>
+          <AppText variant="footnote" color="textSecondary">{t('routeCatalog.detail.attempts')}</AppText>
+        </PressableScale>
       </View>
 
       {/* ── AC-130: Action buttons row ───────────────────────────────────────── */}
       <View style={styles.actionRow}>
-        <Pressable
-          style={styles.actionButton}
-          onPress={handleLogSendPress}
-          accessibilityRole="button"
-          accessibilityLabel={t('routeCatalog.detail.recordSend')}
-        >
-          <Ionicons name="add-circle-outline" size={18} color={theme.colors.textInverse} />
-          <Text style={styles.actionButtonText}>{t('routeCatalog.detail.recordSend')}</Text>
-        </Pressable>
-        <Pressable
-          style={[styles.actionButton, styles.actionButtonSecondary]}
-          onPress={handleUploadBetaPress}
-          accessibilityRole="button"
-          accessibilityLabel={t('routeCatalog.detail.uploadBeta')}
-        >
-          <Ionicons name="videocam-outline" size={18} color={theme.colors.primary} />
-          <Text style={styles.actionButtonSecondaryText}>{t('routeCatalog.detail.uploadBeta')}</Text>
-        </Pressable>
+        <View style={styles.actionCell}>
+          <Button
+            variant="primary"
+            size="md"
+            fullWidth
+            icon={ICON.log.outline}
+            label={t('routeCatalog.detail.recordSend')}
+            onPress={handleLogSendPress}
+          />
+        </View>
+        <View style={styles.actionCell}>
+          <Button
+            variant="secondary"
+            size="md"
+            fullWidth
+            icon={ICON.upload.outline}
+            label={t('routeCatalog.detail.uploadBeta')}
+            onPress={handleUploadBetaPress}
+          />
+        </View>
       </View>
 
       {/* Log Send modal — opens on tap of the AC-130 "Record Send" button */}
@@ -480,7 +484,7 @@ export default function RouteDetailScreen({
       {/* Upload error — rendered between the action buttons row and BetaVideoSection
            so it is visible without scrolling into the beta video section. */}
       {uploadErrorMessage ? (
-        <Text style={styles.uploadErrorText}>{uploadErrorMessage}</Text>
+        <InlineError variant="block" message={uploadErrorMessage} style={styles.uploadError} />
       ) : null}
 
       {/* ── Beta Videos (MOD-005) — AC-033, AC-037 ───────────────────────────
@@ -501,7 +505,9 @@ export default function RouteDetailScreen({
       />
 
       {/* ── AC-126: Added date footer ─────────────────────────────────────── */}
-      <Text style={styles.addedDateFooter}>{addedDateLabel}</Text>
+      <AppText variant="footnote" color="textSecondary" align="center" style={styles.addedDateFooter}>
+        {addedDateLabel}
+      </AppText>
 
       </ScrollView>
     </View>
@@ -510,25 +516,19 @@ export default function RouteDetailScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    /**
-     * Sticky top bar — renders above the ScrollView so back/bookmark buttons
-     * remain visible as the user scrolls through route content.
-     * paddingTop = insets.top so the bar sits flush under the status bar /
-     * Dynamic Island. No paddingTop on the ScrollView below.
-     */
+    /** Sticky top bar: back + bookmark stay visible while scrolling. 44pt IconButtons. */
     topBar: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingTop: topInset,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.sm,
+      paddingHorizontal: screenMargin - theme.spacing.sm,
+      paddingBottom: theme.spacing.xs,
       backgroundColor: theme.colors.background,
     },
     scrollView: {
@@ -536,7 +536,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     contentContainer: {
       paddingTop: theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
     centeredContainer: {
@@ -544,36 +544,26 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       backgroundColor: theme.colors.background,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
-      paddingBottom: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
     },
-    backLink: {
-      // no extra margin — topBar handles spacing
-    },
-    bookmarkButton: {
-      padding: theme.spacing.xs,
+    errorBlock: {
+      paddingHorizontal: screenMargin,
+      paddingTop: theme.spacing.md,
     },
     photo: {
       width: '100%',
       height: 280,
       borderRadius: theme.borderRadius.lg,
       marginBottom: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
+      backgroundColor: theme.colors.surfaceAlt,
     },
     retiredStatusBadge: {
       alignSelf: 'flex-start',
       paddingHorizontal: theme.spacing.sm,
-      paddingVertical: 3,
-      borderRadius: theme.borderRadius.sm,
-      backgroundColor: theme.colors.textDisabled,
+      paddingVertical: theme.spacing.xxs,
+      borderRadius: theme.borderRadius.full,
+      backgroundColor: theme.colors.surfaceAlt,
       marginBottom: theme.spacing.sm,
-    },
-    retiredStatusText: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-      textTransform: 'uppercase',
     },
     routeNameRow: {
       flexDirection: 'row',
@@ -581,122 +571,58 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       gap: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
-    // AC-125: large font for the route name title
+    // AC-125: large title for the route name
     routeNameText: {
-      fontSize: 26,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
       flexShrink: 1,
     },
-    // AC-125: gym name as subtitle beneath the route name; no "岩館" label
-    gymSubtitle: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
+    // AC-125: gym name as subtitle beneath the route name; tape badge before it
+    subtitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      columnGap: theme.layout.inlineGap,
       marginBottom: theme.spacing.md,
     },
-    sectionLabel: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginTop: theme.spacing.lg,
-      marginBottom: theme.spacing.xs,
+    gymSubtitle: {
+      flexShrink: 1,
     },
-    infoText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
+    sectionLabel: {
+      marginTop: theme.layout.sectionGap,
+      marginBottom: theme.spacing.xs,
     },
     // ── AC-127: send summary ──────────────────────────────────────────────────
     summaryRow: {
       flexDirection: 'row',
-      gap: theme.spacing.md,
-      marginTop: theme.spacing.lg,
+      gap: theme.layout.cardGap,
+      marginTop: theme.layout.sectionGap,
       marginBottom: theme.spacing.sm,
     },
     summaryCard: {
       flex: 1,
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
+      minHeight: theme.layout.minTouchTarget,
+      padding: theme.layout.cardPadding,
+      borderRadius: theme.borderRadius.lg,
       backgroundColor: theme.colors.surface,
-      borderWidth: 1,
+      borderWidth: theme.isDark ? theme.stroke.thin : 0,
       borderColor: theme.colors.border,
       alignItems: 'center',
-    },
-    summaryValue: {
-      fontSize: 28,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-    },
-    summaryLabel: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      marginTop: 2,
+      ...theme.elevation.card,
     },
     // ── AC-130: action row ────────────────────────────────────────────────────
     actionRow: {
       flexDirection: 'row',
       gap: theme.spacing.sm,
       marginTop: theme.spacing.sm,
-      marginBottom: theme.spacing.lg,
+      marginBottom: theme.layout.sectionGap,
     },
-    actionButton: {
+    actionCell: {
       flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: theme.spacing.xs,
-      paddingVertical: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.primary,
     },
-    actionButtonText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textInverse,
-    },
-    actionButtonSecondary: {
-      backgroundColor: theme.colors.background,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    actionButtonSecondaryText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.primary,
-    },
-    errorText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-      textAlign: 'center',
-      marginBottom: theme.spacing.md,
-    },
-    retryButton: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingVertical: theme.spacing.sm,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    retryButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-    },
-    // Upload error — shown between the action row and BetaVideoSection.
-    uploadErrorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      marginHorizontal: 16,
+    uploadError: {
       marginBottom: theme.spacing.sm,
     },
     // ── AC-126: added date footer ─────────────────────────────────────────────
     addedDateFooter: {
       marginTop: theme.spacing.xl,
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textDisabled,
-      textAlign: 'center',
     },
   });
 }

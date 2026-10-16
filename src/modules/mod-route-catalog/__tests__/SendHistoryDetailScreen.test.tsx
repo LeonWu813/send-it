@@ -224,7 +224,7 @@ describe('SendHistoryDetailScreen', () => {
     await waitFor(() => {
       // Both styles should be visible
       const flashBadges = screen.queryAllByText(/Flash/i).concat(screen.queryAllByText(/閃攀/));
-      const topBadges = screen.queryAllByText(/^Top$/i).concat(screen.queryAllByText(/完攀/));
+      const topBadges = screen.queryAllByText(/^Send$/i).concat(screen.queryAllByText(/完攀/));
       expect(flashBadges.length).toBeGreaterThan(0);
       expect(topBadges.length).toBeGreaterThan(0);
     });

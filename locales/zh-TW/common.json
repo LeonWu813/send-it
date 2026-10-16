@@ -297,7 +297,8 @@
       "title": "目標路線",
       "allGrades": "全部",
       "empty": "收藏一條路線來追蹤你的目標。",
-      "emptyFiltered": "此難度沒有目標路線。"
+      "emptyFiltered": "此難度沒有目標路線。",
+      "bookmarkFailed": "無法更新收藏路線，請再試一次。"
     },
     "followingActivity": {
       "title": "追蹤動態",
@@ -330,7 +331,7 @@
   "betaVideo": {
     "sectionTitle": "BETA 影片",
     "addVideo": "新增 Beta 影片",
-    "noVideos": "還沒有 Beta 影片，成為第一個分享技巧的人吧！",
+    "noVideos": "還沒人分享 Beta。",
     "myVideos": "我的 Beta 影片",
     "noVideosYet": "還沒有 Beta 影片",
     "uploading": "上傳中…",
@@ -342,7 +343,7 @@
     "replaceConfirmOk": "替換",
     "replaceConfirmCancel": "取消",
     "grid": {
-      "openVideo": "開啟影片"
+      "openVideo": "播放 Beta 影片，第 {{index}} 支，共 {{total}} 支"
     },
     "player": {
       "play": "播放 Beta 影片",
@@ -355,7 +356,8 @@
       "report": "檢舉",
       "reported": "已回報",
       "reportError": "回報失敗，請再試一次",
-      "anonymous": "匿名"
+      "anonymous": "匿名",
+      "likeLabel": "按讚，{{count}} 個讚"
     },
     "userVideos": "Beta 影片",
     "errors": {
@@ -366,7 +368,10 @@
       "permissionDenied": "需要相簿存取權限才能選擇影片。",
       "videoTooLargeAfterCompression": "影片檔案過大，請壓縮至 45MB 以下。",
       "videoTooLargeForStorage": "影片超過上限，請修剪影片後再試。"
-    }
+    },
+    "emptyUpload": "上傳 Beta",
+    "loadingVideos": "Beta 影片載入中",
+    "uploadingHint": "上傳完成前請不要離開這個畫面。"
   },
   "socialFeed": {
     "title": "動態消息",
