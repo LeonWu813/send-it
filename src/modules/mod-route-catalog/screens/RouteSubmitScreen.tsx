@@ -21,7 +21,7 @@
 import type { Session } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -39,10 +39,11 @@ import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import {
+  listRoutes,
   submitRoute,
   uploadRoutePhoto,
 } from '../route-service';
-import type { RouteColor, RouteGrade } from '../types';
+import type { RouteColor, RouteGrade, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
 
 interface RouteSubmitScreenProps {
@@ -94,6 +95,30 @@ export default function RouteSubmitScreen({
   const [colorError, setColorError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // AC-187: client-side duplicate check against already-fetched active routes.
+  // Fetch once on mount — no RPC per selection change.
+  const [activeRoutes, setActiveRoutes] = useState<RouteSummary[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listRoutes(gymId, { grade: null, colorTag: null }).then((routes) => {
+      if (!cancelled) {
+        setActiveRoutes(routes);
+      }
+    }).catch(() => {
+      // Non-fatal: if we can't fetch, the warning simply won't appear.
+    });
+    return () => { cancelled = true; };
+  }, [gymId]);
+
+  // Reactively derive whether the current selection is a duplicate (AC-187).
+  const isDuplicate = useMemo(() => {
+    if (!selectedGrade || !selectedColor) return false;
+    return activeRoutes.some(
+      (r) => r.grade === selectedGrade && r.color_tag === selectedColor,
+    );
+  }, [activeRoutes, selectedGrade, selectedColor]);
 
   // ── Photo picker ───────────────────────────────────────────────────────────
 
@@ -202,23 +227,8 @@ export default function RouteSubmitScreen({
           [{ text: t('common.ok'), onPress: () => onBack() }],
         );
       } else {
-        // Auto-approve is ON (default Phase 1): navigate to the new active route first,
-        // then show the non-blocking duplicate soft warning if applicable (AC-187).
+        // Auto-approve is ON (default Phase 1): navigate to the new active route.
         onSuccess(newRoute.id);
-        if (newRoute.has_duplicate) {
-          // Show informational alert after navigation — does not block the user.
-          // The alert is deferred slightly so the navigation transition can begin.
-          setTimeout(() => {
-            Alert.alert(
-              t('routes.submit.duplicateWarning.title'),
-              t('routes.submit.duplicateWarning.body', {
-                grade: newRoute.grade,
-                color: t(`routeCatalog.colors.${newRoute.color_tag}`),
-              }),
-              [{ text: t('common.ok') }],
-            );
-          }, 300);
-        }
       }
     } catch (err) {
       const message =
@@ -412,6 +422,21 @@ export default function RouteSubmitScreen({
         </Text>
       ) : null}
 
+      {/* AC-187: non-blocking inline duplicate notice — reactive to grade/color selection */}
+      {isDuplicate ? (
+        <View style={styles.duplicateNotice}>
+          <Text style={styles.duplicateNoticeTitle}>
+            {t('routes.duplicateWarning.title')}
+          </Text>
+          <Text style={styles.duplicateNoticeBody}>
+            {t('routes.duplicateWarning.body', {
+              grade: selectedGrade,
+              color: t(`routeCatalog.colors.${selectedColor}`),
+            })}
+          </Text>
+        </View>
+      ) : null}
+
       {/* Add Route button — disabled until a photo is selected (AC-021) */}
       <Pressable
         style={[
@@ -594,6 +619,25 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       color: theme.colors.textSecondary,
       marginBottom: theme.spacing.xs,
       textAlign: 'center',
+    },
+    duplicateNotice: {
+      backgroundColor: '#FFF8E1',
+      borderWidth: 1,
+      borderColor: '#F9A825',
+      borderRadius: theme.borderRadius.md,
+      paddingHorizontal: theme.spacing.md,
+      paddingVertical: theme.spacing.sm,
+      marginBottom: theme.spacing.sm,
+    },
+    duplicateNoticeTitle: {
+      fontSize: theme.fontSize.sm,
+      fontWeight: theme.fontWeight.semibold,
+      color: '#7B5E00',
+      marginBottom: 2,
+    },
+    duplicateNoticeBody: {
+      fontSize: theme.fontSize.sm,
+      color: '#7B5E00',
     },
   });
 }

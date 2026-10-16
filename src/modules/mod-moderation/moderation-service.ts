@@ -58,6 +58,7 @@ export async function reportUser(
   });
 
   if (error) {
+    console.error('[reportUser] error:', error);
     throw new Error('Failed to submit report. Please try again.');
   }
 }
@@ -96,6 +97,7 @@ export async function blockUser(blockedUserId: string): Promise<void> {
     if (error.code === '23505') {
       return;
     }
+    console.error('[blockUser] error:', error);
     throw new Error('Action failed. Please try again.');
   }
 }
@@ -123,6 +125,7 @@ export async function unblockUser(blockedUserId: string): Promise<void> {
     .eq('blocked_user_id', blockedUserId);
 
   if (error) {
+    console.error('[unblockUser] error:', error);
     throw new Error('Action failed. Please try again.');
   }
 }
@@ -148,6 +151,7 @@ export async function fetchBlockedUserIds(): Promise<Set<string>> {
     .select('blocker_user_id, blocked_user_id');
 
   if (error) {
+    console.error('[fetchBlockedUserIds] error:', error);
     throw new Error('Failed to load block list. Please try again.');
   }
 
@@ -210,6 +214,7 @@ export async function fetchMyBlockedUsers(): Promise<BlockedUser[]> {
     .order('created_at', { ascending: false });
 
   if (error) {
+    console.error('[fetchMyBlockedUsers] error:', error);
     throw new Error('Failed to load blocked accounts. Please try again.');
   }
 

@@ -18,6 +18,7 @@ jest.mock('../../../lib/supabase', () => ({
 jest.mock('../route-service', () => ({
   uploadRoutePhoto: jest.fn(),
   submitRoute: jest.fn(),
+  listRoutes: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('expo-image-picker', () => ({
@@ -36,6 +37,7 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   uploadRoutePhoto,
   submitRoute,
+  listRoutes,
 } from '../route-service';
 import RouteSubmitScreen from '../screens/RouteSubmitScreen';
 import { renderOptions } from '../test-utils';
@@ -44,6 +46,7 @@ const mockUploadRoutePhoto = uploadRoutePhoto as jest.MockedFunction<
   typeof uploadRoutePhoto
 >;
 const mockSubmitRoute = submitRoute as jest.MockedFunction<typeof submitRoute>;
+const mockListRoutes = listRoutes as jest.MockedFunction<typeof listRoutes>;
 const mockLaunchImageLibraryAsync =
   ImagePicker.launchImageLibraryAsync as jest.MockedFunction<
     typeof ImagePicker.launchImageLibraryAsync
@@ -307,7 +310,6 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       created_at: '2026-09-23T10:00:00Z',
       retired_at: null,
       retired_by_user_id: null,
-      has_duplicate: false,
     });
 
     // When submitRoute IS called, the first argument must be an object (not a string userId)
@@ -331,7 +333,6 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       created_at: '2026-09-23T10:00:00Z',
       retired_at: null,
       retired_by_user_id: null,
-      has_duplicate: false,
     });
     mockLaunchImageLibraryAsync.mockResolvedValueOnce({
       canceled: false,
@@ -417,5 +418,93 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
         el.props.accessibilityLabel?.includes('確認是否'),
     );
     expect(checkBtn).toBeUndefined();
+  });
+
+  // ── AC-187: inline duplicate notice ───────────────────────────────────────
+
+  it('shows inline duplicate notice when active routes contain same grade+color (AC-187)', async () => {
+    // listRoutes returns an active route with V3 red
+    mockListRoutes.mockResolvedValueOnce([
+      {
+        id: 'route-existing',
+        gym_id: 'gym-001',
+        section_label: null,
+        grade: 'V3',
+        color_tag: 'red',
+        photo_url: 'https://example.com/photo.jpg',
+        status: 'active',
+        created_at: '2026-09-01T10:00:00Z',
+      },
+    ]);
+
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    // Select V3 grade and red color — matches the existing active route
+    fireEvent.press(screen.getByText('V3'));
+    fireEvent.press(screen.getAllByText('red')[0]);
+
+    await waitFor(() => {
+      // Inline notice title should appear (not an Alert modal)
+      const notice = screen.queryByText(/Possible Duplicate|可能重複/);
+      expect(notice).toBeTruthy();
+    });
+  });
+
+  it('hides inline duplicate notice when no active route matches the selection (AC-187)', async () => {
+    // listRoutes returns an active route with V3 red — but we select V4 blue
+    mockListRoutes.mockResolvedValueOnce([
+      {
+        id: 'route-existing',
+        gym_id: 'gym-001',
+        section_label: null,
+        grade: 'V3',
+        color_tag: 'red',
+        photo_url: 'https://example.com/photo.jpg',
+        status: 'active',
+        created_at: '2026-09-01T10:00:00Z',
+      },
+    ]);
+
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    fireEvent.press(screen.getByText('V4'));
+    fireEvent.press(screen.getAllByText('blue')[0]);
+
+    await waitFor(() => {
+      const notice = screen.queryByText(/Possible Duplicate|可能重複/);
+      expect(notice).toBeNull();
+    });
+  });
+
+  it('notice disappears when grade chip changes away from duplicate (AC-187)', async () => {
+    mockListRoutes.mockResolvedValueOnce([
+      {
+        id: 'route-existing',
+        gym_id: 'gym-001',
+        section_label: null,
+        grade: 'V3',
+        color_tag: 'red',
+        photo_url: 'https://example.com/photo.jpg',
+        status: 'active',
+        created_at: '2026-09-01T10:00:00Z',
+      },
+    ]);
+
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    // First select V3 red — notice should appear
+    fireEvent.press(screen.getByText('V3'));
+    fireEvent.press(screen.getAllByText('red')[0]);
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Possible Duplicate|可能重複/)).toBeTruthy();
+    });
+
+    // Change grade to V4 — notice should disappear
+    fireEvent.press(screen.getByText('V4'));
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Possible Duplicate|可能重複/)).toBeNull();
+    });
   });
 });

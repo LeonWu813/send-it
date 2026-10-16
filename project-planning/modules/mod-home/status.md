@@ -3362,3 +3362,30 @@ Pressable (card, flexDirection: 'row', alignItems: 'center')
 **Commit**: e9aebe0
 
 **Result: READY FOR QA**
+
+---
+
+### Bugfix — RouteCard nameRow flex:1 removed; info justifyContent:center added — 2026-10-15
+
+**Changes (style-only, no JSX or prop changes):**
+
+1. `nameRow` — removed `flex: 1`. The row now sizes to its content height instead of filling the parent View's height.
+2. `info` — added `justifyContent: 'center'`. The stack of (nameRow + gymName + betaCount) is now vertically centered within the info View.
+
+**Files changed:**
+- `src/components/RouteCard.tsx` — two style properties only.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest src/components --watchAll=false` | PASS — 25 tests, 2 suites, 0 failures |
+| No JSX changes | PASS |
+| No prop changes | PASS |
+| nameRow no longer has flex:1 | PASS |
+| info has justifyContent:'center' | PASS |
+
+**Commit**: 4b0f7fe
+
+**Result: READY FOR QA**
