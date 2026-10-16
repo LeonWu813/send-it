@@ -9,20 +9,17 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
   View,
 } from 'react-native';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useTheme } from '../../../lib/theme';
+import { AppText, Button, InlineError, TextField } from '../../../components/ui';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { signUpWithEmail } from '../auth-service';
 
 interface SignUpScreenProps {
@@ -35,7 +32,8 @@ export default function SignUpScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, insets.top, screenMargin);
 
   const [email, setEmail] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -85,91 +83,79 @@ export default function SignUpScreen({
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>{t('app.name')}</Text>
+        <AppText variant="largeTitle" align="center" style={styles.title}>
+          {t('app.name')}
+        </AppText>
 
         {/* Display name */}
-        <TextInput
-          style={styles.input}
+        <TextField
+          label={t('auth.displayNameLabel')}
           value={displayName}
           onChangeText={setDisplayName}
           placeholder={t('auth.displayNamePlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
           autoCapitalize="words"
           autoCorrect={false}
-          editable={!isLoading}
-          accessibilityLabel={t('auth.displayNameLabel')}
+          disabled={isLoading}
         />
 
         {/* Email */}
-        <TextInput
-          style={styles.input}
+        <TextField
+          label={t('auth.email')}
           value={email}
           onChangeText={setEmail}
           placeholder={t('auth.emailPlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
-          editable={!isLoading}
-          accessibilityLabel={t('auth.email')}
+          disabled={isLoading}
         />
 
         {/* Password */}
-        <TextInput
-          style={styles.input}
+        <TextField
+          label={t('auth.password')}
           value={password}
           onChangeText={setPassword}
           placeholder={t('auth.passwordPlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
           secureTextEntry
-          editable={!isLoading}
-          accessibilityLabel={t('auth.password')}
+          disabled={isLoading}
         />
 
         {/* Confirm Password */}
-        <TextInput
-          style={styles.input}
+        <TextField
+          label={t('auth.confirmPassword')}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
           placeholder={t('auth.passwordPlaceholder')}
-          placeholderTextColor={theme.colors.textDisabled}
           secureTextEntry
-          editable={!isLoading}
-          accessibilityLabel={t('auth.confirmPassword')}
+          disabled={isLoading}
         />
 
         {/* Error */}
         {errorMessage ? (
-          <Text style={styles.errorText}>{errorMessage}</Text>
+          <InlineError variant="block" message={errorMessage} />
         ) : null}
 
         {/* Submit */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.primaryButtonPressed,
-            isLoading && styles.primaryButtonDisabled,
-          ]}
+        <Button
+          label={t('auth.signUp')}
           onPress={handleSignUp}
+          variant="primary"
+          size="lg"
+          fullWidth
+          loading={isLoading}
           disabled={isLoading}
-          accessibilityRole="button"
           accessibilityLabel={t('auth.signUp')}
-        >
-          {isLoading ? (
-            <ActivityIndicator color={theme.colors.textInverse} />
-          ) : (
-            <Text style={styles.primaryButtonText}>{t('auth.signUp')}</Text>
-          )}
-        </Pressable>
+        />
 
         {/* Already have account */}
-        <Pressable
+        <Button
+          label={t('auth.haveAccount')}
           onPress={onNavigateSignIn}
+          variant="ghost"
+          on="background"
+          fullWidth
           disabled={isLoading}
-          accessibilityRole="button"
-        >
-          <Text style={styles.linkText}>{t('auth.haveAccount')}</Text>
-        </Pressable>
+        />
 
         {/* Vertical spacer for keyboard */}
         <View style={styles.spacer} />
@@ -179,7 +165,11 @@ export default function SignUpScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  topInset: number,
+  screenMargin: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -187,56 +177,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     scrollContent: {
       flexGrow: 1,
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.md,
     },
     title: {
-      fontSize: theme.fontSize.display,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      textAlign: 'center',
       marginBottom: theme.spacing.lg,
-    },
-    input: {
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.md,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm + 4,
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-    },
-    primaryButton: {
-      backgroundColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.md,
-      paddingVertical: theme.spacing.sm + 4,
-      alignItems: 'center',
-      justifyContent: 'center',
-      height: 48,
-    },
-    primaryButtonPressed: {
-      backgroundColor: theme.colors.primaryPressed,
-    },
-    primaryButtonDisabled: {
-      backgroundColor: theme.colors.primaryDisabled,
-    },
-    primaryButtonText: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-    },
-    linkText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-      textAlign: 'center',
-      marginTop: theme.spacing.sm,
     },
     spacer: {
       height: theme.spacing.xl,

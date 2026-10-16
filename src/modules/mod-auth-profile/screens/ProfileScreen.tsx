@@ -28,14 +28,9 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Image,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useTheme } from '../../../lib/theme';
+import { StyleSheet, View } from 'react-native';
+import { AppText, Avatar, Button, PressableScale } from '../../../components/ui';
+import { useLayout, useTheme } from '../../../lib/theme';
 import {
   BetaVideoGrid,
   BetaVideoReelViewer,
@@ -76,7 +71,8 @@ export default function ProfileScreen({
 }: ProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme, 0);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, 0, screenMargin);
 
   const { profile } = useSession();
 
@@ -140,66 +136,66 @@ export default function ProfileScreen({
     <View style={styles.headerContainer}>
       {/* Avatar + display name + bio (AC-116) */}
       <View style={styles.header}>
-        {profile?.avatar_url ? (
-          <Image
-            source={{ uri: profile.avatar_url }}
-            style={styles.avatar}
-            accessibilityLabel={t('profile.avatar')}
-          />
-        ) : (
-          <View style={styles.avatarPlaceholder} />
-        )}
-        <Text style={styles.displayName}>
+        <Avatar
+          size="xl"
+          uri={profile?.avatar_url}
+          name={profile?.display_name}
+          decorative
+        />
+        <AppText variant="title2" align="center">
           {profile?.display_name ?? ''}
-        </Text>
+        </AppText>
         {profile?.bio ? (
-          <Text style={styles.bio}>{profile.bio}</Text>
+          <AppText variant="body" color="textSecondary" align="center">
+            {profile.bio}
+          </AppText>
         ) : null}
       </View>
 
       {/* AC-145: Follower / following count links — immediately below bio */}
       <View style={styles.followCountsRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.followCountItem,
-            pressed && styles.followCountItemPressed,
-          ]}
+        <PressableScale
+          feedback="row"
+          pressedColor={theme.colors.surfaceAltPressed}
+          style={styles.followCountItem}
           onPress={onNavigateToFollowers}
           accessibilityRole="button"
           accessibilityLabel={`${followerCount} ${t('socialFeed.followers')}`}
         >
-          <Text style={styles.followCountNumber}>{followerCount}</Text>
-          <Text style={styles.followCountLabel}>{t('socialFeed.followers')}</Text>
-        </Pressable>
+          <AppText variant="headline" numeric>
+            {followerCount}
+          </AppText>
+          <AppText variant="footnote" color="primary">
+            {t('socialFeed.followers')}
+          </AppText>
+        </PressableScale>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.followCountItem,
-            pressed && styles.followCountItemPressed,
-          ]}
+        <PressableScale
+          feedback="row"
+          pressedColor={theme.colors.surfaceAltPressed}
+          style={styles.followCountItem}
           onPress={onNavigateToFollowing}
           accessibilityRole="button"
           accessibilityLabel={`${followingCount} ${t('socialFeed.following')}`}
         >
-          <Text style={styles.followCountNumber}>{followingCount}</Text>
-          <Text style={styles.followCountLabel}>{t('socialFeed.following')}</Text>
-        </Pressable>
+          <AppText variant="headline" numeric>
+            {followingCount}
+          </AppText>
+          <AppText variant="footnote" color="primary">
+            {t('socialFeed.following')}
+          </AppText>
+        </PressableScale>
       </View>
 
       {/* Edit Profile entry (AC-117) */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.editProfileButton,
-          pressed && styles.editProfileButtonPressed,
-        ]}
+      <Button
+        label={t('profile.editProfile')}
         onPress={onNavigateEditProfile}
-        accessibilityRole="button"
+        variant="secondary"
+        size="md"
+        fullWidth
         accessibilityLabel={t('profile.editProfile')}
-      >
-        <Text style={styles.editProfileButtonText}>
-          {t('profile.editProfile')}
-        </Text>
-      </Pressable>
+      />
     </View>
   );
 
@@ -209,16 +205,25 @@ export default function ProfileScreen({
   // AC-167: Logout button removed from ProfileScreen (moved to MOD-010 SettingsScreen).
   const profileFooter = (
     <View style={styles.videoSectionContainer}>
-      <Text style={styles.videoSectionTitle}>{t('betaVideo.myVideos')}</Text>
+      <AppText variant="sectionHeader" style={styles.videoSectionTitle}>
+        {t('betaVideo.myVideos')}
+      </AppText>
       <BetaVideoGrid
         videos={betaVideos}
         onPressVideo={(index) => {
           setReelStartIndex(index);
           setShowReel(true);
         }}
-        horizontalPadding={theme.spacing.lg}
+        horizontalPadding={screenMargin}
         emptyState={
-          <Text style={styles.videoSectionEmpty}>{t('betaVideo.noVideosYet')}</Text>
+          <AppText
+            variant="footnote"
+            color="textSecondary"
+            align="center"
+            style={styles.videoSectionEmpty}
+          >
+            {t('betaVideo.noVideosYet')}
+          </AppText>
         }
       />
     </View>
@@ -260,7 +265,11 @@ export default function ProfileScreen({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  topInset: number,
+  screenMargin: number,
+) {
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -268,7 +277,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     },
     headerContainer: {
       paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.md,
     },
     header: {
@@ -276,89 +285,29 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       marginBottom: theme.spacing.md,
       gap: theme.spacing.sm,
     },
-    avatar: {
-      width: 96,
-      height: 96,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface,
-    },
-    avatarPlaceholder: {
-      width: 96,
-      height: 96,
-      borderRadius: theme.borderRadius.full,
-      backgroundColor: theme.colors.surface,
-      borderWidth: 1,
-      borderColor: theme.colors.border,
-    },
-    displayName: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-      textAlign: 'center',
-    },
-    bio: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-    },
     // AC-145: follower / following count row
     followCountsRow: {
       flexDirection: 'row',
       justifyContent: 'flex-start',
       gap: theme.spacing.lg,
-      marginBottom: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
     },
     followCountItem: {
       flexDirection: 'row',
       alignItems: 'baseline',
       gap: theme.spacing.xs,
-      paddingVertical: theme.spacing.xs,
-    },
-    followCountItemPressed: {
-      opacity: 0.6,
-    },
-    followCountNumber: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-    },
-    followCountLabel: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-    },
-    editProfileButton: {
-      height: 44,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: theme.spacing.lg,
-    },
-    editProfileButtonPressed: {
-      backgroundColor: theme.colors.surface,
-    },
-    editProfileButtonText: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.primary,
+      minHeight: theme.layout.minTouchTarget,
     },
     // AC-164: beta-video grid section (listFooterComponent)
     videoSectionContainer: {
-      paddingTop: theme.spacing.lg,
+      paddingTop: theme.layout.sectionGap,
       paddingBottom: theme.spacing.xl,
-      paddingHorizontal: theme.spacing.lg,
+      paddingHorizontal: screenMargin,
     },
     videoSectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
       marginBottom: theme.spacing.sm,
     },
     videoSectionEmpty: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
       paddingVertical: theme.spacing.lg,
       paddingHorizontal: theme.spacing.lg,
     },

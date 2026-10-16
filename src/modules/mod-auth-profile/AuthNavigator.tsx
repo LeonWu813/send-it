@@ -12,7 +12,8 @@
  */
 
 import React, { useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Spinner } from '../../components/ui';
 
 import { useTheme } from '../../lib/theme';
 import { useSession } from './hooks/useSession';
@@ -46,7 +47,7 @@ export default function AuthNavigator({
   if (isLoading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator color={theme.colors.primary} size="large" />
+        <Spinner color="primary" size="large" />
       </View>
     );
   }

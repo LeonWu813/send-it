@@ -15,26 +15,8 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }));
 
-jest.mock('../../../lib/theme', () => ({
-  useTheme: () => ({
-    theme: {
-      colors: {
-        background: '#fff',
-        textPrimary: '#000',
-        textSecondary: '#888',
-        primary: '#007AFF',
-        surface: '#f5f5f5',
-        border: '#ccc',
-      },
-      spacing: { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 },
-      fontSize: { sm: 12, md: 16, xl: 20 },
-      fontWeight: { medium: '500', bold: '700' },
-      borderRadius: { md: 8, full: 9999 },
-    },
-  }),
-}));
-
 jest.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: () => undefined },
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: { changeLanguage: jest.fn() },
@@ -75,6 +57,7 @@ jest.mock('../hooks/useSession', () => ({
 import React from 'react';
 import { render } from '@testing-library/react-native';
 import ProfileScreen from '../screens/ProfileScreen';
+import { ThemeProvider } from '../../../lib/theme';
 import type { Session } from '@supabase/supabase-js';
 
 const mockSession = {
@@ -85,10 +68,12 @@ const mockSession = {
 describe('ProfileScreen', () => {
   it('renders without crashing', () => {
     const { getByLabelText } = render(
+      <ThemeProvider>
       <ProfileScreen
         session={mockSession}
         onNavigateEditProfile={jest.fn()}
-      />,
+      />
+      </ThemeProvider>,
     );
     // AC-117: Edit Profile affordance is present
     expect(getByLabelText('profile.editProfile')).toBeTruthy();
@@ -96,12 +81,14 @@ describe('ProfileScreen', () => {
 
   it('renders follower and following count links (AC-145)', () => {
     const { getByLabelText } = render(
+      <ThemeProvider>
       <ProfileScreen
         session={mockSession}
         onNavigateEditProfile={jest.fn()}
         onNavigateToFollowers={jest.fn()}
         onNavigateToFollowing={jest.fn()}
-      />,
+      />
+      </ThemeProvider>,
     );
     // AC-145: count links are accessible
     expect(getByLabelText(/socialFeed.followers/)).toBeTruthy();
