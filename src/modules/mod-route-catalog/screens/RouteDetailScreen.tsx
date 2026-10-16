@@ -54,7 +54,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
-import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import RouteColorBadge from '../components/RouteColorBadge';
 import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';

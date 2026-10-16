@@ -30,7 +30,7 @@ import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
-import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import type { Gym } from '../types';
 
 interface GymDetailScreenProps {

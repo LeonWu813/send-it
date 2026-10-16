@@ -25,7 +25,7 @@ import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { fetchProfileHistory } from '../../mod-profile-history/history-service';
 import type { HistoryAscent } from '../../mod-profile-history/types';
-import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import ModerationActions from '../components/ModerationActions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────

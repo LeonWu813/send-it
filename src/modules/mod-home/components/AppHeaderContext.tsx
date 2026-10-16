@@ -1,7 +1,9 @@
 /**
  * AppHeaderContext — lets screens drive the global AppHeader (design system §30).
  *
- * Import path (all modules): `src/modules/mod-home/components/AppHeaderContext`
+ * @deprecated Import from '@/lib/AppHeaderContext' instead.
+ *
+ * Import path (all modules): `@/lib/AppHeaderContext`
  * (relative from a module: `../../mod-home/components/AppHeaderContext`).
  *
  * Nested screen (back + title [+ trailing] + action capsule on ONE 44pt row; delete the screen's own

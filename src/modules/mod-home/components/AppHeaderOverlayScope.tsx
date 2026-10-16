@@ -2,6 +2,8 @@
  * AppHeaderOverlayScope — wraps a full-screen AppShell overlay (notifications, settings, climber
  * profile) so its screens can use the same `useAppHeader` hook as tab screens.
  *
+ * @deprecated Import from '@/lib/AppHeaderContext' instead.
+ *
  * It owns a private header store: `useAppHeader` registrations inside the scope drive a nested
  * `AppHeader` rendered at the top of the overlay (back, title, optional trailing, action capsule).
  * With no registration the scope renders no header (the overlay draws its own). The scope also marks

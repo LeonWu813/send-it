@@ -28,7 +28,7 @@ import SharedRouteCard from '../../../components/RouteCard';
 import { AppText, Chip, EmptyState, InlineError, Spinner } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useTabBarInset } from '@/lib/AppHeaderContext';
 import StatsPanel from '../components/StatsPanel';
 import {
   fetchProfileHistory,

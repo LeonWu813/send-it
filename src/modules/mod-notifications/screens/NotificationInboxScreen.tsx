@@ -41,7 +41,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
-import { useAppHeader } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader } from '@/lib/AppHeaderContext';
 import {
   fetchNotifications,
   markNotificationsRead,

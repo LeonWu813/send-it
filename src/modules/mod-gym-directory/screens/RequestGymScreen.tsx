@@ -25,7 +25,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { LAYOUT, useLayout, useTheme } from '../../../lib/theme';
-import { useAppHeader, useHideTabBar } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useHideTabBar } from '@/lib/AppHeaderContext';
 import { submitGymRequest } from '../gym-service';
 
 interface RequestGymScreenProps {

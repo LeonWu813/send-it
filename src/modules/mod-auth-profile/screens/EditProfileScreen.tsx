@@ -29,7 +29,7 @@ import {
   TextField,
 } from '../../../components/ui';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { useAppHeader, useHideTabBar } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useHideTabBar } from '@/lib/AppHeaderContext';
 import { uploadAvatar, upsertProfile } from '../auth-service';
 import type { PrivacySetting, UserProfile } from '../types';
 

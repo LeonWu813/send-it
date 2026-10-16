@@ -34,7 +34,7 @@ import {
   submitRoute,
   uploadRoutePhoto,
 } from '../route-service';
-import { useAppHeader, useHideTabBar } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useHideTabBar } from '@/lib/AppHeaderContext';
 import { useTapeSwatch } from '../components/RouteColorBadge';
 import type { RouteColor, RouteGrade, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';

@@ -9,7 +9,7 @@ import {
   AppHeaderProvider,
   AppHeaderStore,
   AppHeaderTabScope,
-} from '../../mod-home/components/AppHeaderContext';
+} from '@/lib/AppHeaderContext';
 import { ThemeProvider } from '../../../lib/theme';
 import OtherUserProfileScreen from '../screens/OtherUserProfileScreen';
 

@@ -32,7 +32,7 @@ import {
 } from '../../mod-moderation/moderation-service';
 import type { BlockedUser } from '../../mod-moderation/moderation-service';
 import { useTheme } from '../../../lib/theme';
-import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 
 // ── Props ─────────────────────────────────────────────────────────────────────

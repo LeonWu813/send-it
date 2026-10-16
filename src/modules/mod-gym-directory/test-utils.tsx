@@ -16,7 +16,7 @@ import {
   AppHeaderStore,
   AppHeaderTabScope,
   useAppHeaderStoreVersion,
-} from '../mod-home/components/AppHeaderContext';
+} from '@/lib/AppHeaderContext';
 
 interface WrapperProps {
   children: React.ReactNode;

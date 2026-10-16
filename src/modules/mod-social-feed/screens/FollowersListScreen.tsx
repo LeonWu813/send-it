@@ -22,7 +22,7 @@ import { ICON } from '../../../lib/icons';
 import { AVATAR_SIZE, useLayout, useTheme } from '../../../lib/theme';
 import { fetchFollowersList } from '../social-feed-service';
 import type { UserListItem } from '../types';
-import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   Avatar,

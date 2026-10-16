@@ -13,7 +13,7 @@
  */
 
 const mockUseAppHeader = jest.fn();
-jest.mock('../../mod-home/components/AppHeaderContext', () => ({
+jest.mock('@/lib/AppHeaderContext', () => ({
   useAppHeader: (cfg: unknown): void => { mockUseAppHeader(cfg); },
   useTabBarInset: () => ({ contentBottom: 0, indicatorBottom: 0 }),
 }));

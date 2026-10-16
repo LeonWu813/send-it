@@ -32,7 +32,7 @@ import {
 import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { useAppHeaderRoot } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
 import { fetchSavedGymIds, listGyms } from '../gym-service';
 import type { GymSummary } from '../types';
 

@@ -33,7 +33,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import { useTapeSwatch } from '../components/RouteColorBadge';
 import { fetchUserAchievements } from '../../mod-send-logging/send-service';
 import {

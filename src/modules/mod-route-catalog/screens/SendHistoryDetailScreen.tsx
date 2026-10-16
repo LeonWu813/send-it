@@ -33,7 +33,7 @@ import {
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import type { AscentWithProfile } from '../../mod-send-logging';
 
