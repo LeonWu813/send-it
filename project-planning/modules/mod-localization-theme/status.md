@@ -2,6 +2,15 @@
 
 ## Engineering Progress
 
+### Storybook infrastructure — 2026-10-16 (off-spec design tooling, pending PR review)
+
+Added on branch `design/storybook` at the UI/UX designer's request. NOT routed through tech-lead/pm/doc-sync; PR review covers it. No runtime app code changed (`src/lib/theme.ts` and `i18n.ts` untouched).
+
+- Added `.storybook/` (main.ts, preview.tsx, ForcedTheme.tsx, stubs/, README.md), `stories/Tokens.stories.tsx`, `storybook` / `build-storybook` scripts, dev deps (storybook, @storybook/react-native-web-vite, vite) and deps react-dom / react-native-web (via `expo install`).
+- Supabase and AsyncStorage are stubbed for Storybook only.
+
+---
+
 ### Bugfix — 2026-10-15 (Jest AsyncStorage mock — cross-project regression fix)
 
 **Added Jest moduleNameMapper entry for `@react-native-async-storage/async-storage`**

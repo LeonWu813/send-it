@@ -84,3 +84,6 @@ Desktop.ini
 # Logs
 *.log
 logs/
+
+# Storybook
+storybook-static/
