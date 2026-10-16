@@ -13,6 +13,12 @@
  * AC-139: Report icon hidden for own videos and admin-dismissed videos.
  * AC-140: Report icon calls report_beta_video RPC; local reportedIds tracks success.
  *
+ * Design system v1.2 (off-spec design work): everything that sits on the video uses the fixed
+ * media tokens (`onMedia`, `mediaScrim`, `mediaScrimStrong`, `mediaBackground`) so it stays
+ * visible in both themes; controls sit inside the safe area (no `|| 34` fallback, no fixed
+ * padding); the like heart is `onMedia` (filled vs outline, never red) with the like motion
+ * (celebratePeak + topOut + particles, Reduce Motion = cross-fade only).
+ *
  * Architecture (Tech Lead decisions, Rev 13 + Rev 16):
  * 1. Portrait lock: `app.json` already sets `"orientation": "portrait"` globally.
  * 2. Modal architecture: RN `<Modal>` — same pattern as BetaVideoUploader.
@@ -58,47 +64,35 @@ import React, {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   Animated,
-  Dimensions,
-  Image,
   Modal,
   PanResponder,
   Pressable,
+  StatusBar,
   StyleSheet,
-  Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AppText } from '../../../components/ui/AppText';
+import { Avatar } from '../../../components/ui/Avatar';
+import { IconButton } from '../../../components/ui/IconButton';
+import { Spinner } from '../../../components/ui/ProgressBar';
+import { ICON } from '../../../lib/icons';
+import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { useLayout, useTheme } from '../../../lib/theme';
+import { ACTION_SIZE, ReelAction } from './ReelAction';
 import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed/social-feed-service';
 import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import type { BetaVideo } from '../types';
 
-/**
- * Intentional named constant for the video viewer background.
- * Pure black is required here: the viewer occupies the full screen as a cinema
- * canvas, and no theme token maps to #000000 (the darkest token is
- * theme.colors.background at #121212). Using a named constant rather than an
- * inline literal satisfies the no-hardcoded-hex convention.
- */
-const VIDEO_VIEWER_BG = '#000000';
-
 /** Minimum dy (in pixels) to trigger a swipe. */
 const SWIPE_THRESHOLD = 50;
 
-/** Diameter of the poster avatar circle (AC-134). */
-const AVATAR_SIZE = 36;
-
-/** Width allocated for the right sidebar (like + report icons). */
-const SIDEBAR_WIDTH = 56;
-
 /** Duration of one marquee scroll pass in milliseconds (AC-137). */
 const MARQUEE_DURATION_MS = 4000;
-
-/** Full device screen height — used for swipe-out animation distance. */
-const screenHeight = Dimensions.get('window').height;
 
 export interface BetaVideoReelViewerProps {
   /** Full ordered array of beta videos for the route (created_at DESC). */
@@ -153,6 +147,8 @@ interface MarqueeTextProps {
   containerWidth: number;
   style?: object;
   testID?: string;
+  /** Reduce Motion: no scrolling, the single line is truncated instead. */
+  reduceMotion?: boolean;
 }
 
 /**
@@ -160,25 +156,27 @@ interface MarqueeTextProps {
  * than `containerWidth`, a looping `Animated.translateX` marquee scrolls it.
  * No native package — pure RN Animated (AC-137).
  */
-function MarqueeText({ text, containerWidth, style, testID }: MarqueeTextProps): React.JSX.Element {
+function MarqueeText({ text, containerWidth, style, testID, reduceMotion = false }: MarqueeTextProps): React.JSX.Element {
   const translateX = useRef(new Animated.Value(0)).current;
   const [textWidth, setTextWidth] = useState(0);
   const animRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
-    if (textWidth > containerWidth && containerWidth > 0) {
+    if (!reduceMotion && textWidth > containerWidth && containerWidth > 0) {
       animRef.current = Animated.loop(
         Animated.sequence([
           Animated.timing(translateX, {
             toValue: -(textWidth - containerWidth),
             duration: MARQUEE_DURATION_MS,
-            useNativeDriver: true,
+            easing: bezierFor('linear'),
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
           Animated.delay(1000),
           Animated.timing(translateX, {
             toValue: 0,
             duration: 0,
-            useNativeDriver: true,
+            easing: bezierFor('linear'),
+            useNativeDriver: USE_NATIVE_DRIVER,
           }),
           Animated.delay(500),
         ]),
@@ -193,11 +191,12 @@ function MarqueeText({ text, containerWidth, style, testID }: MarqueeTextProps):
     return () => {
       animRef.current?.stop();
     };
-  }, [textWidth, containerWidth, translateX]);
+  }, [textWidth, containerWidth, translateX, reduceMotion]);
 
   return (
     <View style={{ width: containerWidth, overflow: 'hidden' }}>
       <Animated.Text
+        maxFontSizeMultiplier={1.6}
         style={[style, { transform: [{ translateX }] }]}
         onTextLayout={(e) => {
           const lineWidth = e.nativeEvent.lines[0]?.width ?? 0;
@@ -212,52 +211,17 @@ function MarqueeText({ text, containerWidth, style, testID }: MarqueeTextProps):
   );
 }
 
-// ── PosterAvatar — circular avatar with initial-letter fallback (AC-134/AC-138) ─
+// ── PosterAvatar — ui/ Avatar (sm 32) with the initial-letter fallback (AC-134/AC-138) ─
 
 interface PosterAvatarProps {
   avatarUrl: string | null;
   displayName: string | null;
-  theme: ReturnType<typeof useTheme>['theme'];
 }
 
-function PosterAvatar({ avatarUrl, displayName, theme }: PosterAvatarProps): React.JSX.Element {
-  const initial = displayName ? displayName.charAt(0).toUpperCase() : '?';
-
-  if (avatarUrl) {
-    return (
-      <Image
-        source={{ uri: avatarUrl }}
-        style={{
-          width: AVATAR_SIZE,
-          height: AVATAR_SIZE,
-          borderRadius: AVATAR_SIZE / 2,
-        }}
-        testID="reel-poster-avatar"
-      />
-    );
-  }
-
+function PosterAvatar({ avatarUrl, displayName }: PosterAvatarProps): React.JSX.Element {
   return (
-    <View
-      style={{
-        width: AVATAR_SIZE,
-        height: AVATAR_SIZE,
-        borderRadius: AVATAR_SIZE / 2,
-        backgroundColor: theme.colors.overlay,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-      testID="reel-poster-avatar-placeholder"
-    >
-      <Text
-        style={{
-          color: theme.colors.textInverse,
-          fontSize: theme.fontSize.md,
-          fontWeight: theme.fontWeight.semibold,
-        }}
-      >
-        {initial}
-      </Text>
+    <View testID={avatarUrl ? 'reel-poster-avatar' : 'reel-poster-avatar-placeholder'}>
+      <Avatar size="sm" uri={avatarUrl} name={displayName ?? undefined} decorative />
     </View>
   );
 }
@@ -286,7 +250,17 @@ export default function BetaVideoReelViewer({
   const { theme } = useTheme();
   const { t } = useTranslation('common');
   const insets = useSafeAreaInsets();
+  const { screenMargin } = useLayout();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const { duration, spring, reduceMotion } = useMotion();
   const styles = makeStyles(theme);
+
+  // The PanResponder is created once, so it reads the live window height / motion values
+  // through refs instead of capturing the first render's values.
+  const windowHeightRef = useRef(windowHeight);
+  windowHeightRef.current = windowHeight;
+  const motionRef = useRef({ duration, spring });
+  motionRef.current = { duration, spring };
 
   // ── Index state ───────────────────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
@@ -591,16 +565,17 @@ export default function BetaVideoReelViewer({
             // finger, not 250 ms later when the index finally changes.
             setIsVideoLoading(true);
             Animated.timing(dragY, {
-              toValue: -screenHeight,
-              duration: 250,
-              useNativeDriver: true,
+              toValue: -windowHeightRef.current,
+              duration: motionRef.current.duration.medium,
+              easing: bezierFor('exit'),
+              useNativeDriver: USE_NATIVE_DRIVER,
             }).start(() => {
               dragY.setValue(0);
               setCurrentIndex((prev) => prev + 1);
             });
           } else {
             // Already at last — snap back.
-            Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
+            Animated.spring(dragY, { toValue: 0, ...motionRef.current.spring.settle, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
           }
         } else if (dy > SWIPE_THRESHOLD) {
           // Swipe down → previous video or dismiss.
@@ -608,9 +583,10 @@ export default function BetaVideoReelViewer({
             // AC-039 / AC-133 fix (Root cause 1): same early overlay for swipe-down.
             setIsVideoLoading(true);
             Animated.timing(dragY, {
-              toValue: screenHeight,
-              duration: 250,
-              useNativeDriver: true,
+              toValue: windowHeightRef.current,
+              duration: motionRef.current.duration.medium,
+              easing: bezierFor('exit'),
+              useNativeDriver: USE_NATIVE_DRIVER,
             }).start(() => {
               dragY.setValue(0);
               setCurrentIndex((prev) => prev - 1);
@@ -625,12 +601,12 @@ export default function BetaVideoReelViewer({
           }
         } else {
           // Threshold not crossed — snap back to resting position.
-          Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
+          Animated.spring(dragY, { toValue: 0, ...motionRef.current.spring.settle, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
         }
       },
       onPanResponderTerminate: () => {
         // Another responder (e.g. a system gesture) took over — snap back.
-        Animated.spring(dragY, { toValue: 0, useNativeDriver: true }).start();
+        Animated.spring(dragY, { toValue: 0, ...motionRef.current.spring.settle, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
       },
     }),
   );
@@ -692,9 +668,15 @@ export default function BetaVideoReelViewer({
 
   // ── Bottom overlay layout widths ──────────────────────────────────────────
   // Left info column width = full width minus sidebar minus some padding.
-  // 16 (left pad) + [INFO_WIDTH] + 8 (gap) + SIDEBAR_WIDTH + 8 (right pad) = screenWidth
-  // We derive INFO_WIDTH lazily from a container measure — use a reasonable fixed value.
-  const INFO_COLUMN_WIDTH = 220;
+  // screenMargin + info column + sm gap + 44pt action column + screenMargin = window width.
+  // Measured from the laid-out info column (minus its scrim padding); until then an estimate from the window.
+  const estimatedInfoWidth = Math.max(0, windowWidth - screenMargin * 2 - ACTION_SIZE - theme.spacing.sm);
+  const [infoWidth, setInfoWidth] = useState<number | null>(null);
+  const handleInfoLayout = useCallback((e: LayoutChangeEvent): void => {
+    const w = e.nativeEvent.layout.width;
+    setInfoWidth((prev) => (prev === w ? prev : w));
+  }, []);
+  const marqueeWidth = Math.max(0, (infoWidth ?? estimatedInfoWidth) - theme.spacing.sm * 2);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -712,6 +694,8 @@ export default function BetaVideoReelViewer({
        * The Animated.View inside translates with dragY during swipe gestures.
        */}
       <View style={styles.fullscreen} testID="beta-video-reel-viewer">
+        {/* Always light content: the viewer is black whatever the app theme is. */}
+        <StatusBar barStyle="light-content" />
 
         {/*
          * Animated content wrapper (Bug 3 — swipe animation).
@@ -753,20 +737,18 @@ export default function BetaVideoReelViewer({
           {/* Loading spinner (absolute, sits above VideoView) */}
           {urlLoading ? (
             <View style={styles.centeredOverlay}>
-              <ActivityIndicator
-                size="large"
-                color={theme.colors.textInverse}
-                testID="beta-video-reel-loading"
-              />
+              <View testID="beta-video-reel-loading">
+                <Spinner color="onMedia" size="large" accessibilityLabel={t('ui.loading')} />
+              </View>
             </View>
           ) : null}
 
           {/* Error state (absolute, sits above VideoView) */}
           {urlError ? (
             <View style={styles.centeredOverlay}>
-              <Text style={styles.errorText} testID="beta-video-reel-error">
+              <AppText variant="callout" color="onMedia" align="center" testID="beta-video-reel-error">
                 {t('betaVideo.loadError')}
-              </Text>
+              </AppText>
             </View>
           ) : null}
 
@@ -804,7 +786,7 @@ export default function BetaVideoReelViewer({
            * metadata (poster identity, route/gym, like, report) remains visible
            * during video buffering (UX enhancement).
            */}
-          <View style={[StyleSheet.absoluteFill, styles.overlayPadding]} pointerEvents="box-none">
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
 
             {/* ── Loading spinner — video area center, above metadata row ──── */}
             {/*
@@ -814,27 +796,34 @@ export default function BetaVideoReelViewer({
              */}
             {isVideoLoading && !urlError ? (
               <View style={styles.videoAreaSpinner} testID="beta-video-reel-video-loading">
-                <ActivityIndicator size="large" color="#fff" />
+                <Spinner color="onMedia" size="large" />
               </View>
             ) : null}
 
             {/* ── Close button (AC-133) — top-left, always visible ─────────── */}
-            <Pressable
-              style={[styles.closeButton, { top: insets.top + 12 }]}
-              onPress={handleDismiss}
-              accessibilityRole="button"
-              accessibilityLabel={t('betaVideo.reel.close')}
+            <View
+              style={[styles.closeButton, { top: insets.top + theme.spacing.smd, left: screenMargin }]}
               testID="beta-video-reel-close"
             >
-              <Ionicons name="chevron-back" size={24} color={theme.colors.textInverse} />
-            </Pressable>
+              <IconButton
+                variant="media"
+                name={ICON.back.outline}
+                size={theme.iconSize.lg}
+                accessibilityLabel={t('betaVideo.reel.close')}
+                onPress={handleDismiss}
+              />
+            </View>
 
             {/* ── Video counter — top-right ────────────────────────────────── */}
             {videos.length > 1 ? (
-              <View style={[styles.counter, { top: insets.top + 12 }]}>
-                <Text style={styles.counterText}>
+              <View
+                style={[styles.counter, { top: insets.top + theme.spacing.smd, right: screenMargin }]}
+                accessible
+                accessibilityLabel={`${currentIndex + 1} / ${videos.length}`}
+              >
+                <AppText variant="footnote" weight="600" numeric color="onMedia">
                   {currentIndex + 1} / {videos.length}
-                </Text>
+                </AppText>
               </View>
             ) : null}
 
@@ -843,11 +832,15 @@ export default function BetaVideoReelViewer({
               <View
                 style={[
                   styles.bottomRow,
-                  { bottom: (insets.bottom || 34) + theme.spacing.md },
+                  {
+                    left: screenMargin,
+                    right: screenMargin,
+                    bottom: Math.max(insets.bottom, theme.spacing.md) + theme.spacing.md,
+                  },
                 ]}
               >
                 {/* Left column: poster identity (AC-134) */}
-                <View style={styles.infoColumn}>
+                <View style={styles.infoColumn} onLayout={handleInfoLayout}>
 
                   {/*
                    * Row 1: avatar + display_name (AC-135 revised, AC-164, Bug 2).
@@ -879,11 +872,17 @@ export default function BetaVideoReelViewer({
                     <PosterAvatar
                       avatarUrl={currentVideo.avatar_url}
                       displayName={currentVideo.display_name}
-                      theme={theme}
                     />
-                    <Text style={styles.displayName} numberOfLines={1} testID="reel-poster-name">
+                    <AppText
+                      variant="footnote"
+                      weight="600"
+                      color="onMedia"
+                      numberOfLines={1}
+                      style={styles.displayName}
+                      testID="reel-poster-name"
+                    >
                       {currentVideo.display_name ?? t('betaVideo.reel.anonymous')}
-                    </Text>
+                    </AppText>
                   </Pressable>
 
                   {/*
@@ -897,6 +896,7 @@ export default function BetaVideoReelViewer({
                    */}
                   {(displayRouteName != null || displayGymName != null) ? (
                     <Pressable
+                      style={styles.routeRow}
                       onPress={() => {
                         if (onNavigateToRoute && currentVideo.route_id) {
                           onNavigateToRoute(currentVideo.route_id);
@@ -907,7 +907,8 @@ export default function BetaVideoReelViewer({
                     >
                       <MarqueeText
                         text={[displayRouteName, displayGymName].filter(Boolean).join(' · ')}
-                        containerWidth={INFO_COLUMN_WIDTH}
+                        containerWidth={marqueeWidth}
+                        reduceMotion={reduceMotion}
                         style={styles.captionText}
                         testID="reel-route-gym-text"
                       />
@@ -918,72 +919,54 @@ export default function BetaVideoReelViewer({
                 {/* Right sidebar: like placeholder + report button (AC-138) */}
                 <View style={styles.sidebar}>
 
-                  {/* Like button (AC-052) */}
-                  <Pressable
-                    style={[styles.sidebarItem, isLikePending && styles.sidebarItemDisabled]}
-                    onPress={() => { void handleLike(); }}
-                    disabled={isLikePending}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      isLiked
-                        ? t('betaVideo.reel.liked')
-                        : t('betaVideo.reel.like')
-                    }
+                  {/* Like button (AC-052): heart, onMedia, filled = liked (never red). */}
+                  <ReelAction
                     testID="reel-like-button"
-                  >
-                    <Ionicons
-                      name={isLiked ? 'heart' : 'heart-outline'}
-                      size={28}
-                      color={theme.colors.textInverse}
-                    />
-                    <Text style={styles.sidebarCount}>{likeCount}</Text>
-                  </Pressable>
+                    accessibilityLabel={t('betaVideo.reel.likeLabel', { count: likeCount })}
+                    onPress={() => { void handleLike(); }}
+                    nameOff={ICON.like.outline}
+                    nameOn={ICON.like.filled}
+                    selected={isLiked}
+                    disabled={isLikePending}
+                    likeMotion
+                    caption={String(likeCount)}
+                  />
 
-                  {/* Report button (AC-139/AC-140) */}
+                  {/* Report button (AC-139/AC-140): flag, onMedia (was error red). */}
                   {showReportButton ? (
-                    <Pressable
-                      style={[styles.sidebarItem, isReporting && styles.sidebarItemDisabled]}
-                      onPress={() => { void handleReport(currentVideo.id); }}
-                      disabled={isReporting || isReported}
-                      accessibilityRole="button"
+                    <ReelAction
+                      testID="reel-report-button"
                       accessibilityLabel={
                         isReported
                           ? t('betaVideo.reel.reported')
                           : t('betaVideo.reel.report')
                       }
-                      testID="reel-report-button"
-                    >
-                      {isReporting ? (
-                        <ActivityIndicator size="small" color={theme.colors.error} />
-                      ) : (
-                        <Ionicons
-                          name={isReported ? 'flag' : 'flag-outline'}
-                          size={26}
-                          color={theme.colors.error}
-                        />
-                      )}
-                      <Text
-                        style={[
-                          styles.sidebarLabel,
-                          { color: theme.colors.error },
-                        ]}
-                        testID="reel-report-label"
-                      >
-                        {isReported
+                      onPress={() => { void handleReport(currentVideo.id); }}
+                      nameOff={ICON.report.outline}
+                      nameOn={ICON.report.filled}
+                      selected={isReported}
+                      disabled={isReporting || isReported}
+                      busy={isReporting}
+                      caption={
+                        isReported
                           ? t('betaVideo.reel.reported')
-                          : t('betaVideo.reel.report')}
-                      </Text>
-                    </Pressable>
+                          : t('betaVideo.reel.report')
+                      }
+                      captionTestID="reel-report-label"
+                    />
                   ) : null}
 
                   {/* AC-139: report error text (shown below report button on failure) */}
                   {reportError ? (
-                    <Text
+                    <AppText
+                      variant="caption1"
+                      color="onMedia"
+                      align="center"
                       style={styles.reportErrorText}
                       testID="reel-report-error"
                     >
                       {reportError}
-                    </Text>
+                    </AppText>
                   ) : null}
                 </View>
               </View>
@@ -999,10 +982,11 @@ export default function BetaVideoReelViewer({
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
+  const c = theme.colors;
   return StyleSheet.create({
     fullscreen: {
       flex: 1,
-      backgroundColor: VIDEO_VIEWER_BG,
+      backgroundColor: c.mediaBackground,
     },
     centeredOverlay: {
       position: 'absolute',
@@ -1013,97 +997,67 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       alignItems: 'center',
       justifyContent: 'center',
     },
+    /** top / left are set inline from the safe-area inset and screenMargin. */
     closeButton: {
       position: 'absolute',
-      left: 16,
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: theme.colors.overlay,
-      alignItems: 'center',
-      justifyContent: 'center',
     },
+    /** Counter pill on a scrim (top / right set inline). Min height keeps it level with the 44 back button. */
     counter: {
       position: 'absolute',
-      right: 16,
-      backgroundColor: theme.colors.overlay,
-      borderRadius: theme.borderRadius.sm,
-      paddingHorizontal: theme.spacing.sm,
-      paddingVertical: theme.spacing.xs,
+      minHeight: theme.layout.minTouchTarget,
+      justifyContent: 'center',
+      backgroundColor: c.mediaScrim,
+      borderRadius: theme.borderRadius.full,
+      paddingHorizontal: theme.spacing.smd,
     },
-    counterText: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-    },
+    /** left / right / bottom are set inline from screenMargin and the safe-area inset. */
     bottomRow: {
       position: 'absolute',
-      left: 16,
-      right: 8,
       flexDirection: 'row',
       alignItems: 'flex-end',
     },
+    /** Identity text sits on a scrim so onMedia stays readable on bright footage. */
     infoColumn: {
       flex: 1,
-      marginRight: 8,
+      marginRight: theme.spacing.sm,
       gap: theme.spacing.xs,
+      backgroundColor: c.mediaScrim,
+      borderRadius: theme.borderRadius.lg,
+      padding: theme.spacing.sm,
     },
     posterRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing.sm,
+      minHeight: theme.layout.minTouchTarget,
     },
     displayName: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
       flex: 1,
     },
     captionText: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.sm,
+      color: c.onMedia,
+      fontSize: theme.typeScale.footnote.fontSize,
+      lineHeight: theme.typeScale.footnote.lineHeight,
+      fontWeight: theme.typeScale.footnote.fontWeight,
     },
     sidebar: {
-      width: SIDEBAR_WIDTH,
+      width: ACTION_SIZE,
       alignItems: 'center',
-      gap: theme.spacing.lg,
-    },
-    sidebarItem: {
-      alignItems: 'center',
-      gap: theme.spacing.xs,
-    },
-    sidebarItemDisabled: {
-      opacity: 0.5,
-    },
-    sidebarCount: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-    },
-    sidebarLabel: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.medium,
-    },
-    errorText: {
-      color: theme.colors.textInverse,
-      fontSize: theme.fontSize.md,
-      textAlign: 'center',
+      gap: theme.spacing.md,
     },
     reportErrorText: {
-      color: theme.colors.error,
-      fontSize: theme.fontSize.xs,
-      textAlign: 'center',
       marginTop: theme.spacing.xs,
+      backgroundColor: c.mediaScrim,
+      borderRadius: theme.borderRadius.sm,
+      paddingHorizontal: theme.spacing.xs,
     },
-    overlayPadding: {
-      paddingTop: 50,
-      paddingBottom: 50,
+    routeRow: {
+      minHeight: theme.layout.minTouchTarget,
+      justifyContent: 'center',
     },
     /**
-     * UX enhancement: black loading background rendered inside Animated.View,
-     * below Layer 4 (metadata overlay) in z-order. Covers the opacity-0 VideoView
-     * so the user sees a black canvas. Does NOT cover metadata — the interactive
-     * overlay (Layer 4) is rendered after this in JSX and therefore on top of it.
+     * Loading background inside the Animated.View, below the metadata overlay in z-order. Covers the
+     * opacity-0 VideoView with the fixed media black.
      */
     videoLoadingBackground: {
       position: 'absolute',
@@ -1111,13 +1065,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: VIDEO_VIEWER_BG,
+      backgroundColor: c.mediaBackground,
     },
-    /**
-     * UX enhancement: spinner positioned at ~40% from the top of the screen,
-     * centered horizontally, so it sits in the video frame area without
-     * overlapping the bottom metadata/action bar.
-     */
+    /** Spinner at ~40% from the top so it sits in the video area, clear of the bottom bar. */
     videoAreaSpinner: {
       position: 'absolute',
       top: '40%',

@@ -40,14 +40,12 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { View } from 'react-native';
+import { AppText } from '../../../components/ui/AppText';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { InlineError } from '../../../components/ui/InlineError';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
 import { fetchBetaVideosForRoute } from '../beta-video-service';
 import type { BetaVideo } from '../types';
@@ -55,7 +53,11 @@ import BetaVideoGrid from './BetaVideoGrid';
 import BetaVideoReelViewer from './BetaVideoReelViewer';
 import BetaVideoUploader from './BetaVideoUploader';
 
-/** Horizontal padding applied to the section container (matches paddingHorizontal in styles). */
+/**
+ * Horizontal padding applied to the section container. Matches `useLayout().screenMargin` at the
+ * compact width (16); passed to the grid so it uses the inset (gap 4, rounded) layout. The tile width
+ * itself comes from the grid's own onLayout.
+ */
 const GRID_PADDING = 16;
 
 interface BetaVideoSectionProps {
@@ -114,7 +116,7 @@ export default function BetaVideoSection({
 }: BetaVideoSectionProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const screenMargin = useLayout().screenMargin;
 
   const [betaVideos, setBetaVideos] = useState<BetaVideo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -232,112 +234,93 @@ export default function BetaVideoSection({
     setOpenIndex(index);
   }, []);
 
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color={theme.colors.primary} size="small" />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
+    <View style={{ marginTop: theme.layout.sectionGap, paddingHorizontal: screenMargin }}>
       {/* Section header */}
-      <Text style={styles.sectionTitle}>{t('betaVideo.sectionTitle')}</Text>
+      <AppText
+        variant="sectionHeader"
+        accessibilityRole="header"
+        style={{ marginBottom: theme.layout.sectionHeaderGap }}
+      >
+        {t('betaVideo.sectionTitle')}
+      </AppText>
 
       {/* Load error (non-fatal) */}
       {loadError ? (
-        <Text style={styles.errorText}>{loadError}</Text>
+        <View style={{ marginBottom: theme.spacing.sm }}>
+          <InlineError variant="block" message={loadError} />
+        </View>
       ) : null}
 
       {/*
        * AC-038: Three-column thumbnail grid — shared BetaVideoGrid component (Fix 3).
-       * horizontalPadding={GRID_PADDING} matches the container's paddingHorizontal so
-       * cell sizes are computed correctly for this context.
-       * emptyState renders the "no videos" message when the list is empty.
+       * horizontalPadding={GRID_PADDING} selects the inset layout (gap 4, rounded tiles); the
+       * grid measures its own width. While loading it shows skeleton tiles. The empty state is the
+       * ui/ EmptyState `inline` ("no one has shared beta yet" + ghost upload when the header
+       * launcher is in use, since the legacy button below already covers the other mode).
        */}
       <BetaVideoGrid
         videos={betaVideos}
         onPressVideo={handlePressVideo}
         horizontalPadding={GRID_PADDING}
+        loading={isLoading}
         emptyState={
           !loadError ? (
-            <Text style={styles.emptyText}>{t('betaVideo.noVideos')}</Text>
+            <EmptyState
+              variant="inline"
+              description={t('betaVideo.noVideos')}
+              secondaryLabel={onRegisterUploadLauncher ? t('betaVideo.emptyUpload') : undefined}
+              onSecondary={() => { void selectHandlerRef.current?.(); }}
+              on="background"
+            />
           ) : undefined
         }
       />
 
-      {/*
-       * AC-037 / AC-130: BetaVideoUploader is always in the render tree so that
-       * handleSelectVideo (the single upload implementation with AC-166 dialog,
-       * AC-169 size gate, and all other ACs) is always active.
-       * - AC-130 mode (onRegisterUploadLauncher provided): hideButton=true
-       *   suppresses the visible button; the upload trigger is the header button
-       *   in RouteDetailScreen, wired via onRegisterSelectHandler → selectHandlerRef
-       *   → onRegisterUploadLauncher. Progress modal and all AC logic remain in
-       *   BetaVideoUploader.
-       * - Legacy mode (no onRegisterUploadLauncher): hideButton defaults to false
-       *   and BetaVideoUploader renders its own "Add beta video" button as before.
-       * Fix 2: suppressInlineError={!!onUploadError} forwards errors to the parent
-       * when the parent handles display; otherwise inline error is shown as before.
-       */}
-      <BetaVideoUploader
-        routeId={routeId}
-        userId={session.user.id}
-        onUploadSuccess={handleUploadSuccess}
-        onUploadError={onUploadError}
-        onRegisterSelectHandler={
-          onRegisterUploadLauncher ? handleRegisterSelectHandler : undefined
-        }
-        hideButton={!!onRegisterUploadLauncher}
-        suppressInlineError={!!onUploadError}
-      />
+      {/* Mounted once loading finishes (as before the skeleton), so the launcher registers
+          only after the mount-time existing-video check had its chance to resolve. */}
+      {isLoading ? null : (
+        <>
+          {/*
+           * AC-037 / AC-130: BetaVideoUploader is always in the render tree so that
+           * handleSelectVideo (the single upload implementation with AC-166 dialog,
+           * AC-169 size gate, and all other ACs) is always active.
+           * - AC-130 mode (onRegisterUploadLauncher provided): hideButton=true
+           *   suppresses the visible button; the upload trigger is the header button
+           *   in RouteDetailScreen, wired via onRegisterSelectHandler → selectHandlerRef
+           *   → onRegisterUploadLauncher. Progress modal and all AC logic remain in
+           *   BetaVideoUploader.
+           * - Legacy mode (no onRegisterUploadLauncher): hideButton defaults to false
+           *   and BetaVideoUploader renders its own "Add beta video" button as before.
+           * Fix 2: suppressInlineError={!!onUploadError} forwards errors to the parent
+           * when the parent handles display; otherwise inline error is shown as before.
+           */}
+          <BetaVideoUploader
+            routeId={routeId}
+            userId={session.user.id}
+            onUploadSuccess={handleUploadSuccess}
+            onUploadError={onUploadError}
+            onRegisterSelectHandler={
+              onRegisterUploadLauncher ? handleRegisterSelectHandler : undefined
+            }
+            hideButton={!!onRegisterUploadLauncher}
+            suppressInlineError={!!onUploadError}
+          />
 
-      {/* AC-039: Fullscreen reel viewer (Modal) */}
-      <BetaVideoReelViewer
-        videos={betaVideos}
-        initialIndex={openIndex ?? 0}
-        visible={openIndex !== null}
-        onDismiss={() => { setOpenIndex(null); }}
-        session={session}
-        routeName={routeName}
-        gymName={gymName}
-        onNavigateToRoute={onNavigateToRoute}
-        onNavigateToUser={onNavigateToUser}
-      />
+          {/* AC-039: Fullscreen reel viewer (Modal) */}
+          <BetaVideoReelViewer
+            videos={betaVideos}
+            initialIndex={openIndex ?? 0}
+            visible={openIndex !== null}
+            onDismiss={() => { setOpenIndex(null); }}
+            session={session}
+            routeName={routeName}
+            gymName={gymName}
+            onNavigateToRoute={onNavigateToRoute}
+            onNavigateToUser={onNavigateToUser}
+          />
+        </>
+      )}
     </View>
   );
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
-  return StyleSheet.create({
-    container: {
-      marginTop: theme.spacing.xl,
-      paddingHorizontal: GRID_PADDING,
-    },
-    loadingContainer: {
-      marginTop: theme.spacing.xl,
-      alignItems: 'center',
-      paddingVertical: theme.spacing.md,
-    },
-    sectionTitle: {
-      fontSize: theme.fontSize.xs,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: theme.spacing.md,
-    },
-    emptyText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textDisabled,
-      marginBottom: theme.spacing.sm,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      marginBottom: theme.spacing.sm,
-    },
-  });
 }

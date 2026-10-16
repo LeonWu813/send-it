@@ -2,6 +2,23 @@
 
 ## Engineering Progress
 
+### Off-spec design work: design system v1.2 applied to mod-beta-video, Reel overlay contrast fix (pending PR review) — 2026-10-16
+
+Visual + motion only (no flow, service, upload-logic or size-limit changes; no illustrations; no expo-haptics, stub driver only). Branch `design/storybook`, off-spec design work pending PR review. No AC impact. Phase 1 body only, nothing from Appendix F.
+
+- **BetaVideoGrid** (§32.9): tiles are `PressableScale` (0.96); `videocam` corner badge (`mediaScrim`, `onMedia`, xs 14, inset 4); play disc (`accentIllustration`, `onAccentIllustration` glyph, 1.5pt `surface` ring, bottom-right inset 4); width from `onLayout` + `PixelRatio.roundToNearestPixel` (the module-level `Dimensions.get` is gone); full-bleed gap 2 / radius 0, inset (`horizontalPadding > 0`) gap 4 / radius `sm`; thumbnail fade-in `short` + linear unless ready < 50ms after mount (D5, also under Reduce Motion), only for loadable URLs (Phase 1 storage paths stay placeholders); a11y label `betaVideo.grid.openVideo` now has `{{index}}`/`{{total}}`; new `loading` prop renders a skeleton (`SkeletonGroup`, 300ms delay).
+- **BetaVideoSection**: ActivityIndicator replaced by the grid skeleton; `AppText sectionHeader`, `screenMargin`, `InlineError` for the load error, `EmptyState inline` ("還沒人分享 Beta。" + ghost "上傳 Beta" only in launcher mode). Uploader/Reel are mounted after loading as before.
+- **Reel viewer (bug fix)**: back button / counter / author / like / report no longer use `textInverse` or `error`; all `onMedia` on `mediaScrim`/`mediaScrimStrong`, so they are visible in dark mode. Back = `IconButton variant="media"`; like/report = new `ReelAction.tsx` (44pt, `xl` glyph, filled vs outline, not red; like = celebratePeak + `topOut` + `particles.like` + haptic `toggle`, Reduce Motion cross-fade only). Avatar = ui `Avatar sm`. Safe area: top `insets.top + smd`, bottom `Math.max(insets.bottom, md) + md`, `screenMargin` sides; `|| 34` and `overlayPadding` (50) removed; `StatusBar light-content`. Hard-coded black / `Dimensions` height / 220 marquee width replaced with `mediaBackground`, `useWindowDimensions`, measured width; swipe timings get easing, springs spread `SPRING_REST`; marquee does not scroll under Reduce Motion. Identity block sits on a `mediaScrim` panel.
+- **Upload modal** (flow unchanged): `surfaceElevated` card, `xl` radius, `lg` padding, width = window - 2 x `screenMargin` (max 320), raised shadow (light) / 1pt border (dark); `cloud-upload-outline` + `title3`; ui `ProgressBar showPercent`; `footnote` hint (`betaVideo.uploadingHint`); `accessibilityViewIsModal`. Failure message is the translated `betaVideo.errors.uploadFailed`, never `err.message`; haptics `toggle` (success) / `error` (failure) via the stub. Add button = ui `Button secondary`, inline error = `InlineError block`.
+- **BetaVideoPlayer**: `textInverse`/`overlay` -> `onMedia` on `mediaScrim`, `AppText`, `ICON.play`, `xl` glyph, `surfaceAlt` placeholder.
+- **Locale keys** (en + zh-TW): changed `betaVideo.noVideos`, `betaVideo.grid.openVideo`; added `betaVideo.emptyUpload`, `betaVideo.loadingVideos`, `betaVideo.uploadingHint`, `betaVideo.reel.likeLabel`.
+- **Tests**: 106 pass. Updated for the new structure: close button is pressed through the IconButton inside the `beta-video-reel-close` wrapper; empty-state copy regex.
+- **Stories**: `BetaVideoGrid.stories.tsx` rewritten to one Controls-driven `Playground` (count, horizontalPadding, empty state, loading, thumbnails); new `ReelOverlay.stories.tsx` (static overlay on dark / bright fake footage, simulated insets, like motion), importing `ReelAction` directly so expo-video stays out.
+- **Not done**: success toast "Beta 已上傳" (needs the AppShell `ToastProvider`; no new flow), in-modal failure card with Retry/Cancel (the existing flow closes the modal and reports via `onUploadError`), double-tap big heart (new gesture), `Alert` replace-confirm kept (a BottomSheet confirm is a flow change), `EmptyState` has no icon prop on its ghost action (spec wants `cloud-upload-outline`).
+- **Self-check**: `npm run lint` (tsc) 0 errors; `npx jest src/modules/mod-beta-video` 106/106; `npm run check:i18n` OK; `npx storybook build` OK; stories checked in light and dark.
+
+---
+
 ### Off-spec design tooling — Storybook stories for BetaVideoGrid — 2026-10-16
 
 Added `src/modules/mod-beta-video/stories/BetaVideoGrid.stories.tsx` (fake data only, no component changes). This is off-spec design tooling requested by the UI/UX designer, on branch `design/storybook`, pending PR review. No AC impact.

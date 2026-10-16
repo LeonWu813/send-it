@@ -20,6 +20,10 @@
  *         call), a confirmation dialog is shown before opening the picker.
  *         Confirming proceeds to the picker; cancelling dismisses with no action.
  *         No disabled-button state; no "delete first" static message.
+ * Design system v1.2 (off-spec design work): the add button is a ui/ Button, inline errors are
+ * ui/ InlineError, the progress modal is a `surfaceElevated` card with a ui/ ProgressBar. Upload
+ * failures show the translated `betaVideo.errors.uploadFailed` sentence, never `err.message`.
+ * Flow and logic are unchanged.
  * AC-169 (Rev 24): upfront native file size gate — runs before upload begins.
  *         If native file size >= 45 MB or cannot be read, upload is rejected.
  *         Fails closed: size === 0 means unreadable, treated as oversized.
@@ -30,16 +34,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Alert,
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { useTheme } from '../../../lib/theme';
+import { Alert, Modal, View } from 'react-native';
+import { AppText } from '../../../components/ui/AppText';
+import { Button } from '../../../components/ui/Button';
+import { InlineError } from '../../../components/ui/InlineError';
+import { ProgressBar } from '../../../components/ui/ProgressBar';
+import { ICON } from '../../../lib/icons';
+import { useMotion } from '../../../lib/motion';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { checkExistingBetaVideo, uploadBetaVideo } from '../beta-video-service';
 import type { BetaVideo, UploadProgress } from '../types';
 
@@ -92,7 +94,8 @@ export default function BetaVideoUploader({
 }: BetaVideoUploaderProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const styles = makeStyles(theme);
+  const { screenMargin, width: windowWidth } = useLayout();
+  const { haptic } = useMotion();
 
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState<UploadProgress | null>(null);
@@ -278,16 +281,19 @@ export default function BetaVideoUploader({
       // the video existed). Set it to true here so subsequent upload attempts in
       // this session correctly show the replace-confirmation dialog.
       setHasExistingVideo(true);
+      haptic('toggle', 'beta-upload');
       onUploadSuccess(video);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : t('betaVideo.errors.uploadFailed');
+    } catch {
+      // Friendly sentence for the user; the service's raw message is not shown.
+      const msg = t('betaVideo.errors.uploadFailed');
+      haptic('error', 'beta-upload');
       setErrorMessage(msg);
       onUploadError?.(msg);
     } finally {
       setIsUploading(false);
       setProgress(null);
     }
-  }, [hasExistingVideo, routeId, userId, onUploadSuccess, onUploadError, t]);
+  }, [hasExistingVideo, routeId, userId, onUploadSuccess, onUploadError, t, haptic]);
 
   /**
    * AC-130: Register handleSelectVideo with the parent so the external launcher
@@ -308,102 +314,85 @@ export default function BetaVideoUploader({
           AC-130: hideButton=true suppresses this button when the trigger is the
           external header button registered via onRegisterSelectHandler. */}
       {hideButton ? null : (
-        <Pressable
-          style={styles.addButton}
-          onPress={() => { void handleSelectVideo(); }}
-          disabled={isUploading}
-          accessibilityRole="button"
-          accessibilityLabel={t('betaVideo.addVideo')}
-          accessibilityState={{ disabled: isUploading }}
-        >
-          <Ionicons
-            name="videocam-outline"
-            size={18}
-            color={theme.colors.primary}
+        <View style={{ marginTop: theme.spacing.sm }}>
+          <Button
+            variant="secondary"
+            size="md"
+            icon={ICON.upload.outline}
+            label={t('betaVideo.addVideo')}
+            onPress={() => { void handleSelectVideo(); }}
+            disabled={isUploading}
           />
-          <Text style={styles.addButtonText}>
-            {t('betaVideo.addVideo')}
-          </Text>
-        </Pressable>
+        </View>
       )}
 
       {/* Inline error message — suppressed when the parent handles error display (Fix 2). */}
       {errorMessage && !suppressInlineError ? (
-        <Text style={styles.errorText}>{errorMessage}</Text>
+        <View style={{ marginTop: theme.spacing.sm }}>
+          <InlineError variant="block" message={errorMessage} />
+        </View>
       ) : null}
 
-      {/* AC-036 (Rev 24): Progress overlay — single "Uploading…" phase, blocks further interaction */}
+      {/* AC-036 (Rev 24): Progress overlay — single "Uploading…" phase, blocks further interaction.
+          Not dismissable while uploading: no close button, a tap on the overlay does nothing. */}
       <Modal
         visible={isUploading}
         transparent
         animationType="fade"
         onRequestClose={() => { /* intentionally non-dismissable during upload */ }}
       >
-        <View style={styles.progressOverlay}>
-          <View style={styles.progressCard}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
-            <Text style={styles.progressTitle}>
-              {t('betaVideo.uploading')}
-            </Text>
-            {progress ? (
-              <Text style={styles.progressPercent}>
-                {t('betaVideo.uploadProgress', { percent: progress.percent })}
-              </Text>
-            ) : null}
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: theme.colors.overlay,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <View
+            accessibilityViewIsModal
+            style={[
+              {
+                width: Math.min(windowWidth - 2 * screenMargin, theme.componentSize.emptyStateMaxWidth),
+                backgroundColor: theme.colors.surfaceElevated,
+                borderRadius: theme.borderRadius.xl,
+                padding: theme.spacing.lg,
+              },
+              // Light: raised shadow. Dark: no shadow, a 1pt border instead.
+              theme.elevation.raised,
+              theme.isDark
+                ? { borderWidth: theme.stroke.thin, borderColor: theme.colors.border }
+                : null,
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Ionicons
+                name={ICON.upload.outline}
+                size={theme.iconSize.md}
+                color={theme.colors.textSecondary}
+                style={{ marginRight: theme.spacing.sm }}
+              />
+              <AppText variant="title3" accessibilityRole="header">
+                {t('betaVideo.uploading')}
+              </AppText>
+            </View>
+            <View style={{ marginTop: theme.spacing.md }}>
+              <ProgressBar
+                value={progress?.percent ?? 0}
+                showPercent
+                accessibilityLabel={t('betaVideo.uploading')}
+              />
+            </View>
+            <AppText
+              variant="footnote"
+              color="textSecondary"
+              style={{ marginTop: theme.spacing.md }}
+            >
+              {t('betaVideo.uploadingHint')}
+            </AppText>
           </View>
         </View>
       </Modal>
     </>
   );
-}
-
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
-  return StyleSheet.create({
-    addButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.xs,
-      paddingVertical: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      alignSelf: 'flex-start',
-      marginTop: theme.spacing.sm,
-    },
-    addButtonText: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.primary,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
-      marginTop: theme.spacing.xs,
-    },
-    progressOverlay: {
-      flex: 1,
-      backgroundColor: theme.colors.overlay,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    progressCard: {
-      backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
-      padding: theme.spacing.xl,
-      alignItems: 'center',
-      minWidth: 200,
-      gap: theme.spacing.md,
-    },
-    progressTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    progressPercent: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-    },
-  });
 }

@@ -158,8 +158,8 @@ describe('BetaVideoSection', () => {
 
     await waitFor(() => {
       const emptyTexts = screen.queryAllByText(
-        /No beta videos yet/i,
-      ).concat(screen.queryAllByText(/還沒有 Beta 影片/));
+        /No one has shared beta yet/i,
+      ).concat(screen.queryAllByText(/還沒人分享 Beta/));
       expect(emptyTexts.length).toBeGreaterThan(0);
     });
   });
