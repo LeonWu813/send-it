@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Animated, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { MOTION, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
 import { useTheme } from '../../lib/theme';
+import type { TypeVariant } from '../../lib/theme';
 
 // One shared pulse for every skeleton on screen (opacity 0.5 <-> 1, linear, skeletonPulse per round trip).
 const pulse = new Animated.Value(1);
@@ -33,9 +35,20 @@ function release(): void {
   }
 }
 
+export type SkeletonShape = 'text' | 'circle' | 'thumb' | 'card' | 'rect';
+
 export interface SkeletonProps {
+  /**
+   * The element being replaced decides the corner radius (§22.2): text -> sm, circle -> full
+   * (give width = height = the Avatar size), thumb -> md (80x80 route thumbnail), card -> lg,
+   * rect (default) -> md.
+   */
+  shape?: SkeletonShape;
+  /** shape="text": the type role being replaced. Bar height = fontSize - 4, centred in the role's line box. */
+  textVariant?: TypeVariant;
   width?: ViewStyle['width'];
   height?: ViewStyle['height'];
+  /** Explicit radius override (prefer `shape`). */
   radius?: number;
   /** 'card' (inside a card): surfaceAlt. 'page' (directly on the sand background): border. */
   surface?: 'card' | 'page';
@@ -43,7 +56,15 @@ export interface SkeletonProps {
 }
 
 /** Placeholder block. Reduce Motion: static. Wrap groups in <SkeletonGroup> for a single busy node. */
-export function Skeleton({ width = '100%', height = 16, radius, surface = 'card', style }: SkeletonProps): React.JSX.Element {
+export function Skeleton({
+  shape = 'rect',
+  textVariant = 'subhead',
+  width = '100%',
+  height,
+  radius,
+  surface = 'card',
+  style,
+}: SkeletonProps): React.JSX.Element {
   const { theme } = useTheme();
   const { reduceMotion } = useMotion();
   useEffect(() => {
@@ -51,26 +72,43 @@ export function Skeleton({ width = '100%', height = 16, radius, surface = 'card'
     retain();
     return release;
   }, [reduceMotion]);
-  return (
+  const r =
+    radius ??
+    (shape === 'text'
+      ? theme.borderRadius.sm
+      : shape === 'circle'
+        ? theme.borderRadius.full
+        : shape === 'card'
+          ? theme.borderRadius.lg
+          : theme.borderRadius.md);
+  const role = theme.typeScale[textVariant];
+  const bar = (
     <Animated.View
       style={[
         {
           width,
-          height,
-          borderRadius: radius ?? theme.borderRadius.md,
+          height: shape === 'text' ? (height ?? role.fontSize - 4) : (height ?? 16),
+          borderRadius: r,
           backgroundColor: surface === 'card' ? theme.colors.surfaceAlt : theme.colors.border,
           opacity: reduceMotion ? 1 : pulse,
         },
-        style,
+        shape === 'text' ? null : style,
       ]}
     />
   );
+  if (shape !== 'text') return bar;
+  // text line: sits centred inside the role's line box so the layout equals the real text
+  return <View style={[{ minHeight: role.lineHeight, justifyContent: 'center' }, style]}>{bar}</View>;
 }
 
-/** One accessibility node (busy) for a set of skeleton blocks. */
+/**
+ * One accessibility node (busy) for a set of skeleton blocks. Pass a label naming the region
+ * ("Loading routes", "Loading beta videos"); it falls back to a generic "Loading".
+ */
 export function SkeletonGroup({ label, children, style }: { label?: string; children: React.ReactNode; style?: StyleProp<ViewStyle> }): React.JSX.Element {
+  const { t } = useTranslation('common');
   return (
-    <View accessible accessibilityLabel={label} accessibilityState={{ busy: true }} style={style}>
+    <View accessible accessibilityLabel={label ?? t('ui.loading')} accessibilityState={{ busy: true }} style={style}>
       <View importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         {children}
       </View>

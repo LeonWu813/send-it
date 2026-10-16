@@ -12,7 +12,8 @@ export interface AppTextProps extends TextProps {
   variant?: AppTextVariant;
   /** Palette key. Defaults to textPrimary (sectionHeader: textSecondary). */
   color?: PaletteKey;
-  weight?: '400' | '500' | '600' | '700';
+  /** Emphasis only (400/500/600). 700 is built into the title1/title2/largeTitle roles. */
+  weight?: '400' | '500' | '600';
   /** tabular-nums for numbers. */
   numeric?: boolean;
   align?: 'left' | 'center' | 'right';

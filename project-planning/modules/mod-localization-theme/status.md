@@ -2,6 +2,25 @@
 
 ## Engineering Progress
 
+### Design-system foundation G2 (final design system v1.1/v1.2 alignment) — 2026-10-16 (off-spec design-system work pending PR review)
+
+Same authorization as G1: off-spec visual + motion work requested directly by the human designer, not routed through tech-lead/pm/doc-sync; PR review covers it. Source: `send-it-design/ux-team/design-system/send-it-design-system.md` (section 0.6 checklist, Appendix A/B, Part 2). Phase 1 only; nothing from Appendix F. No illustrations, no `expo-haptics`, no new product flows. Planning docs were not edited.
+
+- `src/lib/theme.ts`: palette now 57 keys (`surfaceAltPressed`, `mediaTrack`); `STROKE`, `AVATAR_SIZE`; new `COMPONENT_SIZE` keys (`buttonSmMinHeight`, `textFieldMinHeight`, `emptyStateMaxWidth`, `radioSize`, `radioDot`, `noticeBarWidth`, `tapeSwatch`, `tapeSwatchRadius`, `tapePadH`, `likeBurst`); `theme.stroke` / `theme.avatarSize`; `caption2` comment. `TAPE_DISPLAY` / `TAPE_HAIR` left to engineer-mod-route-catalog.
+- `src/lib/motion.ts`: `MOTION.shake`, `duration.celebrationCard` 5000, `shake` in `useMotion()`, `SPRING_REST`. `haptics.ts` unchanged (per spec).
+- `src/lib/icons.ts` (new): `ICON` dictionary (spec 9.8 / A.9, 49 concepts, 63 glyphs, one glyph per concept) + `iconName()`.
+- `src/components/ui/` fixed per section 0.6: AppText (no `'700'`), PressableScale (`standard` easing, `underlay`), Button (`size`, `on`, `surfaceAltPressed`, spinner `short`+`standard`, `trailingIcon`), IconButton (`plain|toggle|media`, `on`, `badge`), Chip (`filter|choice|multi`, two-layer native-driver fill, token swatch, clear button, `size`), BottomSheet (close button, `screenMargin`, safe-area bottom, no shadow, `overshootClamping` + rest thresholds, draggable under Reduce Motion, backdrop follows drag, grabber D6, `content|list-single|form|confirm`, stacked confirm buttons, `error`), Toast (no rgba pressed overlay, swipe-down dismiss, no clamp, stacked actions at font scale >= 1.6, `accessibilityActions`, icon pop D4, error not replaced by success), Skeleton (`shape` radii, default group label), CelebrationHost (`trophy`, `iconScale`, light shadow xor dark border, 5s hold paused on touch, tap = view, close button).
+- New in `ui/`: `useShake`, `Badge`, `TextField`, `ListRow` (+`Radio`), `Card`, `ProgressBar` (+`Spinner`), `Avatar`, `EmptyState`, `InlineError` (+`NoticeBox`), `SendStyleChip` (+`SendStylePicker`). Stories (one Controls-driven story each) in `ui/stories/`.
+- Storybook: Tokens story updated, new Foundations/Icons story, `.storybook/MIGRATION.md` rewritten, README pointer.
+- i18n: added `ui.sendStyle.*`, `ui.fieldError`, `ui.readOnly`, `ui.showPassword`, `ui.clearText`, `ui.toastWithActions`, `ui.avatarOf`, `ui.progress` (en + zh-TW).
+- Tests: `src/lib/__tests__/design-tokens.test.ts` (palette parity, new tokens, ICON glyph existence and uniqueness).
+
+Checks: `npm run lint` clean; `npm test` all pass except the pre-existing `supabase.test.ts` env failure; `npm run check:i18n` OK; `storybook build` OK; every `ui-*` and `foundations-*` story loaded in headless Chrome (light + dark) with no console errors.
+
+Not done / deviations: see the hand-off report (CelebrationHost tap semantics follow the spec: card tap = view + close button; AppHeader, TabBar, RouteCard, AscentList, BetaVideoUploader, UserProfileScreen rows of 0.6 belong to other modules).
+
+---
+
 ### Design-system foundation G1 — 2026-10-16 (off-spec design-system work pending PR review)
 
 Implements 07-final-design-system.md (visual + motion only), approved by the human designer; not routed through tech-lead/pm/doc-sync. Warm sand B palette; no illustrations; no `expo-haptics`.

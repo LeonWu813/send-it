@@ -478,6 +478,20 @@
     "dismiss": "Dismiss",
     "loading": "Loading",
     "sheet": "Panel",
-    "celebrationDismiss": "Dismiss celebration"
+    "celebrationDismiss": "Dismiss celebration",
+    "sendStyle": {
+      "top": "Send",
+      "flash": "Flash",
+      "attempt": "Attempt",
+      "attemptWithCount": "Attempt ×{{count}}",
+      "group": "Send style"
+    },
+    "fieldError": "{{label}}, error: {{error}}",
+    "readOnly": "{{label}}, {{value}}, read only",
+    "showPassword": "Show password",
+    "clearText": "Clear",
+    "toastWithActions": "{{message}}. Actions available: {{actions}}",
+    "avatarOf": "{{name}}'s avatar",
+    "progress": "Progress"
   }
 }

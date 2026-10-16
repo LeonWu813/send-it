@@ -16,7 +16,7 @@ const meta: Meta<AppTextProps> = {
       options: ['largeTitle', 'title1', 'title2', 'title3', 'headline', 'body', 'callout', 'subhead', 'footnote', 'caption1', 'caption2', 'sectionHeader'],
     },
     color: { control: 'select', options: ['textPrimary', 'textSecondary', 'primary', 'error', 'sendTop', 'sendFlash'] },
-    weight: { control: 'select', options: [undefined, '400', '500', '600', '700'] },
+    weight: { control: 'select', options: [undefined, '400', '500', '600'] },
   },
 };
 export default meta;

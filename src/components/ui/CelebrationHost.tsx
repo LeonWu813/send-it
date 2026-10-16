@@ -1,19 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { AccessibilityInfo, Animated, PanResponder, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
+import { ICON } from '../../lib/icons';
+import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
 import { useLayout, useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
-import { Button } from './Button';
+import { IconButton } from './IconButton';
 import { ParticleBurst } from './Particles';
 import { useScreenReader } from './useScreenReader';
 
 export interface CelebrationContent {
   title: string;
   subtitle?: string;
-  /** Ghost button (e.g. "View"). Tapping it does not dismiss the card. */
+  /** Text of the card action (e.g. "View"). Tapping the card runs `onAction`, then dismisses. */
   actionLabel?: string;
   onAction?: () => void;
   /** The new highest grade was also a flash: gold is mixed into the particles. */
@@ -34,13 +36,16 @@ export function useCelebration(): CelebrationApi {
 }
 
 /**
- * Mount once at the top of the app shell (above the tab bar and screens). The layer is
- * pointerEvents="box-none": only the card is touchable, everything else passes through.
- * Card: in `medium` (translateY -12 -> 0, enter), flag with `topOut`, particles, holds
- * `celebrationCard` (until dismissed under VoiceOver). Tap the card (except the action) or swipe up
- * to dismiss. Reduce Motion: fade only, no particles.
+ * Mount ONCE at the top of AppShell (above the tab bar and screens, 8pt under the AppHeader). The
+ * layer is pointerEvents="box-none": only the card is touchable. Card (`surfaceElevated`, `lg`):
+ * light theme has only the raised shadow, dark theme only a 1pt border. In: `medium` (translateY
+ * -12 -> 0, enter); trophy in a sendTopContainer disc pops with `topOut` (scales about its centre);
+ * particles. Holds `celebrationCard` (5000ms), paused while a finger is on the card, never
+ * auto-dismissed under VoiceOver. Tap the card = view (runs `onAction`, then closes); the close
+ * IconButton or a swipe up dismisses. Reduce Motion: fade only, no particles.
  */
 export function CelebrationHost({ children }: { children?: React.ReactNode }): React.JSX.Element {
+  const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { duration, spring, reduceMotion, haptic } = useMotion();
   const insets = useSafeAreaInsets();
@@ -49,11 +54,15 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
   const [current, setCurrent] = useState<(CelebrationContent & { id: number }) | null>(null);
   const idRef = useRef(0);
   const enter = useRef(new Animated.Value(0)).current;
-  const flag = useRef(new Animated.Value(1)).current;
+  const iconScale = useRef(new Animated.Value(1)).current;
   const swipe = useRef(new Animated.Value(0)).current;
   const dismissRef = useRef<() => void>(() => {});
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const live = useRef({ screenReader, hold: duration.celebrationCard, settle: spring.settle, short: duration.short });
+  live.current = { screenReader, hold: duration.celebrationCard, settle: spring.settle, short: duration.short };
 
   const dismiss = useCallback(() => {
+    clearTimeout(timer.current);
     Animated.timing(enter, {
       toValue: 0,
       duration: duration.short,
@@ -68,11 +77,18 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
     setCurrent({ ...content, id: idRef.current });
   }, []);
 
+  const clearHold = useCallback(() => clearTimeout(timer.current), []);
+  const startHold = useCallback(() => {
+    clearTimeout(timer.current);
+    if (live.current.screenReader) return;
+    timer.current = setTimeout(() => dismissRef.current(), live.current.hold);
+  }, []);
+
   useEffect(() => {
     if (!current) return undefined;
     enter.setValue(0);
     swipe.setValue(0);
-    flag.setValue(reduceMotion ? 1 : 0.6);
+    iconScale.setValue(reduceMotion ? 1 : 0.6);
     haptic('celebrate', 'celebration');
     AccessibilityInfo.announceForAccessibility(current.title);
     Animated.timing(enter, {
@@ -82,11 +98,10 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
       useNativeDriver: USE_NATIVE_DRIVER,
     }).start();
     if (!reduceMotion) {
-      Animated.spring(flag, { toValue: 1, ...spring.topOut, useNativeDriver: USE_NATIVE_DRIVER }).start();
+      Animated.spring(iconScale, { toValue: 1, ...spring.topOut, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
     }
-    if (screenReader) return undefined;
-    const timer = setTimeout(() => dismissRef.current(), duration.celebrationCard);
-    return () => clearTimeout(timer);
+    startHold();
+    return clearHold;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id, screenReader]);
 
@@ -94,10 +109,14 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
     () =>
       PanResponder.create({
         onMoveShouldSetPanResponder: (_e, g) => g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx),
+        onPanResponderGrant: () => clearTimeout(timer.current),
         onPanResponderMove: (_e, g) => swipe.setValue(Math.min(0, g.dy)),
         onPanResponderRelease: (_e, g) => {
           if (g.dy < -24 || g.vy < -0.5) dismissRef.current();
-          else Animated.spring(swipe, { toValue: 0, ...spring.settle, useNativeDriver: USE_NATIVE_DRIVER }).start();
+          else {
+            Animated.spring(swipe, { toValue: 0, ...live.current.settle, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
+            startHold();
+          }
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -106,6 +125,7 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
 
   const api = useMemo(() => ({ celebrate, dismiss }), [celebrate, dismiss]);
   const c = theme.colors;
+  const closeBox = theme.layout.minTouchTarget;
 
   return (
     <CelebrationContext.Provider value={api}>
@@ -114,15 +134,17 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
         <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
           <Animated.View
             {...pan.panHandlers}
+            onTouchStart={clearHold}
+            onTouchEnd={startHold}
             style={[
               {
                 marginTop: insets.top + theme.layout.headerContentHeight + theme.spacing.sm,
                 marginHorizontal: screenMargin,
                 borderRadius: theme.borderRadius.lg,
                 backgroundColor: c.surfaceElevated,
-                borderWidth: 1,
+                // light: raised shadow only; dark: 1pt border only (never both)
+                borderWidth: theme.isDark ? theme.stroke.thin : 0,
                 borderColor: c.border,
-                padding: theme.layout.cardPadding,
                 opacity: enter,
                 transform: [
                   { translateY: swipe },
@@ -133,10 +155,19 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
             ]}
           >
             <Pressable
-              onPress={dismiss}
+              onPress={() => {
+                current.onAction?.();
+                dismiss();
+              }}
               accessibilityRole="button"
               accessibilityLabel={`${current.title}${current.subtitle ? `, ${current.subtitle}` : ''}`}
-              style={{ flexDirection: 'row', alignItems: 'center' }}
+              accessibilityHint={current.actionLabel}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                padding: theme.layout.cardPadding,
+                paddingRight: theme.layout.cardPadding + closeBox - theme.spacing.md,
+              }}
             >
               <View
                 style={{
@@ -149,8 +180,8 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
                   marginRight: theme.spacing.smd,
                 }}
               >
-                <Animated.View style={{ transform: [{ scale: flag }] }}>
-                  <Ionicons name="flag" size={theme.iconSize.xl} color={c.sendTop} />
+                <Animated.View style={{ transform: [{ scale: iconScale }] }}>
+                  <Ionicons name={ICON.newTopGrade.filled} size={theme.iconSize.xl} color={c.sendTop} />
                 </Animated.View>
                 <ParticleBurst kind="newHighest" flash={current.flash} playKey={current.id} />
               </View>
@@ -161,16 +192,23 @@ export function CelebrationHost({ children }: { children?: React.ReactNode }): R
                     {current.subtitle}
                   </AppText>
                 ) : null}
+                {current.actionLabel ? (
+                  <AppText variant="footnote" weight="600" color="primary" style={{ marginTop: theme.spacing.xs }}>
+                    {current.actionLabel}
+                  </AppText>
+                ) : null}
               </View>
-              {current.actionLabel ? (
-                <Button
-                  variant="ghost"
-                  label={current.actionLabel}
-                  minHeight={theme.layout.minTouchTarget}
-                  onPress={() => current.onAction?.()}
-                />
-              ) : null}
             </Pressable>
+            {/* last in JSX: title -> subtitle -> view -> close */}
+            <View style={{ position: 'absolute', top: theme.spacing.xs, right: theme.spacing.xs }}>
+              <IconButton
+                name={ICON.close.outline}
+                size={theme.iconSize.md}
+                color="textSecondary"
+                accessibilityLabel={t('ui.celebrationDismiss')}
+                onPress={dismiss}
+              />
+            </View>
           </Animated.View>
         </View>
       ) : null}

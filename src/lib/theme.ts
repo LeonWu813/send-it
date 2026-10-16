@@ -11,12 +11,12 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Appearance, ColorSchemeName, useWindowDimensions } from 'react-native';
+import { Appearance, ColorSchemeName, StyleSheet, useWindowDimensions } from 'react-native';
 
 // ─── Color palettes ───────────────────────────────────────────────────────────
 //
-// Source of truth: send-it-design/ux-team/07-final-design-system.md §2.2 with the
-// warm sand B neutral overrides of §2.3 applied (human decision). Both palettes MUST
+// Source of truth: send-it-design/ux-team/design-system/send-it-design-system.md (v1.1+,
+// supersedes 07-final-design-system.md). Warm sand B neutrals. 57 keys. Both palettes MUST
 // have exactly the same keys (DARK_PALETTE is typed against ThemePalette).
 //
 // Usage rules (07 §2.4):
@@ -25,10 +25,11 @@ import { Appearance, ColorSchemeName, useWindowDimensions } from 'react-native';
 //     selection, text, particles, toasts or pressed states.
 //  3. `sendFlashBright` and `decorChalk` are decoration only (particles) — never text/icons.
 //  4. `toastAction` only on `toastBackground`; `sendTopContainer` only for new-row highlight
-//     and the celebration flag disc; `secondaryContainer` is the selected-state fill and
+//     and the celebration trophy disc; `secondaryContainer` is the selected-state fill and
 //     always pairs with a 1.5pt `primary` outline.
 //  5. Brand colours are never square-cornered labels (radius 4 + text = route tape only).
-//  6. Pressed feedback never uses opacity — swap to the matching `*Pressed` colour.
+//  6. Pressed feedback never uses opacity — swap to the matching `*Pressed` colour
+//     (`surfacePressed` on surface, `surfaceAltPressed` on background / secondary buttons).
 //  7. Card-less lists (notifications, settings, followers): rows sit on `surface`, not on
 //     the sand `background`.
 
@@ -40,8 +41,10 @@ export const LIGHT_PALETTE = {
   surfaceElevated: '#FFFFFF',
   /** Inputs, secondary buttons, chart tracks, in-card skeletons. */
   surfaceAlt: '#ECE1D3',
-  /** Pressed card / row / IconButton disc. */
+  /** Pressed card / row / IconButton disc (on `surface`). */
   surfacePressed: '#F1E7D8',
+  /** Pressed state on `background` / on `surfaceAlt` (secondary Button). Same value as `border`. */
+  surfaceAltPressed: '#D1C5B1',
   // Text
   textPrimary: '#201B12',
   textSecondary: '#4E4637',
@@ -102,6 +105,8 @@ export const LIGHT_PALETTE = {
   onMedia: '#FFFFFF',
   mediaScrim: 'rgba(0,0,0,0.45)',
   mediaScrimStrong: 'rgba(0,0,0,0.6)',
+  /** Progress-bar track on media (Phase 2 upload cells). */
+  mediaTrack: 'rgba(255,255,255,0.3)',
   // Overlays
   overlay: 'rgba(0,0,0,0.32)',
   // Apple Sign-In button — must be black on white per HIG
@@ -118,6 +123,7 @@ export const DARK_PALETTE: ThemePalette = {
   surfaceElevated: '#2F2920',
   surfaceAlt: '#3A342A',
   surfacePressed: '#3A342A',
+  surfaceAltPressed: '#4E4637',
   textPrimary: '#ECE1D3',
   textSecondary: '#D1C5B1',
   textPlaceholder: '#D1C5B1',
@@ -166,6 +172,7 @@ export const DARK_PALETTE: ThemePalette = {
   onMedia: '#FFFFFF',
   mediaScrim: 'rgba(0,0,0,0.45)',
   mediaScrimStrong: 'rgba(0,0,0,0.6)',
+  mediaTrack: 'rgba(255,255,255,0.3)',
   overlay: 'rgba(0,0,0,0.32)',
   // Apple Sign-In button — must be white on black in dark mode per HIG
   appleButton: '#FFFFFF',
@@ -236,6 +243,34 @@ export const COMPONENT_SIZE = {
   chipHeight: 32,
   buttonMinHeight: 44,
   buttonPrimaryMinHeight: 50,
+  /** Button `sm` (hitSlop 6 top/bottom brings the touch target to 44). */
+  buttonSmMinHeight: 32,
+  textFieldMinHeight: 48,
+  emptyStateMaxWidth: 320,
+  radioSize: 20,
+  radioDot: 10,
+  /** InlineError block / NoticeBox left bar (a filled child View, never borderLeftWidth). */
+  noticeBarWidth: 4,
+  tapeSwatch: 11,
+  tapeSwatchRadius: 3,
+  /** TapeBadge horizontal padding per size. */
+  tapePadH: { sm: 6, md: 10 },
+  /** Reel double-tap heart. */
+  likeBurst: 84,
+} as const;
+
+/** Line widths. Only these three are allowed. */
+export const STROKE = {
+  hairline: StyleSheet.hairlineWidth,
+  thin: 1,
+  emphasis: 1.5,
+} as const;
+
+export const AVATAR_SIZE = {
+  xs: 24,
+  sm: 32,
+  md: 48,
+  xl: 96,
 } as const;
 
 export interface ElevationStyle {
@@ -299,7 +334,7 @@ export const TYPE_SCALE = {
   footnote: { fontSize: 13, lineHeight: 20, fontWeight: FW.w400, maxFontSizeMultiplier: 1.6 },
   /** Smallest size for Chinese metadata. */
   caption1: { fontSize: 12, lineHeight: 18, fontWeight: FW.w400, maxFontSizeMultiplier: 1.6 },
-  /** Numbers / Latin only: badges, tape labels, chart axes. */
+  /** Numbers / Latin only: badges, chart axes (tape labels use caption1). */
   caption2: { fontSize: 11, lineHeight: 16, fontWeight: FW.w500, maxFontSizeMultiplier: 1.4 },
 } as const satisfies Record<string, TypeStyle>;
 
@@ -361,6 +396,8 @@ export interface Theme {
   iconSize: typeof ICON_SIZE;
   elevation: typeof ELEVATION;
   componentSize: typeof COMPONENT_SIZE;
+  stroke: typeof STROKE;
+  avatarSize: typeof AVATAR_SIZE;
   isDark: boolean;
 }
 
@@ -387,6 +424,8 @@ function buildTheme(isDark: boolean): Theme {
     iconSize: ICON_SIZE,
     elevation: isDark ? ELEVATION_DARK : ELEVATION,
     componentSize: COMPONENT_SIZE,
+    stroke: STROKE,
+    avatarSize: AVATAR_SIZE,
     isDark,
   };
 }

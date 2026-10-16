@@ -12,7 +12,8 @@ Off-spec design tooling (added on `design/storybook`, pending PR review).
 ## Where stories go
 
 Colocate in the module: `src/modules/<mod-name>/stories/<ComponentName>.stories.tsx`
-(Tokens page: `src/modules/mod-localization-theme/stories/Tokens.stories.tsx`).
+(Tokens and Icons pages: `src/modules/mod-localization-theme/stories/`; shared `ui/` components: `src/components/ui/stories/`).
+One Controls-driven story per component; see `MIGRATION.md` section 6.
 Story titles: `<Module or area>/<ComponentName>`, e.g. `Home/HomeScreen`.
 Jest ignores `*.stories.tsx` (it only runs `*.test.*` / `__tests__`).
 

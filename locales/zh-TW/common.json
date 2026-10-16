@@ -478,6 +478,20 @@
     "dismiss": "忽略",
     "loading": "載入中",
     "sheet": "面板",
-    "celebrationDismiss": "關閉慶祝訊息"
+    "celebrationDismiss": "關閉慶祝訊息",
+    "sendStyle": {
+      "top": "完攀",
+      "flash": "閃攀",
+      "attempt": "嘗試",
+      "attemptWithCount": "嘗試 {{count}} 次",
+      "group": "完攀方式"
+    },
+    "fieldError": "{{label}}，錯誤：{{error}}",
+    "readOnly": "{{label}}，{{value}}，無法修改",
+    "showPassword": "顯示密碼",
+    "clearText": "清除",
+    "toastWithActions": "{{message}}。可用動作：{{actions}}",
+    "avatarOf": "{{name}} 的頭像",
+    "progress": "進度"
   }
 }

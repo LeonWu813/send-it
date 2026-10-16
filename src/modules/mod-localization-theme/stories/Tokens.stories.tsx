@@ -6,6 +6,7 @@ import { ScrollView, View } from 'react-native';
 import { AppText } from '../../../components/ui/AppText';
 import { MOTION } from '../../../lib/motion';
 import {
+  AVATAR_SIZE,
   BORDER_RADIUS,
   COMPONENT_SIZE,
   DARK_PALETTE,
@@ -13,6 +14,7 @@ import {
   LAYOUT,
   LIGHT_PALETTE,
   SPACING,
+  STROKE,
   TYPE_SCALE,
   useTheme,
 } from '../../../lib/theme';
@@ -124,10 +126,29 @@ function Tokens(): React.JSX.Element {
         </View>
       </Section>
 
+      <Section title="STROKE">
+        {Object.entries(STROKE).map(([name, value]) => (
+          <Row key={name} label={`${name} (${value === STROKE.hairline ? 'hairline' : value})`}>
+            <View style={{ width: 200, height: 0, borderTopWidth: value, borderTopColor: c.outline }} />
+          </Row>
+        ))}
+      </Section>
+
+      <Section title="AVATAR_SIZE">
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          {Object.entries(AVATAR_SIZE).map(([name, value]) => (
+            <View key={name} style={{ alignItems: 'center', marginRight: 24 }}>
+              <View style={{ width: value, height: value, borderRadius: BORDER_RADIUS.full, backgroundColor: c.surfaceAlt, borderWidth: STROKE.hairline, borderColor: c.border }} />
+              <AppText variant="caption1" color="textSecondary">{`${name} ${value}`}</AppText>
+            </View>
+          ))}
+        </View>
+      </Section>
+
       <Section title="COMPONENT_SIZE">
         {Object.entries(COMPONENT_SIZE).map(([name, value]) => (
           <Row key={name} label={name}>
-            <AppText variant="footnote">{String(value)}</AppText>
+            <AppText variant="footnote">{typeof value === 'object' ? JSON.stringify(value) : String(value)}</AppText>
           </Row>
         ))}
       </Section>
@@ -172,6 +193,9 @@ function Tokens(): React.JSX.Element {
             <AppText variant="footnote">{String(v)}</AppText>
           </Row>
         ))}
+        <Row label="shake">
+          <AppText variant="footnote">{`${JSON.stringify(MOTION.shake)} (time = duration.short, linear)`}</AppText>
+        </Row>
       </Section>
 
       <Section title="MOTION.particles">

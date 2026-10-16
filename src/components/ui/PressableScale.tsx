@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, StyleSheet } from 'react-native';
+import { Animated, Pressable, StyleSheet } from 'react-native';
 import type { PressableProps, StyleProp, ViewStyle } from 'react-native';
 
-import { bezierFor, USE_NATIVE_DRIVER, useMotion } from '../../lib/motion';
+import { SPRING_REST, bezierFor, USE_NATIVE_DRIVER, useMotion } from '../../lib/motion';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -14,6 +14,11 @@ export interface PressableScaleProps extends Omit<PressableProps, 'style' | 'chi
   feedback?: 'control' | 'row';
   /** The matching *Pressed colour (never opacity). Shown as a wash: in micro, out short. */
   pressedColor?: string;
+  /**
+   * Background layers (e.g. a cross-fading selected fill). Rendered BELOW the pressed wash and
+   * the content, so the wash is never hidden by an opaque child background.
+   */
+  underlay?: React.ReactNode;
   /** Row inside a scroll container: delays the pressed state by pressDelayInScroll. */
   inScroll?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -24,6 +29,7 @@ export interface PressableScaleProps extends Omit<PressableProps, 'style' | 'chi
 export function PressableScale({
   feedback = 'control',
   pressedColor,
+  underlay,
   inScroll,
   style,
   children,
@@ -59,7 +65,7 @@ export function PressableScale({
           Animated.timing(size, {
             toValue: scale.pressControl,
             duration: duration.micro,
-            easing: Easing.out(Easing.quad),
+            easing: bezierFor('standard'),
             useNativeDriver: USE_NATIVE_DRIVER,
           }).start();
         }
@@ -73,12 +79,13 @@ export function PressableScale({
           useNativeDriver: USE_NATIVE_DRIVER,
         }).start();
         if (scales) {
-          Animated.spring(size, { toValue: 1, ...spring.grip, useNativeDriver: USE_NATIVE_DRIVER }).start();
+          Animated.spring(size, { toValue: 1, ...spring.grip, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
         }
         onPressOut?.(e);
       }}
       style={[style, scales ? { transform: [{ scale: size }] } : null]}
     >
+      {underlay}
       {pressedColor ? (
         <Animated.View
           pointerEvents="none"

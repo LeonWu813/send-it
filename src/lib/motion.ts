@@ -1,5 +1,5 @@
 /**
- * Motion tokens and useMotion() (07 §8). Identical in both themes.
+ * Motion tokens and useMotion() (design system §10). Identical in both themes.
  *
  * Rules:
  *  - Exits are shorter than entrances.
@@ -30,7 +30,7 @@ export const MOTION = {
     stagger: 30,
     toast: 5000,
     toastShort: 2000,
-    celebrationCard: 2500,
+    celebrationCard: 5000,
     highlightHold: 600,
     skeletonDelay: 300,
     skeletonPulse: 1200,
@@ -51,6 +51,8 @@ export const MOTION = {
     settle: { stiffness: 280, damping: 28, mass: 1 },
   },
   scale: { pressControl: 0.96, pop: 1.2, celebratePeak: 1.3 },
+  /** Failure shake: translateX 0 -> +d -> -d -> +d -> 0 in `segments` linear steps over duration.short. */
+  shake: { distancePt: 4, segments: 4 },
   particles: {
     flash: {
       count: 10,
@@ -75,6 +77,9 @@ export const MOTION = {
     like: { count: 6, colors: [{ key: 'onMedia', n: 6 }], sizePt: [4, 8], distancePt: [24, 48] },
   },
 } as const;
+
+/** Every Animated.spring must set these (avoids a ~900ms callback delay on long tails). */
+export const SPRING_REST = { restDisplacementThreshold: 0.5, restSpeedThreshold: 0.5 } as const;
 
 export type MotionTokens = typeof MOTION;
 export type EasingName = keyof typeof MOTION.easing;
@@ -162,6 +167,7 @@ export interface UseMotion {
   easing: MotionTokens['easing'];
   spring: MotionTokens['spring'];
   scale: MotionTokens['scale'];
+  shake: MotionTokens['shake'];
   particles: MotionTokens['particles'];
   reduceMotion: boolean;
   /**
@@ -204,6 +210,7 @@ export function useMotion(): UseMotion {
       easing: MOTION.easing,
       spring: MOTION.spring,
       scale: MOTION.scale,
+      shake: MOTION.shake,
       particles: MOTION.particles,
       reduceMotion,
       haptic,
