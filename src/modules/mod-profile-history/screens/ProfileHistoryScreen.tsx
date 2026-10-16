@@ -27,6 +27,7 @@ import SharedRouteCard from '../../../components/RouteCard';
 import { AppText, Chip, EmptyState, InlineError, Spinner } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import StatsPanel from '../components/StatsPanel';
 import {
   fetchProfileHistory,
@@ -87,6 +88,7 @@ export default function ProfileHistoryScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const insets = useSafeAreaInsets();
+  const tabInset = useTabBarInset();
   // When extraListHeader is provided, the host element already applies the
   // top-inset padding inside its container. Pass 0 so we don't double-pad.
   const topInsetForStyles = extraListHeader !== undefined ? 0 : insets.top;
@@ -240,7 +242,8 @@ export default function ProfileHistoryScreen({
   return (
     <FlatList
       style={styles.root}
-      contentContainerStyle={styles.contentContainer}
+      contentContainerStyle={[styles.contentContainer, tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom }]}
+      scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       data={filtered}
       keyExtractor={(item) => item.route_id}
       renderItem={({ item }) => {
