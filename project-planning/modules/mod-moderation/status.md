@@ -75,6 +75,9 @@ Fix A (migration `20260929000006_mod_009_fix_follows_block.sql`): dropped and re
 Fix B (`moderation-service.ts` `blockUser()`): added doc comment noting the DB trigger handles follow removal — no client-side delete needed.
 Post-fix verification: `npx tsc --noEmit` 0 errors; `npx jest --passWithNoTests` 405 tests passed, 31 suites.
 
+### Storybook stories (off-spec design tooling)
+Added `src/modules/mod-moderation/stories/ModerationActions.stories.tsx` and `ReportSheet.stories.tsx` on branch `design/storybook`. Off-spec design tooling requested by UI/UX, pending PR review. No component source changes; fake data only via the Storybook supabase stub.
+
 ## QA Results
 
 **QA agent**: qa-mod-moderation
