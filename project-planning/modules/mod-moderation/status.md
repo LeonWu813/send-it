@@ -78,6 +78,19 @@ Post-fix verification: `npx tsc --noEmit` 0 errors; `npx jest --passWithNoTests`
 ### Storybook stories (off-spec design tooling)
 Added `src/modules/mod-moderation/stories/ModerationActions.stories.tsx` and `ReportSheet.stories.tsx` on branch `design/storybook`. Off-spec design tooling requested by UI/UX, pending PR review. No component source changes; fake data only via the Storybook supabase stub.
 
+### Design system v1.2 (2026-10-16) — off-spec design work, pending PR review
+
+Visual + motion only (spec §32.10, §32.11, MIGRATION.md); no new flows, no service changes except the bug fixes.
+
+- **Bug fix, Rules of Hooks:** `ModerationActions` returned `null` before `useCallback` / `useEffect`. The own-profile guard now runs after all hooks (and skips the status fetch). Regression test: `__tests__/ModerationActions.test.tsx`.
+- **Bug fix, unblock contrast (1.09:1):** Unblock is now `ui/Button secondary`.
+- `ModerationActions`: Button `destructive` (`ICON.block.outline`) / `secondary` / `ghost`; Block opens BottomSheet `confirm` (uses `moderation.block.confirmBlock` + new `confirmBody`; error stays in the sheet with retry); toasts replace inline feedback; haptic `success` on block only; button `loading` replaces the centered spinner. Requires a `ToastProvider` above it (AppShell).
+- `ReportSheet`: BottomSheet `form` (keyboard avoidance + sticky footer), `ListRow radio` reasons, `TextField multiline` with 0/280 counter, NoticeBox, disabled submit + "pick a reason" hint, `InlineError` via sheet `error` (input kept), success = sheet closes + toast (replaces the in-sheet confirmation). New optional props `defaultCategory` / `defaultNote` (used by Storybook).
+- `OtherUserProfileScreen`: `Avatar`, `AppText`, `IconButton` back (`ICON.back.outline`), `InlineError`, `Card` history, `screenMargin`.
+- Locale: added `moderation.report.notePlaceholder/notice/pickReason`, `moderation.block.confirmBody`, `moderation.sheetReportHint`; reworded `sheetReport` ("Report and block"), `report.confirmation`, `report.error`, `report.category`.
+- Stories merged to one Controls-driven `Playground` each (ModerationActions: isBlocked / isOwnProfile / fail; ReportSheet: visible / reason / noteLength / submitResult).
+- Not done: spec's "discard this report?" inline confirm on close with content (new flow); the "⋯" menu hint row lives in mod-social-feed `UserProfileScreen.tsx` (key `moderation.sheetReportHint` is ready).
+
 ## QA Results
 
 **QA agent**: qa-mod-moderation

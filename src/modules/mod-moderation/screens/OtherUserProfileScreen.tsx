@@ -17,20 +17,14 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
+import { AppText, Avatar, Card, IconButton, InlineError, Spinner } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { fetchProfileHistory } from '../../mod-profile-history/history-service';
 import type { HistoryAscent } from '../../mod-profile-history/types';
 import ModerationActions from '../components/ModerationActions';
@@ -64,7 +58,8 @@ export default function OtherUserProfileScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, insets.top, screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [history, setHistory] = useState<HistoryAscent[]>([]);
@@ -110,7 +105,7 @@ export default function OtherUserProfileScreen({
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Spinner size="large" />
       </View>
     );
   }
@@ -123,20 +118,20 @@ export default function OtherUserProfileScreen({
         showsVerticalScrollIndicator={false}
       >
         {/* Back button */}
-        <Pressable
-          style={styles.backButton}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back')}
-          hitSlop={8}
-        >
-          <Text style={styles.backButtonText}>{'‹  '}{t('common.back')}</Text>
-        </Pressable>
+        <View style={styles.backButton}>
+          <IconButton
+            name={ICON.back.outline}
+            size={theme.iconSize.lg}
+            on="background"
+            accessibilityLabel={t('common.back')}
+            onPress={onBack}
+          />
+        </View>
 
         {/* Error */}
         {error !== null && (
           <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
+            <InlineError variant="block" message={error} actionLabel={t('common.retry')} onAction={() => void loadData()} />
           </View>
         )}
 
@@ -144,18 +139,14 @@ export default function OtherUserProfileScreen({
           <>
             {/* Avatar + name */}
             <View style={styles.avatarSection}>
-              {profile.avatar_url !== null ? (
-                <Image
-                  source={{ uri: profile.avatar_url }}
-                  style={styles.avatar}
-                  accessibilityLabel={profile.display_name}
-                />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]} />
-              )}
-              <Text style={styles.displayName}>{profile.display_name}</Text>
+              <Avatar size="xl" uri={profile.avatar_url ?? undefined} name={profile.display_name} decorative />
+              <AppText variant="title2" align="center" style={styles.displayName}>
+                {profile.display_name}
+              </AppText>
               {profile.bio !== null && profile.bio !== '' && (
-                <Text style={styles.bio}>{profile.bio}</Text>
+                <AppText variant="subhead" color="textSecondary" align="center">
+                  {profile.bio}
+                </AppText>
               )}
             </View>
 
@@ -168,18 +159,27 @@ export default function OtherUserProfileScreen({
 
             {/* Send history (privacy-gated server-side; empty state if blocked) */}
             <View style={styles.historySection}>
-              <Text style={styles.historySectionTitle}>{t('profile.sendHistory')}</Text>
+              <AppText variant="sectionHeader" color="textSecondary" style={styles.historySectionTitle}>
+                {t('profile.sendHistory')}
+              </AppText>
               {history.length === 0 ? (
-                <Text style={styles.historyEmpty}>{t('profileHistory.empty')}</Text>
+                <AppText variant="subhead" color="textSecondary" align="center" style={styles.historyEmpty}>
+                  {t('profileHistory.empty')}
+                </AppText>
               ) : (
-                history.slice(0, 20).map((ascent) => (
-                  <View key={ascent.ascent_id} style={styles.historyItem}>
-                    <Text style={styles.historyGrade}>{ascent.grade}</Text>
-                    <Text style={styles.historyDate}>
-                      {new Date(ascent.logged_at).toLocaleDateString()}
-                    </Text>
-                  </View>
-                ))
+                <Card variant="static" padding={0}>
+                  {history.slice(0, 20).map((ascent, i, arr) => (
+                    <View
+                      key={ascent.ascent_id}
+                      style={[styles.historyItem, i < arr.length - 1 && styles.historyItemDivider]}
+                    >
+                      <AppText variant="body" weight="600">{ascent.grade}</AppText>
+                      <AppText variant="subhead" color="textSecondary">
+                        {new Date(ascent.logged_at).toLocaleDateString()}
+                      </AppText>
+                    </View>
+                  ))}
+                </Card>
               )}
             </View>
           </>
@@ -192,15 +192,15 @@ export default function OtherUserProfileScreen({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number, screenMargin: number) {
   return StyleSheet.create({
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      paddingTop: topInset + theme.spacing.sm,
+      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
     centered: {
@@ -210,78 +210,40 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       backgroundColor: theme.colors.background,
     },
     backButton: {
-      marginBottom: theme.spacing.md,
+      marginBottom: theme.spacing.sm,
       alignSelf: 'flex-start',
-    },
-    backButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
+      marginLeft: -theme.spacing.smd,
     },
     errorContainer: {
-      padding: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
-      backgroundColor: theme.colors.error,
       marginBottom: theme.spacing.md,
-    },
-    errorText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textInverse,
     },
     avatarSection: {
       alignItems: 'center',
-      marginBottom: theme.spacing.lg,
-    },
-    avatar: {
-      width: 96,
-      height: 96,
-      borderRadius: theme.borderRadius.full,
-      marginBottom: theme.spacing.md,
-    },
-    avatarPlaceholder: {
-      backgroundColor: theme.colors.border,
+      marginBottom: theme.layout.sectionGap,
     },
     displayName: {
-      fontSize: theme.fontSize.xl,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
+      marginTop: theme.spacing.md,
       marginBottom: theme.spacing.xs,
-      textAlign: 'center',
-    },
-    bio: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
     },
     historySection: {
-      marginTop: theme.spacing.xl,
+      marginTop: theme.layout.sectionGap,
     },
     historySectionTitle: {
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
       marginBottom: theme.spacing.sm,
     },
     historyEmpty: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
       paddingVertical: theme.spacing.lg,
     },
     historyItem: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      paddingVertical: theme.spacing.sm,
-      borderBottomWidth: 1,
+      alignItems: 'center',
+      minHeight: theme.layout.minTouchTarget,
+      paddingHorizontal: theme.layout.cardPadding,
+    },
+    historyItemDivider: {
+      borderBottomWidth: theme.stroke.thin,
       borderBottomColor: theme.colors.divider,
-    },
-    historyGrade: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textPrimary,
-      fontWeight: theme.fontWeight.semibold,
-    },
-    historyDate: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.textSecondary,
     },
   });
 }
