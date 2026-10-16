@@ -20,17 +20,17 @@
     "expo-web-browser": "~14.1.6",
     "i18next": "^24.2.3",
     "react": "19.2.3",
-    "react-dom": "19.2.3",
     "react-i18next": "^15.5.1",
     "react-native": "0.86.3",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "~4.26.0",
-    "react-native-web": "^0.21.2"
+    "react-native-screens": "~4.26.0"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
     "@react-native/jest-preset": "^0.86.3",
     "@storybook/react-native-web-vite": "^10.6.2",
+    "react-dom": "19.2.3",
+    "react-native-web": "^0.21.2",
     "@testing-library/react-native": "^13.2.0",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
