@@ -8,7 +8,7 @@
  *   - Send history via fetchProfileHistory RPC (server-side privacy gate;
  *     returns [] if privacy blocks access — shown as empty state).
  *
- * Safe area: useSafeAreaInsets() + makeStyles(theme, topInset) pattern.
+ * Safe area: useHeaderContentInset() (0 when the AppShell header is in flow).
  *
  * AC-080: Report User → opens ReportSheet.
  * AC-082, AC-083, AC-084: Block/Unblock via ModerationActions.
@@ -18,7 +18,6 @@ import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { AppText, Avatar, Card, InlineError, Spinner } from '../../../components/ui';
@@ -26,8 +25,7 @@ import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { fetchProfileHistory } from '../../mod-profile-history/history-service';
 import type { HistoryAscent } from '../../mod-profile-history/types';
-import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
-import { rootHeaderHeight } from '../../mod-home/components/AppHeader';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import ModerationActions from '../components/ModerationActions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -58,11 +56,10 @@ export default function OtherUserProfileScreen({
 }: OtherUserProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
   const { screenMargin } = useLayout();
   const tabInset = useTabBarInset();
-  // The AppShell nested header overlays the content: reserve its height at the top.
-  const styles = makeStyles(theme, rootHeaderHeight(insets.top, 1), screenMargin);
+  const headerInset = useHeaderContentInset();
+  const styles = makeStyles(theme, headerInset, screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [history, setHistory] = useState<HistoryAscent[]>([]);
