@@ -29,6 +29,7 @@ import {
   TextField,
 } from '../../../components/ui';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { useAppHeader, useHideTabBar } from '../../mod-home/components/AppHeaderContext';
 import { uploadAvatar, upsertProfile } from '../auth-service';
 import type { PrivacySetting, UserProfile } from '../types';
 
@@ -49,6 +50,10 @@ export default function EditProfileScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, 0, screenMargin);
+
+  // v2.2: nested screen in the Profile tab; form hides the TabBar.
+  useAppHeader({ title: t('profile.editProfile'), onBack: onCancel });
+  useHideTabBar();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
