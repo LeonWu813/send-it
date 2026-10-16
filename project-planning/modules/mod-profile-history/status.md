@@ -5,6 +5,8 @@
 **Status**: Complete — ready for QA.
 **Completed**: 2026-09-29
 
+**Off-spec design tooling (2026-10-16)**: Added Storybook stories for StatsPanel, FilterBar and AscentHistoryItem in `src/modules/mod-profile-history/stories/` on branch `design/storybook`. Not part of the spec; no component source changed. Pending PR review.
+
 ### Patch — 2026-10-13: AC-183 — Shared RouteCard integration (MOD-008 v6)
 
 **AC**: AC-183 (Rev 35) — send-history section uses shared `RouteCard` component.
