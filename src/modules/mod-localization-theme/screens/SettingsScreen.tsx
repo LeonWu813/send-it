@@ -40,6 +40,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,6 +51,8 @@ import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
 import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile/auth-service';
+import { rootHeaderHeight } from '../../mod-home/components/AppHeader';
+import { useAppHeader, useAppHeaderStore, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { Button } from '../../../components/ui/Button';
 import {
@@ -71,7 +74,12 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   const { t } = useTranslation('common');
   const { theme, override, setOverride } = useTheme();
   const insets = useSafeAreaInsets();
-  const styles = makeStyles(theme, insets.top);
+  const store = useAppHeaderStore();
+  const { fontScale } = useWindowDimensions();
+  const tabInset = useTabBarInset();
+  const headerTop = store ? rootHeaderHeight(insets.top, fontScale) : 0;
+  const styles = makeStyles(theme, headerTop, tabInset.contentBottom);
+  useAppHeader({ title: t('settings.title'), onBack });
 
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(
     (i18n.language as SupportedLanguage) ?? 'zh-TW',
@@ -190,26 +198,11 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
 
   return (
     <SwipeBackWrapper onBack={onBack}>
-      {/* Navigation bar */}
-      <View style={styles.navBar}>
-        <Pressable
-          style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('settings.back') ?? 'Back'}
-        >
-          <Ionicons name="chevron-back" size={20} color={theme.colors.primary} />
-          <Text style={styles.backButtonText}>{t('settings.back') ?? 'Back'}</Text>
-        </Pressable>
-        <Text style={styles.navTitle}>{t('settings.title')}</Text>
-        {/* Spacer to balance the back button */}
-        <View style={styles.navSpacer} />
-      </View>
-
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
         {/* Language section (AC-091) */}
         <View style={styles.section}>
@@ -332,54 +325,16 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: number, bottomInset: number) {
   return StyleSheet.create({
-    navBar: {
-      paddingTop: topInset + theme.spacing.md,
-      paddingBottom: theme.spacing.md,
-      paddingHorizontal: theme.spacing.md,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderBottomWidth: 1,
-      borderBottomColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
-    },
-    backButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 2,
-      paddingVertical: theme.spacing.xs,
-      paddingHorizontal: theme.spacing.xs,
-      borderRadius: theme.borderRadius.md,
-      minWidth: 60,
-      minHeight: theme.layout.minTouchTarget,
-    },
-    backButtonPressed: {
-      backgroundColor: theme.colors.surfacePressed,
-    },
-    backButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
-    },
-    navTitle: {
-      flex: 1,
-      textAlign: 'center',
-      fontSize: theme.fontSize.lg,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textPrimary,
-    },
-    navSpacer: {
-      width: 40,
-    },
     scrollView: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     scrollContent: {
       paddingHorizontal: theme.spacing.lg,
-      paddingTop: theme.spacing.lg,
-      paddingBottom: theme.spacing.xl,
+      paddingTop: headerTop + theme.spacing.lg,
+      paddingBottom: theme.spacing.xl + bottomInset,
     },
     section: {
       marginBottom: theme.spacing.xl,
