@@ -2,6 +2,14 @@
 
 ## Engineering Progress
 
+### Off-spec design work, pending PR review - 2026-10-16 (design system v2.2 migration)
+
+- `GymListScreen.tsx`: city chips `on="background"` (inverted selection from Chip); content-shaped skeleton (headline, branch, district lines inside Card radius 20).
+- `GymDetailScreen.tsx`: photo and placeholder use `RADIUS.card` + `CONTINUOUS`; section labels `sectionHeader` -> `pageSection`; skeleton now mirrors photo, name, zh name, section and body lines.
+- `RequestGymScreen.tsx`: the three fields sit in one `Card` with `gap: LAYOUT.fieldGap`.
+- Not done: the screens' own back rows and GymList `largeTitle` are kept. AppHeader has no `nested`/`title`/`onBack` API yet (mod-home in progress) and GymNavigator state is not visible to AppShell; removing them now would strand the user without back. Follow-up once mod-home ships the nested header.
+- No behaviour, locale, or dependency changes. Tests: `npx jest src/modules/mod-gym-directory` 44 pass; `npm run lint` (tsc) clean for this module.
+
 ### Implementation — 2026-10-15 (AC-185 — SwipeBackWrapper wired into GymDetailScreen and RequestGymScreen)
 
 **Files modified:**

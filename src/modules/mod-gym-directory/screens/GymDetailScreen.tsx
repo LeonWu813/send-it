@@ -28,7 +28,7 @@ import {
 } from '../../../components/ui';
 import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
 import type { Gym } from '../types';
 
@@ -119,7 +119,10 @@ export default function GymDetailScreen({
               <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonGroup}>
                 <Skeleton shape="card" surface="page" height={160} />
                 <Skeleton shape="text" textVariant="title1" width="70%" surface="page" />
-                <Skeleton shape="text" textVariant="subhead" width="50%" surface="page" />
+                <Skeleton shape="text" textVariant="title3" width="45%" surface="page" />
+                <Skeleton shape="text" textVariant="title3" width="30%" surface="page" />
+                <Skeleton shape="text" textVariant="body" width="60%" surface="page" />
+                <Skeleton shape="text" textVariant="body" width="80%" surface="page" />
               </SkeletonGroup>
             ) : null}
           </View>
@@ -215,7 +218,7 @@ export default function GymDetailScreen({
         ) : null}
 
         {/* Location section */}
-        <AppText variant="sectionHeader" style={styles.sectionLabel}>
+        <AppText variant="pageSection" style={styles.sectionLabel}>
           {t('gymDirectory.detail.location')}
         </AppText>
         <AppText variant="body">
@@ -228,7 +231,7 @@ export default function GymDetailScreen({
         </AppText>
 
         {/* Grade system */}
-        <AppText variant="sectionHeader" style={styles.sectionLabel}>
+        <AppText variant="pageSection" style={styles.sectionLabel}>
           {t('gymDirectory.detail.gradingSystem')}
         </AppText>
         <AppText variant="body">{gym.official_grading_system}</AppText>
@@ -277,14 +280,17 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     photo: {
       width: '100%',
       aspectRatio: 2,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: RADIUS.card,
+      ...CONTINUOUS,
+      overflow: 'hidden',
       marginBottom: theme.spacing.md,
       backgroundColor: theme.colors.surfaceAlt,
     },
     photoPlaceholder: {
       width: '100%',
       minHeight: 160,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: RADIUS.card,
+      ...CONTINUOUS,
       backgroundColor: theme.colors.surfaceAlt,
       alignItems: 'center',
       justifyContent: 'center',

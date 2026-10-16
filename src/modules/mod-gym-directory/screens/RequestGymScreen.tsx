@@ -19,12 +19,13 @@ import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
   Button,
+  Card,
   IconButton,
   InlineError,
   TextField,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { LAYOUT, useLayout, useTheme } from '../../../lib/theme';
 import { submitGymRequest } from '../gym-service';
 
 interface RequestGymScreenProps {
@@ -134,7 +135,7 @@ export default function RequestGymScreen({
           {t('gymDirectory.requestGym.subtitle')}
         </AppText>
 
-        <View style={styles.form}>
+        <Card style={styles.form}>
           {/* Gym name (required) */}
           <TextField
             label={`${t('gymDirectory.requestGym.nameLabel')} *`}
@@ -169,7 +170,7 @@ export default function RequestGymScreen({
             returnKeyType="done"
             onSubmitEditing={handleSubmit}
           />
-        </View>
+        </Card>
 
         {/* Submission error */}
         {errorMessage ? (
@@ -224,7 +225,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       marginBottom: theme.layout.sectionGap,
     },
     form: {
-      gap: theme.spacing.md,
+      gap: LAYOUT.fieldGap,
     },
     errorBlock: {
       marginTop: theme.spacing.md,

@@ -185,7 +185,10 @@ export default function GymListScreen({
             {[0, 1, 2, 3].map((i) => (
               <Card key={i}>
                 <Skeleton shape="text" textVariant="headline" width="60%" />
-                <Skeleton shape="text" textVariant="subhead" width="40%" />
+                <Skeleton shape="text" textVariant="footnote" width="30%" />
+                <View style={styles.skeletonDistrict}>
+                  <Skeleton shape="text" textVariant="subhead" width="45%" />
+                </View>
               </Card>
             ))}
           </SkeletonGroup>
@@ -233,12 +236,14 @@ export default function GymListScreen({
         <Chip
           variant="multi"
           label={t('gymDirectory.cityFilter.taipei')}
+          on="background"
           selected={cityFilter === 'Taipei'}
           onPress={() => setCityFilter(cityFilter === 'Taipei' ? null : 'Taipei')}
         />
         <Chip
           variant="multi"
           label={t('gymDirectory.cityFilter.newTaipei')}
+          on="background"
           selected={cityFilter === 'New Taipei'}
           onPress={() => setCityFilter(cityFilter === 'New Taipei' ? null : 'New Taipei')}
         />
@@ -282,6 +287,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     },
     skeletonList: {
       gap: theme.layout.cardGap,
+    },
+    skeletonDistrict: {
+      marginTop: theme.spacing.xs,
     },
     screenTitle: {
       marginBottom: theme.spacing.md,
