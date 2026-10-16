@@ -14,6 +14,16 @@
 **AC-186 + cleanup commit**: pending — `feat(mod-social-feed): AC-186 — get_like_info_batch RPC and service wrapper; remove AC-123/124 refs`
 **Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup); 2026-10-15 (AC-185 SwipeBackWrapper wiring)
 
+### Design system v2.2 migration (2026-10-16) - off-spec design work, pending PR review
+
+Visual/structure only, no behaviour change (follow/unfollow, AC-150/151/152/153 sheet and block logic untouched).
+- `UserProfileScreen`: removed the screen-drawn back button/row (AppShell `nested` AppHeader, §30, owns back; swipe-back unchanged); the "..." IconButton stays in a right-aligned row. Profile header is now a `Card` (Avatar `lg` 64 with initials fallback, `title3` name, `footnote` bio, counts, Follow capsule `md`; Following stays text-only `secondary`). Chart title and video section title use `pageSection`; bar radii use `theme.radius.full`. "..." menu already a `list-single` BottomSheet (§32.10).
+- `FollowersListScreen` / `FollowingListScreen`: removed back/title nav bar; rows use `ListRow variant="content"` (min 52).
+- `FeedScreen`: unchanged (compiles).
+- Test: replaced "calls onBack when back button is pressed" with "draws no back row of its own".
+- Not done: no block `destructiveTonal` button added (this screen has no block button, only the "..." menu rows; adding one would be a behaviour change). FeedScreen still uses deprecated `sectionHeader` alias inside cards.
+- Dependency: back + title now rely on engineer-mod-home's AppShell nested AppHeader for the profile/followers/following overlays.
+
 ### AC-163 Bug Fix — BetaVideoGrid privacy gate (2026-10-13, QA Run 4)
 
 **Bug**: `BetaVideoGrid` rendered unconditionally for any non-blocked profile, including `followers_only` profiles viewed by non-followers. `fetchBetaVideosByUser` applies no follower-relationship gate server-side. A non-follower viewing a `followers_only` profile saw the full video grid instead of the hidden/403 state per AC-064.

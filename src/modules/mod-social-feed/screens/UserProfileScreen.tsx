@@ -20,7 +20,10 @@
  * Blocked state (AC-153): fetchBlockedUserIds() called in loadProfile() Promise.all.
  * If a block exists in either direction, shows "This profile isn't available".
  *
- * Safe area: useSafeAreaInsets() + makeStyles(theme, topInset) pattern.
+ * Design system v2.2 (§30, §32.10, §32.11): no screen-drawn back row; the AppShell `nested`
+ * AppHeader owns back + title (swipe-back stays via SwipeBackWrapper). The profile header is a
+ * Card (Avatar lg 64 + title3 name + footnote bio, counts, capsule Follow button). The "⋯" menu is a
+ * floating `list-single` sheet. Page sections use `pageSection`.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -29,7 +32,6 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import type { ViewStyle } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { fetchProfileStats } from '../../mod-profile-history/history-service';
 import type { ProfileStats } from '../../mod-profile-history/types';
@@ -54,6 +56,7 @@ import {
   Avatar,
   BottomSheet,
   Button,
+  Card,
   EmptyState,
   IconButton,
   InlineError,
@@ -104,9 +107,8 @@ export default function UserProfileScreen({
 }: UserProfileScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
   const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, insets.top, screenMargin);
+  const styles = makeStyles(theme, screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [counts, setCounts] = useState<FollowerCounts>({ follower_count: 0, following_count: 0 });
@@ -304,27 +306,17 @@ export default function UserProfileScreen({
   // 44pt IconButtons carry a 24pt glyph: pull them outward so the glyphs align to the margin.
   const glyphInset = (theme.layout.minTouchTarget - theme.iconSize.lg) / 2;
 
-  const renderHeader = (showMore: boolean, style: ViewStyle): React.JSX.Element => (
+  const renderMore = (style: ViewStyle): React.JSX.Element => (
     <View style={style}>
-      <View style={{ marginLeft: -glyphInset }}>
+      {/* AC-150: three-dots icon, only for !isOwnProfile */}
+      <View style={{ marginRight: -glyphInset }}>
         <IconButton
-          name={ICON.back.outline}
-          accessibilityLabel={t('common.back')}
-          onPress={onBack}
+          name={ICON.more.outline}
+          accessibilityLabel={t('socialFeed.moreOptions')}
+          onPress={() => { setSheetVisible(true); }}
           on="background"
         />
       </View>
-      {/* AC-150: three-dots icon, only for !isOwnProfile */}
-      {showMore && (
-        <View style={{ marginRight: -glyphInset }}>
-          <IconButton
-            name={ICON.more.outline}
-            accessibilityLabel={t('socialFeed.moreOptions')}
-            onPress={() => { setSheetVisible(true); }}
-            on="background"
-          />
-        </View>
-      )}
     </View>
   );
 
@@ -361,8 +353,8 @@ export default function UserProfileScreen({
     return (
       <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible}>
         <View style={styles.root}>
-          {/* Header row: back button + optional dots icon (only when viewer can unblock) */}
-          {renderHeader(!isOwnProfile && isBlockedByMe, styles.blockedHeader)}
+          {/* Dots icon only when the viewer can unblock; back is the AppShell nested header */}
+          {!isOwnProfile && isBlockedByMe && renderMore(styles.blockedHeader)}
 
           {/* Blocked state message */}
           <View style={styles.centered}>
@@ -384,8 +376,8 @@ export default function UserProfileScreen({
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header row: back button + dots icon */}
-        {renderHeader(!isOwnProfile, styles.headerRow)}
+        {/* Dots icon; back + title are the AppShell nested header (§30) */}
+        {!isOwnProfile && renderMore(styles.headerRow)}
 
         {/* Error */}
         {error !== null && (
@@ -394,65 +386,68 @@ export default function UserProfileScreen({
 
         {profile !== null && (
           <>
-            {/* Avatar + name */}
-            <View style={styles.avatarSection}>
-              <Avatar
-                size="xl"
-                uri={profile.avatar_url}
-                name={profile.display_name}
-                decorative
-                style={styles.avatar}
-              />
-              <AppText variant="title2" align="center">
-                {profile.display_name}
-              </AppText>
-              {profile.bio !== null && profile.bio !== '' && (
-                <AppText variant="subhead" color="textSecondary" align="center" style={styles.bio}>
-                  {profile.bio}
-                </AppText>
-              )}
-              {profile.privacy_setting === 'followers_only' && (
-                <View style={styles.privateBadge}>
-                  <Ionicons
-                    name={ICON.locked.outline}
-                    size={theme.iconSize.xs}
-                    color={theme.colors.textSecondary}
-                  />
-                  <AppText variant="caption1" color="textSecondary">
-                    {t('socialFeed.privateProfile')}
+            {/* Profile header Card (§32.11): Avatar lg + name + info, counts, Follow button */}
+            <Card variant="static" style={styles.profileCard}>
+              <View style={styles.identityRow}>
+                <Avatar
+                  size="lg"
+                  uri={profile.avatar_url}
+                  name={profile.display_name}
+                  decorative
+                />
+                <View style={styles.identityText}>
+                  <AppText variant="title3" numberOfLines={2}>
+                    {profile.display_name}
                   </AppText>
+                  {profile.bio !== null && profile.bio !== '' && (
+                    <AppText variant="footnote" color="textSecondary" style={styles.bio}>
+                      {profile.bio}
+                    </AppText>
+                  )}
+                  {profile.privacy_setting === 'followers_only' && (
+                    <View style={styles.privateBadge}>
+                      <Ionicons
+                        name={ICON.locked.outline}
+                        size={theme.iconSize.xs}
+                        color={theme.colors.textSecondary}
+                      />
+                      <AppText variant="caption1" color="textSecondary">
+                        {t('socialFeed.privateProfile')}
+                      </AppText>
+                    </View>
+                  )}
                 </View>
+              </View>
+
+              {/* Follower counts (AC-050: update immediately) */}
+              <View style={styles.countsRow}>
+                <View style={styles.countItem}>
+                  <AppText variant="title2" numeric>{counts.follower_count}</AppText>
+                  <AppText variant="caption1" color="textSecondary">{t('socialFeed.followers')}</AppText>
+                </View>
+                <View style={styles.countDivider} />
+                <View style={styles.countItem}>
+                  <AppText variant="title2" numeric>{counts.following_count}</AppText>
+                  <AppText variant="caption1" color="textSecondary">{t('socialFeed.following')}</AppText>
+                </View>
+              </View>
+
+              {/* Follow / Following button — hidden for own profile.
+                  Following = text-only secondary capsule; its accessibility label stays "Unfollow". */}
+              {!isOwnProfile && (
+                <Button
+                  variant={isFollowing ? 'secondary' : 'primary'}
+                  size="md"
+                  fullWidth
+                  label={isFollowing ? t('socialFeed.following') : t('socialFeed.follow')}
+                  accessibilityLabel={
+                    isFollowing ? t('socialFeed.unfollow') : t('socialFeed.follow')
+                  }
+                  loading={followLoading}
+                  onPress={() => void handleFollowToggle()}
+                />
               )}
-            </View>
-
-            {/* Follower counts (AC-050: update immediately) */}
-            <View style={styles.countsRow}>
-              <View style={styles.countItem}>
-                <AppText variant="title2" numeric>{counts.follower_count}</AppText>
-                <AppText variant="caption1" color="textSecondary">{t('socialFeed.followers')}</AppText>
-              </View>
-              <View style={styles.countDivider} />
-              <View style={styles.countItem}>
-                <AppText variant="title2" numeric>{counts.following_count}</AppText>
-                <AppText variant="caption1" color="textSecondary">{t('socialFeed.following')}</AppText>
-              </View>
-            </View>
-
-            {/* Follow / Following button — hidden for own profile.
-                Following = text-only secondary; its accessibility label stays "Unfollow". */}
-            {!isOwnProfile && (
-              <Button
-                variant={isFollowing ? 'secondary' : 'primary'}
-                size="lg"
-                fullWidth
-                label={isFollowing ? t('socialFeed.following') : t('socialFeed.follow')}
-                accessibilityLabel={
-                  isFollowing ? t('socialFeed.unfollow') : t('socialFeed.follow')
-                }
-                loading={followLoading}
-                onPress={() => void handleFollowToggle()}
-              />
-            )}
+            </Card>
 
             {/* Stats section — shown when stats loaded successfully */}
             {stats !== null && (
@@ -492,7 +487,7 @@ export default function UserProfileScreen({
                     style={styles.chartContainer}
                     accessibilityLabel={t('profileHistory.stats.chartA11y')}
                   >
-                    <AppText variant="sectionHeader" style={styles.chartTitle}>
+                    <AppText variant="pageSection" style={styles.chartTitle}>
                       {t('profileHistory.stats.chartTitle')}
                     </AppText>
                     {stats.sends_by_grade
@@ -526,7 +521,7 @@ export default function UserProfileScreen({
                 followers_only profiles when the viewer is not a follower. */}
             {profile.privacy_setting === 'followers_only' && !isFollowing ? null : (
               <View style={styles.videoSection}>
-                <AppText variant="title3" style={styles.videoSectionTitle}>
+                <AppText variant="pageSection" style={styles.videoSectionTitle}>
                   {t('betaVideo.userVideos')}
                 </AppText>
                 <BetaVideoGrid
@@ -628,7 +623,6 @@ function ActionSheet({
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function makeStyles(
   theme: ReturnType<typeof useTheme>['theme'],
-  topInset: number,
   screenMargin: number,
 ) {
   return StyleSheet.create({
@@ -637,7 +631,7 @@ function makeStyles(
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: topInset + theme.spacing.sm,
+      paddingTop: theme.spacing.sm,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },
@@ -647,19 +641,19 @@ function makeStyles(
       alignItems: 'center',
       backgroundColor: theme.colors.background,
     },
-    // Header row containing back button and dots icon
+    // Row holding the dots icon (back + title live in the AppShell nested header)
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
+      justifyContent: 'flex-end',
       marginBottom: theme.spacing.sm,
     },
     // Used in blocked state where root is a plain View (not ScrollView)
     blockedHeader: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingTop: topInset + theme.spacing.sm,
+      justifyContent: 'flex-end',
+      paddingTop: theme.spacing.sm,
       paddingHorizontal: screenMargin,
     },
     profileUnavailableText: {
@@ -668,12 +662,17 @@ function makeStyles(
     errorBlock: {
       marginBottom: theme.spacing.md,
     },
-    avatarSection: {
-      alignItems: 'center',
+    profileCard: {
       marginBottom: theme.layout.sectionGap,
     },
-    avatar: {
-      marginBottom: theme.spacing.md,
+    identityRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.md,
+    },
+    identityText: {
+      flex: 1,
+      alignItems: 'flex-start',
     },
     bio: {
       marginTop: theme.spacing.xs,
@@ -684,7 +683,7 @@ function makeStyles(
       gap: theme.layout.iconTextGap,
       borderWidth: theme.stroke.thin,
       borderColor: theme.colors.border,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       paddingHorizontal: theme.spacing.sm,
       paddingVertical: theme.spacing.xxs,
       marginTop: theme.spacing.sm,
@@ -693,7 +692,7 @@ function makeStyles(
       flexDirection: 'row',
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: theme.layout.sectionGap,
+      marginVertical: theme.spacing.md,
     },
     countItem: {
       alignItems: 'center',
@@ -746,13 +745,13 @@ function makeStyles(
       flex: 1,
       height: theme.spacing.smd,
       backgroundColor: theme.colors.surfaceAlt,
-      borderRadius: theme.borderRadius.sm,
+      borderRadius: theme.radius.full,
       overflow: 'hidden',
     },
     bar: {
       height: '100%',
       backgroundColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.sm,
+      borderRadius: theme.radius.full,
     },
     barCount: {
       minWidth: theme.spacing.lg + theme.spacing.xs,

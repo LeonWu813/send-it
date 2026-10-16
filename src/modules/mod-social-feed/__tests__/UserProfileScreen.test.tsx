@@ -345,32 +345,27 @@ describe('UserProfileScreen', () => {
     });
   });
 
-  it('calls onBack when back button is pressed', async () => {
+  it('v2.2: draws no back row of its own (AppShell nested AppHeader owns back, §30)', async () => {
     setupProfileMock();
-    const onBack = jest.fn();
 
     render(
       <UserProfileScreen
         targetUserId={TARGET_USER_ID}
         session={MOCK_SESSION}
-        onBack={onBack}
+        onBack={jest.fn()}
       />,
       renderOptions(),
     );
 
     await waitFor(() => {
-      const backButton = screen.queryAllByRole('button').find(
-        (el) =>
-          el.props.accessibilityLabel === 'Back' ||
-          el.props.accessibilityLabel === '返回',
-      );
-      expect(backButton).toBeTruthy();
-      if (backButton) {
-        fireEvent.press(backButton);
-      }
+      expect(screen.getByText('Alice')).toBeTruthy();
     });
-
-    expect(onBack).toHaveBeenCalled();
+    const backButton = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Back' ||
+        el.props.accessibilityLabel === '返回',
+    );
+    expect(backButton).toBeUndefined();
   });
 
   it('AC-150: renders three-dots icon for non-own profiles', async () => {

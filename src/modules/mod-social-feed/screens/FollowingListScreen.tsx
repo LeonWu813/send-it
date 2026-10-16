@@ -11,7 +11,7 @@
  * users the current user has blocked AND users who have blocked the current user.
  *
  * Safe area: useSafeAreaInsets() + makeStyles(theme, topInset) pattern.
- * Navigation bar: 44pt back IconButton (chevron-back), title "追蹤中"/"Following".
+ * Design system v2.2: no screen-drawn back/title row; the AppShell `nested` AppHeader owns them (§30).
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -25,10 +25,8 @@ import { fetchFollowingList } from '../social-feed-service';
 import type { UserListItem } from '../types';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
-  AppText,
   Avatar,
   EmptyState,
-  IconButton,
   InlineError,
   ListRow,
   Spinner,
@@ -105,11 +103,11 @@ export default function FollowingListScreen({
     return (
       <FlatList
         data={users}
+        contentContainerStyle={styles.listContent}
         keyExtractor={(item) => item.userId}
         renderItem={({ item, index }) => (
           <ListRow
-            variant="navigation"
-            density="content"
+            variant="content"
             inset="screen"
             title={item.displayName}
             accessibilityLabel={item.displayName}
@@ -135,20 +133,6 @@ export default function FollowingListScreen({
   return (
     <SwipeBackWrapper onBack={onBack}>
       <View style={styles.root}>
-        {/* Navigation bar */}
-        <View style={styles.navBar}>
-          <IconButton
-            name={ICON.back.outline}
-            accessibilityLabel={t('settings.back')}
-            onPress={onBack}
-            on="background"
-          />
-          <AppText variant="headline" align="center" numberOfLines={1} style={styles.navTitle}>
-            {t('socialFeed.following')}
-          </AppText>
-          <View style={styles.navSpacer} />
-        </View>
-
         {renderContent()}
       </View>
     </SwipeBackWrapper>
@@ -164,21 +148,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    navBar: {
-      paddingTop: theme.spacing.md,
-      paddingBottom: theme.spacing.sm,
-      paddingHorizontal: screenMargin - theme.spacing.sm,
-      flexDirection: 'row',
-      alignItems: 'center',
-      borderBottomWidth: theme.stroke.hairline,
-      borderBottomColor: theme.colors.border,
-      backgroundColor: theme.colors.background,
-    },
-    navTitle: {
-      flex: 1,
-    },
-    navSpacer: {
-      width: theme.layout.minTouchTarget,
+    listContent: {
+      paddingTop: theme.spacing.sm,
     },
     centered: {
       flex: 1,
