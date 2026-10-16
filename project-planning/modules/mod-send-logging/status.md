@@ -2,6 +2,8 @@
 
 ## Engineering Progress
 
+> Off-spec design tooling (pending PR review): added Storybook stories for AscentList at `src/modules/mod-send-logging/stories/AscentList.stories.tsx` (branch design/storybook). No component source changes.
+
 ### Bugfix — Bug E (attempts clamping) + Bug G (delete button in send history) (2026-10-04)
 
 **Mode:** bugfix (two human QA bugs)
