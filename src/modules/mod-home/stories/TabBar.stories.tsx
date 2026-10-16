@@ -12,7 +12,7 @@ function Demo({ activeTab, bottomInset }: Args): React.JSX.Element {
   const [tab, setTab] = useState<TabKey>(activeTab);
   useEffect(() => setTab(activeTab), [activeTab]);
   return (
-    <View style={{ width: 375 }}>
+    <View style={{ width: 375, height: 160, position: 'relative' }}>
       <TabBar activeTab={tab} onTabPress={setTab} bottomInset={bottomInset} />
     </View>
   );
@@ -24,10 +24,10 @@ const meta: Meta<Args> = {
   args: { activeTab: 'home', bottomInset: 0 },
   argTypes: {
     activeTab: { control: 'inline-radio', options: ['home', 'gyms', 'profile'] },
-    bottomInset: { control: { type: 'number', min: 0, max: 60 }, description: 'Home-indicator inset; padding is max(inset, 8)' },
+    bottomInset: { control: { type: 'number', min: 0, max: 60 }, description: 'Home-indicator inset; the capsule sits at max(inset - 12, 8) from the bottom' },
   },
 };
 export default meta;
 
-/** Tap the tabs (icon 0.9 -> 1 + colour cross-fade; changing the activeTab control does not animate), tap the active tab again, set bottomInset 34. */
+/** Tap the tabs (the pill glides on `glide`, icon 0.96 press, layers cross-fade; changing the activeTab control snaps), set bottomInset 34. */
 export const Playground: StoryObj<Args> = {};

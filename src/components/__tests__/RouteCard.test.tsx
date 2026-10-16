@@ -33,6 +33,7 @@ jest.mock('../../modules/mod-route-catalog/route-service', () => ({
 // ── Imports ───────────────────────────────────────────────────────────────────
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { Dimensions } from 'react-native';
 
 import RouteCard from '../RouteCard';
 import { TestProviders } from '../../modules/mod-home/test-utils';
@@ -52,7 +53,14 @@ const BASE_ROUTE = {
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
-describe('RouteCard (AC-183, Rev 39/40)', () => {
+// The jest preset reports fontScale 2 (AX layout: thumbnail hidden). Tests default to the regular layout.
+const SCREEN = { width: 375, height: 812, scale: 2, fontScale: 1 };
+
+describe('RouteCard (AC-183, v2.2)', () => {
+  beforeEach(() => {
+    Dimensions.set({ window: SCREEN, screen: SCREEN });
+  });
+
   it('renders the route name', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
@@ -61,16 +69,34 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
     expect(screen.getByText('Crimson Tide', HIDDEN)).toBeTruthy();
   });
 
-  it('does NOT render the grade label text in the card UI (AC-191)', () => {
+  it('prints the grade on the tape badge as the headline (v2.2, overrides AC-191)', () => {
     render(
-      <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
+      <RouteCard route={{ ...BASE_ROUTE, colorTag: 'red' }} onPress={jest.fn()} />,
       { wrapper: TestProviders },
     );
-    // Grade is retained on the interface for a11y but must not be visible.
-    expect(screen.queryByText('V5', HIDDEN)).toBeNull();
+    expect(screen.getByText('V5', HIDDEN)).toBeTruthy();
   });
 
-  it('does not draw gymName (AC-192) but VoiceOver reads it when provided', () => {
+  it('hides the thumbnail at accessibility font scales (>= 1.6)', () => {
+    Dimensions.set({ window: { ...SCREEN, fontScale: 2 }, screen: { ...SCREEN, fontScale: 2 } });
+    render(<RouteCard route={BASE_ROUTE} onPress={jest.fn()} />, { wrapper: TestProviders });
+    expect(screen.UNSAFE_queryAllByType(require('react-native').Image)).toHaveLength(0);
+  });
+
+  it('shows the image placeholder icon when there is no photo', () => {
+    render(<RouteCard route={{ ...BASE_ROUTE, photo_url: null }} onPress={jest.fn()} />, { wrapper: TestProviders });
+    expect(screen.getByTestId('thumb-placeholder', HIDDEN)).toBeTruthy();
+  });
+
+  it('shows the play disc only with beta videos and a photo, hidden from VoiceOver', () => {
+    const { rerender } = render(<RouteCard route={BASE_ROUTE} onPress={jest.fn()} betaVideoCount={2} />, { wrapper: TestProviders });
+    expect(screen.queryByTestId('play-disc')).toBeNull();
+    expect(screen.getByTestId('play-disc', HIDDEN)).toBeTruthy();
+    rerender(<RouteCard route={{ ...BASE_ROUTE, photo_url: null }} onPress={jest.fn()} betaVideoCount={2} />);
+    expect(screen.queryByTestId('play-disc', HIDDEN)).toBeNull();
+  });
+
+  it('draws the gym after the section on cross-gym lists and VoiceOver reads it', () => {
     render(
       <RouteCard
         route={{ ...BASE_ROUTE, gymName: 'MegaSTONE' }}
@@ -78,7 +104,7 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
       />,
       { wrapper: TestProviders },
     );
-    expect(screen.queryByText('MegaSTONE', HIDDEN)).toBeNull();
+    expect(screen.getByText(/MegaSTONE/, HIDDEN)).toBeTruthy();
     expect(screen.getByLabelText(/MegaSTONE/)).toBeTruthy();
   });
 
@@ -90,10 +116,10 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
     expect(screen.queryByLabelText(/MegaSTONE/)).toBeNull();
   });
 
-  it('composes the VoiceOver label: grade, colour, name, gym, status, beta count', () => {
+  it('composes the one-sentence VoiceOver label: grade, colour, section, gym, status, beta count', () => {
     render(
       <RouteCard
-        route={{ ...BASE_ROUTE, colorTag: 'red', gymName: 'MegaSTONE' }}
+        route={{ ...BASE_ROUTE, colorTag: 'red', section: 'A', gymName: 'MegaSTONE' }}
         onPress={jest.fn()}
         hasSend
         sendStyle="flash"
@@ -102,11 +128,11 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
       { wrapper: TestProviders },
     );
     expect(
-      screen.getByLabelText('V5, Red, Crimson Tide. MegaSTONE. Flashed. 3 Beta Videos'),
+      screen.getByLabelText('V5, Red, A. MegaSTONE. Flashed. 3 Beta Videos'),
     ).toBeTruthy();
   });
 
-  it('renders the thumbnail image when photo_url is provided (AC-192 — 80×80)', async () => {
+  it('renders the thumbnail image when photo_url is provided (88×88)', async () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
       { wrapper: TestProviders },
@@ -166,7 +192,7 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
 
   // ── AC-190: send icon (inline, next to route name) ─────────────────────────
   // The old sendBadge pill (text "Flash" / "Top") has been replaced by an
-  // inline Ionicons icon in the nameRow. Tests use testID="send-icon" to assert
+  // inline Ionicons icon in the nameRow. Tests use testID="send-status" to assert
   // presence/absence of the icon element.
 
   it('renders the send icon when hasSend + sendStyle flash (AC-190)', () => {
@@ -174,7 +200,7 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="flash" />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByTestId('send-icon', HIDDEN)).toBeTruthy();
+    expect(screen.getByTestId('send-status', HIDDEN)).toBeTruthy();
   });
 
   it('renders the send icon when hasSend + sendStyle top (AC-190)', () => {
@@ -182,7 +208,7 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend sendStyle="top" />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByTestId('send-icon', HIDDEN)).toBeTruthy();
+    expect(screen.getByTestId('send-status', HIDDEN)).toBeTruthy();
   });
 
   it('does not render the send icon when hasSend is false (AC-190)', () => {
@@ -190,7 +216,7 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} hasSend={false} />,
       { wrapper: TestProviders },
     );
-    expect(screen.queryByTestId('send-icon', HIDDEN)).toBeNull();
+    expect(screen.queryByTestId('send-status', HIDDEN)).toBeNull();
   });
 
   it('does not render the send icon when hasSend is omitted (AC-190)', () => {
@@ -198,7 +224,7 @@ describe('RouteCard (AC-183, Rev 39/40)', () => {
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} />,
       { wrapper: TestProviders },
     );
-    expect(screen.queryByTestId('send-icon', HIDDEN)).toBeNull();
+    expect(screen.queryByTestId('send-status', HIDDEN)).toBeNull();
   });
 
   // Old text-based send badge assertions — verify the old "Flash"/"Top" text

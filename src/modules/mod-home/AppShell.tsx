@@ -13,7 +13,8 @@
  *   Never use conditional unmount — loses state.
  *   Never use `flex: 0` — still lays out and leaks touch targets.
  *
- * Global app-level header (AC-184):
+ * Global app-level header (AC-184, v2.2 §30): rendered by `HeaderHost` from the AppHeaderContext store
+ *   (screens register via `useAppHeader` / `useAppHeaderRoot`; default = tab-root large title).
  *   AppHeader is mounted inside UnreadCountProvider, above the tab-content area.
  *   It renders on all non-exempt screens. The fullscreen reel viewer (AC-133) is
  *   exempt — it renders as a full-screen overlay above AppShell, so the header
@@ -60,7 +61,8 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -74,7 +76,14 @@ import NotificationsNavigator from '../mod-notifications/NotificationsNavigator'
 import UserProfileScreen from '../mod-social-feed/UserProfileNavigator';
 import SettingsScreen from '../mod-localization-theme/SettingsScreen';
 import AppHeader from './components/AppHeader';
-import TabBar, { type TabKey } from './components/TabBar';
+import {
+  AppHeaderProvider,
+  AppHeaderStore,
+  AppHeaderTabScope,
+  tabBarBottomGap,
+  useAppHeaderStoreVersion,
+} from './components/AppHeaderContext';
+import TabBar, { TabBarFade, type TabKey } from './components/TabBar';
 import HomeNavigator from './HomeNavigator';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -106,6 +115,62 @@ const styles = StyleSheet.create({
   },
 });
 
+// ── Header host + tab chrome (subscribe to the header store; never wrap the tab content) ──────
+
+interface ChromeProps {
+  store: AppHeaderStore;
+  activeTab: TabKey;
+}
+
+/** Renders the global header for the active tab from whatever its screens registered. */
+function HeaderHost({
+  store,
+  activeTab,
+  onNavigateToNotifications,
+  onNavigateToSettings,
+}: ChromeProps & { onNavigateToNotifications: () => void; onNavigateToSettings: () => void }): React.JSX.Element {
+  const { t } = useTranslation('common');
+  useAppHeaderStoreVersion(store);
+  const entry = store.top(activeTab);
+  const config = entry?.config;
+  const nested = config?.onBack !== undefined;
+  return (
+    <AppHeader
+      variant={nested ? 'nested' : 'root'}
+      title={config?.title ?? t(`tabs.${activeTab}`)}
+      onBack={config?.onBack}
+      trailing={config?.trailing}
+      scrollY={nested ? config?.scrollY : store.rootScrollFor(activeTab)}
+      topInset={store.topInset}
+      onNavigateToNotifications={onNavigateToNotifications}
+      onNavigateToSettings={onNavigateToSettings}
+    />
+  );
+}
+
+/** Floating TabBar + its bottom fade. */
+function TabChrome({
+  store,
+  activeTab,
+  onTabPress,
+  onBarLayout,
+}: ChromeProps & { onTabPress: (tab: TabKey) => void; onBarLayout: (h: number) => void }): React.JSX.Element {
+  useAppHeaderStoreVersion(store);
+  const hidden = store.isTabBarHidden(activeTab);
+  return (
+    <>
+      <TabBarFade show={!hidden && store.canScrollDown(activeTab)} bottomInset={store.bottomInset} />
+      <TabBar
+        activeTab={activeTab}
+        onTabPress={onTabPress}
+        bottomInset={store.bottomInset}
+        hidden={hidden}
+        onLayout={(e) => onBarLayout(e.nativeEvent.layout.height)}
+      />
+    </>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function AppShell({ session }: AppShellProps): React.JSX.Element {
@@ -115,8 +180,11 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
 
   /** Measured TabBar height — toasts float `toastOffsetAboveTabBar` above it. */
   const [tabBarHeight, setTabBarHeight] = useState<number | null>(null);
+  const headerStore = useMemo(() => new AppHeaderStore(insets.top, insets.bottom), [insets.top, insets.bottom]);
   const toastBottomOffset =
-    tabBarHeight === null ? undefined : tabBarHeight + theme.componentSize.toastOffsetAboveTabBar;
+    tabBarHeight === null
+      ? undefined
+      : tabBarHeight + tabBarBottomGap(insets.bottom) + theme.componentSize.toastOffsetAboveTabBar;
 
   /** Non-null while a climber profile overlay is open (AC-182). */
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
@@ -201,19 +269,22 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
 
   return (
     <UnreadCountProvider session={session}>
+      <AppHeaderProvider value={headerStore}>
       <ToastProvider bottomOffset={toastBottomOffset}>
         <CelebrationHost>
           <View style={styles.root}>
             {/* Global app-level header (AC-184) — above tab content on all non-exempt screens */}
-            <AppHeader
+            <HeaderHost
+              store={headerStore}
+              activeTab={activeTab}
               onNavigateToNotifications={handleNavigateToNotifications}
               onNavigateToSettings={handleNavigateToSettings}
-              topInset={insets.top}
             />
 
             <View style={styles.tabContentArea}>
               {/* Tab 1 — Home */}
               <View style={[styles.tabContent, activeTab !== 'home' && styles.hidden]}>
+                <AppHeaderTabScope tab="home">
                 <HomeNavigator
                   session={session}
                   isActive={activeTab === 'home'}
@@ -224,10 +295,12 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   onNavigateToNotifications={handleNavigateToNotifications}
                   onNavigateToSettings={handleNavigateToSettings}
                 />
+                </AppHeaderTabScope>
               </View>
 
               {/* Tab 2 — Gyms */}
               <View style={[styles.tabContent, activeTab !== 'gyms' && styles.hidden]}>
+                <AppHeaderTabScope tab="gyms">
                 <GymNavigator
                   session={session}
                   initialGymId={selectedGymId}
@@ -240,24 +313,27 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   routeNavKey={routeNavKey}
                   onNavigateToUser={handleSelectClimber}
                 />
+                </AppHeaderTabScope>
               </View>
 
               {/* Tab 3 — Profile */}
               <View style={[styles.tabContent, activeTab !== 'profile' && styles.hidden]}>
+                <AppHeaderTabScope tab="profile">
                 <ProfileNavigator
                   session={session}
                   isActive={activeTab === 'profile'}
                   onNavigateToRoute={handleNavigateToRoute}
                   onNavigateToUser={handleSelectClimber}
                 />
+                </AppHeaderTabScope>
               </View>
             </View>
 
-            <TabBar
+            <TabChrome
+              store={headerStore}
               activeTab={activeTab}
               onTabPress={setActiveTab}
-              bottomInset={insets.bottom}
-              onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}
+              onBarLayout={setTabBarHeight}
             />
 
             {/* Climber profile overlay (AC-182) */}
@@ -293,6 +369,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
           </View>
         </CelebrationHost>
       </ToastProvider>
+      </AppHeaderProvider>
     </UnreadCountProvider>
   );
 }

@@ -20,6 +20,7 @@ jest.mock('../../../mod-notifications/UnreadCountProvider', () => ({
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 import React from 'react';
+import { Text } from 'react-native';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 
 import AppHeader from '../AppHeader';
@@ -42,21 +43,23 @@ describe('AppHeader (AC-184)', () => {
     mockUseUnreadCount.mockReturnValue(0);
   });
 
-  it('renders the app name', () => {
+  it('renders the tab name as the large title on a root header (v2.2)', () => {
     render(
       <AppHeader
+        title="Home"
         onNavigateToNotifications={jest.fn()}
         onNavigateToSettings={jest.fn()}
         topInset={0}
       />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('Send It')).toBeTruthy();
+    expect(screen.getByText('Home')).toBeTruthy();
   });
 
   it('renders the bell icon button', () => {
     render(
       <AppHeader
+        title="Home"
         onNavigateToNotifications={jest.fn()}
         onNavigateToSettings={jest.fn()}
         topInset={0}
@@ -69,6 +72,7 @@ describe('AppHeader (AC-184)', () => {
   it('renders the settings icon button', () => {
     render(
       <AppHeader
+        title="Home"
         onNavigateToNotifications={jest.fn()}
         onNavigateToSettings={jest.fn()}
         topInset={0}
@@ -78,50 +82,51 @@ describe('AppHeader (AC-184)', () => {
     expect(screen.getByLabelText('Settings')).toBeTruthy();
   });
 
-  it('does not render a badge when unreadCount is 0', () => {
+  it('does not render the unread dot when unreadCount is 0', () => {
     mockUseUnreadCount.mockReturnValue(0);
     render(
-      <AppHeader
-        onNavigateToNotifications={jest.fn()}
-        onNavigateToSettings={jest.fn()}
-        topInset={0}
-      />,
+      <AppHeader title="Home" onNavigateToNotifications={jest.fn()} onNavigateToSettings={jest.fn()} topInset={0} />,
       { wrapper: TestProviders },
     );
-    // Badge text should not be present when count is 0.
-    expect(screen.queryByText('0')).toBeNull();
+    expect(screen.queryByTestId('unread-dot', HIDDEN)).toBeNull();
   });
 
-  it('renders the unread badge with count when unreadCount > 0 (AC-173)', () => {
+  it('renders an 8pt unread dot (no number) when unreadCount > 0 (AC-173, v2.2)', () => {
     mockUseUnreadCount.mockReturnValue(5);
     render(
-      <AppHeader
-        onNavigateToNotifications={jest.fn()}
-        onNavigateToSettings={jest.fn()}
-        topInset={0}
-      />,
+      <AppHeader title="Home" onNavigateToNotifications={jest.fn()} onNavigateToSettings={jest.fn()} topInset={0} />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('5', HIDDEN)).toBeTruthy();
+    expect(screen.getByTestId('unread-dot', HIDDEN)).toBeTruthy();
+    expect(screen.queryByText('5', HIDDEN)).toBeNull();
   });
 
-  it('renders "99+" badge when unreadCount exceeds 99 (AC-173)', () => {
-    mockUseUnreadCount.mockReturnValue(150);
+  it('nested variant: one row with back, title, bell and settings; back calls onBack', () => {
+    const onBack = jest.fn();
     render(
-      <AppHeader
-        onNavigateToNotifications={jest.fn()}
-        onNavigateToSettings={jest.fn()}
-        topInset={0}
-      />,
+      <AppHeader variant="nested" title="V4 Red (A)" onBack={onBack} onNavigateToNotifications={jest.fn()} onNavigateToSettings={jest.fn()} topInset={0} />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('99+', HIDDEN)).toBeTruthy();
+    expect(screen.getByText('V4 Red (A)')).toBeTruthy();
+    expect(screen.getByLabelText('Notifications')).toBeTruthy();
+    expect(screen.getByLabelText('Settings')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Back'));
+    expect(onBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('nested variant renders the trailing control', () => {
+    render(
+      <AppHeader variant="nested" title="Gym" onBack={jest.fn()} trailing={<Text>TRAIL</Text>} onNavigateToNotifications={jest.fn()} onNavigateToSettings={jest.fn()} topInset={0} />,
+      { wrapper: TestProviders },
+    );
+    expect(screen.getByText('TRAIL')).toBeTruthy();
   });
 
   it('shows unread a11y label when count > 0 (AC-173)', () => {
     mockUseUnreadCount.mockReturnValue(3);
     render(
       <AppHeader
+        title="Home"
         onNavigateToNotifications={jest.fn()}
         onNavigateToSettings={jest.fn()}
         topInset={0}
@@ -135,6 +140,7 @@ describe('AppHeader (AC-184)', () => {
     const mockNav = jest.fn();
     render(
       <AppHeader
+        title="Home"
         onNavigateToNotifications={mockNav}
         onNavigateToSettings={jest.fn()}
         topInset={0}
@@ -149,6 +155,7 @@ describe('AppHeader (AC-184)', () => {
     const mockSettings = jest.fn();
     render(
       <AppHeader
+        title="Home"
         onNavigateToNotifications={jest.fn()}
         onNavigateToSettings={mockSettings}
         topInset={0}

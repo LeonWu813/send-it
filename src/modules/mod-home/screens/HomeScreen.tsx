@@ -36,7 +36,7 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Image, ScrollView, StyleSheet, View } from 'react-native';
 
 import RouteCard from '../../../components/RouteCard';
 import { AppText } from '../../../components/ui/AppText';
@@ -56,6 +56,7 @@ import type { RouteGrade } from '../../mod-route-catalog/types';
 import { fetchUserAchievements } from '../../mod-send-logging';
 import { fetchFollowing } from '../../mod-social-feed/social-feed-service';
 import type { FollowingUser } from '../../mod-social-feed/types';
+import { useAppHeaderRoot } from '../components/AppHeaderContext';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -184,7 +185,8 @@ export default function HomeScreen({
   const { haptic } = useMotion();
   const toast = useToast();
   const c = theme.colors;
-  const styles = makeStyles(theme, screenMargin);
+  const header = useAppHeaderRoot();
+  const styles = makeStyles(theme, screenMargin, header.contentTopInset, header.contentBottomInset);
 
   // ── Section 1: Admin Events Banner ────────────────────────────────────────
 
@@ -571,7 +573,7 @@ export default function HomeScreen({
 
   const sectionHeader = (title: string, action?: React.ReactNode): React.JSX.Element => (
     <View style={styles.sectionHeader}>
-      <AppText variant="headline" accessibilityRole="header">
+      <AppText variant="pageSection" accessibilityRole="header">
         {title}
       </AppText>
       {action}
@@ -579,10 +581,15 @@ export default function HomeScreen({
   );
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       style={styles.root}
       contentContainerStyle={styles.contentContainer}
       showsVerticalScrollIndicator={false}
+      scrollIndicatorInsets={{ top: header.contentTopInset, bottom: header.indicatorBottomInset }}
+      onScroll={header.onScroll}
+      onContentSizeChange={header.onContentSizeChange}
+      onLayout={header.onLayout}
+      scrollEventThrottle={header.scrollEventThrottle}
     >
       {/* ── Section 1: Events Banner (AC-112, AC-174) ─────────────────── */}
       {/* Section is NEVER hidden in Phase 1 (AC-112 Rev 38). When no active    */}
@@ -714,6 +721,7 @@ export default function HomeScreen({
                     id: route.id,
                     name: `${route.grade} ${capitalize(route.color_tag)}${route.section_label ? ` (${route.section_label})` : ''}`,
                     grade: route.grade,
+                    section: route.section_label,
                     photo_url: route.photo_url,
                     gymName: route.gym_name ?? undefined,
                     colorTag: route.color_tag,
@@ -775,13 +783,18 @@ export default function HomeScreen({
           </View>
         )}
       </View>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
+function makeStyles(
+  theme: ReturnType<typeof useTheme>['theme'],
+  screenMargin: number,
+  topInset: number,
+  bottomInset: number,
+) {
   const c = theme.colors;
   return StyleSheet.create({
     root: {
@@ -789,8 +802,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       backgroundColor: c.background,
     },
     contentContainer: {
-      paddingTop: theme.spacing.md,
-      paddingBottom: theme.spacing.xl,
+      // The large title floats over the list (AppHeader overlay); the TabBar floats over the bottom.
+      paddingTop: topInset,
+      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.xl,
     },
     section: {
       marginBottom: theme.layout.sectionGap,
@@ -816,7 +830,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     bannerCard: {
       marginHorizontal: screenMargin,
       height: 160,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: theme.radius.card,
+      borderCurve: 'continuous',
       overflow: 'hidden',
       backgroundColor: c.surfaceAlt,
     },
@@ -846,19 +861,22 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     gymChip: {
       width: 96,
       alignItems: 'center',
-      borderRadius: theme.borderRadius.md,
+      borderRadius: theme.radius.media,
+      borderCurve: 'continuous',
       paddingBottom: theme.spacing.xs,
     },
     gymChipImage: {
       width: 80,
       height: 80,
-      borderRadius: theme.borderRadius.md,
+      borderRadius: theme.radius.media,
+      borderCurve: 'continuous',
       marginBottom: theme.spacing.xs,
     },
     gymChipImagePlaceholder: {
       width: 80,
       height: 80,
-      borderRadius: theme.borderRadius.md,
+      borderRadius: theme.radius.media,
+      borderCurve: 'continuous',
       backgroundColor: c.surfaceAlt,
       marginBottom: theme.spacing.xs,
     },
@@ -878,7 +896,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     activityList: {
       marginHorizontal: screenMargin,
       backgroundColor: c.surface,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: theme.radius.card,
+      borderCurve: 'continuous',
       overflow: 'hidden',
       borderWidth: theme.isDark ? theme.stroke.thin : 0,
       borderColor: c.border,
