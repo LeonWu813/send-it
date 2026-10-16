@@ -40,10 +40,8 @@ import {
   StyleSheet,
   Switch,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import i18n from '../../../lib/i18n';
 import type { SupportedLanguage } from '../../../lib/i18n';
@@ -51,8 +49,7 @@ import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
 import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile/auth-service';
-import { rootHeaderHeight } from '../../mod-home/components/AppHeader';
-import { useAppHeader, useAppHeaderStore, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { Button } from '../../../components/ui/Button';
 import {
@@ -73,11 +70,8 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   const [view, setView] = useState<SettingsView>('settings');
   const { t } = useTranslation('common');
   const { theme, override, setOverride } = useTheme();
-  const insets = useSafeAreaInsets();
-  const store = useAppHeaderStore();
-  const { fontScale } = useWindowDimensions();
   const tabInset = useTabBarInset();
-  const headerTop = store ? rootHeaderHeight(insets.top, fontScale) : 0;
+  const headerTop = useHeaderContentInset();
   const styles = makeStyles(theme, headerTop, tabInset.contentBottom);
   useAppHeader({ title: t('settings.title'), onBack });
 

@@ -23,10 +23,8 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   fetchMyBlockedUsers,
@@ -34,8 +32,7 @@ import {
 } from '../../mod-moderation/moderation-service';
 import type { BlockedUser } from '../../mod-moderation/moderation-service';
 import { useTheme } from '../../../lib/theme';
-import { rootHeaderHeight } from '../../mod-home/components/AppHeader';
-import { useAppHeader, useAppHeaderStore, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeader, useHeaderContentInset, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -149,11 +146,8 @@ export default function BlockedAccountsScreen({
 }: BlockedAccountsScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const insets = useSafeAreaInsets();
-  const store = useAppHeaderStore();
-  const { fontScale } = useWindowDimensions();
   const tabInset = useTabBarInset();
-  const headerTop = store ? rootHeaderHeight(insets.top, fontScale) : 0;
+  const headerTop = useHeaderContentInset();
   const styles = makeStyles(theme, headerTop);
   useAppHeader({ title: t('settings.blockedAccounts'), onBack });
 
