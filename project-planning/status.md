@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: acdb2a85507d4754be806f1594572502bf27a74f
+commit: 6b2d5b1818dad7a402e340132eb3542580c08edc
 timestamp: 2026-10-16T00:00:00Z
 ```
 
@@ -2925,6 +2925,79 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Passed   | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-16 — Delta Sync (Revision 41, [SUBSTANTIVE])
+
+**Sync type:** delta
+**PRD Revision:** 41
+**PM Update reference:** 2026-10-16 [SUBSTANTIVE] — PR #1 designer integration: 8 accepted off-spec items applied (PRD Revision 41). AC-184 revised (AppHeader layout: left=title/back, right=bell+settings as group). AC-191 revised (grade shown via TapeBadge, no plain-text label). AC-192 revised (size prop: standard=88pt, compact=64pt; tape badge on left side). AC-131 revised (LogSendScreen route summary card with TapeBadge). AC-166 revised (upload failure: modal stays open, Retry button, dismiss cancels). AC-193 new (inline delete on ascent rows: deleteAscent, optimistic removal, revert on error). AC-150 revised ("Report and block" label, i18n key moderation.sheetReport). AC-061 amended (thisYear i18n key renamed to lastYear; label values unchanged). Two new Shared Conventions: AppHeaderContext and tape.ts.
+
+**Files modified:**
+
+- `project-planning/production.md` — Last Synced from PRD Revision 40 → 41; Last Updated 2026-10-15 → 2026-10-16. Added two new Shared Conventions before `### Commit Conventions`:
+  - `### AppHeaderContext`: canonical file `src/lib/AppHeaderContext.ts`; screens use `useAppHeader()`; overlays use `AppHeaderOverlayScope`; AppShell root uses `useAppHeaderRoot()`; direct prop-drilling prohibited.
+  - `### tape.ts (hold/tape color display)`: canonical file `src/lib/tape.ts`; shared primitives `TapeBadge`, `resolveTape`, `ROUTE_COLOR_TO_RN_COLOR`; `RouteColorBadge` in MOD-003 deprecated — must not be used in new code.
+
+- `project-planning/modules/mod-home/spec.md` — Last Synced from PRD Revision 40 → 41. Changes:
+  - Purpose: Updated route card description to 88pt/64pt thumbnail via `size` prop + tape badge via `src/lib/tape.ts`; AC-184 description updated to left=title/back, right=bell+settings as group.
+  - Context: Updated AC-184 description (left side = screen title or back button; right side = notification bell and settings icon together as a group on the right).
+  - AC-184 (revised, Rev 41): Full PRD text — left side = screen title or back button; right side = notification bell and settings icon as a group; AppHeaderContext convention named.
+  - AC-191 (revised, Rev 41): Full PRD text — grade shown via TapeBadge from `src/lib/tape.ts`; plain-text `<Text>` grade label NOT rendered; grade field retained on `RouteCardRoute`; reverts Rev 39 "grade hidden" decision.
+  - AC-192 (revised, Rev 41): Full PRD text — `size?: 'standard' | 'compact'` prop; standard=88pt×88pt; compact=64pt×64pt; tape badge on left side; all metadata grouped left.
+  - Requirements: AC-184 requirement updated (new header layout); route card requirement updated (tape badge, 88pt/64pt sizes).
+  - Key Implementation Notes: "Global app-level header (AC-184)" updated for Rev 41 layout; "Shared route card (AC-183)" updated for new sizes and tape badge.
+
+- `project-planning/modules/mod-send-logging/spec.md` — Last Synced from PRD Revision 40 → 41. Changes:
+  - Purpose: Added AC-131 route summary card description (TapeBadge from `src/lib/tape.ts`) and AC-193 inline delete description (`deleteAscent`, optimistic removal, revert on error).
+  - Context: AC-131 note updated from "shall not display route grade section" to "shall display route summary card with TapeBadge".
+  - Related User Stories: AC-193 added to US-002's AC list.
+  - AC-131 (revised, Rev 41): Full PRD text — route summary card at top of LogSendScreen with TapeBadge from `src/lib/tape.ts`; read-only contextual display.
+  - AC-193 (new, Rev 41): Full PRD text — inline delete control (swipe-to-delete or delete icon) on each ascent row; calls `deleteAscent(ascentId)`; RLS own-rows-only enforcement; optimistic removal; revert on error.
+  - Key Implementation Notes: Renamed "AC-131 — Grade Display Removal" to "AC-131 — Route Summary Card (Rev 41)"; updated instructions for route summary card with TapeBadge.
+
+- `project-planning/modules/mod-beta-video/spec.md` — Last Synced from PRD Revision 38 → 41. Changes:
+  - AC-166: Appended "Upload failure behavior (Rev 41)" paragraph — modal stays open on failure; error message + Retry button shown; Retry re-attempts upload without re-selecting video; dismissing modal cancels upload; no automatic retry on dismissal.
+
+- `project-planning/modules/mod-social-feed/spec.md` — Last Synced from PRD Revision 36 → 41. Changes:
+  - Purpose: Three-dots action sheet description updated ("Report and block" / Block / Unblock).
+  - Context (AC-150): Updated — "Report and block" (i18n key `moderation.sheetReport`; AC-151 — files a report and blocks the user).
+  - AC-150 (revised, Rev 41): Full PRD text — "Report and block" label (i18n key `moderation.sheetReport`); underlying AC-151 behavior unchanged; label makes combined report-and-block action explicit.
+  - Outputs (three-dots sheet): Updated — "Report and block" (i18n key `moderation.sheetReport`; AC-151).
+  - Key Implementation Notes (three-dots sheet note): Updated — "Report and block" (i18n key `moderation.sheetReport`) and block toggle.
+  Note: AC-150 is in mod-social-feed/spec.md (UserProfileScreen ⋮ sheet, MOD-006), NOT in mod-moderation/spec.md (confirmed via grep; the PM Update reference to "MOD-009" for AC-150 was a module-label error — AC-150 has always lived in MOD-006/social-feed).
+
+- `project-planning/modules/mod-profile-history/spec.md` — Last Synced from PRD Revision 36 → 41. Changes:
+  - AC-061: Appended i18n key rename note (Rev 41) — profile history stats section's "this year" display label uses i18n key `lastYear` (renamed from former `thisYear`); both locale files shall rename key; label values unchanged.
+
+- `project-planning/modules/mod-localization-theme/spec.md` — Last Synced from PRD Revision 22 → 41. Changes:
+  - AC-092: Appended i18n key rename note (Rev 41, AC-061) — both `locales/en/common.json` and `locales/zh-TW/common.json` shall rename key `thisYear` to `lastYear`; label values unchanged; CI completeness gate must continue to pass; both locale files updated atomically.
+
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced from PRD Revision 40 → 41. Changes:
+  - AC-191 (revised, Rev 41): Full PRD text — grade shown via TapeBadge from `src/lib/tape.ts`; plain-text `<Text>` grade label removed; `grade` field retained for a11y and badge supply; reverts Rev 39 "grade hidden."
+  - AC-192 (revised, Rev 41): Full PRD text — `size?: 'standard' | 'compact'` prop; standard=88pt×88pt; compact=64pt×64pt; tape badge on left side; all metadata grouped left.
+  - Key Implementation Notes — "Grade via TapeBadge in RouteCard UI (AC-191, Rev 41)": updated from "Grade hidden" to describe TapeBadge usage.
+  - Key Implementation Notes — "RouteCard layout Rev 41 (AC-192)": updated from Rev 39 80×80 to 88pt/64pt with `size` prop and tape badge on left side.
+  - Key Implementation Notes — "`RouteColorBadge` deprecated (Rev 41)": new note — `RouteColorBadge` is deprecated; all tape/hold-color display must import from `src/lib/tape.ts`; `RouteColorBadge` must not be used in new code; existing usages must be migrated to `TapeBadge`.
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — read-only.
+- `project-planning/modules/mod-moderation/spec.md` — AC-150 is not in this spec (it is in mod-social-feed). No changes required. Mod-moderation owns AC-080–085 and AC-151; none of these changed in Rev 41.
+- All other module specs — not in scope for Rev 41.
+- Agent wrappers — not in scope (no new module added, no dependency list change).
+- All `modules/*/status.md` files — owned by Engineer/QA agents.
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none — all PRD content was explicit enough to translate directly.
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as all prior delta syncs, confirmed by running verify-sync.sh against baseline (git stash before applying changes) which shows the same 4/6 result. Check 4 FAIL (pre-existing script bug): awk range pattern does not match the `**US-NNN**:` markdown format used in spec Related User Stories sections; all US-IDs are present in each spec. Check 6 FAIL (pre-existing script bug): script over-matches non-phase-plan PRD content (gym seed data, milestone lines) as "phase names"; Phase Plan section in status.md is correctly written. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
 
 ### 2026-10-15 — Delta Sync (Revision 38, [SUBSTANTIVE])
 

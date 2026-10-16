@@ -4,7 +4,7 @@
 **Module Name**: Profile History & Stats
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-004
-**Last Synced from PRD Revision**: 36
+**Last Synced from PRD Revision**: 41
 
 ---
 
@@ -39,6 +39,8 @@ Climbers tracking progress want to see their full send history and basic stats w
 **AC-060**: The system shall render the current user's full send history filterable by gym, grade, and date range.
 
 **AC-061**: The system shall render basic stats: total sends, sends by grade (bar chart), current streak (consecutive days with ≥1 send), and highest grade climbed.
+
+**i18n key rename (Rev 41)**: The profile history stats section's "this year" display label uses the i18n key `lastYear` (renamed from the former `thisYear`); both `locales/en/common.json` and `locales/zh-TW/common.json` shall rename the key from `thisYear` to `lastYear` (label values unchanged).
 
 **AC-062**: The system shall recalculate stats immediately after a new send log is saved and re-render the stats view without requiring a manual refresh.
 

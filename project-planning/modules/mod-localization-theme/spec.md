@@ -4,7 +4,7 @@
 **Module Name**: Localization & Theming
 **Phase**: 1
 **Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
-**Last Synced from PRD Revision**: 22
+**Last Synced from PRD Revision**: 41
 **Last Updated**: 2026-09-30
 
 ---
@@ -56,6 +56,8 @@ For AC-168, the SettingsScreen presents a Logout button at the very bottom, belo
 **AC-091**: The system shall expose a language toggle in Settings between English and zh-TW that takes effect immediately without an app restart.
 
 **AC-092**: The system shall default to the OS Light/Dark appearance and expose a Settings override with three states (System, Light, Dark) that takes effect immediately without an app restart.
+
+**i18n key rename (Rev 41, AC-061)**: Both `locales/en/common.json` and `locales/zh-TW/common.json` shall rename the i18n key `thisYear` to `lastYear`. The label values displayed to the user are unchanged — only the key name changes. This rename affects the profile history stats section's "this year" display label (AC-061, MOD-008). The CI completeness gate (Key Implementation Notes) must continue to pass after the rename; both locale files must be updated atomically.
 
 **AC-155** (new): The Settings screen (SettingsScreen) shall present a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping the row shall open a Blocked Accounts screen (BlockedAccountsScreen) that lists the users the current user has blocked (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, the user's `display_name`, and an "Unblock" button. Tapping "Unblock" shall call `unblockUser(userId)` (MOD-009, AC-152) and remove that entry from the list. When the current user has blocked no one, the screen shall display an empty state. Navigation to and from the Blocked Accounts screen is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere), with no ProfileNavigator view-state change. The blocked-users list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
 

@@ -4,14 +4,14 @@
 **Module Name**: Send Logging
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003
-**Last Synced from PRD Revision**: 40
+**Last Synced from PRD Revision**: 41
 **Last Updated**: 2026-10-15
 
 ---
 
 ## Purpose
 
-Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override) and restricting the ascent style to the three-value set (flash, top, attempt). Expose `fetchUserAchievements(routeIds[])`, `fetchMyAscentsForRoute(routeId)`, and `summarizeAscents(ascents)` as public service functions for consumption by MOD-003 screens and (for AC-190, Rev 39/40) by MOD-003 RouteListScreen and MOD-012 HomeScreen.
+Handle send log creation from a route page or global "+" entry point, enforcing that grade is inherited from the route (no per-user override) and restricting the ascent style to the three-value set (flash, top, attempt). `LogSendScreen` displays a read-only route summary card (grade + tape badge via `src/lib/tape.ts`) at the top before the form fields (AC-131). The ascent history list for a route shows an inline delete control (swipe-to-delete or delete icon) on each ascent row; tapping it calls `deleteAscent(ascentId)` with RLS own-rows-only enforcement, optimistic removal, and revert on error (AC-193). Expose `fetchUserAchievements(routeIds[])`, `fetchMyAscentsForRoute(routeId)`, and `summarizeAscents(ascents)` as public service functions for consumption by MOD-003 screens and (for AC-190, Rev 39/40) by MOD-003 RouteListScreen and MOD-012 HomeScreen.
 
 ---
 
@@ -25,7 +25,7 @@ The log-send form (`LogSendScreen.tsx`) does not present a V-grade or any grade 
 
 **AC-011 revised (Rev 14) — already satisfied**: `LogSendScreen.tsx` has no grade input field. Grade is displayed read-only (display-only block showing `routeGrade` with a `gradeNote`), never as a selectable or editable control. The `logAscent` payload and `AscentLogInput` type contain no `grade` field. AC-011 revised codifies existing behavior — no code change is required. **One doc-comment fix is needed**: the JSDoc comment at the top of `LogSendScreen.tsx` line 12 lists `project` as a style (removed in Rev 9); drop `project` from the listed style set. The running code is already correct (`ASCENT_STYLES` in `types.ts` is `['flash', 'top', 'attempt']`); only the comment is stale.
 
-**AC-131 (new, Rev 15)**: The log-send form shall not display a route grade section. The route's grade is shown on the route detail screen before the form is opened; it is not repeated inside the log-send form. Note: AC-011 governs the absence of a grade input field; AC-131 additionally removes the read-only grade display. The entire read-only grade display block (labeled "難度") in `LogSendScreen.tsx` must be removed. This is a presentational-only change; no data or logic change is required.
+**AC-131 (revised, Rev 41)**: `LogSendScreen.tsx` shall display a route summary card at the top of the screen before the log-send form fields. The summary card shall show the route's grade and tape badge using the shared `TapeBadge` component from `src/lib/tape.ts`. The summary card is read-only — it is a contextual display only and is not an input. (Note: AC-011 governs the absence of a grade input field; AC-131 adds the read-only route summary card at the top of the log-send screen.) This supersedes the Rev 15 "shall not display a route grade section" requirement.
 
 **AC-132 (new, Rev 15)**: The log-send form shall not present a "set as private" (設為私人) toggle. All send records logged in Phase 1 are private: the system shall set `is_private = true` on every ascent insert. The `is_private` column remains in the schema (no migration), but it is not user-controllable in Phase 1. The `is_private` toggle must be removed from `LogSendScreen.tsx`; `is_private: true` must be hardcoded in the `AscentLogInput` payload sent to `insertAscent`. The `is_private` column stays in the DB schema and `Ascent` type for Phase 2.
 
@@ -49,7 +49,7 @@ MOD-004 owns the following public service functions:
 
 ## Related User Stories
 
-- **US-002**: Log a send quickly (AC-010, AC-011, AC-012, AC-014, AC-127, AC-128, AC-129, AC-130, AC-131, AC-132)
+- **US-002**: Log a send quickly (AC-010, AC-011, AC-012, AC-014, AC-127, AC-128, AC-129, AC-130, AC-131, AC-132, AC-193)
 
 ---
 
@@ -67,13 +67,13 @@ MOD-004 owns the following public service functions:
 
 **AC-014** (new): The system shall restrict the ascent style selector to the fixed three-value enum {flash, top, attempt}. The `project` style is removed — it is not selectable in the UI and is not a valid value in the `ascent_style` database enum. Any historical ascent previously logged with `project` shall be treated as `attempt` (see migration note below).
 
-**AC-131** (new, Rev 15): The log-send form shall not display a route grade section. The route's grade is shown on the route detail screen before the form is opened; it is not repeated inside the log-send form. (Note: AC-011 governs the absence of a grade input field; AC-131 additionally removes the read-only grade display.)
-
-> **Implementation note**: Remove the entire read-only grade display block from `LogSendScreen.tsx` (labeled "難度"). This is a presentational-only change — no data model change and no change to the `AscentLogInput` payload are required.
+**AC-131** (revised, Rev 41): `LogSendScreen` (MOD-004) shall display a route summary card at the top of the screen before the log-send form fields. The summary card shall show the route's grade and tape badge using the shared `TapeBadge` component from `src/lib/tape.ts`. The summary card is read-only — it is a contextual display only and is not an input. (Note: AC-011 governs the absence of a grade input field; AC-131 adds the read-only route summary card at the top of the log-send screen.)
 
 **AC-132** (new, Rev 15): The log-send form shall not present a "set as private" (設為私人) toggle. All send records logged in Phase 1 are private: the system shall set `is_private = true` on every ascent insert. The `is_private` column remains in the schema (no migration), but it is not user-controllable in Phase 1.
 
 > **Implementation note**: Remove the `is_private` toggle from `LogSendScreen.tsx`; hardcode `is_private: true` in the `AscentLogInput` payload sent to `insertAscent`. The `is_private` column stays in the DB schema and `Ascent` type — no migration is required. The column is retained for Phase 2, when a public/shared visibility toggle may be introduced.
+
+**AC-193** (new, Rev 41, MOD-004): The ascent history list on the route detail screen (MOD-004) shall display an inline delete control on each ascent row — either a swipe-to-delete gesture or a visible delete icon (implementation choice left to the engineer). Tapping or activating the delete control shall call `deleteAscent(ascentId)` to remove that ascent record from the database; RLS own-rows-only enforcement (the `Ascent` table's RLS policy scopes deletes to `user_id = auth.uid()`) prevents deletion of another user's records. The UI shall apply an **optimistic removal** — the row is immediately hidden from the list before the server call resolves — and shall **revert the removal** (restore the row with an error message) if the `deleteAscent` call fails.
 
 ---
 
@@ -157,9 +157,9 @@ All tables guarded by Supabase Row-Level Security policies. `Ascent` rows are wr
 - Any TypeScript union type or picker option list enumerating ascent styles must be `'flash' | 'top' | 'attempt'` — drop `'project'`.
 - RLS: a user may only insert Ascent rows with their own `user_id`. Reading other users' ascents is controlled by the profile privacy setting (MOD-001 `privacy_setting = followers_only` hides logs from non-followers).
 
-### AC-131 — Grade Display Removal
+### AC-131 — Route Summary Card (Rev 41)
 
-Remove the entire read-only grade display block (labeled "難度") from `LogSendScreen.tsx`. AC-011 already required no grade *input* field; AC-131 (Rev 15) additionally removes the read-only grade *display*. This is a presentational-only change — no data model change, no change to the `AscentLogInput` payload, and no schema migration are required.
+Add a read-only route summary card at the top of `LogSendScreen.tsx`, before the form fields. The summary card shall show the route's grade and tape badge using the shared `TapeBadge` component from `src/lib/tape.ts`. The card is read-only — it is contextual display only and is not an input. No data model change and no schema migration are required. (This supersedes the Rev 15 "Grade Display Removal" direction: grade is now displayed via TapeBadge on the summary card, not hidden entirely.)
 
 ### AC-132 — Always-Private Sends
 

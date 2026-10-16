@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 40 (2026-10-15)
-**Last Updated**: 2026-10-15
+**Last synced from PRD**: rev 41 (2026-10-16)
+**Last Updated**: 2026-10-16
 
 ---
 
@@ -376,6 +376,14 @@ For any list or grid that renders N items each needing the same per-item lookup 
 ### Per-Route Beta-Video Aggregates Must Go Through a Batched SECURITY INVOKER RPC
 
 When computing counts, membership, or any rollup of `beta_videos` keyed by `route_id`, the query must run through a SECURITY INVOKER RPC over a `route_ids uuid[]` parameter that composes the AC-142/154/158 visibility fence server-side (reported exclusion, symmetric block filter, followers-only privacy). A plain client-side `.in('route_id', ids)` PostgREST call is never acceptable for this — it cannot compose the cross-table predicate and will over-count or leak private/blocked videos. The reference contracts are `routes_with_new_beta` (membership, AC-180) and `count_beta_videos_by_routes` (count, AC-189); both share the same visibility body so a route's count and its "new" state can never disagree on which videos are visible to the current viewer.
+
+### AppHeaderContext
+
+Canonical file: `src/lib/AppHeaderContext.ts`. Screens consume header state via `useAppHeader()`. Overlay components that need to suppress the header use `AppHeaderOverlayScope`. AppShell root registers via `useAppHeaderRoot()`. Direct prop-drilling of header state is prohibited.
+
+### tape.ts (hold/tape color display)
+
+Canonical file: `src/lib/tape.ts`. All tape and hold-color display logic imports from this file. Shared primitives: `TapeBadge`, `resolveTape`, `ROUTE_COLOR_TO_RN_COLOR`. The existing `RouteColorBadge` component in MOD-003 is deprecated — must not be used in new code.
 
 ### Commit Conventions
 

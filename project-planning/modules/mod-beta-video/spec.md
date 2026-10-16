@@ -4,7 +4,7 @@
 **Module Name**: Beta Video
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-003, MOD-009 (block-status public service `fetchBlockedUserIds`, AC-154)
-**Last Synced from PRD Revision**: 40
+**Last Synced from PRD Revision**: 41
 **Last Updated**: 2026-10-15
 
 ---
@@ -131,6 +131,8 @@ This module owns the shared `BetaVideoGrid` component (`mod-beta-video/component
 There shall be no disabled-button state and no "delete your existing video first" static message. The upload itself shall continue to use an upsert pattern (delete-old + insert, or `ON CONFLICT DO UPDATE`) consistent with the AC-165 unique constraint — the database upsert (AC-165) handles the replacement. On a replace/upsert the system shall set `updated_at = NOW()` (via the `BEFORE UPDATE` trigger added in AC-188) so the beta video's "last activity" timestamp reflects the replacement time while `created_at` stays fixed at the original insert.
 
 **i18n keys**: ADD `betaVideo.replaceConfirmTitle`, `betaVideo.replaceConfirmMessage`, `betaVideo.replaceConfirmOk`, `betaVideo.replaceConfirmCancel`. REMOVE `betaVideo.alreadyHasVideo` (the former static "already has a video" reminder is removed with the disabled-button state).
+
+**Upload failure behavior (Rev 41)**: When a beta video upload fails, the upload progress modal shall remain open and shall display the error message together with a **Retry** button. The user may tap Retry to re-attempt the upload with the already-selected video file — the user shall not need to re-select the video from the picker to retry. Dismissing the modal manually (e.g. tapping a close/cancel control on the modal) shall cancel the upload and close the modal; no automatic retry is attempted on dismissal.
 
 **AC-169** (revised, Rev 24): Before any upload is attempted — after format validation (AC-035) and the duration check (AC-030) — the system shall read the native video file's size. If the native file size is 45 MB or greater, or the size cannot be read, the system shall reject the upload with the bilingual error "影片檔案過大，請壓縮至 45MB 以下 / Video is too large, please keep it under 45 MB" and shall not attempt the upload. The check fails closed: an unreadable size is treated as oversized and the upload is rejected. The 45 MB threshold sits below the 50 MB Supabase Storage free-tier bucket ceiling to leave a safe margin. No `expo-file-system` post-compression check is required (compression is removed in Rev 24).
 
