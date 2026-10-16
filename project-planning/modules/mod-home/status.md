@@ -3389,3 +3389,6 @@ Pressable (card, flexDirection: 'row', alignItems: 'center')
 **Commit**: 4b0f7fe
 
 **Result: READY FOR QA**
+
+### Storybook stories (off-spec design tooling)
+Added `src/modules/mod-home/stories/{RouteCard,AppHeader,TabBar}.stories.tsx` on branch `design/storybook`. This is off-spec design tooling requested by the UI/UX designer, pending PR review. No component source changed; fake data only (Supabase stubbed).
