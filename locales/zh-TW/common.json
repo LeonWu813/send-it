@@ -97,7 +97,7 @@
       "viewRoutes": "查看路線"
     },
     "requestGym": {
-      "cta": "找不到你的岩館？來申請加入 →",
+      "cta": "找不到你的岩館？來申請加入",
       "title": "申請新增岩館",
       "subtitle": "告訴我們尚未收錄的岩館，我們的團隊將審核後加入。",
       "nameLabel": "岩館名稱",
@@ -142,8 +142,10 @@
       "purple": "紫色",
       "pink": "粉紅色",
       "white": "白色",
-      "black": "黑色"
+      "black": "黑色",
+      "other": "其他"
     },
+    "tapeLabel": "{{color}}膠帶",
     "bookmark": {
       "save": "收藏路線",
       "unsave": "取消收藏",
@@ -313,7 +315,10 @@
     "saved": "已收藏",
     "unsaved": "收藏",
     "flashSend": "閃送",
-    "topSend": "完攀"
+    "topSend": "完攀",
+    "openHint": "開啟路線",
+    "statusFlash": "已閃攀",
+    "statusTop": "已完攀"
   },
   "betaVideo": {
     "sectionTitle": "BETA 影片",
@@ -381,7 +386,7 @@
   "notifications": {
     "title": "通知",
     "empty": "目前沒有通知，別人對你的 Beta 影片按讚後會顯示在這裡。",
-    "badgeBetaVideoLike": "♥ 按讚",
+    "badgeBetaVideoLike": "按讚",
     "betaVideoLikedBody": "對你的 Beta 影片按讚了。",
     "betaVideoLikeA11y": "Beta 影片按讚通知",
     "unknownActor": "某位攀岩者",
@@ -493,5 +498,10 @@
     "toastWithActions": "{{message}}。可用動作：{{actions}}",
     "avatarOf": "{{name}} 的頭像",
     "progress": "進度"
+  },
+  "tabs": {
+    "home": "首頁",
+    "gyms": "岩館",
+    "profile": "我的"
   }
 }

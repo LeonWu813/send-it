@@ -97,7 +97,7 @@
       "viewRoutes": "View Routes"
     },
     "requestGym": {
-      "cta": "Can't find your gym? Request it →",
+      "cta": "Can't find your gym? Request it",
       "title": "Request a Gym",
       "subtitle": "Let us know about a gym we haven't added yet. Requests are reviewed by our team.",
       "nameLabel": "Gym Name",
@@ -142,8 +142,10 @@
       "purple": "Purple",
       "pink": "Pink",
       "white": "White",
-      "black": "Black"
+      "black": "Black",
+      "other": "Other"
     },
+    "tapeLabel": "{{color}} tape",
     "bookmark": {
       "save": "Save route",
       "unsave": "Unsave route",
@@ -313,7 +315,10 @@
     "saved": "Saved",
     "unsaved": "Save",
     "flashSend": "Flash",
-    "topSend": "Top"
+    "topSend": "Top",
+    "openHint": "Open route",
+    "statusFlash": "Flashed",
+    "statusTop": "Sent"
   },
   "betaVideo": {
     "sectionTitle": "BETA VIDEOS",
@@ -381,7 +386,7 @@
   "notifications": {
     "title": "Notifications",
     "empty": "No notifications yet. Like activity from others will appear here.",
-    "badgeBetaVideoLike": "♥ Like",
+    "badgeBetaVideoLike": "Like",
     "betaVideoLikedBody": "liked your beta video.",
     "betaVideoLikeA11y": "Beta video like notification",
     "unknownActor": "Someone",
@@ -493,5 +498,10 @@
     "toastWithActions": "{{message}}. Actions available: {{actions}}",
     "avatarOf": "{{name}}'s avatar",
     "progress": "Progress"
+  },
+  "tabs": {
+    "home": "Home",
+    "gyms": "Gyms",
+    "profile": "Profile"
   }
 }
