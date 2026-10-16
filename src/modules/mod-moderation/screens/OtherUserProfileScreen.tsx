@@ -4,7 +4,7 @@
  * Displays:
  *   - display_name + avatar (fetched from `public.users`)
  *   - ModerationActions (Report + Block) below the avatar section
- *   - Back button (top-left)
+ *   - Back + title via the AppShell header (useAppHeader)
  *   - Send history via fetchProfileHistory RPC (server-side privacy gate;
  *     returns [] if privacy blocks access — shown as empty state).
  *
@@ -21,12 +21,13 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { AppText, Avatar, Card, IconButton, InlineError, Spinner } from '../../../components/ui';
-import { ICON } from '../../../lib/icons';
+import { AppText, Avatar, Card, InlineError, Spinner } from '../../../components/ui';
 import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { fetchProfileHistory } from '../../mod-profile-history/history-service';
 import type { HistoryAscent } from '../../mod-profile-history/types';
+import { useAppHeader, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { rootHeaderHeight } from '../../mod-home/components/AppHeader';
 import ModerationActions from '../components/ModerationActions';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -59,7 +60,9 @@ export default function OtherUserProfileScreen({
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, insets.top, screenMargin);
+  const tabInset = useTabBarInset();
+  // The AppShell nested header overlays the content: reserve its height at the top.
+  const styles = makeStyles(theme, rootHeaderHeight(insets.top, 1), screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
   const [history, setHistory] = useState<HistoryAscent[]>([]);
@@ -67,6 +70,8 @@ export default function OtherUserProfileScreen({
   const [error, setError] = useState<string | null>(null);
 
   const currentUserId = session.user.id;
+
+  useAppHeader({ title: profile?.display_name ?? '', onBack });
 
   // ── Load profile + history ──────────────────────────────────────────────────
 
@@ -114,20 +119,10 @@ export default function OtherUserProfileScreen({
     <SwipeBackWrapper onBack={onBack}>
       <ScrollView
         style={styles.root}
-        contentContainerStyle={styles.contentContainer}
+        contentContainerStyle={[styles.contentContainer, { paddingBottom: tabInset.contentBottom || theme.spacing.xxl }]}
+        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Back button */}
-        <View style={styles.backButton}>
-          <IconButton
-            name={ICON.back.outline}
-            size={theme.iconSize.lg}
-            on="background"
-            accessibilityLabel={t('common.back')}
-            onPress={onBack}
-          />
-        </View>
-
         {/* Error */}
         {error !== null && (
           <View style={styles.errorContainer}>
@@ -216,11 +211,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: theme.colors.background,
-    },
-    backButton: {
-      marginBottom: theme.spacing.sm,
-      alignSelf: 'flex-start',
-      marginLeft: -theme.spacing.smd,
     },
     errorContainer: {
       marginBottom: theme.spacing.md,
