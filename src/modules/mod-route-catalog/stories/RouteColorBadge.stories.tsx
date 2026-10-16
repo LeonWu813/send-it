@@ -9,24 +9,27 @@ import RouteColorBadge from '../components/RouteColorBadge';
 import { ROUTE_COLORS } from '../types';
 
 // Off-spec design tooling. Fake data only.
-const SIZES = ['sm', 'md'] as const;
+const SIZES = ['sm', 'md', 'lg'] as const;
+const GRADES = ['V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'];
 // 'unknown' demonstrates the "Other" fallback (surfaceAlt + hairline).
 const COLOR_OPTIONS = [...ROUTE_COLORS, 'unknown'];
 
 const meta: Meta<typeof RouteColorBadge> = {
   title: 'Route Catalog/RouteColorBadge',
   component: RouteColorBadge,
-  args: { color: 'red', size: 'md' },
+  args: { color: 'red', size: 'lg', grade: 'V4', onMedia: false },
   argTypes: {
     color: { control: 'select', options: COLOR_OPTIONS },
     size: { control: 'inline-radio', options: [...SIZES] },
+    grade: { control: 'select', options: [undefined, ...GRADES] },
+    onMedia: { control: 'boolean' },
   },
 };
 export default meta;
 
 type Story = StoryObj<typeof RouteColorBadge>;
 
-/** Change colour and size with the controls; use the toolbar for theme and language. The badge is static (no press). */
+/** Change colour, size (sm/md/lg), grade (prints the grade, e.g. V4) and onMedia with the controls; use the toolbar for theme and language. The badge is static (no press). */
 export const Playground: Story = {
   render: (args) => (
     <View style={{ padding: 16 }}>
@@ -45,10 +48,13 @@ function Grid(): React.JSX.Element {
             <AppText variant="caption1" color="textSecondary">{c}</AppText>
           </View>
           {SIZES.map((s) => (
-            <View key={s} style={{ width: 90 }}>
-              <RouteColorBadge color={c} size={s} />
+            <View key={s} style={{ width: 72 }}>
+              <RouteColorBadge color={c} size={s} grade={s === 'lg' ? GRADES[ROUTE_COLORS.indexOf(c as never) + 1] ?? 'V0' : undefined} />
             </View>
           ))}
+          <View style={{ width: 72 }}>
+            <RouteColorBadge color={c} size="md" grade="V3" onMedia />
+          </View>
         </View>
       ))}
     </View>
@@ -81,7 +87,7 @@ function PanelBody({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
   );
 }
 
-/** All 9 tapes plus the unknown fallback, sm and md, light beside dark, on a white card (hairlines show on white/yellow/pink in light, black in dark). */
+/** All 9 tapes plus the unknown fallback, sm / md (colour name) / lg (grade) plus an onMedia grade tape, light beside dark, on a white card (hairlines show on white/yellow/pink in light, black in dark). */
 export const AllTapesBySizeLightVsDark: Story = {
   render: () => (
     <View style={{ flexDirection: 'row', gap: 16, padding: 16 }}>

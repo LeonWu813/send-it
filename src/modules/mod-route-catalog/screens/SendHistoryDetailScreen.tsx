@@ -28,7 +28,7 @@ import {
   Card,
   IconButton,
   InlineError,
-  SendStyleChip,
+  SendStatus,
   Spinner,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
@@ -151,7 +151,7 @@ export default function SendHistoryDetailScreen({
               return (
                 <Card key={ascent.id} variant="static">
                   <View style={styles.ascentRowHeader}>
-                    <SendStyleChip sendStyle={ascent.style} />
+                    <SendStatus sendStyle={ascent.style} variant="tag" />
                     <View style={styles.ascentRowHeaderRight}>
                       <AppText variant="footnote" color="textSecondary">{displayDate}</AppText>
                       {/* Delete button — all rows in this screen are the current user's own ascents */}
@@ -250,7 +250,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     noteContainer: {
       marginTop: theme.spacing.sm,
       padding: theme.spacing.sm,
-      borderRadius: theme.borderRadius.sm,
+      borderRadius: theme.radius.control,
       backgroundColor: theme.colors.surfaceAlt,
     },
     noteText: {

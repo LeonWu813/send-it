@@ -1,7 +1,7 @@
 /**
  * RouteColorBadge (TapeBadge), design system v1.2 chapter 17 / 32.2.
  *
- * Route tape colour label: the only square-cornered (radius sm) label with text.
+ * Route tape colour label: the only tape-radius (6) label with text; v2.2.
  * Fill / label / hairline come from `TAPE_DISPLAY` / `TAPE_HAIR` (display only; stored colour
  * names are unchanged). Colour names go through i18n. Static: not pressable, no motion.
  * Unknown colours render `surfaceAlt` / `textPrimary` / hairline with the "Other" label.
@@ -9,9 +9,8 @@
 
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 
-import { AppText } from '../../../components/ui';
 import { useTheme } from '../../../lib/theme';
 import { TAPE_HAIR, resolveTape } from '../tape';
 import type { RouteColor } from '../types';
@@ -19,8 +18,15 @@ import type { RouteColor } from '../types';
 interface RouteColorBadgeProps {
   /** Stored colour name. Anything outside the 9-colour enum is shown as "Other". */
   color: RouteColor | (string & {});
-  /** Size variant. Defaults to 'md'. */
-  size?: 'sm' | 'md';
+  /** Size variant. Defaults to 'md' ('lg' = 34 high grade plate, RouteCard title). */
+  size?: 'sm' | 'md' | 'lg';
+  /**
+   * Grade variant: when set, the tape prints this text (e.g. "V4") instead of the colour name.
+   * The accessibility label becomes "V4, red". Without `grade`, the colour name is printed.
+   */
+  grade?: string;
+  /** On a photo: adds a 1.5pt `onMedia` outline. */
+  onMedia?: boolean;
 }
 
 /** Fill / hairline for the 11x11 tape swatch (colour-filter chip, thumbnail dot). */
@@ -35,6 +41,8 @@ export function useTapeSwatch(color: string): { fill: string; hair?: string } {
 export default function RouteColorBadge({
   color,
   size = 'md',
+  grade,
+  onMedia = false,
 }: RouteColorBadgeProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -46,25 +54,55 @@ export default function RouteColorBadge({
   const hasHair = tape.known ? !!tape.entry.hair : true;
 
   const name = t(`routeCatalog.colors.${tape.known ? color : 'other'}`);
+  const tl = theme.typeVariant.tapeLabel[size];
+  const text = grade ?? name;
+  const label = grade
+    ? `${grade}, ${name}`
+    : t('routeCatalog.tapeLabel', { color: name });
 
   return (
     <View
       accessible
-      accessibilityLabel={t('routeCatalog.tapeLabel', { color: name })}
+      accessibilityLabel={label}
       style={[
         styles.chip,
         {
           backgroundColor: fill,
-          borderRadius: theme.borderRadius.sm,
+          borderRadius: theme.radius.tape,
+          minHeight: theme.componentSize.tapeHeight[size],
           paddingHorizontal: theme.componentSize.tapePadH[size],
-          paddingVertical: size === 'sm' ? theme.spacing.xxs : theme.spacing.xs,
         },
       ]}
     >
-      <AppText variant="caption1" weight="600" style={{ color: labelColor }} numberOfLines={1}>
-        {name}
-      </AppText>
-      {hasHair ? (
+      <Text
+        numberOfLines={1}
+        maxFontSizeMultiplier={tl.maxFontSizeMultiplier}
+        style={[
+          {
+            fontSize: tl.fontSize,
+            lineHeight: tl.lineHeight,
+            fontWeight: tl.fontWeight,
+            color: labelColor,
+            letterSpacing: 0,
+          },
+          grade ? { fontVariant: theme.typeVariant.numeric.fontVariant } : null,
+        ]}
+      >
+        {text}
+      </Text>
+      {onMedia ? (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            {
+              borderWidth: theme.stroke.emphasis,
+              borderColor: theme.colors.onMedia,
+              borderRadius: theme.radius.tape,
+            },
+          ]}
+        />
+      ) : hasHair ? (
         // Overlay so the 1pt hairline never changes the 22 / 26 visual height.
         <View
           pointerEvents="none"
@@ -73,7 +111,7 @@ export default function RouteColorBadge({
             {
               borderWidth: theme.stroke.thin,
               borderColor: TAPE_HAIR[mode],
-              borderRadius: theme.borderRadius.sm,
+              borderRadius: theme.radius.tape,
             },
           ]}
         />

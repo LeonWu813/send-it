@@ -23,18 +23,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { AppText, Button, Chip, IconButton, NoticeBox, TextField } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
 import {
   listRoutes,
   submitRoute,
   uploadRoutePhoto,
 } from '../route-service';
-import { TAPE_HAIR, resolveTape } from '../tape';
+import { useTapeSwatch } from '../components/RouteColorBadge';
 import type { RouteColor, RouteGrade, RouteSummary } from '../types';
 import { ROUTE_COLORS, ROUTE_GRADES } from '../types';
 
@@ -259,7 +259,7 @@ export default function RouteSubmitScreen({
 
       {/* Grade chips — AC-023: V-scale only */}
       <View style={styles.section}>
-        <AppText variant="sectionHeader" style={styles.sectionLabel}>{t('routes.submit.gradeLabel')}</AppText>
+        <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.gradeLabel')}</AppText>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -286,7 +286,7 @@ export default function RouteSubmitScreen({
 
       {/* Hold-color picker — AC-022: fixed enum, tape swatches */}
       <View style={styles.section}>
-        <AppText variant="sectionHeader" style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</AppText>
+        <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</AppText>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -312,7 +312,7 @@ export default function RouteSubmitScreen({
 
       {/* Inline photo picker — AC-021 */}
       <View style={styles.section}>
-        <AppText variant="sectionHeader" style={styles.sectionLabel}>{t('routes.submit.photo.title')}</AppText>
+        <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.photo.title')}</AppText>
 
         {photoUri ? (
           /* Preview + Change Photo */
@@ -421,10 +421,7 @@ function InlineFieldError({ message }: { message: string }): React.JSX.Element {
   );
 }
 
-/**
- * Tape colour option for the picker: a 44pt-target tape block with the localized colour name.
- * Selected = `checkmark` (md, tape label colour) + 1.5pt primary outline.
- */
+/** Tape colour option for the picker: inverted Chip with a 14x14 tape swatch (v2.2). */
 function ColorOption({
   color,
   selected,
@@ -435,56 +432,16 @@ function ColorOption({
   onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation('common');
-  const { theme } = useTheme();
-  const mode = theme.isDark ? 'dark' : 'light';
-  const tape = resolveTape(mode, color);
-  const labelColor = tape.known ? tape.entry.label : theme.colors.textPrimary;
-  const fill = tape.known ? tape.entry.fill : theme.colors.surfaceAlt;
-  const hair = tape.known && tape.entry.hair ? TAPE_HAIR[mode] : undefined;
-  const name = t(`routeCatalog.colors.${color}`);
+  const swatch = useTapeSwatch(color);
   return (
-    <Pressable
+    <Chip
+      variant="choice"
+      label={t(`routeCatalog.colors.${color}`)}
+      swatch={swatch.fill}
+      swatchHair={swatch.hair}
+      selected={selected}
       onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{ checked: selected }}
-      accessibilityLabel={name}
-      style={{
-        minHeight: theme.layout.minTouchTarget,
-        justifyContent: 'center',
-        borderRadius: theme.borderRadius.md,
-        borderWidth: theme.stroke.emphasis,
-        borderColor: selected ? theme.colors.primary : 'transparent',
-        padding: theme.spacing.xs,
-      }}
-    >
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          columnGap: theme.spacing.xs,
-          backgroundColor: fill,
-          borderRadius: theme.borderRadius.sm,
-          paddingHorizontal: theme.componentSize.tapePadH.md,
-          paddingVertical: theme.spacing.xs,
-        }}
-      >
-        <AppText variant="caption1" weight="600" style={{ color: labelColor }}>
-          {name}
-        </AppText>
-        {selected ? (
-          <Ionicons name={ICON.selected.outline} size={theme.iconSize.md} color={labelColor} />
-        ) : null}
-        {hair ? (
-          <View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFill,
-              { borderWidth: theme.stroke.thin, borderColor: hair, borderRadius: theme.borderRadius.sm },
-            ]}
-          />
-        ) : null}
-      </View>
-    </Pressable>
+    />
   );
 }
 
@@ -528,7 +485,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     photoPreview: {
       width: '100%',
       height: 260,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
       backgroundColor: theme.colors.surfaceAlt,
     },
     photoButtonRow: {

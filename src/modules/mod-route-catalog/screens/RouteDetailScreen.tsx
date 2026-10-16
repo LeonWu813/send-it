@@ -53,7 +53,7 @@ import {
   Spinner,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
 import RouteColorBadge from '../components/RouteColorBadge';
 import BetaVideoSection from '../../mod-beta-video/components/BetaVideoSection';
 import LogSendScreen from '../../mod-send-logging/screens/LogSendScreen';
@@ -387,14 +387,14 @@ export default function RouteDetailScreen({
 
       {/* AC-125: gym name as subtitle directly beneath the route name, with the tape badge */}
       <View style={styles.subtitleRow}>
-        <RouteColorBadge color={route.color_tag} size="md" />
+        <RouteColorBadge color={route.color_tag} grade={route.grade} size="lg" />
         <AppText variant="body" color="textSecondary" style={styles.gymSubtitle}>{gymName}</AppText>
       </View>
 
       {/* Section label (if present) — keep as informational detail */}
       {route.section_label ? (
         <>
-          <AppText variant="sectionHeader" style={styles.sectionLabel}>
+          <AppText variant="pageSection" style={styles.sectionLabel}>
             {t('routes.detail.section')}
           </AppText>
           <AppText variant="body">{route.section_label}</AppText>
@@ -404,7 +404,7 @@ export default function RouteDetailScreen({
       {/* Retired info */}
       {isRetired && route.retired_at ? (
         <>
-          <AppText variant="sectionHeader" style={styles.sectionLabel}>
+          <AppText variant="pageSection" style={styles.sectionLabel}>
             {t('routes.detail.retiredOn')}
           </AppText>
           <AppText variant="body">
@@ -553,7 +553,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     photo: {
       width: '100%',
       height: 280,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
       marginBottom: theme.spacing.md,
       backgroundColor: theme.colors.surfaceAlt,
     },
@@ -600,7 +601,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flex: 1,
       minHeight: theme.layout.minTouchTarget,
       padding: theme.layout.cardPadding,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: theme.radius.card,
+      ...CONTINUOUS,
       backgroundColor: theme.colors.surface,
       borderWidth: theme.isDark ? theme.stroke.thin : 0,
       borderColor: theme.colors.border,

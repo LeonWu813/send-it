@@ -3254,3 +3254,11 @@ Visual + motion only; no flows, services or DB changes. No illustrations, no exp
 - RouteListScreen, RouteDetailScreen, RouteSubmitScreen, SendHistoryDetailScreen migrated to ui/ components, `AppText`, `ICON`, `useLayout().screenMargin`, `surfaceAlt`, `onPrimary`, `sendFlash`/`sendTop` (no `#FFD700`). Colour filter chips use Chip swatch (pop). RouteList passes `colorTag` to the redesigned RouteCard.
 - Tests updated for the new semantics (localized colour names, `checked` radio state, SendStyleChip label "Send", hidden RouteCard text). Delete confirm stays an `Alert` (BottomSheet confirm is a flow change).
 - Stories: `RouteColorBadge.stories.tsx` rewritten (Playground + all tapes x sizes light vs dark).
+
+## Design System v2.2 (off-spec design work, pending PR review)
+
+Visual only; no flows, data or dependencies. No illustrations, no expo-haptics.
+- `RouteColorBadge` / TapeBadge: `RADIUS.tape` 6, sizes `sm` 20 / `md` 24 / `lg` 34 (`minHeight`), `tapeLabel` type (lg 24/800, md 13/800, sm 12/700), new `grade?: string` prop (prints the grade on the tape, a11y label "V4, red") and `onMedia?: boolean` (1.5pt `onMedia` outline). Existing props/exports unchanged; `tape-exports` still exports `TapeBadge`, `useTapeSwatch`, `TAPE_DISPLAY`, `TAPE_HAIR`, `resolveTape`.
+- RouteDetailScreen: grade tape (`lg`) in the subtitle row, `pageSection` headers, card radius + continuous curve. RouteSubmitScreen: colour picker is now an inverted `Chip` with tape swatch; `pageSection` headers. RouteListScreen: chips/buttons inherit v2.2 Chip (inverted) and capsule Button. SendHistoryDetailScreen: `SendStatus variant="tag"` replaces `SendStyleChip`.
+- Story: `RouteColorBadge.stories.tsx` Controls (color, size, grade, onMedia) + matrix (sm/md/lg + onMedia, light vs dark).
+- Verified: tsc, jest (110/110), check:i18n, storybook build.
