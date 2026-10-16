@@ -39,7 +39,7 @@ import {
 import type { BetaVideo } from '../../mod-beta-video';
 import { SendHistoryProfile } from '../../mod-profile-history';
 import { fetchFollowerCounts } from '../../mod-social-feed/social-feed-service';
-import { useAppHeaderRoot, useTabBarInset } from '../../mod-home/components/AppHeaderContext';
+import { useAppHeaderRoot } from '../../mod-home/components/AppHeaderContext';
 import { useSession } from '../hooks/useSession';
 
 interface ProfileScreenProps {
@@ -73,12 +73,9 @@ export default function ProfileScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  // v2.2: the large root header floats over the list, so its height is the top padding.
-  // The scroll container is owned by SendHistoryProfile (mod-profile-history), which does not
-  // expose scroll props, so only the insets are applied here.
-  const { contentTopInset } = useAppHeaderRoot();
-  const { contentBottom } = useTabBarInset();
-  const styles = makeStyles(theme, contentTopInset, contentBottom, screenMargin);
+  // v2.2: bind the list (owned by SendHistoryProfile) to the AppShell header and TabBar insets.
+  const h = useAppHeaderRoot();
+  const styles = makeStyles(theme, screenMargin);
 
   const { profile } = useSession();
 
@@ -246,6 +243,14 @@ export default function ProfileScreen({
           listHeaderComponent={profileHeader}
           listFooterComponent={profileFooter}
           onNavigateToRoute={onNavigateToRoute}
+          scrollProps={{
+            onScroll: h.onScroll,
+            onContentSizeChange: h.onContentSizeChange,
+            onLayout: h.onLayout,
+            scrollEventThrottle: h.scrollEventThrottle,
+            contentContainerStyle: { paddingTop: h.contentTopInset, paddingBottom: h.contentBottomInset },
+            scrollIndicatorInsets: { top: h.contentTopInset, bottom: h.indicatorBottomInset },
+          }}
         />
       ) : (
         // Profile not yet loaded — show header and footer without history list.
@@ -273,8 +278,6 @@ export default function ProfileScreen({
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function makeStyles(
   theme: ReturnType<typeof useTheme>['theme'],
-  topInset: number,
-  bottomInset: number,
   screenMargin: number,
 ) {
   return StyleSheet.create({
@@ -283,7 +286,7 @@ function makeStyles(
       backgroundColor: theme.colors.background,
     },
     headerContainer: {
-      paddingTop: topInset,
+      paddingTop: theme.spacing.md,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.md,
     },
@@ -308,7 +311,7 @@ function makeStyles(
     // AC-164: beta-video grid section (listFooterComponent)
     videoSectionContainer: {
       paddingTop: theme.layout.sectionGap,
-      paddingBottom: theme.spacing.xl + bottomInset,
+      paddingBottom: theme.spacing.xl,
       paddingHorizontal: screenMargin,
     },
     videoSectionTitle: {
