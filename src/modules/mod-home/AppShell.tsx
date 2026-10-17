@@ -246,6 +246,10 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   }
 
   function handleNavigateToNotifications(): void {
+    // Close Settings if open so only one overlay is ever active at a time.
+    // This gives replace-semantics: the back button always returns to PagePrev,
+    // never to a stacked Settings screen.
+    setSettingsOpen(false);
     setNotificationsOpen(true);
   }
 
@@ -254,6 +258,8 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   }
 
   function handleNavigateToSettings(): void {
+    // Close Notifications if open so only one overlay is ever active at a time.
+    setNotificationsOpen(false);
     setSettingsOpen(true);
   }
 
