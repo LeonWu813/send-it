@@ -7,8 +7,8 @@ agent: tech-lead
 mode: review
 module: n/a
 result: success
-commit: a68f37ed428bbc089134f9fa3c3a4ed6bca0e9f2
-timestamp: 2026-10-16T00:00:00Z
+commit: 794c8d9f2297e336709f5b94e4ff70365409749e
+timestamp: 2026-10-16T01:00:00Z
 ```
 
 
@@ -327,6 +327,284 @@ timestamp: 2026-10-16T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-16 — Signed URL Cache Design
+
+**Context**: Concrete implementation plan for an in-memory signed URL cache, a Phase 1 pre-TestFlight optimization. Read `src/modules/mod-route-catalog/route-service.ts` (specifically `getPhotoSignedUrl`), `src/modules/mod-beta-video/beta-video-service.ts` (`getVideoSignedUrl`, `getThumbnailSignedUrl`), `src/components/RouteCard.tsx` (the `useEffect` calling `getPhotoSignedUrl` on every mount), and the existing test suites for both service files. Advisory only — no source code, spec, or PRD files were edited.
+
+---
+
+#### Baseline facts
+
+**Current hotspot**: `RouteCard.tsx` calls `getPhotoSignedUrl(route.photo_url)` inside a `useEffect` on every card mount. On a 20-route list that is 20 separate `supabase.storage.createSignedUrl` round-trips per screen load. Navigate away and back — another 20. `getPhotoSignedUrl` signs into the `route-photos` bucket; the stored path is extracted from the full public URL stored in `routes.photo_url`.
+
+**Second surface**: `beta-video-service.ts` exposes `getVideoSignedUrl` and `getThumbnailSignedUrl`, both signing into the `beta-videos` bucket with the same 3600-second TTL. `BetaVideoReelViewer.tsx` calls `getVideoSignedUrl` inside a `useEffect` keyed on each video in the reel. Thumbnails may be requested as a user pages through a grid.
+
+**No shared utility today**: each function calls `supabase.storage.from(<bucket>).createSignedUrl(path, 3600)` independently. There is no shared cache, no deduplication, and no TTL tracking.
+
+---
+
+#### 1. Cache Location
+
+**Recommendation: a dedicated `src/lib/signedUrlCache.ts`.**
+
+Three reasons favor a shared lib file over a module-level Map in `route-service.ts`:
+
+- `getVideoSignedUrl` and `getThumbnailSignedUrl` in `beta-video-service.ts` have the identical problem. Placing the cache inside `route-service.ts` forces `beta-video-service.ts` to either duplicate the Map or import from a peer module — both are worse than a neutral `src/lib/` home. `src/lib/` is already the established home for cross-cutting singletons (`supabase.ts`, `i18n.ts`, `AppHeaderContext.ts`).
+- A dedicated file gives the cache a clear, testable public interface (exported functions + an exported `clearCacheForTesting()` hook) without polluting the service files with cache bookkeeping.
+- If a future module adds signed URLs for a different bucket (e.g. gym photos, avatars), the same utility is reachable without coordination.
+
+`route-service.ts` and `beta-video-service.ts` both delegate to `signedUrlCache.ts`; their exported function signatures (`getPhotoSignedUrl`, `getVideoSignedUrl`, `getThumbnailSignedUrl`) are unchanged from the caller's perspective — the cache is an implementation detail inside each service function.
+
+---
+
+#### 2. Cache Key Design
+
+**Recommendation: `"<bucket>:<storagePath>"` as a single string key.**
+
+`route-photos` and `beta-videos` are separate Supabase Storage buckets. A path like `user-001/1234567890-abc.jpg` could theoretically exist in both buckets. Prefixing with the bucket name eliminates any collision:
+
+```
+"route-photos:user-001/1234567890-abc.jpg"
+"beta-videos:user-001/1234567890-video.mp4"
+"beta-videos:user-001/1234567890-thumb.jpg"
+```
+
+The `storagePath` passed to the cache is the path already extracted by each service function (after stripping the public URL prefix). For `getPhotoSignedUrl` this is the string currently passed to `createSignedUrl`; for `getVideoSignedUrl` / `getThumbnailSignedUrl` the input parameter is already the raw storage path (no extraction needed — the beta-video service stores the path directly, not the full public URL).
+
+A plain object or `Map<string, CacheEntry>` keyed by this string is sufficient. `Map` is preferred over a plain object for correct key isolation (no prototype pollution) and O(1) lookup.
+
+---
+
+#### 3. TTL and Expiry Strategy
+
+**Recommendation: cache TTL = 3300 seconds (55 minutes). Check expiry on read; do not run a background eviction timer.**
+
+Supabase signs the URL for 3600 seconds. The cache TTL should be shorter than the signing window to ensure the URL delivered to the UI has meaningful remaining validity — a URL fetched at second 3598 of its life is functionally expired from the user's perspective. A 5-minute safety margin (TTL = 3300 s) is the conventional choice and is safe at Phase 1 scale.
+
+Each cache entry stores:
+```typescript
+type CacheEntry = {
+  signedUrl: string;
+  expiresAt: number; // Date.now() + TTL_MS at insertion time
+};
+```
+
+Expiry is checked **on read**, not by a background `setInterval`. The read path is:
+1. Look up the entry by key.
+2. If no entry, or `Date.now() >= entry.expiresAt`: fall through to the network call, store the fresh result.
+3. If entry is present and not expired: return `entry.signedUrl` directly.
+
+No background timer is needed for Phase 1. A timer adds complexity without a clear benefit at this scale: the on-read check evicts stale entries implicitly, and the LRU ceiling (see §5) bounds Map growth. If a timer is added later, it must be cleared on module unload — that is a lifecycle concern not present with on-read eviction.
+
+Implementation sketch:
+```typescript
+const TTL_MS = 3300 * 1000; // 55 minutes
+
+type CacheEntry = { signedUrl: string; expiresAt: number };
+const cache = new Map<string, CacheEntry>();
+
+export async function getSignedUrl(
+  bucket: string,
+  storagePath: string,
+  fetcher: () => Promise<string>,
+): Promise<string> {
+  const key = `${bucket}:${storagePath}`;
+  const now = Date.now();
+  const entry = cache.get(key);
+  if (entry && now < entry.expiresAt) {
+    return entry.signedUrl;
+  }
+  // No in-flight deduplication yet (see §6 for the upgrade path).
+  const signedUrl = await fetcher();
+  cache.set(key, { signedUrl, expiresAt: now + TTL_MS });
+  return signedUrl;
+}
+```
+
+Each service function wraps its `createSignedUrl` call in `getSignedUrl`:
+```typescript
+// In route-service.ts — getPhotoSignedUrl
+return getSignedUrl('route-photos', storagePath, () =>
+  supabase.storage.from('route-photos').createSignedUrl(storagePath, 3600)
+    .then(({ data, error }) => {
+      if (error || !data?.signedUrl) throw new Error('Failed to load route photo. Please try again.');
+      return data.signedUrl;
+    }),
+);
+```
+
+---
+
+#### 4. Cache Invalidation
+
+**Recommendation: no explicit invalidation for Phase 1. Document the one scenario that matters.**
+
+The only invalidation-relevant event in Phase 1 is a user replacing their own beta video (AC-031 / `uploadBetaVideo` — the upsert pattern). When this happens, the `video_url` and `thumbnail_url` columns in `beta_videos` change to new storage paths. Because the **path itself changes on replace** (new path = `userId/timestamp-random.ext`), the old cache entry is orphaned at a new key and never hit again. No explicit invalidation is needed — the cache is naturally self-invalidating for the replace case because the key is the storage path, not the route ID or video ID.
+
+Route photos work the same way: `uploadRoutePhoto` generates a new path on every upload (`userId/timestamp-random.ext`), so a re-uploaded route photo results in a new `photo_url` column value and a new cache key.
+
+The one scenario that would require explicit invalidation — a file being **deleted and re-uploaded at the exact same path** — does not occur in this codebase. Route photos use `upsert: false` (collision guard with a random suffix); beta videos use upsert on `(user_id, route_id)` uniqueness but always generate a new path.
+
+**For Phase 1: no `invalidate(key)` API is needed.** If a "delete and re-use the same path" pattern is ever introduced, the cache will need an explicit invalidation call at that write site — flag this as a doc comment on the exported `getSignedUrl` function.
+
+---
+
+#### 5. Memory Ceiling
+
+**Recommendation: apply a max-entry cap of 500 entries for Phase 1. Evict the oldest-inserted entry on overflow (FIFO, not LRU).**
+
+At Phase 1 scale, the risk is low but not zero:
+- 20 routes × route-photos = 20 entries per gym screen load.
+- Beta video grids: a prolific climber might have 50–100 videos; a reel viewer loads URLs one at a time.
+- Across a session navigating multiple gyms and several climber profiles, the Map could grow to a few hundred entries in tens of minutes.
+
+At ~200 bytes per entry (URL string + metadata), 500 entries ≈ 100 KB — entirely acceptable for a mobile device. The risk of unbounded growth is real only if the user navigates many unique routes/videos without restarting the app; the TTL-based on-read expiry does not actively shrink the Map, it only prevents stale reads.
+
+FIFO eviction at 500 entries is the right Phase 1 choice over LRU because:
+- LRU requires a doubly-linked list or moving map entries on every access — more code, more allocation.
+- The access pattern is time-correlated (routes loaded now are likely accessed now); FIFO naturally keeps the freshest paths and evicts early-session entries that are unlikely to be revisited.
+- The implementation is trivial: track insertion order via `Map`'s natural insertion-order iteration.
+
+Implementation sketch for the eviction path (added to `getSignedUrl`):
+```typescript
+const MAX_ENTRIES = 500;
+
+// After cache.set(...):
+if (cache.size > MAX_ENTRIES) {
+  // Map iterates in insertion order; first key = oldest entry.
+  const oldestKey = cache.keys().next().value;
+  cache.delete(oldestKey);
+}
+```
+
+---
+
+#### 6. Concurrency / Race Conditions (Cache Stampede)
+
+**Recommendation: deduplicate in-flight requests with a `Promise` map for Phase 1.**
+
+The stampede scenario is real and non-theoretical: `RouteCard`'s `useEffect` runs on mount. When a 20-card list renders, React mounts all 20 `RouteCard` components in the same synchronous render cycle and their `useEffect` hooks fire before the first `await` in `getPhotoSignedUrl` resolves. If all 20 cards request the same storage path (unlikely for route photos since each route has a unique path, but very likely for beta video thumbnails on a prolific climber's grid, or for the same signed URL requested in quick succession across two screens), all 20 `useEffect` calls hit the cache before any result is stored — all 20 miss, all 20 fire network requests.
+
+For **route photos** the stampede risk is low (each route has a unique path, so 20 cards = 20 distinct keys). For **beta video URLs** the risk is moderate: the reel viewer requests one at a time, but thumbnail grids could request the same video's thumbnail from a grid + a background prefetch simultaneously.
+
+**The safe, simple fix for Phase 1**: an in-flight `Promise` map alongside the result cache.
+
+Implementation sketch:
+```typescript
+const inFlight = new Map<string, Promise<string>>();
+
+export async function getSignedUrl(
+  bucket: string,
+  storagePath: string,
+  fetcher: () => Promise<string>,
+): Promise<string> {
+  const key = `${bucket}:${storagePath}`;
+  const now = Date.now();
+
+  // 1. Cache hit.
+  const entry = cache.get(key);
+  if (entry && now < entry.expiresAt) return entry.signedUrl;
+
+  // 2. In-flight deduplication: if a request for this key is already pending,
+  //    return the same Promise — callers share the single network round-trip.
+  const pending = inFlight.get(key);
+  if (pending) return pending;
+
+  // 3. Cache miss, no in-flight: start the network request.
+  const request = fetcher().then((signedUrl) => {
+    cache.set(key, { signedUrl, expiresAt: Date.now() + TTL_MS });
+    inFlight.delete(key);
+    // Evict oldest if over the cap.
+    if (cache.size > MAX_ENTRIES) {
+      cache.delete(cache.keys().next().value!);
+    }
+    return signedUrl;
+  }).catch((err) => {
+    inFlight.delete(key); // Always clean up on error so future calls retry.
+    throw err;
+  });
+
+  inFlight.set(key, request);
+  return request;
+}
+```
+
+This ensures that no matter how many concurrent callers request the same key, only one `createSignedUrl` round-trip fires. All callers receive the same resolved URL. On error, the in-flight entry is cleared so the next caller retries rather than receiving a rejected Promise forever.
+
+---
+
+#### 7. Test Surface
+
+The existing `route-service.test.ts` tests call `getPhotoSignedUrl` directly and assert that `createSignedUrl` is called with the correct path and TTL. After the cache is introduced, those tests must be updated and new tests must be added. The same applies to `beta-video-service.test.ts`.
+
+**Tests to add or modify:**
+
+`src/lib/__tests__/signedUrlCache.test.ts` (new file):
+- Cache hit: call `getSignedUrl` twice with the same key; assert `fetcher` is called exactly once and both calls return the same URL.
+- Cache miss after TTL: call `getSignedUrl`, advance `Date.now()` past `expiresAt` (Jest fake timers), call again; assert `fetcher` is called twice.
+- In-flight deduplication: call `getSignedUrl` twice concurrently before the first `fetcher` resolves; assert `fetcher` is called exactly once and both returned Promises resolve to the same URL.
+- Error path: `fetcher` rejects; assert the rejection propagates to callers and the in-flight entry is cleared (a subsequent call fires a new network request rather than receiving the prior rejection).
+- Max-entry eviction: fill the cache to `MAX_ENTRIES + 1` distinct keys; assert `cache.size === MAX_ENTRIES` after insertion (the oldest entry was evicted). Requires `clearCacheForTesting()` export.
+- Bucket isolation: same `storagePath`, different `bucket` values → two distinct cache entries, two `fetcher` calls.
+
+`route-service.test.ts` (modify):
+- The three existing `getPhotoSignedUrl` error-path tests remain structurally valid but must call `clearCacheForTesting()` in `beforeEach` to prevent cross-test cache leakage.
+- Add one cache-hit test: call `getPhotoSignedUrl` twice with the same URL; assert `createSignedUrl` mock is called only once.
+
+`beta-video-service.test.ts` (modify):
+- Same pattern: add `clearCacheForTesting()` in `beforeEach` for any test exercising `getVideoSignedUrl` or `getThumbnailSignedUrl`.
+- Add one cache-hit test per function.
+
+**Important constraint**: `clearCacheForTesting()` must be exported from `signedUrlCache.ts` and must clear both `cache` and `inFlight`. It must NOT be called in production code. The function signature must make this intent explicit:
+```typescript
+/** For test use only. Clears all cache and in-flight state. */
+export function clearCacheForTesting(): void {
+  cache.clear();
+  inFlight.clear();
+}
+```
+
+---
+
+#### 8. Files to Change
+
+| File | Change |
+|---|---|
+| `src/lib/signedUrlCache.ts` | **New file.** Exports `getSignedUrl(bucket, storagePath, fetcher)` and `clearCacheForTesting()`. Owns the `Map`, TTL constant (3300 s), max-entries cap (500), in-flight Promise map. |
+| `src/lib/__tests__/signedUrlCache.test.ts` | **New file.** Full unit test suite for the cache (see §7). |
+| `src/modules/mod-route-catalog/route-service.ts` | **Modify `getPhotoSignedUrl`**: import `getSignedUrl` from `../../lib/signedUrlCache`; wrap the existing `createSignedUrl` call inside the `fetcher` argument. Function signature and error messages unchanged. |
+| `src/modules/mod-beta-video/beta-video-service.ts` | **Modify `getVideoSignedUrl` and `getThumbnailSignedUrl`**: same pattern as above. Two separate `getSignedUrl` calls with bucket `'beta-videos'` and the respective storage paths. |
+| `src/modules/mod-route-catalog/__tests__/route-service.test.ts` | **Modify**: add `clearCacheForTesting()` import and `beforeEach` reset; add cache-hit assertion to the `getPhotoSignedUrl` suite. |
+| `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` | **Modify**: same `clearCacheForTesting` reset pattern; add cache-hit assertions for `getVideoSignedUrl` and `getThumbnailSignedUrl`. |
+
+No other files need to change. Callers of `getPhotoSignedUrl`, `getVideoSignedUrl`, and `getThumbnailSignedUrl` (RouteCard, RouteDetailScreen, BetaVideoReelViewer) are unaffected — their call sites do not change.
+
+---
+
+#### Risks and Non-Obvious Constraints
+
+- **`clearCacheForTesting` leakage between test files**: Jest runs test files in separate workers by default, so the module-level `cache` Map is not shared across files. Within a single test file, however, all `describe` blocks share the same module instance. Every test that calls `getSignedUrl` must call `clearCacheForTesting()` in `beforeEach` — not just `afterEach` — to prevent a prior test's cache entry from masking a `createSignedUrl` call that the current test expects.
+
+- **`Date.now()` in tests requires fake timers**: the TTL check (`Date.now() >= entry.expiresAt`) means tests that verify expiry behavior must control `Date.now()`. Use `jest.useFakeTimers()` + `jest.advanceTimersByTime()` for TTL expiry tests; restore with `jest.useRealTimers()` in `afterEach`. Tests that do not test expiry can use real timers safely (the TTL is 55 minutes — no test will run long enough to expire a fresh entry).
+
+- **The in-flight map holds strong references to Promises**: if the React component that initiated a request is unmounted before the Promise resolves, the Promise still lives in `inFlight` and will store its result in `cache` on resolution. This is intentional and correct — the cached URL is valid and will benefit the next mount. There is no memory leak risk at Phase 1 scale; `inFlight` entries are cleared on both resolution and rejection.
+
+- **`RouteDetailScreen` also calls `getPhotoSignedUrl`**: confirmed at line 198 of `RouteDetailScreen.tsx`. After the cache is in place, a route opened from the route list (where `RouteCard` already fetched and cached the URL) will receive the cached signed URL on `RouteDetailScreen` mount — zero additional network calls for that photo. This is a bonus win beyond the RouteCard list.
+
+- **The `fetcher` argument in `getSignedUrl` is a closure**: the service functions construct the fetcher inline, which captures `storagePath` and `supabase`. This is correct and intentional — the cache only needs the key and the fetcher. The fetcher is never stored in the cache; only the resolved URL is. No memory concern.
+
+- **No persistence across app restarts**: the `Map` is module-level in-process memory. It is reset on every cold start, backgrounded-and-killed restart, or Expo dev reload. This is correct behavior — signed URLs from a prior session may have expired.
+
+- **Phase 2 consideration (not for Phase 1)**: if the route list grows to hundreds of routes across many gyms, the more impactful optimization is to call `supabase.storage.from('route-photos').createSignedUrls(paths[], 3600)` once per screen load (the batch-sign API) instead of `createSignedUrl(path, 3600)` N times, and pass the resolved URLs to each card as a prop rather than having each card fetch its own. This eliminates N network calls entirely (instead of deduplicating repeat calls). The cache described here is the correct Phase 1 move; the batch-sign approach is the Phase 2 move if signed-URL latency becomes measurable on longer lists.
+
+---
+
+**Approved**: the `src/lib/` placement, the `Map`-based in-memory approach, and the 3600-second Supabase signing window are all well-suited to this problem at Phase 1 scale. No PRD change is required for this optimization.
+
+**Not blocking any existing AC.** This is a pure implementation optimization within the existing `getPhotoSignedUrl`, `getVideoSignedUrl`, and `getThumbnailSignedUrl` contracts.
+
+---
 
 ### Review — 2026-10-16 — Designer PR #1 review (Storybook + design system v2.2)
 
