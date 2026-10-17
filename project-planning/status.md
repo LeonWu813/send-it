@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: 6b2d5b1818dad7a402e340132eb3542580c08edc
+commit: a68f37ed428bbc089134f9fa3c3a4ed6bca0e9f2
 timestamp: 2026-10-16T00:00:00Z
 ```
 
@@ -3838,6 +3838,52 @@ Doc-Sync Rev 8 [TRIVIAL] — AC-114 wording passthrough to mod-home spec.
 - none
 
 **verify-sync.sh:** 4/6 — same two pre-existing script bugs as all prior delta syncs since Rev 18. Check 4 FAIL (script bug): awk range pattern terminates immediately on macOS because the opening delimiter matches the end condition — all module specs have correct Related User Stories sections with US-IDs present; alternative grep confirms. Check 6 FAIL (script bug): script over-matches non-phase-plan PRD content (gym seed data "Milestone:" / "Rule:" / "Scope summary:" lines) as "phase names"; Phase Plan section in status.md is correctly written with Phase 1/2/3 content. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
+
+### Review — 2026-10-16 — Advisory: Phase 2 Caching Architecture
+
+**Context**: Advisory record of confirmed Phase 2 caching decisions. Three-layer pattern adopted. No source code, `prd.md`, `production.md`, or spec files edited. Advisory only — human and PM decide if any of these decisions require a PRD entry when the Phase 2 PRD is written.
+
+---
+
+#### 1. Client-side data cache — TanStack Query
+
+TanStack Query (React Query) replaces all manual `useEffect + useState` fetch patterns in the React Native app. Handles: automatic background refetch on screen focus, stale-while-revalidate, cache invalidation on mutation, request deduplication. Works with Supabase and AWS alike — backend-agnostic.
+
+Target data: routes, gyms, user achievements, profiles, ascent history.
+
+**Rationale**: The current pattern (`useEffect` + `useState` + manual refetch on focus) is duplicated across every screen and produces stale data on back-navigation. TanStack Query unifies this with a single cache layer, removes boilerplate, and makes the existing `fetchBetaVideoCounts` / `fetchUserAchievements` / `fetchSavedRouteIds` batch calls automatically shareable across components that reference the same query key.
+
+**Action item for Phase 2 PRD**: the TanStack Query adoption should be added to the Phase 2 module list when the Phase 2 PRD is written.
+
+---
+
+#### 2. Video and asset delivery — CloudFront CDN
+
+CloudFront handles network-edge caching for video files globally. Already part of the approved Phase 2 S3 migration plan (§4, §7, AC-170, PRD Rev 24 decision). Closest CDN node to Taiwan users.
+
+This is the correct AWS-native solution for video delivery latency — not an application-layer cache. No new architectural decision required here; this confirms the Rev 24 decision is sufficient and no additional video-caching layer should be added on top of it.
+
+---
+
+#### 3. Redis — explicitly rejected for this architecture
+
+Redis is a server-side cache requiring a persistent backend server. This project uses Supabase (serverless PostgREST + Edge Functions) with no persistent API server. Adding Redis would require a new infrastructure layer (AWS ElastiCache, approximately $15–50/month minimum) for marginal gain. Supabase already provides connection pooling via pgBouncer.
+
+Redis is not appropriate for this architecture at any foreseeable Phase 2 scale.
+
+---
+
+#### Phase 1 action item (pre-TestFlight quick win)
+
+Add an in-memory signed URL cache to `getPhotoSignedUrl` in `route-service.ts`. A module-level `Map<string, { url: string; expiresAt: number }>` keyed by storage path, with a 55-minute TTL (5 minutes under Supabase's 1-hour signed URL expiry). Eliminates redundant Storage API calls on RouteCard mounts and screen re-visits.
+
+This is a targeted optimization, not a full caching layer. Engineer-mod-route-catalog owns this.
+
+---
+
+**No PRD change required.** These are implementation-layer decisions within the existing Phase 2 scope. The TanStack Query adoption should be added to the Phase 2 module list when the Phase 2 PRD is written.
+
+**Approved**: CloudFront CDN for video (confirmed as the correct layer per Rev 24). Redis rejection (no persistent server to host it; pgBouncer already handles connection pooling). In-memory signed URL cache for Phase 1 (non-breaking, scoped to a single service function in MOD-003).
 
 ## Skill Recommendations
 
