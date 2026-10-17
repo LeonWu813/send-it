@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 57ebdd0cb1b33fe8566c946cf91ffd1ab44439a9
+commit: 62515ffa920ed3a6a6ed544840c1d09bb9385110
 timestamp: 2026-10-17T00:00:00Z
 ```
 
@@ -3204,6 +3204,44 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Passed   | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-17 — Delta Sync (Revision 42, [SUBSTANTIVE])
+
+**Sync type:** delta
+**PRD Revision:** 42
+**PM Update reference:** 2026-10-17 [SUBSTANTIVE] — AC-187 revised: two-layer duplicate route guard (PRD Revision 42). Replaces the single-layer inline-warning duplicate check with a two-stage flow: Layer 1 neutral-colored inline notice (proactive, while filling form, with {grade}/{color}/{count} interpolations, i18n keys routes.duplicateNotice.title / routes.duplicateNotice.body) + Layer 2 non-dismissable bottom sheet on submit tap (intercepted strictly before uploadRoutePhoto(), showing RouteCards for each duplicate, "Cancel" returns to form, "Add Route" proceeds with full submit flow; i18n keys routes.duplicateSheet.cancel / routes.duplicateSheet.confirm). Old keys routes.duplicateWarning.title / routes.duplicateWarning.body superseded.
+
+**Files modified:**
+
+- `project-planning/modules/mod-route-catalog/spec.md` — Last Synced from PRD Revision 41 → 42; Last Updated 2026-10-15 → 2026-10-17. Changes:
+  - Purpose: Updated AC-187 description from "non-blocking soft-warning" to "two-layer duplicate guard: inline notice + non-dismissable confirmation sheet on submit".
+  - Context: Updated AC-187 data-quality description to reflect two-layer guard (neutral inline notice while filling form + non-dismissable confirmation sheet before photo upload).
+  - AC-020: Updated cross-reference from "non-blocking soft warning in AC-187" to "two-layer duplicate guard in AC-187".
+  - AC-029: Updated cross-reference from "soft warning (AC-187)" to "duplicate guard (AC-187)".
+  - AC-045: Updated cross-reference from "AC-187 soft warning nudges the submitter" to "AC-187 Layer 1 inline notice nudges the submitter".
+  - AC-187 (revised, Rev 42): Full PRD text replaced — two-layer spec: Layer 1 (neutral-colored inline notice below form fields, count of matches, i18n keys routes.duplicateNotice.title / routes.duplicateNotice.body with {grade}/{color}/{count} interpolations, submit button always enabled); Layer 2 (non-dismissable bottom sheet on submit tap, strictly before uploadRoutePhoto(), RouteCard per matching route showing thumbnail/name/section label, two buttons: Cancel = routes.duplicateSheet.cancel returns to form no upload, Add Route = routes.duplicateSheet.confirm proceeds with full submit flow); no sheet when no candidates; photo upload must never start before Add Route tapped on sheet; detection logic unchanged (useMemo over activeRoutes, no new RPC).
+  - Data Model comment: Updated "AC-187 soft-warning duplicate count" to "AC-187 duplicate guard candidate list".
+  - Requirements — i18n keys (Rev 42): New section added. Keys to add: routes.duplicateNotice.title, routes.duplicateNotice.body, routes.duplicateSheet.cancel, routes.duplicateSheet.confirm. Keys to remove: routes.duplicateWarning.title, routes.duplicateWarning.body (superseded).
+  - Key Implementation Notes — "AC-187 two-layer duplicate guard (Rev 42)": Replaced old "AC-187 count is client-side (Rev 37)" note with full two-layer guard description (Layer 1 inline notice i18n keys and interpolations; Layer 2 non-dismissable sheet with RouteCards and two buttons; upload intercept contract).
+
+- `project-planning/production.md` — Module Index MOD-003 description updated: "non-blocking soft-warning AC-187" → "two-layer duplicate guard: inline notice + non-dismissable confirmation sheet on submit, AC-187 Rev 42".
+
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+
+**Files not touched:**
+- `project-planning/prd.md` — read-only.
+- All other module specs — AC-187 is scoped to MOD-003 only; no other module spec references this AC as its own.
+- Agent wrappers — not in scope (no new module, no dependency list change).
+- All `modules/*/status.md` files — owned by Engineer/QA agents.
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none — all PRD content was explicit enough to translate directly.
+
+**CONFLICT markers added:**
+- none
 
 ### 2026-10-16 — Delta Sync (Revision 41, [SUBSTANTIVE])
 
