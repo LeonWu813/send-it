@@ -15,6 +15,7 @@
 
 import { File as ExpoFile } from 'expo-file-system';
 
+import { getSignedUrl } from '../../lib/signedUrlCache';
 import { supabase } from '../../lib/supabase';
 import type {
   Route,
@@ -164,15 +165,17 @@ export async function getPhotoSignedUrl(photoUrl: string): Promise<string> {
   }
   const storagePath = photoUrl.slice(prefixIndex + BUCKET_PREFIX.length);
 
-  const { data, error } = await supabase.storage
-    .from('route-photos')
-    .createSignedUrl(storagePath, 3600);
+  return getSignedUrl('route-photos', storagePath, async () => {
+    const { data, error } = await supabase.storage
+      .from('route-photos')
+      .createSignedUrl(storagePath, 3600);
 
-  if (error || !data?.signedUrl) {
-    throw new Error('Failed to load route photo. Please try again.');
-  }
+    if (error || !data?.signedUrl) {
+      throw new Error('Failed to load route photo. Please try again.');
+    }
 
-  return data.signedUrl;
+    return data.signedUrl;
+  });
 }
 
 /**

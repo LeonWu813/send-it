@@ -44,6 +44,7 @@ function makeStorageBuilder(opts: {
 }
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
+import { clearCacheForTesting } from '../../../lib/signedUrlCache';
 import { supabase } from '../../../lib/supabase';
 import {
   fetchBetaVideoCounts,
@@ -356,6 +357,8 @@ describe('withdrawRoute', () => {
 describe('getPhotoSignedUrl', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Prevent cross-test cache leakage — each test starts with an empty cache.
+    clearCacheForTesting();
   });
 
   const STORED_URL =
@@ -405,6 +408,23 @@ describe('getPhotoSignedUrl', () => {
     await expect(getPhotoSignedUrl(STORED_URL)).rejects.toThrow(
       'Failed to load route photo. Please try again.',
     );
+  });
+
+  it('calls createSignedUrl only once when getPhotoSignedUrl is called twice with the same URL (cache hit)', async () => {
+    const storageBuilder = makeStorageBuilder({
+      signedUrlResult: { data: { signedUrl: SIGNED_URL }, error: null },
+    });
+    // mockReturnValue (not Once) — but cache ensures createSignedUrl is only called once.
+    mockStorageFrom.mockReturnValue(storageBuilder as unknown as ReturnType<typeof supabase.storage.from>);
+
+    const first = await getPhotoSignedUrl(STORED_URL);
+    const second = await getPhotoSignedUrl(STORED_URL);
+
+    expect(first).toBe(SIGNED_URL);
+    expect(second).toBe(SIGNED_URL);
+    // The Supabase storage mock must be invoked only once — the second call is
+    // served from the in-memory cache.
+    expect(storageBuilder.createSignedUrl).toHaveBeenCalledTimes(1);
   });
 });
 
