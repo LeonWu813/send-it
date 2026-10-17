@@ -16,6 +16,7 @@
  * AC-022: color selector restricted to fixed enum.
  * AC-023: grade selector restricted to V-scale only.
  * AC-043: pre-fill grade + color from RouteListScreen filter state via optional props.
+ * AC-187 (revised, Rev 42): two-layer duplicate guard — inline notice + non-dismissable sheet.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -25,8 +26,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
 
+import RouteCard from '../../../components/RouteCard';
+import type { RouteCardRoute } from '../../../components/RouteCard';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { AppText, Button, Chip, IconButton, NoticeBox, TextField } from '../../../components/ui';
+import { BottomSheet } from '../../../components/ui/BottomSheet';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
 import {
@@ -92,6 +96,9 @@ export default function RouteSubmitScreen({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // AC-187 Layer 2: non-dismissable confirmation sheet state.
+  const [showDuplicateSheet, setShowDuplicateSheet] = useState(false);
+
   // AC-187: client-side duplicate check against already-fetched active routes.
   // Fetch once on mount — no RPC per selection change.
   const [activeRoutes, setActiveRoutes] = useState<RouteSummary[]>([]);
@@ -103,15 +110,16 @@ export default function RouteSubmitScreen({
         setActiveRoutes(routes);
       }
     }).catch(() => {
-      // Non-fatal: if we can't fetch, the warning simply won't appear.
+      // Non-fatal: if we can't fetch, the notice simply won't appear.
     });
     return () => { cancelled = true; };
   }, [gymId]);
 
-  // Reactively derive whether the current selection is a duplicate (AC-187).
-  const isDuplicate = useMemo(() => {
-    if (!selectedGrade || !selectedColor) return false;
-    return activeRoutes.some(
+  // AC-187: derive the full list of matching duplicate candidates (not just a boolean).
+  // Used by Layer 1 (notice count) and Layer 2 (RouteCard list in sheet).
+  const duplicateCandidates = useMemo((): RouteSummary[] => {
+    if (!selectedGrade || !selectedColor) return [];
+    return activeRoutes.filter(
       (r) => r.grade === selectedGrade && r.color_tag === selectedColor,
     );
   }, [activeRoutes, selectedGrade, selectedColor]);
@@ -164,41 +172,17 @@ export default function RouteSubmitScreen({
 
   // ── Submission ─────────────────────────────────────────────────────────────
 
-  async function handleAddRoute(): Promise<void> {
-    // Inline validation — show all missing-field errors at once
-    let hasError = false;
-
-    if (!selectedGrade) {
-      setGradeError(t('routes.submit.errors.gradeRequired'));
-      hasError = true;
-    } else {
-      setGradeError(null);
-    }
-
-    if (!selectedColor) {
-      setColorError(t('routes.submit.errors.colorRequired'));
-      hasError = true;
-    } else {
-      setColorError(null);
-    }
-
-    // AC-021: photo is required
-    if (!photoUri) {
-      setPhotoError(t('routes.submit.errors.photoRequired'));
-      hasError = true;
-    } else {
-      setPhotoError(null);
-    }
-
-    if (hasError) return;
-
-    // TypeScript narrowing — all three are now non-null
-    const grade = selectedGrade!;
-    const colorTag = selectedColor!;
-    const uri = photoUri!;
-
+  /**
+   * The actual upload + RPC call. Called either directly (no duplicates) or
+   * after the user taps "Add Route" on the Layer 2 confirmation sheet.
+   * Precondition: grade, color, and photoUri are all non-null (validated before call).
+   */
+  async function uploadAndSubmit(
+    grade: RouteGrade,
+    colorTag: RouteColor,
+    uri: string,
+  ): Promise<void> {
     setIsSubmitting(true);
-
     try {
       const uploadedPhotoUrl = await uploadRoutePhoto(
         session.user.id,
@@ -235,6 +219,51 @@ export default function RouteSubmitScreen({
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleAddRoute(): Promise<void> {
+    // Inline validation — show all missing-field errors at once
+    let hasError = false;
+
+    if (!selectedGrade) {
+      setGradeError(t('routes.submit.errors.gradeRequired'));
+      hasError = true;
+    } else {
+      setGradeError(null);
+    }
+
+    if (!selectedColor) {
+      setColorError(t('routes.submit.errors.colorRequired'));
+      hasError = true;
+    } else {
+      setColorError(null);
+    }
+
+    // AC-021: photo is required
+    if (!photoUri) {
+      setPhotoError(t('routes.submit.errors.photoRequired'));
+      hasError = true;
+    } else {
+      setPhotoError(null);
+    }
+
+    if (hasError) return;
+
+    // TypeScript narrowing — all three are now non-null
+    const grade = selectedGrade!;
+    const colorTag = selectedColor!;
+    const uri = photoUri!;
+
+    // AC-187 Layer 2: intercept before any photo upload begins.
+    // If duplicate candidates exist, show the non-dismissable confirmation sheet
+    // and stop here — uploadRoutePhoto() must NOT be called until the user confirms.
+    if (duplicateCandidates.length > 0) {
+      setShowDuplicateSheet(true);
+      return;
+    }
+
+    // No duplicates — proceed immediately.
+    await uploadAndSubmit(grade, colorTag, uri);
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -372,20 +401,20 @@ export default function RouteSubmitScreen({
         </AppText>
       ) : null}
 
-      {/* AC-187: non-blocking inline duplicate notice — reactive to grade/color selection */}
-      {isDuplicate ? (
+      {/* AC-187 Layer 1: neutral-colored inline notice — reactive to grade/color selection */}
+      {duplicateCandidates.length > 0 ? (
         <View style={styles.duplicateNotice}>
           <NoticeBox
-            warning
-            message={`${t('routes.duplicateWarning.title')}. ${t('routes.duplicateWarning.body', {
+            message={`${t('routes.duplicateNotice.title')}. ${t('routes.duplicateNotice.body', {
               grade: selectedGrade,
               color: t(`routeCatalog.colors.${selectedColor}`),
+              count: duplicateCandidates.length,
             })}`}
           />
         </View>
       ) : null}
 
-      {/* Add Route button — disabled until a photo is selected (AC-021) */}
+      {/* Add Route button — always enabled (AC-187); disabled only while submitting */}
       <View style={styles.primaryAction}>
         <Button
           variant="primary"
@@ -393,10 +422,62 @@ export default function RouteSubmitScreen({
           label={t('routeCatalog.submit.addRoute')}
           onPress={() => void handleAddRoute()}
           loading={isSubmitting}
-          disabled={!photoUri || isSubmitting}
+          disabled={isSubmitting}
         />
       </View>
     </ScrollView>
+
+    {/* AC-187 Layer 2: non-dismissable confirmation sheet shown when duplicates exist on submit */}
+    <BottomSheet
+      visible={showDuplicateSheet}
+      onClose={() => {
+        // No-op: swipe-to-dismiss and backdrop tap are inert.
+        // The user must tap Cancel or "Add Route" to exit.
+      }}
+      title={t('routes.duplicateSheet.title')}
+      variant="content"
+      footer={
+        <View style={{ gap: 8 }}>
+          <Button
+            variant="primary"
+            size="lg"
+            fullWidth
+            label={t('routes.duplicateSheet.confirm')}
+            loading={isSubmitting}
+            onPress={() => {
+              setShowDuplicateSheet(false);
+              // TypeScript narrowing — validated before the sheet was shown
+              void uploadAndSubmit(selectedGrade!, selectedColor!, photoUri!);
+            }}
+          />
+          <Button
+            variant="secondary"
+            size="lg"
+            fullWidth
+            label={t('routes.duplicateSheet.cancel')}
+            disabled={isSubmitting}
+            onPress={() => setShowDuplicateSheet(false)}
+          />
+        </View>
+      }
+    >
+      {duplicateCandidates.map((candidate) => {
+        const cardRoute: RouteCardRoute = {
+          id: candidate.id,
+          name: `${candidate.grade} ${t(`routeCatalog.colors.${candidate.color_tag}`)}${candidate.section_label ? ` (${candidate.section_label})` : ''}`,
+          grade: candidate.grade,
+          photo_url: candidate.photo_url,
+          gymName: gymName,
+          colorTag: candidate.color_tag,
+          section: candidate.section_label ?? null,
+        };
+        return (
+          <View key={candidate.id} style={{ marginBottom: 8 }}>
+            <RouteCard route={cardRoute} onPress={() => {}} />
+          </View>
+        );
+      })}
+    </BottomSheet>
     </SwipeBackWrapper>
   );
 }

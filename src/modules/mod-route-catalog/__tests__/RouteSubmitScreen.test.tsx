@@ -19,6 +19,7 @@ jest.mock('../route-service', () => ({
   uploadRoutePhoto: jest.fn(),
   submitRoute: jest.fn(),
   listRoutes: jest.fn().mockResolvedValue([]),
+  getPhotoSignedUrl: jest.fn().mockResolvedValue('https://example.com/signed.jpg'),
 }));
 
 jest.mock('expo-image-picker', () => ({
@@ -444,8 +445,9 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     fireEvent.press(screen.getAllByText('Red')[0]);
 
     await waitFor(() => {
-      // Inline notice title should appear (not an Alert modal)
-      const notice = screen.queryByText(/Possible Duplicate|可能重複/);
+      // Layer 1: neutral-colored inline notice should appear (not an Alert modal)
+      // Rev 42: title changed from "Possible Duplicate" to "Similar Route Exists"
+      const notice = screen.queryByText(/Similar Route Exists|已有相似路線/);
       expect(notice).toBeTruthy();
     });
   });
@@ -471,7 +473,7 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     fireEvent.press(screen.getAllByText('Blue')[0]);
 
     await waitFor(() => {
-      const notice = screen.queryByText(/Possible Duplicate|可能重複/);
+      const notice = screen.queryByText(/Similar Route Exists|已有相似路線/);
       expect(notice).toBeNull();
     });
   });
@@ -497,14 +499,187 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     fireEvent.press(screen.getAllByText('Red')[0]);
 
     await waitFor(() => {
-      expect(screen.queryByText(/Possible Duplicate|可能重複/)).toBeTruthy();
+      expect(screen.queryByText(/Similar Route Exists|已有相似路線/)).toBeTruthy();
     });
 
     // Change grade to V4 — notice should disappear
     fireEvent.press(screen.getByText('V4'));
 
     await waitFor(() => {
-      expect(screen.queryByText(/Possible Duplicate|可能重複/)).toBeNull();
+      expect(screen.queryByText(/Similar Route Exists|已有相似路線/)).toBeNull();
+    });
+  });
+
+  it('shows Layer 2 confirmation sheet when duplicates exist and Add Route is tapped (AC-187)', async () => {
+    mockListRoutes.mockResolvedValueOnce([
+      {
+        id: 'route-existing',
+        gym_id: 'gym-001',
+        section_label: null,
+        grade: 'V3',
+        color_tag: 'red',
+        photo_url: 'https://example.com/photo.jpg',
+        status: 'active',
+        created_at: '2026-09-01T10:00:00Z',
+      },
+    ]);
+    mockLaunchImageLibraryAsync.mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file://photo.jpg',
+          mimeType: 'image/jpeg',
+          width: 800,
+          height: 600,
+          type: 'image',
+          fileName: 'photo.jpg',
+          fileSize: 100000,
+          assetId: null,
+          base64: null,
+          duration: null,
+          exif: null,
+          pairedVideoAsset: null,
+        },
+      ],
+    });
+
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    fireEvent.press(screen.getByText('V3'));
+    fireEvent.press(screen.getAllByText('Red')[0]);
+
+    const chooseBtn = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel?.toLowerCase().includes('library') ||
+        el.props.accessibilityLabel?.toLowerCase().includes('choose') ||
+        el.props.accessibilityLabel?.includes('相簿'),
+    );
+    if (chooseBtn) fireEvent.press(chooseBtn);
+
+    await waitFor(() => {
+      const changePhotoBtn = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel?.includes('Change Photo') ||
+          el.props.accessibilityLabel?.includes('更換照片'),
+      );
+      expect(changePhotoBtn).toBeTruthy();
+    });
+
+    const addRouteBtn = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel?.includes('Add Route') ||
+        el.props.accessibilityLabel?.includes('新增路線'),
+    );
+    if (addRouteBtn) fireEvent.press(addRouteBtn);
+
+    await waitFor(() => {
+      // Sheet should be shown — uploadRoutePhoto must NOT have been called yet
+      expect(mockUploadRoutePhoto).not.toHaveBeenCalled();
+      // The sheet title should appear
+      const sheetTitle = screen.queryByText(/Similar Routes Found|找到相似路線/);
+      expect(sheetTitle).toBeTruthy();
+    });
+  });
+
+  it('proceeds with upload only after tapping confirm on Layer 2 sheet (AC-187)', async () => {
+    mockListRoutes.mockResolvedValueOnce([
+      {
+        id: 'route-existing',
+        gym_id: 'gym-001',
+        section_label: null,
+        grade: 'V3',
+        color_tag: 'red',
+        photo_url: 'https://example.com/photo.jpg',
+        status: 'active',
+        created_at: '2026-09-01T10:00:00Z',
+      },
+    ]);
+    mockUploadRoutePhoto.mockResolvedValueOnce('https://example.com/photo.jpg');
+    mockSubmitRoute.mockResolvedValueOnce({
+      id: 'route-new',
+      gym_id: 'gym-001',
+      section_label: null,
+      grade: 'V3',
+      color_tag: 'red',
+      photo_url: 'https://example.com/photo.jpg',
+      status: 'active',
+      submitted_by_user_id: 'user-001',
+      created_at: '2026-09-23T10:00:00Z',
+      retired_at: null,
+      retired_by_user_id: null,
+    });
+    mockLaunchImageLibraryAsync.mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file://photo.jpg',
+          mimeType: 'image/jpeg',
+          width: 800,
+          height: 600,
+          type: 'image',
+          fileName: 'photo.jpg',
+          fileSize: 100000,
+          assetId: null,
+          base64: null,
+          duration: null,
+          exif: null,
+          pairedVideoAsset: null,
+        },
+      ],
+    });
+
+    const onSuccess = jest.fn();
+    render(
+      <RouteSubmitScreen {...DEFAULT_PROPS} onSuccess={onSuccess} />,
+      renderOptions(),
+    );
+
+    fireEvent.press(screen.getByText('V3'));
+    fireEvent.press(screen.getAllByText('Red')[0]);
+
+    const chooseBtn = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel?.toLowerCase().includes('library') ||
+        el.props.accessibilityLabel?.toLowerCase().includes('choose') ||
+        el.props.accessibilityLabel?.includes('相簿'),
+    );
+    if (chooseBtn) fireEvent.press(chooseBtn);
+
+    await waitFor(() => {
+      const changePhotoBtn = screen.queryAllByRole('button').find(
+        (el) =>
+          el.props.accessibilityLabel?.includes('Change Photo') ||
+          el.props.accessibilityLabel?.includes('更換照片'),
+      );
+      expect(changePhotoBtn).toBeTruthy();
+    });
+
+    // Tap "Add Route" — sheet appears, upload must NOT have started
+    const addRouteBtn = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel?.includes('Add Route') ||
+        el.props.accessibilityLabel?.includes('新增路線'),
+    );
+    if (addRouteBtn) fireEvent.press(addRouteBtn);
+
+    await waitFor(() => {
+      expect(mockUploadRoutePhoto).not.toHaveBeenCalled();
+    });
+
+    // Tap "Add Route" confirm button on the sheet — upload now proceeds.
+    // When the sheet is visible there are two "Add Route" buttons: one on the form
+    // and one in the sheet footer. The sheet confirm button is the last occurrence.
+    const allAddRouteBtns = screen.queryAllByRole('button').filter(
+      (el) =>
+        el.props.accessibilityLabel?.includes('Add Route') ||
+        el.props.accessibilityLabel?.includes('新增路線'),
+    );
+    const sheetConfirmBtn = allAddRouteBtns[allAddRouteBtns.length - 1];
+    if (sheetConfirmBtn) fireEvent.press(sheetConfirmBtn);
+
+    await waitFor(() => {
+      expect(mockUploadRoutePhoto).toHaveBeenCalled();
+      expect(onSuccess).toHaveBeenCalledWith('route-new');
     });
   });
 });

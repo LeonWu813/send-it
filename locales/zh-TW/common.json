@@ -169,9 +169,14 @@
   },
   "routes": {
     "noResults": "找不到路線。",
-    "duplicateWarning": {
-      "title": "可能重複",
-      "body": "這個健身房已有一條 {{grade}} {{color}} 的現役路線。"
+    "duplicateNotice": {
+      "title": "已有相似路線",
+      "body": "此岩館已有 {{count}} 條現役 {{grade}} {{color}} 路線。"
+    },
+    "duplicateSheet": {
+      "title": "找到相似路線",
+      "cancel": "取消",
+      "confirm": "新增路線"
     },
     "status": {
       "active": "開放中",
@@ -208,10 +213,6 @@
         "preview": "路線照片預覽",
         "takePhoto": "拍照",
         "choosePhoto": "從相簿選擇"
-      },
-      "duplicateWarning": {
-        "title": "可能為重複路線",
-        "body": "此岩館已有相同難度與顏色的路線。如果這是不同的路線，請加上區域標籤以作區分；否則您可能正在建立重複路線。"
       },
       "errors": {
         "gradeRequired": "請選擇難度。",
