@@ -18,6 +18,7 @@
 import { File as ExpoFile } from 'expo-file-system';
 
 import { supabase } from '../../lib/supabase';
+import { getSignedUrl } from '../../lib/signedUrlCache';
 import type { BetaVideo, BetaVideoUploadInput, UploadProgress } from './types';
 
 /** Storage bucket for beta video artifacts. */
@@ -185,15 +186,17 @@ export async function uploadBetaVideo(
  * @throws {Error}     on failure.
  */
 export async function getVideoSignedUrl(storagePath: string): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from(BETA_VIDEO_BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_EXPIRY);
+  return getSignedUrl(BETA_VIDEO_BUCKET, storagePath, async () => {
+    const { data, error } = await supabase.storage
+      .from(BETA_VIDEO_BUCKET)
+      .createSignedUrl(storagePath, SIGNED_URL_EXPIRY);
 
-  if (error || !data?.signedUrl) {
-    throw new Error('Failed to generate video URL.');
-  }
+    if (error || !data?.signedUrl) {
+      throw new Error('Failed to generate video URL.');
+    }
 
-  return data.signedUrl;
+    return data.signedUrl;
+  });
 }
 
 /**
@@ -204,15 +207,17 @@ export async function getVideoSignedUrl(storagePath: string): Promise<string> {
  * @throws {Error}     on failure.
  */
 export async function getThumbnailSignedUrl(storagePath: string): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from(BETA_VIDEO_BUCKET)
-    .createSignedUrl(storagePath, SIGNED_URL_EXPIRY);
+  return getSignedUrl(BETA_VIDEO_BUCKET, storagePath, async () => {
+    const { data, error } = await supabase.storage
+      .from(BETA_VIDEO_BUCKET)
+      .createSignedUrl(storagePath, SIGNED_URL_EXPIRY);
 
-  if (error || !data?.signedUrl) {
-    throw new Error('Failed to generate thumbnail URL.');
-  }
+    if (error || !data?.signedUrl) {
+      throw new Error('Failed to generate thumbnail URL.');
+    }
 
-  return data.signedUrl;
+    return data.signedUrl;
+  });
 }
 
 /**

@@ -33,6 +33,7 @@ jest.mock('../../../lib/supabase', () => ({
 
 import * as ExpoFileSystem from 'expo-file-system';
 import { supabase } from '../../../lib/supabase';
+import { clearCacheForTesting } from '../../../lib/signedUrlCache';
 import {
   fetchBetaVideosForRoute,
   uploadBetaVideo,
@@ -146,6 +147,7 @@ describe('fetchBetaVideosForRoute', () => {
 describe('getVideoSignedUrl', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearCacheForTesting();
   });
 
   it('returns a signed URL on success', async () => {
@@ -179,11 +181,29 @@ describe('getVideoSignedUrl', () => {
       'Failed to generate video URL',
     );
   });
+
+  it('cache hit: calling the same path twice invokes createSignedUrl only once', async () => {
+    const storageBucket = {
+      createSignedUrl: jest.fn().mockResolvedValue({
+        data: { signedUrl: 'https://signed.example.com/video.mp4?token=abc' },
+        error: null,
+      }),
+    };
+    (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
+
+    const url1 = await getVideoSignedUrl('user-001/route-001/video.mp4');
+    const url2 = await getVideoSignedUrl('user-001/route-001/video.mp4');
+
+    expect(url1).toBe('https://signed.example.com/video.mp4?token=abc');
+    expect(url2).toBe('https://signed.example.com/video.mp4?token=abc');
+    expect(storageBucket.createSignedUrl).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('getThumbnailSignedUrl', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    clearCacheForTesting();
   });
 
   it('returns a signed URL on success', async () => {
@@ -212,6 +232,23 @@ describe('getThumbnailSignedUrl', () => {
     await expect(getThumbnailSignedUrl('user-001/route-001/thumb.jpg')).rejects.toThrow(
       'Failed to generate thumbnail URL',
     );
+  });
+
+  it('cache hit: calling the same path twice invokes createSignedUrl only once', async () => {
+    const storageBucket = {
+      createSignedUrl: jest.fn().mockResolvedValue({
+        data: { signedUrl: 'https://signed.example.com/thumb.jpg?token=abc' },
+        error: null,
+      }),
+    };
+    (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
+
+    const url1 = await getThumbnailSignedUrl('user-001/route-001/thumb.jpg');
+    const url2 = await getThumbnailSignedUrl('user-001/route-001/thumb.jpg');
+
+    expect(url1).toBe('https://signed.example.com/thumb.jpg?token=abc');
+    expect(url2).toBe('https://signed.example.com/thumb.jpg?token=abc');
+    expect(storageBucket.createSignedUrl).toHaveBeenCalledTimes(1);
   });
 });
 
