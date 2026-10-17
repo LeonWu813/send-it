@@ -176,7 +176,7 @@
     "duplicateSheet": {
       "title": "Similar Routes Found",
       "cancel": "Cancel",
-      "confirm": "Add Route"
+      "confirm": "Continue to add, this is a different route"
     },
     "status": {
       "active": "Active",

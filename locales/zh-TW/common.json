@@ -176,7 +176,7 @@
     "duplicateSheet": {
       "title": "找到相似路線",
       "cancel": "取消",
-      "confirm": "新增路線"
+      "confirm": "確認新增，這是不同的路線"
     },
     "status": {
       "active": "開放中",
