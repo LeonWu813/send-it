@@ -80,6 +80,10 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   );
   const [selectedOverride, setSelectedOverride] = useState<ThemeOverride>(override);
 
+  // userId for per-user AsyncStorage key scoping.
+  // Loaded once on mount from the Supabase session; null until resolved.
+  const [userId, setUserId] = useState<string | null>(null);
+
   // AC-157: Beta Video Privacy state
   const [betaVideoPrivacy, setBetaVideoPrivacy] = useState<'public' | 'followers_only'>('public');
   const [privacyLoading, setPrivacyLoading] = useState(false);
@@ -89,12 +93,21 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
-  // On mount: load persisted preferences and apply them
+  // On mount: resolve userId then load persisted preferences and apply them.
+  // If userId cannot be resolved (unauthenticated), skip AsyncStorage reads —
+  // the screen will show system defaults without crashing.
   useEffect(() => {
     async function restorePreferences(): Promise<void> {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        return;
+      }
+      const resolvedUserId = session.user.id;
+      setUserId(resolvedUserId);
+
       const [savedLang, savedOverride] = await Promise.all([
-        loadLanguage(),
-        loadThemeOverride(),
+        loadLanguage(resolvedUserId),
+        loadThemeOverride(resolvedUserId),
       ]);
 
       if (savedLang !== null) {
@@ -137,13 +150,19 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   async function handleLanguageSelect(lang: SupportedLanguage): Promise<void> {
     setSelectedLanguage(lang);
     await i18n.changeLanguage(lang);
-    await saveLanguage(lang);
+    // Only persist if userId is known; unauthenticated state is not persisted.
+    if (userId !== null) {
+      await saveLanguage(userId, lang);
+    }
   }
 
   async function handleOverrideSelect(newOverride: ThemeOverride): Promise<void> {
     setSelectedOverride(newOverride);
     setOverride(newOverride);
-    await saveThemeOverride(newOverride);
+    // Only persist if userId is known; unauthenticated state is not persisted.
+    if (userId !== null) {
+      await saveThemeOverride(userId, newOverride);
+    }
   }
 
   // AC-157: Toggle handler

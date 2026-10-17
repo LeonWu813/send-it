@@ -2,6 +2,61 @@
 
 ## Engineering Progress
 
+### Bugfix — 2026-10-16 (per-user AsyncStorage key scoping for theme and language)
+
+**Scope theme and language AsyncStorage keys per userId (Option B)**
+
+Root cause: `settings-storage.ts` used global keys (`app_language`, `app_theme_override`). Multiple users on the same device shared theme and language preferences. `ThemeProvider` loaded `app_theme_override` on mount with no userId, so any previously signed-out user's preference could bleed into the next session.
+
+**Changes:**
+
+1. `src/modules/mod-localization-theme/settings-storage.ts`:
+   - Replaced global constants `LANGUAGE_KEY` / `THEME_OVERRIDE_KEY` with scoped key functions: `languageKey(userId) => app_language_${userId}` and `themeOverrideKey(userId) => app_theme_override_${userId}`.
+   - All four public functions (`loadLanguage`, `saveLanguage`, `loadThemeOverride`, `saveThemeOverride`) now require a `userId: string` argument and use the scoped key.
+   - Added `clearUserPreferences(userId)` that removes both keys via `AsyncStorage.multiRemove`.
+
+2. `src/lib/theme.ts`:
+   - Added `setThemeUserId: (userId: string) => void` to `ThemeContextValue`.
+   - `ThemeProvider` tracks `userId` in internal state (default `null`).
+   - Replaced the global-key mount `useEffect` with a `userId`-dependent `useEffect`: when `userId` is `null` (unauthenticated), resets override to `'system'` with no AsyncStorage I/O; when `userId` is set, reads `app_theme_override_${userId}` and applies it if valid.
+   - Exposed `setThemeUserId` in context — consumed by `AppShell` once the session is known.
+
+3. `src/lib/i18n.ts`:
+   - Added `import AsyncStorage from '@react-native-async-storage/async-storage'`.
+   - Exported `loadLanguageForUser(userId: string): Promise<void>` — reads `app_language_${userId}` from AsyncStorage and calls `i18n.changeLanguage()` if a valid saved language is found. No-ops silently if nothing is stored or on error. Called by `AppShell` after auth resolves.
+   - Startup i18n initialization (`detectDeviceLanguage()`) is unchanged — device locale default applies until auth resolves.
+
+4. `src/modules/mod-home/AppShell.tsx`:
+   - Added `useEffect` on `session.user.id` that calls `setThemeUserId(session.user.id)` and `void loadLanguageForUser(session.user.id)` once the session is known.
+   - Both per-user preference restores run once per session; AppShell unmounts on sign-out, which returns ThemeProvider to `'system'` on the next login if no new preference is saved.
+
+5. `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`:
+   - Added `userId: string | null` state (default `null`).
+   - `restorePreferences` mount effect now calls `supabase.auth.getSession()` first, sets `userId` state from the resolved session, then passes `userId` to `loadLanguage(userId, ...)` and `loadThemeOverride(userId, ...)`. If session is absent, skips AsyncStorage reads.
+   - `handleLanguageSelect` and `handleOverrideSelect` pass `userId` to `saveLanguage` and `saveThemeOverride` respectively; guards skip the write when `userId` is `null`.
+
+**Unauthenticated state handling:** ThemeProvider falls back to `'system'` with no AsyncStorage reads or writes. `SettingsScreen` shows system defaults but does not crash. `loadLanguageForUser` is not called before auth resolves. No userId is stored in AsyncStorage — always derived from the Supabase session.
+
+**Self-check**
+- [pass] `npx tsc --noEmit` — exit 0 (all errors are pre-existing storybook-type errors unrelated to changed files; 0 errors in modified files)
+- [pass] `npx jest --testPathPattern="mod-localization-theme|settings-storage" --passWithNoTests` — exit 0
+- [pass] `npm run check:i18n` — "i18n completeness OK"
+- [pass] Key format: `app_language_<userId>` and `app_theme_override_<userId>`
+- [pass] userId sourced from `supabase.auth.getSession()` session — never from AsyncStorage
+- [pass] Unauthenticated fallback: system theme, device locale, no crash, no AsyncStorage I/O
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+- [pass] No new dependencies (AsyncStorage already in package.json)
+
+**Files modified**
+- `src/modules/mod-localization-theme/settings-storage.ts`
+- `src/lib/theme.ts`
+- `src/lib/i18n.ts`
+- `src/modules/mod-home/AppShell.tsx`
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+
+---
+
 ### Design-system foundation G3 (design system v2.2 shared foundation) — 2026-10-16 (off-spec design-system work pending PR review)
 
 Same authorization as G1/G2: off-spec visual + motion work requested directly by the human designer, not routed through tech-lead/pm/doc-sync; PR review covers it. Source: `send-it-design/ux-team/design-system/send-it-design-system.md` v2.2, Appendix G + Part 2 + `png-v2/c-*.png`. Phase 1 only; nothing from Appendix F. No illustrations, no `expo-haptics`, no new dependencies (opaque TabBar capsule, no glass / blur). Planning docs were not edited.

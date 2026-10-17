@@ -527,6 +527,14 @@ interface ThemeContextValue {
   theme: Theme;
   override: ThemeOverride;
   setOverride: (override: ThemeOverride) => void;
+  /**
+   * Called once the authenticated userId is known (e.g. from AppShell on mount).
+   * ThemeProvider loads and persists the user-scoped theme override key
+   * (app_theme_override_<userId>) from that point forward.
+   * When userId is undefined (unauthenticated), the provider falls back to the
+   * system theme with no AsyncStorage reads or writes.
+   */
+  setThemeUserId: (userId: string) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -572,13 +580,23 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
   const [systemScheme, setSystemScheme] = useState<ColorSchemeName>(
     Appearance.getColorScheme() ?? 'unspecified',
   );
+  // userId is set by AppShell once the session is known (Option B: per-user keys).
+  // When null (unauthenticated), no AsyncStorage reads or writes are performed.
+  const [userId, setUserId] = useState<string | null>(null);
 
-  // Load persisted theme override on mount so the correct theme is applied from
-  // the first render rather than waiting for SettingsScreen to open.
+  // When userId becomes known, load the user-scoped theme override preference.
+  // Falls back to 'system' (already the default) when nothing is stored or on error.
   useEffect(() => {
+    if (userId === null) {
+      // Unauthenticated — reset to system default and skip all AsyncStorage I/O.
+      setOverride('system');
+      return;
+    }
+
     async function loadSavedOverride(): Promise<void> {
       try {
-        const saved = await AsyncStorage.getItem('app_theme_override');
+        const key = `app_theme_override_${userId}`;
+        const saved = await AsyncStorage.getItem(key);
         if (saved === 'light' || saved === 'dark' || saved === 'system') {
           setOverride(saved);
         }
@@ -587,7 +605,7 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
       }
     }
     void loadSavedOverride();
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     const subscription = Appearance.addChangeListener(({ colorScheme }) => {
@@ -596,12 +614,16 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
     return () => subscription.remove();
   }, []);
 
+  function setThemeUserId(newUserId: string): void {
+    setUserId(newUserId);
+  }
+
   const isDark = resolveScheme(override, systemScheme);
   const theme = buildTheme(isDark);
 
   return React.createElement(
     ThemeContext.Provider,
-    { value: { theme, override, setOverride } },
+    { value: { theme, override, setOverride, setThemeUserId } },
     children,
   );
 }

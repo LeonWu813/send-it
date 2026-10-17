@@ -61,13 +61,14 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CelebrationHost } from '../../components/ui/CelebrationHost';
 import { ToastProvider } from '../../components/ui/Toast';
+import { loadLanguageForUser } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme';
 import { UnreadCountProvider } from '../mod-notifications/UnreadCountProvider';
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
@@ -177,7 +178,19 @@ function TabChrome({
 export default function AppShell({ session }: AppShellProps): React.JSX.Element {
   const [activeTab, setActiveTab] = useState<TabKey>('home');
   const insets = useSafeAreaInsets();
-  const { theme } = useTheme();
+  const { theme, setThemeUserId } = useTheme();
+
+  // Once the session is known, apply per-user preferences stored in AsyncStorage.
+  // - setThemeUserId: tells ThemeProvider to load and persist the user-scoped
+  //   theme override key (app_theme_override_<userId>).
+  // - loadLanguageForUser: applies the user-scoped language key (app_language_<userId>)
+  //   so the i18n language is per-user rather than device-global.
+  // Both run once per session — AppShell unmounts on sign-out, which causes
+  // ThemeProvider to reset to 'system' on the next login if no preference is saved.
+  useEffect(() => {
+    setThemeUserId(session.user.id);
+    void loadLanguageForUser(session.user.id);
+  }, [session.user.id, setThemeUserId]);
 
   /** Measured TabBar height — toasts float `toastOffsetAboveTabBar` above it. */
   const [tabBarHeight, setTabBarHeight] = useState<number | null>(null);
