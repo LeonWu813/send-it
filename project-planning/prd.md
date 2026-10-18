@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 42
-**Date**: 2026-10-17
-**Revision**: 42
+**Status**: [SUBSTANTIVE] — Revision 43
+**Date**: 2026-10-18
+**Revision**: 43
 
 ---
 
@@ -175,13 +175,15 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 
 ---
 
-### US-012: Set profile privacy
+### US-012: Set beta video privacy
 
 **As a** climber concerned about visibility,
-**I want** to choose between a public profile and followers-only visibility, and separately choose whether my beta videos are visible to everyone or only to my followers,
-**so that** I control who sees my logs and who sees my beta.
+**I want** to choose whether my beta videos are visible to everyone or only to my followers,
+**so that** I control who sees my beta.
 
-**Acceptance Criteria**: AC-063, AC-156, AC-157, AC-158
+Profile activity is always public; only beta video privacy is user-controlled.
+
+**Acceptance Criteria**: AC-156, AC-157, AC-158
 
 ---
 
@@ -326,7 +328,7 @@ The data flow for the two most important loops:
 
 ### MOD-001: Auth & Profile
 
-**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). The notification bell is no longer in the ProfileScreen header — it moves to the global app-level header owned by MOD-012 (AC-184), which wires to MOD-007's NotificationInboxScreen. There is no home gym concept — saved gyms live in MOD-012.
+**Purpose**: Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including the beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The `privacy_setting` column is always `public` — there is no user-facing toggle for profile privacy (AC-063). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). The notification bell is no longer in the ProfileScreen header — it moves to the global app-level header owned by MOD-012 (AC-184), which wires to MOD-007's NotificationInboxScreen. There is no home gym concept — saved gyms live in MOD-012.
 
 **User Stories**: US-001, US-011, US-012, US-022
 
@@ -482,11 +484,11 @@ The data flow for the two most important loops:
 
 **AC-001** (revised): On first run, the system shall navigate the user directly to the Home screen after signup via Email, Apple Sign-In, or Google Sign-In, without requiring any gym selection step.
 
-**AC-063**: The system shall enforce a profile privacy setting of `public` (default) or `followers_only`, and when set to `followers_only` shall return 403/hidden for logs and beta video listings requested by non-followers.
+**AC-063**: The `users.privacy_setting` column is always `public`; there is no user-facing toggle to change it to `followers_only`. The column is retained in the schema for potential future use but is not user-controllable in Phase 1. Profile activity (send history, profile surface) is visible to all authenticated users regardless of this value.
 
 **AC-116** (new): The Profile screen shall display the current user's display name, avatar, and bio.
 
-**AC-117** (new): The Profile screen shall expose an Edit Profile entry point that opens editing of the current user's display name, avatar, bio, and privacy setting.
+**AC-117** (new): The Profile screen shall expose an Edit Profile entry point that opens editing of the current user's display name, avatar, and bio.
 
 **AC-118** (new): The Profile screen shall embed the current user's send history (the MOD-008 profile-history-and-stats surface).
 
@@ -782,7 +784,7 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-155** (new): The Settings screen (SettingsScreen) shall present a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping the row shall open a Blocked Accounts screen (BlockedAccountsScreen) that lists the users the current user has blocked (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, the user's `display_name`, and an "Unblock" button. Tapping "Unblock" shall call `unblockUser(userId)` (MOD-009, AC-152) and remove that entry from the list. When the current user has blocked no one, the screen shall display an empty state. Navigation to and from the Blocked Accounts screen is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere), with no ProfileNavigator view-state change. The blocked-users list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
 
-**AC-157** (new): The Settings screen (SettingsScreen) shall present a "Beta Video Privacy" toggle row with two states — `public` (default) and `followers_only` — reflecting the current user's `beta_video_privacy` value (AC-156). Changing the toggle shall call MOD-001's public service function to update the current user's `beta_video_privacy` column (MOD-001 owns the write) and reflect the new state immediately. This row is independent from the existing profile privacy setting (AC-063), which is edited via the MOD-001 Edit Profile entry point (AC-117), not here.
+**AC-157** (new): The Settings screen (SettingsScreen) shall present a "Beta Video Privacy" toggle row with two states — `public` (default) and `followers_only` — reflecting the current user's `beta_video_privacy` value (AC-156). Changing the toggle shall call MOD-001's public service function to update the current user's `beta_video_privacy` column (MOD-001 owns the write) and reflect the new state immediately. This row is the only user-facing privacy control. Profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063).
 
 **AC-168** (new): The SettingsScreen shall present a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and the "Blocked Accounts" row, AC-155). The button shall use the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167).
 
@@ -853,15 +855,18 @@ There shall be no disabled-button state and no "delete your existing video first
 ```
 User
  - id, display_name, avatar_url,
-   bio, privacy_setting (public | followers_only),
+   bio, privacy_setting (always 'public', no user toggle — retained for schema compat, AC-063),
    beta_video_privacy (public | followers_only, default public), created_at
-   -- privacy_setting governs the profile surface, logs, and beta-video LISTINGS
-   --   for followers-only profiles (AC-063). beta_video_privacy is a SEPARATE,
-   --   independent control (AC-156) governing beta-video visibility only:
-   --   when followers_only, the user's beta videos are visible only to the user
-   --   and their followers (AC-158); when public (default), visible to all.
-   --   MOD-001 owns the write (public service); MOD-010's SettingsScreen calls it
-   --   (AC-157). Adding this column requires a migration.
+   -- privacy_setting is ALWAYS 'public' in Phase 1 — there is no user-facing
+   --   toggle and no followers_only enforcement (AC-063). The column is retained
+   --   in the schema for potential future use only; do not read it as an access
+   --   gate in any query or RLS policy.
+   -- beta_video_privacy is a SEPARATE, independent control (AC-156) governing
+   --   beta-video visibility only: when followers_only, the user's beta videos
+   --   are visible only to the user and their followers (AC-158); when public
+   --   (default), visible to all. MOD-001 owns the write (public service);
+   --   MOD-010's SettingsScreen calls it (AC-157). Adding this column requires
+   --   a migration.
 
 Gym  (admin-maintained, branch-level rows for multi-branch gyms)
  - id, name, branch_label (nullable, e.g. "萬華", "南港"), city, district,
