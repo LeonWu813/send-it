@@ -1,11 +1,12 @@
 /**
  * EditProfileScreen.
  *
- * Allows the user to update their display name, bio, avatar, and privacy
- * setting. Avatar changes are uploaded to Supabase Storage first; the
+ * Allows the user to update their display name, bio, and avatar.
+ * Avatar changes are uploaded to Supabase Storage first; the
  * resulting URL is then written to the profile row.
  *
- * AC-063: privacy_setting of 'public' | 'followers_only' is persisted here.
+ * AC-117: editable fields are display name, avatar, and bio only.
+ * AC-063: privacy_setting is always 'public'; there is no user-facing toggle.
  */
 
 import * as ImagePicker from 'expo-image-picker';
@@ -24,14 +25,13 @@ import {
   Avatar,
   Button,
   Card,
-  Chip,
   InlineError,
   TextField,
 } from '../../../components/ui';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader, useHideTabBar } from '@/lib/AppHeaderContext';
 import { uploadAvatar, upsertProfile } from '../auth-service';
-import type { PrivacySetting, UserProfile } from '../types';
+import type { UserProfile } from '../types';
 
 interface EditProfileScreenProps {
   userId: string;
@@ -57,9 +57,6 @@ export default function EditProfileScreen({
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
-  const [privacySetting, setPrivacySetting] = useState<PrivacySetting>(
-    profile?.privacy_setting ?? 'public',
-  );
   const [avatarUri, setAvatarUri] = useState<string | null>(
     profile?.avatar_url ?? null,
   );
@@ -72,7 +69,6 @@ export default function EditProfileScreen({
     if (profile) {
       setDisplayName(profile.display_name);
       setBio(profile.bio ?? '');
-      setPrivacySetting(profile.privacy_setting);
       setAvatarUri(profile.avatar_url);
     }
   }, [profile]);
@@ -116,7 +112,6 @@ export default function EditProfileScreen({
         display_name: displayName.trim(),
         bio: bio.trim() || null,
         avatar_url: avatarUri,
-        privacy_setting: privacySetting,
       });
       onSaved(updated);
     } catch (err) {
@@ -173,32 +168,6 @@ export default function EditProfileScreen({
           disabled={isSaving}
         />
         </Card>
-
-        {/* Privacy setting */}
-        <AppText variant="groupHeader" style={styles.sectionLabel}>
-          {t('profile.privacy')}
-        </AppText>
-        <View style={styles.privacyToggleRow} accessibilityRole="radiogroup">
-          <Chip
-            variant="choice"
-            label={t('profile.privacyPublic')}
-            selected={privacySetting === 'public'}
-            onPress={() => setPrivacySetting('public')}
-            disabled={isSaving}
-          />
-          <Chip
-            variant="choice"
-            label={t('profile.privacyFollowersOnly')}
-            selected={privacySetting === 'followers_only'}
-            onPress={() => setPrivacySetting('followers_only')}
-            disabled={isSaving}
-          />
-        </View>
-        <AppText variant="footnote" color="textSecondary">
-          {privacySetting === 'public'
-            ? t('profile.privacyPublicDescription')
-            : t('profile.privacyFollowersOnlyDescription')}
-        </AppText>
 
         {/* Error */}
         {errorMessage ? (
@@ -259,15 +228,6 @@ function makeStyles(
     },
     formCard: {
       gap: theme.layout.fieldGap,
-    },
-    sectionLabel: {
-      marginTop: theme.spacing.sm,
-    },
-    privacyToggleRow: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      columnGap: theme.spacing.sm,
-      rowGap: theme.spacing.smd,
     },
     actionsRow: {
       flexDirection: 'row',
