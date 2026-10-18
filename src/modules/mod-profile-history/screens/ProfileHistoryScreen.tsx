@@ -289,6 +289,7 @@ export default function ProfileHistoryScreen({
           />
         );
       }}
+      ItemSeparatorComponent={() => <View style={{ height: theme.layout.cardGap }} />}
       ListHeaderComponent={ListHeader}
       ListEmptyComponent={hasRecords ? ListEmpty : null}
       ListFooterComponent={extraListFooter ?? null}
@@ -309,6 +310,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
     contentContainer: {
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
+      paddingHorizontal: screenMargin,
     },
     centered: {
       flex: 1,
