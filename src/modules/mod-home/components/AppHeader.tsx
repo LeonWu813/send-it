@@ -182,7 +182,7 @@ export default function AppHeader({
         }}
       >
         <View style={[styles.nestedRow, { paddingHorizontal: screenMargin, height: ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM }]}>
-          <View style={[StyleSheet.absoluteFill, styles.titleWrap, { paddingHorizontal: side }]} pointerEvents="none">
+          <View style={[StyleSheet.absoluteFill, styles.titleWrap, { paddingLeft: screenMargin + ROW + theme.spacing.sm, paddingRight: side }]} pointerEvents="none">
             <AppText variant="headline" align="center" numberOfLines={1} accessibilityRole="header">
               {title}
             </AppText>
