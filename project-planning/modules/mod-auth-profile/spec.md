@@ -4,20 +4,20 @@
 **Module Name**: Auth & Profile
 **Phase**: 1
 **Dependencies**: MOD-005 (`BetaVideoGrid` component, `fetchBetaVideosByUser` service, and `BetaVideoReelViewer` `profile` context for the own-videos grid on ProfileScreen, AC-164)
-**Last Synced from PRD Revision**: 36
-**Last Updated**: 2026-10-13
+**Last Synced from PRD Revision**: 43
+**Last Updated**: 2026-10-18
 
 ---
 
 ## Purpose
 
-Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including privacy setting, the separate beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio, privacy setting); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). The notification bell is no longer in the ProfileScreen header — it moves to the global app-level header owned by MOD-012 (AC-184), which wires to MOD-007's NotificationInboxScreen. There is no home gym concept — saved gyms live in MOD-012.
+Handle signup, sign-in (email, Apple, Google), session management, and user profile CRUD including the beta-video privacy setting (`beta_video_privacy`), avatar, bio, and display name. Own the Profile tab surface: display the current user's display name, avatar, and bio; render follower/following count links on the profile (AC-145); expose an Edit Profile entry point (display name, avatar, bio); embed the current user's send history (MOD-008 surface); and render a 3-column beta-video grid of the current user's own beta videos below the send history (MOD-005's `BetaVideoGrid` + `fetchBetaVideosByUser`, opening MOD-005's reel viewer in `profile` context, AC-164). Own the `users.beta_video_privacy` write: expose a public service function that updates the current user's `beta_video_privacy` column, consumed by MOD-010's SettingsScreen (AC-157). The `privacy_setting` column is always `public` — there is no user-facing toggle for profile privacy (AC-063). The Logout control is no longer on the Profile screen — it moves to MOD-010's SettingsScreen (AC-167/AC-168). The notification bell is no longer in the ProfileScreen header — it moves to the global app-level header owned by MOD-012 (AC-184), which wires to MOD-007's NotificationInboxScreen. There is no home gym concept — saved gyms live in MOD-012.
 
 ---
 
 ## Context
 
-New climbers need a fast, trustworthy onboarding path that lets them complete signup and start logging. Send It supports Email, Apple Sign-In, and Google Sign-In; Apple Sign-In is required by the App Store because a third-party sign-in (Google) is offered. After auth, the user lands directly on the Home tab without requiring any gym selection step (AC-001 revised). Profile privacy (`public` | `followers_only`) controls whether non-followers can view a user's logs and beta video listings; this setting is required for US-012 and enforced in RLS across multiple downstream modules.
+New climbers need a fast, trustworthy onboarding path that lets them complete signup and start logging. Send It supports Email, Apple Sign-In, and Google Sign-In; Apple Sign-In is required by the App Store because a third-party sign-in (Google) is offered. After auth, the user lands directly on the Home tab without requiring any gym selection step (AC-001 revised). The `privacy_setting` column is always `public`; there is no user-facing toggle to change it to `followers_only`. The column is retained in the schema for potential future use but is not user-controllable in Phase 1. Profile activity (send history, profile surface) is visible to all authenticated users regardless of this value (AC-063).
 
 The MOD-001 engineer must also execute the `home_gym_id` removal: add a forward migration to DROP COLUMN `home_gym_id` from `public.users` and remove all source references listed in the Impact Map (auth-service.ts, types.ts, AuthNavigator.tsx, HomeGymSelectionScreen.tsx, test files, i18n catalogs). This removal is required because the `SavedGym` join table (owned by MOD-012) replaces the single `home_gym_id` field.
 
@@ -43,7 +43,7 @@ The Logout control is removed from the Profile screen (AC-167) and relocated to 
 
 - **US-001**: Sign up and start using the app
 - **US-011**: View my profile history and stats
-- **US-012**: Set profile privacy
+- **US-012**: Set beta video privacy
 - **US-022**: See who follows me and who I follow
 
 **US-001 Acceptance Criteria**: AC-001
@@ -60,11 +60,11 @@ The Logout control is removed from the Profile screen (AC-167) and relocated to 
 
 **AC-001** (revised): On first run, the app shall navigate the user directly to the Home tab without requiring gym selection.
 
-**AC-063**: The system shall enforce a profile privacy setting of `public` (default) or `followers_only`, and when set to `followers_only` shall return 403/hidden for logs and beta video listings requested by non-followers.
+**AC-063**: The `users.privacy_setting` column is always `public`; there is no user-facing toggle to change it to `followers_only`. The column is retained in the schema for potential future use but is not user-controllable in Phase 1. Profile activity (send history, profile surface) is visible to all authenticated users regardless of this value.
 
 **AC-116** (new): The Profile screen shall display the current user's display name, avatar, and bio.
 
-**AC-117** (new): The Profile screen shall expose an Edit Profile entry point that opens editing of the current user's display name, avatar, bio, and privacy setting.
+**AC-117** (new): The Profile screen shall expose an Edit Profile entry point that opens editing of the current user's display name, avatar, and bio.
 
 **AC-118** (new): The Profile screen shall embed the current user's send history (the MOD-008 profile-history-and-stats surface).
 
@@ -97,10 +97,11 @@ The Logout control is removed from the Profile screen (AC-167) and relocated to 
 ```
 User
  - id, display_name, avatar_url,
-   bio, privacy_setting (public | followers_only),
+   bio, privacy_setting (always 'public', no user toggle — retained for schema compat, AC-063),
    beta_video_privacy (public | followers_only, default public), created_at
-   -- privacy_setting: governs logs and the profile surface (AC-063).
-   --   followers_only → logs and profile hidden/403 to non-followers.
+   -- privacy_setting: ALWAYS 'public' in Phase 1, no followers_only enforcement,
+   --   retained for potential future use only; must not be read as an access gate
+   --   in any query or RLS policy (AC-063).
    -- beta_video_privacy: a SEPARATE, independent column (AC-156) governing
    --   beta-video visibility only. followers_only → beta videos visible only
    --   to the poster and their followers (AC-158); public (default) → visible
@@ -118,13 +119,12 @@ All tables guarded by Supabase Row-Level Security policies.
 
 **Inputs:**
 - Supabase Auth sign-up/sign-in payload (email+password, Apple identity token, Google OAuth token)
-- Profile fields: `display_name`, `avatar_url` (Storage URL), `bio`, `privacy_setting`
+- Profile fields: `display_name`, `avatar_url` (Storage URL), `bio`
 - `beta_video_privacy` update value (`public` | `followers_only`) — written via MOD-001's public service, called by MOD-010 SettingsScreen (AC-157)
 
 **Outputs:**
 - Authenticated Supabase session stored locally on the device
 - `User` row created/updated in Postgres
-- `privacy_setting` persisted on `User` (controls downstream RLS behaviour in MOD-004, MOD-005, MOD-006, MOD-008)
 - `beta_video_privacy` persisted on `User` (controls beta-video visibility across all listing surfaces, AC-158)
 - Profile screen rendering: display name, avatar, bio, follower/following count links (AC-145), embedded send history (MOD-008), 3-column `BetaVideoGrid` of own beta videos below send history (AC-164), and Logout control removed from Profile screen (AC-167; now in MOD-010 SettingsScreen)
 
@@ -134,10 +134,10 @@ All tables guarded by Supabase Row-Level Security policies.
 
 - Signup via Email, Apple Sign-In, and Google Sign-In must be supported (AC-001).
 - On first run, the app navigates the user directly to the Home tab without requiring any gym selection step (AC-001 revised).
-- Profile privacy must be enforced as `public` (default) or `followers_only`; when `followers_only`, logs and beta video listings must return 403/hidden to non-followers (AC-063).
+- The `users.privacy_setting` column is always `public`; there is no user-facing toggle to change it to `followers_only`. The column is retained in the schema for potential future use but is not user-controllable in Phase 1. Profile activity (send history, profile surface) is visible to all authenticated users regardless of this value (AC-063).
 - The system must persist `users.beta_video_privacy` (enum `public` | `followers_only`, default `public`) and expose a public service function to update it; MOD-001 owns this write (AC-156).
 - The Profile screen must display the current user's display name, avatar, and bio (AC-116).
-- The Profile screen must expose an Edit Profile entry point for editing display name, avatar, bio, and privacy setting (AC-117).
+- The Profile screen must expose an Edit Profile entry point for editing display name, avatar, and bio (AC-117).
 - The Profile screen must embed the current user's send history (MOD-008 surface) (AC-118).
 - The Profile screen must display follower and following count links immediately below the bio, sourced from MOD-006's social-graph public service, navigating to AC-146 and AC-147 screens respectively (AC-145).
 - The Profile screen must display a 3-column `BetaVideoGrid` below the full send history, showing own beta videos via `fetchBetaVideosByUser(currentUserId)` (MOD-005), opening `BetaVideoReelViewer` with `reelContext = 'profile'` on cell tap (AC-164).
@@ -151,7 +151,7 @@ All tables guarded by Supabase Row-Level Security policies.
 
 - Apple Sign-In must be visually equivalent to Google Sign-In (not smaller or hidden) per App Store review guidelines — this is a hard App Store requirement.
 - Session is stored locally by the Supabase client singleton (`src/lib/supabase.ts`); never call `createClient()` at individual call sites.
-- `privacy_setting` defaults to `public`. When set to `followers_only`, all downstream modules (MOD-004 send history, MOD-005 beta video listings, MOD-008 profile stats) must respect this via RLS policies or RPC guards — MOD-001 owns the column, downstream modules enforce it.
+- `privacy_setting` is ALWAYS `public` in Phase 1. It must not be read as an access gate in any query or RLS policy. The column is retained in the schema for potential future use only (AC-063).
 - `beta_video_privacy` defaults to `public`. MOD-001 owns the write via a public service function (e.g., `updateBetaVideoPrivacy(value)`). MOD-010's SettingsScreen calls this function for AC-157. MOD-005's AC-158 filter reads this value via the existing `fetchBetaVideosForRoute` poster join (AC-144). MOD-001 does not import from MOD-005; MOD-005 reads auth via `lib/supabase` directly — no circular dependency.
 - Avatar upload path: client uploads to Supabase Storage, then writes the resulting URL into `User.avatar_url`.
 - No per-user grade system override in Phase 1 — V-scale is forced across all gyms.
@@ -179,3 +179,4 @@ All tables guarded by Supabase Row-Level Security policies.
 - Saved gyms (owned by MOD-012 — the `SavedGym` join table replaces the removed `home_gym_id` field).
 - Logout control on the Profile screen (removed per AC-167; moved to MOD-010 SettingsScreen per AC-168).
 - Notification bell or settings icon in the ProfileScreen header (removed per AC-171 revised and AC-184; both controls now live on MOD-012's global app-level header).
+- User-facing toggle for `privacy_setting` (AC-063 — `privacy_setting` is always `public` with no user-facing control in Phase 1).

@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: 0045390bdbe7ca9360ebdb3ac88d061c75455d1a
+commit: e4cb92607b391a4fd1d3770ea89eaacb1298475d
 timestamp: 2026-10-18T00:00:00Z
 ```
 
@@ -3205,6 +3205,28 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-012 | mod-home               | QA Passed   | qa-mod-home               |
 
 ## Sync Reports
+
+### 2026-10-18 — Delta Sync (Revision 43, [SUBSTANTIVE])
+
+**Sync type:** delta
+**PRD Revision:** 43
+**PM Update reference:** 2026-10-18 [SUBSTANTIVE] — US-012 and AC-063: profile privacy_setting always public, only beta video privacy is user-controlled (PRD Revision 43).
+**Files modified:**
+- `project-planning/modules/mod-auth-profile/spec.md` — Last Synced from PRD Revision 36 → 43; Last Updated 2026-10-13 → 2026-10-18. Changes: Purpose: removed "privacy setting" from CRUD list and Edit Profile entry point fields; added note that `privacy_setting` is always `public` — no user-facing toggle (AC-063). Context: replaced paragraph opening about profile privacy being user-controlled with the new always-public description from AC-063. AC-063: replaced old "enforce public | followers_only" behavioral text with the new PRD text: `privacy_setting` always `public`, no user toggle, column retained for potential future use, profile activity visible to all authenticated users. AC-117: removed "and privacy setting" from Edit Profile fields — now display name, avatar, and bio only. Requirements: updated AC-063 requirement to match new always-public spec; updated AC-117 requirement to remove "privacy setting". Input/Output Contract Inputs: removed `privacy_setting` as a user-editable input field. Outputs: removed `privacy_setting persisted` line. Data Model comment: updated `privacy_setting` inline comment to reflect always-public, no user toggle, retained for schema compat. Key Implementation Notes: replaced the followers_only enforcement note with always-public clarification. Related User Stories US-012: title updated from "Set profile privacy" to "Set beta video privacy". Out of Scope: added entry for user-facing toggle for `privacy_setting`.
+- `project-planning/modules/mod-localization-theme/spec.md` — Last Synced from PRD Revision 41 → 43; Last Updated 2026-09-30 (unchanged). Changes: Context (US-012 paragraph): last sentence updated from "This row is independent from the profile privacy setting (AC-063), which is edited via the MOD-001 Edit Profile entry point (AC-117), not here." to "This row is the only user-facing privacy control. Profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063)." AC-157: last sentence replaced with PRD Rev 43 text: "This row is the only user-facing privacy control. Profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063)." Key Implementation Notes (AC-157): last sentence updated to match the same always-public language. Related User Stories US-012: title updated from "Set profile privacy" to "Set beta video privacy".
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+**Files created:**
+- none
+**Module removals noted:**
+- none
+**AMBIGUITY markers added:**
+- none — all PRD Rev 43 content was explicit enough to translate directly.
+**AMBIGUITY markers resolved:**
+- none
+**CONFLICT markers added:**
+- none
+
+verify-sync.sh result: 4/6 checks passed. Check 4 [FAIL] (US-ID matching) and Check 6 [FAIL] (phase name matching) are pre-existing script defects — the awk range pattern in Check 4 stops at the heading line itself and never reads US-IDs from the Related User Stories section; the grep in Check 6 matches gym seed table rows in prd.md as false positives. Both failures reproduce identically on all untouched module specs (e.g. mod-route-catalog). These failures are NOT caused by this delta sync.
 
 ### 2026-10-17 — Delta Sync (Revision 42, [SUBSTANTIVE])
 

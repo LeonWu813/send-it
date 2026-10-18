@@ -4,7 +4,7 @@
 **Module Name**: Localization & Theming
 **Phase**: 1
 **Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
-**Last Synced from PRD Revision**: 41
+**Last Synced from PRD Revision**: 43
 **Last Updated**: 2026-09-30
 
 ---
@@ -21,7 +21,7 @@ Send It targets the Taiwan indoor bouldering community, so Traditional Chinese (
 
 For US-016, the SettingsScreen presents a "Blocked Accounts" tappable row. Tapping it opens a BlockedAccountsScreen listing the current user's blocked users via MOD-009's `fetchMyBlockedUsers()` public service, with per-row Unblock via MOD-009's `unblockUser(userId)` (AC-152). Navigation is managed as a sub-view state within SettingsScreen.
 
-For US-012, the SettingsScreen presents a "Beta Video Privacy" toggle row (`public` / `followers_only`) reflecting the current user's `users.beta_video_privacy` value (AC-156). Changing the toggle calls MOD-001's public service function to update the column (MOD-001 owns the write, AC-157) and reflects the new state immediately. This row is independent from the profile privacy setting (AC-063).
+For US-012, the SettingsScreen presents a "Beta Video Privacy" toggle row (`public` / `followers_only`) reflecting the current user's `users.beta_video_privacy` value (AC-156). Changing the toggle calls MOD-001's public service function to update the column (MOD-001 owns the write, AC-157) and reflects the new state immediately. This row is the only user-facing privacy control. Profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063).
 
 For AC-168, the SettingsScreen presents a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and "Blocked Accounts" row, AC-155). The button uses the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167, MOD-001).
 
@@ -34,7 +34,7 @@ For AC-168, the SettingsScreen presents a Logout button at the very bottom, belo
 
 ## Related User Stories
 
-- **US-012**: Set profile privacy
+- **US-012**: Set beta video privacy
 - **US-016**: Block another user
 - **US-017**: Use the app in Traditional Chinese or English
 - **US-018**: Use the app in Dark Mode
@@ -61,7 +61,7 @@ For AC-168, the SettingsScreen presents a Logout button at the very bottom, belo
 
 **AC-155** (new): The Settings screen (SettingsScreen) shall present a "Blocked Accounts" tappable row at the bottom of its existing sections. Tapping the row shall open a Blocked Accounts screen (BlockedAccountsScreen) that lists the users the current user has blocked (rows where `blocker_user_id = auth.uid()`), each entry showing a circular avatar, the user's `display_name`, and an "Unblock" button. Tapping "Unblock" shall call `unblockUser(userId)` (MOD-009, AC-152) and remove that entry from the list. When the current user has blocked no one, the screen shall display an empty state. Navigation to and from the Blocked Accounts screen is managed internally within SettingsScreen as a sub-view state (the same navigator pattern used elsewhere), with no ProfileNavigator view-state change. The blocked-users list is sourced from MOD-009's public service `fetchMyBlockedUsers()`.
 
-**AC-157** (new): The Settings screen (SettingsScreen) shall present a "Beta Video Privacy" toggle row with two states — `public` (default, label "所有人"/"All Users") and `followers_only` (label "僅限追蹤者"/"Followers Only") — reflecting the current user's `beta_video_privacy` value (AC-156). Changing the toggle shall call MOD-001's public service function to update the current user's `beta_video_privacy` column (MOD-001 owns the write) and reflect the new state immediately. This row is independent from the existing profile privacy setting (AC-063), which is edited via the MOD-001 Edit Profile entry point (AC-117), not here.
+**AC-157** (new): The Settings screen (SettingsScreen) shall present a "Beta Video Privacy" toggle row with two states — `public` (default, label "所有人"/"All Users") and `followers_only` (label "僅限追蹤者"/"Followers Only") — reflecting the current user's `beta_video_privacy` value (AC-156). Changing the toggle shall call MOD-001's public service function to update the current user's `beta_video_privacy` column (MOD-001 owns the write) and reflect the new state immediately. This row is the only user-facing privacy control. Profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063).
 
 **AC-168** (new): The SettingsScreen shall present a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and the "Blocked Accounts" row, AC-155). The button shall use the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167).
 
@@ -149,7 +149,7 @@ The "Beta Video Privacy" toggle (AC-157) reads from and writes to `users.beta_vi
 - **Dark mode + zh-TW combinatorial testing**: QA must verify every screen in 4 combinations (light/dark × en/zh-TW). This should be incorporated into every module's test plan rather than treated as a one-off audit.
 - **No hardcoded hex colors**: Any hardcoded `#RRGGBB` or `rgb()` color in component code is a defect. All colors must come from the theme token system.
 - **Blocked Accounts screen sub-view state (AC-155)**: SettingsScreen manages a sub-view state (`'settings' | 'blockedAccounts'`); BlockedAccountsScreen is a new file in `mod-localization-theme/screens/`. No ProfileNavigator view-state change is needed. `fetchMyBlockedUsers` and `unblockUser` are direct imports from `mod-moderation/moderation-service`.
-- **"Beta Video Privacy" toggle (AC-157)**: The toggle row is labeled "Beta 影片可見度" (or equivalent). Two states: `public` (default, displayed as "所有人"/"All Users") and `followers_only` (displayed as "僅限追蹤者"/"Followers Only"). Reads the current user's `beta_video_privacy` on Settings screen load. Changing the toggle calls MOD-001's public write service (e.g., `updateBetaVideoPrivacy(value)` imported from `mod-auth-profile/auth-service`). MOD-010 does NOT write directly to `users.beta_video_privacy`. This toggle is independent from the profile privacy setting (AC-063).
+- **"Beta Video Privacy" toggle (AC-157)**: The toggle row is labeled "Beta 影片可見度" (or equivalent). Two states: `public` (default, displayed as "所有人"/"All Users") and `followers_only` (displayed as "僅限追蹤者"/"Followers Only"). Reads the current user's `beta_video_privacy` on Settings screen load. Changing the toggle calls MOD-001's public write service (e.g., `updateBetaVideoPrivacy(value)` imported from `mod-auth-profile/auth-service`). MOD-010 does NOT write directly to `users.beta_video_privacy`. This toggle is the only user-facing privacy control; profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063).
 - **Logout button at the bottom of SettingsScreen (AC-168)**: Add a Logout button at the very bottom of SettingsScreen, below all other rows — below the "Beta Video Privacy" toggle (AC-157) and below the "Blocked Accounts" row (AC-155). Same styling as the former ProfileScreen logout (error color, outlined). Same `signOut()` call and error-handling pattern. This is the relocation target for AC-167 (Logout removed from ProfileScreen).
 - **SettingsScreen row order**: The SettingsScreen row order from top to bottom is: (existing sections) → "Blocked Accounts" row (AC-155) → "Beta Video Privacy" toggle row (AC-157) → Logout button (AC-168).
 
