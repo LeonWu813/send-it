@@ -427,13 +427,13 @@ export default function RouteSubmitScreen({
       </View>
     </ScrollView>
 
-    {/* AC-187 Layer 2: non-dismissable confirmation sheet shown when duplicates exist on submit */}
+    {/* AC-187 Layer 2: non-dismissable confirmation sheet shown when duplicates exist on submit.
+        X button closes the sheet; swipe-to-dismiss and backdrop tap are intentionally blocked. */}
     <BottomSheet
       visible={showDuplicateSheet}
-      onClose={() => {
-        // No-op: swipe-to-dismiss and backdrop tap are inert.
-        // The user must tap Cancel or "Add Route" to exit.
-      }}
+      onClose={() => setShowDuplicateSheet(false)}
+      swipeable={false}
+      dismissOnBackdrop={false}
       title={t('routes.duplicateSheet.title')}
       variant="content"
       footer={

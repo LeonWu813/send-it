@@ -66,6 +66,18 @@ export interface BottomSheetProps {
   onErrorAction?: () => void;
   /** Called after the exit animation finished and the Modal unmounted. */
   onClosed?: () => void;
+  /**
+   * When false, dragging the sheet down does not trigger dismiss (the sheet springs back).
+   * The close button and Cancel / backdrop still work unless also suppressed.
+   * Default: true.
+   */
+  swipeable?: boolean;
+  /**
+   * When false, tapping the backdrop does not call onClose.
+   * The close button and Cancel actions still work.
+   * Default: true.
+   */
+  dismissOnBackdrop?: boolean;
   children?: React.ReactNode;
 }
 
@@ -115,6 +127,8 @@ export function BottomSheet({
   errorActionLabel,
   onErrorAction,
   onClosed,
+  swipeable = true,
+  dismissOnBackdrop = true,
   children,
 }: BottomSheetProps): React.JSX.Element | null {
   const { t } = useTranslation('common');
@@ -136,8 +150,8 @@ export function BottomSheet({
   const grab = useRef(new Animated.Value(0)).current;
   const titleRef = useRef<View>(null);
   const crossed = useRef(false);
-  const live = useRef({ loading, reduceMotion, onClose, attached, exitFar: 0 });
-  live.current = { loading, reduceMotion, onClose, attached, exitFar: panelH + inset + insets.bottom };
+  const live = useRef({ loading, reduceMotion, onClose, attached, exitFar: 0, swipeable, dismissOnBackdrop });
+  live.current = { loading, reduceMotion, onClose, attached, exitFar: panelH + inset + insets.bottom, swipeable, dismissOnBackdrop };
 
   const springTo = useCallback(
     (toValue: number) => {
@@ -251,7 +265,7 @@ export function BottomSheet({
           }
         },
         onPanResponderRelease: (_e, g) => {
-          const shouldClose = !live.current.loading && (g.dy > panelHeight.current * 0.3 || g.vy > 0.5);
+          const shouldClose = !live.current.loading && live.current.swipeable && (g.dy > panelHeight.current * 0.3 || g.vy > 0.5);
           setGrabbed(false);
           if (shouldClose) {
             draggedClose.current = true;
@@ -430,7 +444,7 @@ export function BottomSheet({
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.overlay, opacity: backdropOpacity }]}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={requestClose}
+            onPress={dismissOnBackdrop ? requestClose : undefined}
             accessibilityRole="button"
             accessibilityLabel={t('ui.close')}
           />
