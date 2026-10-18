@@ -6,11 +6,11 @@
  *
  * AC-091: Language toggle between English and Traditional Chinese (zh-TW).
  *   - Calls i18n.changeLanguage() immediately on selection.
- *   - Persists the selection to AsyncStorage with key 'app_language'.
+ *   - Persists the selection to AsyncStorage with key 'app_language_<userId>'.
  *
  * AC-092: Appearance override between System / Light / Dark.
  *   - Calls setOverride() from useTheme() immediately on selection.
- *   - Persists the selection to AsyncStorage with key 'app_theme_override'.
+ *   - Persists the selection to AsyncStorage with key 'app_theme_override_<userId>'.
  *
  * AC-155: "Blocked Accounts" row navigates to BlockedAccountsScreen (sub-view state).
  *
