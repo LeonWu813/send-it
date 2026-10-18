@@ -68,6 +68,17 @@ export default function RouteNavigator({
 
   const [view, setView] = useState<RouteView>({ name: 'list' });
 
+  // Filter state hoisted here so it survives the RouteListScreen unmount that occurs
+  // when the user navigates to a detail screen and presses back. Because RouteNavigator
+  // uses a conditional-render state machine (not a stack navigator), RouteListScreen
+  // unmounts on navigate-away and remounts on back-nav. Keeping filter state here
+  // ensures grade + color selections are preserved across that unmount/remount cycle.
+  // The re-fetch on remount is handled by RouteListScreen's own useEffect, which fires
+  // on every mount and re-runs the route list fetch using the current filter values
+  // passed in via props.
+  const [gradeFilter, setGradeFilter] = useState<RouteGrade | null>(null);
+  const [colorFilter, setColorFilter] = useState<RouteColor | null>(null);
+
   // Deep-link: when routeNavKey changes, navigate directly to the specified
   // route's detail screen. Mirrors the gymNavKey pattern in GymNavigator.
   // initialRouteId is read inside the effect but intentionally omitted from
@@ -118,6 +129,10 @@ export default function RouteNavigator({
           onSelectRoute={navigateToDetail}
           onSubmitRoute={navigateToSubmit}
           onBack={onBackToGym}
+          gradeFilter={gradeFilter}
+          colorFilter={colorFilter}
+          onGradeFilterChange={setGradeFilter}
+          onColorFilterChange={setColorFilter}
         />
       )}
       {view.name === 'detail' && (

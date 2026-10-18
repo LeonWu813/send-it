@@ -100,6 +100,15 @@ interface RouteListScreenProps {
   onSubmitRoute: (grade?: RouteGrade, colorTag?: RouteColor) => void;
   /** Navigate back to the gym detail page. */
   onBack?: () => void;
+  /**
+   * Controlled filter state — when provided by a parent navigator, filter selections
+   * survive RouteListScreen unmount/remount (e.g. navigate-to-detail then back).
+   * When absent, the screen manages filter state internally (used in tests).
+   */
+  gradeFilter?: RouteGrade | null;
+  colorFilter?: RouteColor | null;
+  onGradeFilterChange?: (grade: RouteGrade | null) => void;
+  onColorFilterChange?: (color: RouteColor | null) => void;
 }
 
 export default function RouteListScreen({
@@ -108,6 +117,10 @@ export default function RouteListScreen({
   onSelectRoute,
   onSubmitRoute,
   onBack,
+  gradeFilter: controlledGradeFilter,
+  colorFilter: controlledColorFilter,
+  onGradeFilterChange,
+  onColorFilterChange,
 }: RouteListScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -120,9 +133,18 @@ export default function RouteListScreen({
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Filter state — grade and color only (AC-040); status is always 'active'
-  const [gradeFilter, setGradeFilter] = useState<RouteGrade | null>(null);
-  const [colorFilter, setColorFilter] = useState<RouteColor | null>(null);
+  // Filter state — grade and color only (AC-040); status is always 'active'.
+  // When the parent navigator passes controlled props (gradeFilter/colorFilter +
+  // onGradeFilterChange/onColorFilterChange), those values are used and the local
+  // state is ignored — this keeps filter selections alive across the
+  // unmount/remount cycle that occurs when navigating to a detail screen and back.
+  // When no controlled props are provided (e.g. in tests), the screen manages
+  // filter state internally.
+  const [internalGradeFilter, setInternalGradeFilter] = useState<RouteGrade | null>(null);
+  const [internalColorFilter, setInternalColorFilter] = useState<RouteColor | null>(null);
+
+  const gradeFilter = controlledGradeFilter !== undefined ? controlledGradeFilter : internalGradeFilter;
+  const colorFilter = controlledColorFilter !== undefined ? controlledColorFilter : internalColorFilter;
 
   // AC-046/190: achievement map (route_id → best ascent style for the current user)
   const [achievements, setAchievements] = useState<Record<string, AchievementStyle>>({});
@@ -290,11 +312,21 @@ export default function RouteListScreen({
   }, [fetchSaved]);
 
   function toggleGradeFilter(grade: RouteGrade): void {
-    setGradeFilter((prev) => (prev === grade ? null : grade));
+    const next = gradeFilter === grade ? null : grade;
+    if (onGradeFilterChange) {
+      onGradeFilterChange(next);
+    } else {
+      setInternalGradeFilter(next);
+    }
   }
 
   function toggleColorFilter(color: RouteColor): void {
-    setColorFilter((prev) => (prev === color ? null : color));
+    const next = colorFilter === color ? null : color;
+    if (onColorFilterChange) {
+      onColorFilterChange(next);
+    } else {
+      setInternalColorFilter(next);
+    }
   }
 
   function renderRouteCard({ item }: { item: RouteSummary }): React.JSX.Element {
