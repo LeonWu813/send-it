@@ -474,7 +474,8 @@ export default function HomeScreen({
         }
       }
 
-      // Step 4: Build the activity list in follow order (only users with videos).
+      // Step 4: Build the activity list — dedup by user (already done via activityMap),
+      // sort by latest upload date descending, then cap at 10 (AC-182).
       const activities: FollowingActivity[] = followingUsers
         .filter((u) => activityMap.has(u.id))
         .map((u) => {
@@ -485,7 +486,16 @@ export default function HomeScreen({
             avatarUrl: u.avatar_url,
             latestAt: entry.latestAt,
           };
-        });
+        })
+        // Sort descending by latestAt (most recent first). Null entries go last.
+        .sort((a, b) => {
+          if (a.latestAt === null && b.latestAt === null) return 0;
+          if (a.latestAt === null) return 1;
+          if (b.latestAt === null) return -1;
+          return b.latestAt.localeCompare(a.latestAt);
+        })
+        // Cap at 10 entries.
+        .slice(0, 10);
 
       setFollowingActivity(activities);
     } catch (err) {
