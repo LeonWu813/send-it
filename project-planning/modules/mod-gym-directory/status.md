@@ -1326,3 +1326,170 @@ No features beyond AC-194 through AC-198:
 All previously-passing ACs (AC-004, AC-005, AC-006, AC-070, AC-120, AC-121, AC-122) pass with no regressions. 44/44 automated tests pass, 4 suites, exit code 0.
 
 One follow-up item flagged (not a blocker): `scripts/seed-gym-photos.ts` produces a `TS7016` TypeScript error because `@types/ws` is not installed — pre-existing relative to commit 91efaa8, not introduced by the crash fix. Engineer should run `npm i --save-dev @types/ws` to resolve.
+
+---
+
+## QA Results — Regression (Tappable address, expo-image, removed UI rows)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-10-19
+**Scope**: Three engineering changes since last QA pass:
+1. Removed UI rows — `GymDetailScreen` no longer renders the coordinates row or grade system section.
+2. Tappable address — address is a `TouchableOpacity` with `accessibilityRole="link"` that opens Google Maps via `Linking.openURL`.
+3. `expo-image` — both `GymDetailScreen` and `GymListScreen` use `expo-image` `Image` with `contentFit="cover"` and `cachePolicy="memory-disk"`.
+
+---
+
+### Automated Test Suite
+
+Command: `npx jest --testPathPattern="mod-gym-directory" --passWithNoTests 2>&1 | tail -20`
+Result: **46/46 tests passed, 4 suites, exit code 0**
+
+Test count vs. last pass: 44 → 46 (+2 new tests for tappable address — "opens Google Maps with coordinates when the address row is pressed (lat/lng present)" and "opens Google Maps with encoded address when lat/lng are null"). All 4 suites pass: `gym-service.test.ts`, `GymDetailScreen.test.tsx`, `GymListScreen.test.tsx`, `RequestGymScreen.test.tsx`.
+
+Console warnings: pre-existing `act(...)` warnings from `@expo/vector-icons` Icon font loading — upstream issue, unchanged from all prior passes.
+
+---
+
+### TypeScript Compilation
+
+Command: `npx tsc --noEmit`
+Result: **PASS — exit code 0, 0 errors**
+
+The prior-pass `TS7016` error in `scripts/seed-gym-photos.ts` (flagged in the Rev 44 QA pass as a follow-up item) is now resolved. `@types/ws` was installed and an `as any` cast added at line 49 per the Engineering Progress entry dated 2026-10-19. Full project TypeScript compilation is clean.
+
+---
+
+### Change 1 — Removed UI rows (coordinates row and grade system section)
+
+**PASS — coordinates row absent from GymDetailScreen JSX.**
+
+Grep of `GymDetailScreen.tsx` for `gymDirectory.detail.coordinates`, `lat.toFixed`, `lng.toFixed`, and the `coordinates` style key returns no matches in JSX rendering code. The only `lat`/`lng` references in the file are:
+- A doc comment in the file header (line 5: "address, map pin coordinates").
+- The address `onPress` handler (lines 234–236): `gym.lat != null && gym.lng != null` — used to build the Google Maps URL, not to render a visible row. This is the tappable-address implementation (Change 2), not the removed coordinates display row.
+
+The `coordinates` style entry is absent from `makeStyles`. The i18n key `gymDirectory.detail.coordinates` is intentionally retained in locale files (confirmed per Engineering Progress note) and is not rendered by any JSX.
+
+**PASS — grade system section absent from GymDetailScreen JSX.**
+
+Grep of `GymDetailScreen.tsx` for `gymDirectory.detail.gradingSystem`, `official_grading_system`, and any grade-system section label returns zero JSX rendering matches. The `official_grading_system` field is present in the `Gym` type (fetched by `GYM_DETAIL_SELECT`) but is not rendered anywhere in the screen. The i18n key `gymDirectory.detail.gradingSystem` is retained in locale files but unused by any JSX. The test "renders gym name, city/district, and address" (previously named "renders gym name, city/district, address, and grading system") no longer asserts `getByText('V')` — confirmed by reading `GymDetailScreen.test.tsx`. Test passes.
+
+---
+
+### Change 2 — Tappable address opens Google Maps
+
+**PASS — TouchableOpacity with correct props.**
+
+`GymDetailScreen.tsx` lines 229–245:
+- `<TouchableOpacity accessibilityRole="link" accessibilityLabel={gym.address_text} onPress={...} style={styles.addressRow}>` — all three required props present.
+- `onPress` handler constructs URL as: `gym.lat != null && gym.lng != null ? \`https://maps.google.com/?q=${gym.lat},${gym.lng}\` : \`https://maps.google.com/?q=${encodeURIComponent(gym.address_text)}\`` — matches the specified behavior exactly. Calls `void Linking.openURL(mapsUrl)`.
+- External-link icon: `<Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />` — icon present, uses `theme.colors.primary` (semantic token, no hardcoded hex).
+- Address text: `<AppText variant="body" color="primary" style={styles.addressText}>{gym.address_text}</AppText>` — `color="primary"` signals interactivity.
+- `addressRow` style: `flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs` (line 308–311). `addressText` style: `flex: 1` (line 313–315). Both present in `makeStyles`.
+
+**PASS — Two new automated tests cover both URL branches.**
+
+Test 1 ("opens Google Maps with coordinates when the address row is pressed (lat/lng present)"): spies on `Linking.openURL`, renders with `BOULDERING_GYM` (lat: 25.0363, lng: 121.4447), presses via `getByLabelText('新北市新莊區思源路171號')`, asserts `openURL` called with `'https://maps.google.com/?q=25.0363,121.4447'`. Passes.
+
+Test 2 ("opens Google Maps with encoded address when lat/lng are null"): renders with null lat/lng variant, asserts `openURL` called with `\`https://maps.google.com/?q=${encodeURIComponent('新北市新莊區思源路171號')}\``. Passes.
+
+Both tests use `fireEvent.press(screen.getByLabelText(gym.address_text))` — correctly targeting via `accessibilityLabel`, consistent with the `TouchableOpacity accessibilityLabel={gym.address_text}` prop.
+
+---
+
+### Change 3 — expo-image with contentFit and cachePolicy
+
+**PASS — GymDetailScreen cover photo uses expo-image.**
+
+`GymDetailScreen.tsx` line 21: `import { Image } from 'expo-image';` — correct import source.
+
+Cover photo `<Image>` (lines 190–196):
+- `source={{ uri: gym.cover_photo_url }}` — correct.
+- `contentFit="cover"` — replaces former `resizeMode="cover"` (RN Image prop). Correct expo-image prop.
+- `cachePolicy="memory-disk"` — present, enables disk + memory caching.
+
+No `resizeMode` prop present anywhere in the file — confirmed by grep (no output).
+
+**PASS — GymListScreen thumbnail uses expo-image.**
+
+`GymListScreen.tsx` line 22: `import { Image } from 'expo-image';` — correct import source.
+
+Thumbnail `<Image>` (lines 170–176):
+- `source={{ uri: item.cover_photo_url }}` — correct.
+- `contentFit="cover"` — present.
+- `cachePolicy="memory-disk"` — present.
+
+No `resizeMode` prop present anywhere in the file — confirmed by grep (no output).
+
+**PASS — No placeholder={{ color }} prop used.**
+
+The Engineering Progress entry documents that `placeholder={{ color: theme.colors.surfaceAlt }}` is not a valid prop type in expo-image ~57.0.5. Neither screen uses this form. Loading-state backgrounds are handled via `backgroundColor: theme.colors.surfaceAlt` on the `coverPhoto` and `thumbnail` styles respectively — the correct mechanism.
+
+**PASS — No react-native Image import remaining.**
+
+Neither `GymDetailScreen.tsx` nor `GymListScreen.tsx` contains `import { Image } from 'react-native'`. Confirmed by reading both files.
+
+---
+
+### Regression — All Previously-Passing ACs
+
+**PASS AC-004**: GymListScreen and GymDetailScreen render gym name, city/district (bilingual helpers). Search, city filter chips unchanged. GymListScreen tests pass. Cover photo / initials avatar rendering (AC-197/AC-198) unchanged — expo-image swap is a drop-in with the same source prop; no conditional rendering logic altered.
+
+**PASS AC-005**: "View Routes" `<Button>` at bottom of GymDetailScreen unchanged (lines 253–260). `onViewRoutes(gym.id, gym.name)` call on press unchanged. "calls onViewRoutes with gymId and gymName when View Routes is pressed" test passes. No regression.
+
+**PASS AC-006**: GymListScreen tap-to-navigate unchanged. `renderGymCard` `onPress={() => onSelectGym(item.id)}` unchanged. Verified by passing GymListScreen tests.
+
+**PASS AC-070**: RequestGymScreen and `submitGymRequest()` unchanged. 5/5 RequestGymScreen tests pass. No regression.
+
+**PASS AC-120**: GymDetailScreen bookmark icon in the AppShell header (via `useAppHeader`) unchanged. The `trailing` prop passes `<IconButton>` with `isSaved ? ICON.bookmark.filled : ICON.bookmark.outline`. "shows bookmark-outline (unsaved)" and "shows bookmark (saved/filled)" tests pass. No regression.
+
+**PASS AC-121**: Optimistic bookmark toggle (`handleBookmarkToggle`) unchanged. 3/3 optimistic-update tests pass (save, unsave, revert on error). No regression.
+
+**PASS AC-122**: GymListScreen read-only saved indicator unchanged. `isItemSaved = savedGymIds.has(item.id)` conditional `<Ionicons>` rendering unchanged. 2/2 indicator tests pass. `sortedGyms` memo and FlatList `data={sortedGyms}` untouched. No regression.
+
+**PASS AC-194 through AC-198**: Cover photo migration, seeder script, detail cover photo, list thumbnail, and initials avatar all verified in the prior QA pass and unchanged by these three engineering changes. expo-image swap is confined to the `<Image>` component and its props; the surrounding conditional rendering logic (`gym.cover_photo_url ? <Image .../> : <View initials />`) is unchanged in both screens.
+
+---
+
+### Shared Conventions Check
+
+**PASS no hardcoded hex colors**: No hex color literals in changed code. `theme.colors.primary` used for address text and icon color (semantic token). Verified by reading both screen files.
+
+**PASS no hardcoded strings**: Address `accessibilityLabel` uses `{gym.address_text}` (dynamic, not a static string). All static user-facing strings use `t(...)`. No new locale keys required (Engineering Progress confirms this explicitly).
+
+**PASS Supabase client singleton**: No new `createClient()` calls introduced. Verified.
+
+**PASS TypeScript strict mode**: `npx tsc --noEmit` exits 0, 0 errors.
+
+**PASS no @react-navigation/native hooks introduced**: No navigation-context hooks added. `TouchableOpacity` and `Linking` are from `react-native`, not navigation library.
+
+---
+
+### Gold-Plating Check
+
+**PASS — no features beyond the three specified changes:**
+- Coordinates row removed, grade system section removed — nothing else removed beyond what was specified.
+- Tappable address: two branches (lat/lng URL and encoded-address fallback), external icon, `color="primary"` text, `accessibilityRole="link"`, `accessibilityLabel={gym.address_text}` — all specified behaviors. No additional tap target or Google Maps integration added.
+- expo-image: `contentFit="cover"` and `cachePolicy="memory-disk"` only — no `transition`, `placeholder`, `priority`, or other expo-image-specific props added beyond what was specified. The `placeholder={{ color }}` form was evaluated and correctly not used per the API deviation note.
+
+---
+
+### Overall Verdict
+
+**QA PASS** — All three engineering changes verified.
+
+| Change | Result |
+|--------|--------|
+| Coordinates row absent from GymDetailScreen | PASS |
+| Grade system section absent from GymDetailScreen | PASS |
+| Address is TouchableOpacity with accessibilityRole="link" | PASS |
+| Pressing address calls Linking.openURL with lat/lng URL (coords present) | PASS |
+| Pressing address calls Linking.openURL with encoded address URL (coords null) | PASS |
+| External-link icon present beside address text in primary color | PASS |
+| GymDetailScreen: expo-image import, contentFit="cover", cachePolicy="memory-disk" | PASS |
+| GymListScreen: expo-image import, contentFit="cover", cachePolicy="memory-disk" | PASS |
+| No resizeMode prop remaining in either screen | PASS |
+| TypeScript compilation clean (exit 0, 0 errors) | PASS |
+| 46/46 automated tests pass, 4 suites | PASS |
+| All previously-passing ACs (AC-004 through AC-198) — no regressions | PASS |
