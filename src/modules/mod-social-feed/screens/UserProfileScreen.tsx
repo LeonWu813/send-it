@@ -519,6 +519,7 @@ export default function UserProfileScreen({
                   {t('betaVideo.userVideos')}
                 </AppText>
                 <BetaVideoGrid
+                  horizontalPadding={screenMargin}
                   videos={betaVideos}
                   onPressVideo={(index) => {
                     setReelStartIndex(index);
