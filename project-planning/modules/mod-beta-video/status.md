@@ -4306,3 +4306,84 @@ No regressions detected.
 - **Tests**: PASS — 106/106, 0 failures (with AsyncStorage mock resolved).
 - **Regressions**: PASS — all previously-passing ACs continue to pass.
 - **Pre-existing jest config gap**: The project `package.json` jest config is missing a `moduleNameMapper` entry for `@react-native-async-storage/async-storage`. This prevents the 4 component test suites from resolving without the extra `--moduleNameMapper` flag. This gap predates both changes in this session and is not introduced by AC-188 or the mock fix. Routing to Engineer to add the entry to `package.json` jest config.
+
+---
+
+### Like Icon Change Regression QA — 2026-10-19
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (like icon glyph change — ICON.like from heart to thumbs-up)
+**Date**: 2026-10-19
+**Scope**: Verify ICON.like values updated correctly; verify BetaVideoReelViewer consumes ICON.like (not hardcoded strings); verify no remaining hardcoded heart strings in like-button context; regression check of automated test suite.
+
+---
+
+#### Item 1 — ICON.like values in src/lib/icons.ts
+
+**Expected**: `ICON.like.outline === 'thumbs-up-outline'`, `ICON.like.filled === 'thumbs-up'`
+
+**Verification**: `src/lib/icons.ts` line 72:
+```
+like: { outline: 'thumbs-up-outline', filled: 'thumbs-up' },
+```
+Both values match the change requirement exactly.
+
+**ICON.like values** — PASS
+
+---
+
+#### Item 2 — BetaVideoReelViewer uses ICON.like (not hardcoded heart strings)
+
+**Expected**: The like button in `BetaVideoReelViewer` references `ICON.like.outline` and `ICON.like.filled` — no hardcoded `'heart'` or `'heart-outline'` string in the like button context.
+
+**Verification**: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx` lines 943–944:
+```tsx
+nameOff={ICON.like.outline}
+nameOn={ICON.like.filled}
+```
+The `ReelAction` like button passes `ICON.like.outline` and `ICON.like.filled` from the dictionary. No hardcoded `'heart'` or `'heart-outline'` string appears anywhere in the file (`grep -n "heart"` returned no output).
+
+**BetaVideoReelViewer like button uses ICON.like** — PASS
+
+---
+
+#### Item 3 — No remaining hardcoded heart strings in mod-beta-video
+
+**Expected**: `grep -rn "heart" src/modules/mod-beta-video/` returns no output — no hardcoded heart glyph strings anywhere in the module.
+
+**Verification**: Grep returned empty output. No hardcoded heart strings remain in mod-beta-video source files, tests, or stories.
+
+**No hardcoded heart strings in mod-beta-video** — PASS
+
+---
+
+#### Item 4 — Automated test suite
+
+**Test run**: `npx jest --testPathPattern="mod-beta-video" --passWithNoTests 2>&1 | tail -20`
+
+**Result**: 109 tests, 5 suites, 0 failures. All passing. Console `act()` warnings are pre-existing (async `supabase.auth.getSession()` in `useEffect`); not introduced by this change.
+
+**Tests** — PASS
+
+---
+
+#### AC-138 Regression Check — exactly two sidebar icons
+
+**Spec (AC-138)**: The fullscreen viewer's right sidebar contains exactly two action icons: the like icon and the report icon. No share, download, comment, three-dot-menu, or other icons.
+
+**Verification**: `BetaVideoReelViewer.tsx` sidebar (lines 936–986): one `ReelAction` for like (`testID="reel-like-button"`), one `ReelAction` for report (`testID="reel-report-button"`, shown only when `showReportButton` is true). No other icons or actions are present. The icon change (heart → thumbs-up) does not alter the sidebar structure or icon count.
+
+**AC-138** — PASS (no regression)
+
+---
+
+#### Verdict
+
+**QA PASS (like icon change regression)**
+
+- **ICON.like.outline**: PASS — `'thumbs-up-outline'` confirmed in `src/lib/icons.ts`.
+- **ICON.like.filled**: PASS — `'thumbs-up'` confirmed in `src/lib/icons.ts`.
+- **BetaVideoReelViewer like button**: PASS — uses `ICON.like.outline` / `ICON.like.filled`; no hardcoded heart strings.
+- **mod-beta-video hardcoded heart strings**: PASS — `grep -rn "heart"` returns empty; none remain.
+- **AC-138 (sidebar two icons)**: PASS — structure unchanged; no regression.
+- **Tests**: PASS — 109/109, 0 failures. No regressions.
