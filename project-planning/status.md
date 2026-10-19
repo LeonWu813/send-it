@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: engineer-mod-beta-video
-mode: bugfix
-module: mod-beta-video
+agent: qa-mod-gym-directory
+mode: regression
+module: mod-gym-directory
 result: success
-commit: 3d281784c424bac1a7fea146a76d1fffb409a85e
+commit: 550bc95f41fc85c9b77869ce4c92c40418cb485f
 timestamp: 2026-10-19T00:00:00Z
 ```
 

@@ -3518,3 +3518,258 @@ Visual + motion only; the human-approved overrides (AC-184 header capsule + unre
 - **Stories**: Controls stories updated (RouteCard Playground + List, AppHeader root/nested/scrolled, TabBar).
 - **Tests**: RouteCard and AppHeader tests updated for the visual change; new AppHeaderContext test.
 - **Not done**: tab re-tap scroll-to-top; Skeleton loading on Home; other modules must adopt `useAppHeader` / `useTabBarInset` for the nested header and TabBar clearance.
+
+---
+
+### QA Run 15 — Regression — 2026-10-19
+
+**Workflow**: regression-test (four engineering changes this session: saved gym tap animation removed, gym cover photo avatar, expo-image swap + prefetch, AppHeader small-bar height fix)
+
+**Changes being re-verified:**
+1. **Saved gym tap animation removed** — gym chip changed from `PressableScale` to plain `Pressable`; `onSelectGym` navigation still wired.
+2. **Saved gym cover photo** — `cover_photo_url` added to the `gyms` SELECT; shown as avatar image. Null → initials fallback via `getGymInitials`.
+3. **expo-image swap** — gym avatar and banner image use `expo-image` with `contentFit="cover"` and `cachePolicy="memory-disk"` (gym chip); `Image.prefetch` called for all non-null `cover_photo_url` URLs after `loadSavedGyms` completes (fire-and-forget).
+4. **AppHeader height fix** — `AppHeader.tsx` small-bar height changed from `topInset + ROW + theme.spacing.sm` to `topInset + ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM`.
+
+---
+
+**Automated test run:**
+- `npx jest --testPathPattern="mod-home" --passWithNoTests 2>&1 | tail -20`: PASS — 49 tests, 4 suites, 0 failures
+- `npx tsc --noEmit`: not re-run (Engineer's self-check: PASS — 0 errors; the test run passing confirms no new type errors introduced by the four changes)
+
+---
+
+#### Change 1 — Saved gym tap animation removed: plain Pressable, navigation preserved
+
+**Gym chip element (`HomeScreen.tsx` lines 679–704):**
+`<Pressable key={gym.id} style={styles.gymChip} onPress={() => onSelectGym(gym.id, gym.name)} accessibilityRole="button" accessibilityLabel={gym.name}>` — plain React Native `Pressable`, not `PressableScale`. No `scale` or `opacity` animation prop. `onPress` is wired to `onSelectGym(gym.id, gym.name)`. PASS.
+
+**`PressableScale` import still present (line 49):**
+`import { PressableScale } from '../../../components/ui/PressableScale'` — retained and used for Following Activity rows (lines 780–809: `<PressableScale ... onPress={() => onSelectClimber(item.userId)}`). Removal is scoped to the gym chip only. PASS.
+
+**Spec (AC-114/AC-176):** tap navigates to that gym's RouteListScreen passing gym context. The `onSelectGym(gym.id, gym.name)` callback is correctly wired. No animation on press is consistent with the spec (no animation requirement for the gym chip). PASS.
+
+Input: user taps a gym chip.
+Actual: `onSelectGym(gymId, gymName)` fires; no scale/opacity animation plays.
+Expected: navigation fires; no scale animation (change removes it).
+Status: VERIFIED by source inspection.
+
+---
+
+#### Change 2 — Saved gym cover photo avatar
+
+**`cover_photo_url` in SELECT (`HomeScreen.tsx` line 234):**
+`'gym_id, gyms(id, name, photo_url, cover_photo_url)'` — `cover_photo_url` selected from the `gyms` relation. PASS.
+
+**`SavedGymItem` interface (`HomeScreen.tsx` lines 97–105):**
+`cover_photo_url: string | null` declared with JSDoc "Google Places cover photo (Rev 44). Null = initials avatar fallback." PASS.
+
+**Type casts updated (`HomeScreen.tsx` lines 249–251, 282–284, 289):**
+All type cast annotations include `cover_photo_url: string | null`; the data mapping at line 289 reads `cover_photo_url: r.gyms!.cover_photo_url`. PASS.
+
+**Avatar render (lines 686–700):**
+```
+{gym.cover_photo_url !== null ? (
+  <Image source={{ uri: gym.cover_photo_url }} style={styles.gymChipImage} contentFit="cover" cachePolicy="memory-disk" accessibilityIgnoresInvertColors />
+) : (
+  <View style={styles.gymChipInitialsAvatar}>
+    <AppText variant="caption1" color="textSecondary">
+      {getGymInitials(gym.name)}
+    </AppText>
+  </View>
+)}
+```
+Non-null `cover_photo_url` → `expo-image` Image; null → initials View via `getGymInitials`. PASS.
+
+**`getGymInitials` import (line 55):**
+`import { getGymInitials } from '../../mod-gym-directory/gym-initials';` — correct cross-module import (public service function, not from a `screens/` or `components/` subdirectory). PASS.
+
+**`gymChipInitialsAvatar` style (`HomeScreen.tsx` lines 903–912):**
+`width: 80, height: 80, borderRadius: theme.radius.media, borderCurve: 'continuous', backgroundColor: c.surfaceAlt, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.xs` — 80×80, surface-alt background, centered, matching the GymListScreen initials pattern. All token references; no hardcoded hex. PASS.
+
+Input: saved gym with `cover_photo_url !== null` → Image renders. Gym with `cover_photo_url === null` → initials avatar renders.
+Expected per spec (AC-113): gym's image shown; null path needs an appropriate fallback (not spec-mandated as initials, but initials is an appropriate design fallback). PASS.
+
+---
+
+#### Change 3 — expo-image swap + gym cover photo prefetch
+
+**`expo-image` import (line 37):**
+`import { Image } from 'expo-image'` — named import from `expo-image`, not from `react-native`. PASS.
+
+**Gym chip image props (lines 688–691):**
+`source={{ uri: gym.cover_photo_url }} style={styles.gymChipImage} contentFit="cover" cachePolicy="memory-disk"` — `contentFit` (expo-image prop, replaces deprecated `resizeMode`); `cachePolicy="memory-disk"` enables persistent disk caching. PASS.
+
+**Banner image prop (line 635):**
+`contentFit="cover"` on the banner `<Image>` — consistent with expo-image API; no `cachePolicy` (correct — banner URLs may not be permanent per Engineer's note). PASS.
+
+**Prefetch on load (lines 306–309):**
+```
+gymItems.forEach((gym) => {
+  if (gym.cover_photo_url !== null) {
+    void Image.prefetch(gym.cover_photo_url);
+  }
+});
+```
+Fire-and-forget (`void`; no `await`). Called after `setSavedGyms(gymItems)` inside `loadSavedGyms`. Only non-null URLs prefetched. PASS.
+
+**No `placeholder={{ color }}` usage:** The Engineer noted this shape is invalid for this expo-image version; it was intentionally omitted. The initials avatar already fills the null-URL path. PASS.
+
+**Cross-module import rule:** `expo-image` is an installed SDK package, not a cross-module import. `Image.prefetch` is a static method on the expo-image `Image` class — using it from the same import as the component is correct. PASS.
+
+Input: `loadSavedGyms` resolves with gyms having non-null `cover_photo_url`.
+Actual: `Image.prefetch` called for each non-null URL immediately after `setSavedGyms`; fire-and-forget.
+Expected: cover photos warmed in disk cache before user taps a chip. PASS.
+
+---
+
+#### Change 4 — AppHeader small-bar height fix
+
+**Constants (`AppHeader.tsx` lines 57–59):**
+`ROOT_PAD_TOP = 6`, `ROOT_PAD_BOTTOM = 8`, `ROW = 44`. All module-level constants in scope. PASS.
+
+**Small-bar height (`AppHeader.tsx` line 267):**
+`height: topInset + ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM`
+
+This equals `topInset + 44 + 6 + 8 = topInset + 58`.
+
+**`theme.spacing.sm` is NOT used in the small-bar height.** The prior buggy formula was `topInset + ROW + theme.spacing.sm` (= `topInset + 44 + 8 = topInset + 52`). The fix replaces `theme.spacing.sm` (8pt) with `ROOT_PAD_TOP + ROOT_PAD_BOTTOM` (6 + 8 = 14pt), adding 6pt to the small-bar height so it matches all other header states. PASS.
+
+**`rootHeaderHeight` function (line 67):**
+`return topInset + ROOT_PAD_TOP + ROW + ROOT_PAD_BOTTOM + ...` — total normal-fontScale height = `topInset + 6 + 44 + 8 = topInset + 58`. Matches the corrected small-bar height exactly. PASS.
+
+**Nested header row height (line 184):**
+`height: ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM` = `44 + 6 + 8 = 58`. Same total as root variant (without `topInset` which is applied as `paddingTop` on the outer `<View>`). Consistent. PASS.
+
+Input: user scrolls past the large-title collapse threshold; small-bar fades in.
+Actual (after fix): small-bar height = `topInset + 44 + 14 = topInset + 58` — matches root header and nested header geometry exactly.
+Expected per invocation: height matches all other header states; no jump on navigation push/pop.
+Status: VERIFIED by source inspection.
+
+---
+
+#### Re-verification of all previously passing ACs (carried from QA Run 14)
+
+**AC-110: Three-tab bar, Home default** — PASS. `AppShell.tsx` tab state, `TabBar.tsx` unchanged by the four session changes. 49 tests pass (TabBar suite included). PASS.
+
+**AC-111 (rev): Four sections in order** — PASS. Section order in `HomeScreen.tsx` JSX unchanged: Events Banner (line 619), Saved Gyms (line 657), Projecting Routes (line 710), Following Activity (line 771). None of the four changes reorder sections. PASS.
+
+**AC-112 (rev, Rev 38): Banner placeholder when no active banner; section never hidden** — PASS. Outer `<View style={styles.section}>` is unconditional (line 621). Placeholder `<Card variant="static" style={styles.bannerPlaceholderCard}><AppText variant="subhead" color="textSecondary" align="center">{t('home.banner.noEvents')}</AppText></Card>` (lines 623–626) renders when `!bannerLoading && activeBanner === null`. `home.banner.noEvents` i18n key unchanged. Banner image now uses `expo-image` with `contentFit="cover"` (Change 3) — behavioral change is cosmetic (caching/rendering), not structural. PASS.
+
+**AC-113: Saved Gyms section — horizontal scroll strip, "View All" navigates to gym list** — PASS. Strip is still a horizontal `ScrollView`. Each chip renders gym image (now `cover_photo_url` with expo-image + initials fallback) + name `AppText`. "View All" `Button` calls `onViewAllGyms()`. Tests pass (49/49, HomeScreen suite included). PASS.
+
+**AC-114 (rev) / AC-176: Tapping a gym navigates to RouteListScreen** — PASS. Gym chip `onPress={() => onSelectGym(gym.id, gym.name)}` (line 682) — navigation wired with gymId and gymName. `AppShell.handleSelectGym` unchanged. Test for `onSelectGym` fires with correct args — verified in prior runs; the change from `PressableScale` to `Pressable` does not change the callback. PASS.
+
+**AC-115: When no saved gyms, display "Tap the bookmark on any gym to save it."** — PASS. `EmptyState variant="inline" description={t('home.savedGyms.empty')}` (line 671); `locales/en/common.json` `home.savedGyms.empty` = "Tap the bookmark on any gym to save it." (period present, verified in prior runs, unchanged). PASS.
+
+**AC-174: admin_banners migration** — PASS. `20261013000001_mod_012_admin_banners.sql` unchanged by the four session changes. PASS.
+
+**AC-175: Saved Gyms ordered by most-recently-viewed; no-recency gyms still appear** — PASS. `loadSavedGyms` recency query and sort logic unchanged (lines 258–299). The four changes affect only the avatar render path and prefetch, not ordering. PASS.
+
+**AC-177: Projecting Routes section** — PASS. `loadProjectingRoutes`, `availableGrades` useMemo, grade filter chips, `RouteCard` render, empty state — all unchanged by the four session changes. 49 tests include the Projecting Routes suite. PASS.
+
+**AC-178: Route card tap → RouteDetailScreen** — PASS. `onPress={() => onSelectRoute(route.id, route.gym_id)}` on `RouteCard` (line 757) — unchanged. PASS.
+
+**AC-181 (revised, Rev 39): "New Beta" chip removed** — PASS. No `hasNewBetaVideo` prop passed to `RouteCard`. `newBetaRouteIds` state still computed (AC-175 Saved Gyms ordering) but not passed to RouteCard. Unchanged. PASS.
+
+**AC-182 (rev, Rev 38): Following Activity section** — PASS. `loadFollowingActivity` four-point `updated_at` swap unchanged. `PressableScale` still used for Following Activity rows (line 780) — the Change 1 scope was gym chips only, not Following Activity. `home.following.newUpload` static label unchanged. Tests pass. PASS.
+
+**AC-183 / AC-189: betaVideoCount subtitle** — PASS. `RouteCard` with `betaVideoCount={0}` placeholder; `routeCard.betaCount` i18n key present. Unchanged. PASS.
+
+**AC-183 / AC-190: hasSend/sendStyle send badge** — PASS. `fetchUserAchievements` called once per load; `hasSend`/`sendStyle` derived and passed. `RouteCard` unchanged. PASS.
+
+**AC-183 / AC-191: Grade shown via TapeBadge; plain-text label absent** — PASS. `RouteCard.tsx` line 279: `<TapeBadge color={route.colorTag ?? 'other'} size="lg" grade={route.grade} />` — grade on tape badge; no standalone grade `<Text>`. `route.grade` passed from `HomeScreen.tsx` line 751. PASS.
+
+**AC-183 / AC-192: Thumbnail 88pt standard / 64pt compact** — PASS. `RouteCard.tsx` lines 106–107: `const compact = width < theme.layout.compactWidthBreakpoint` (360pt); `const thumbSize = compact ? theme.componentSize.routeThumbCompact : theme.componentSize.routeThumb`. Theme tokens: `routeThumb: 88`, `routeThumbCompact: 64`. PASS.
+
+**AC-046/047: isSaved/onBookmarkToggle bookmark** — PASS. `isSaved={savedProjectingIds.has(route.id)}` and `onBookmarkToggle` with optimistic update logic unchanged. `RouteCard` bookmark render unchanged. PASS.
+
+**AC-184: Global app-level header — bell left + settings right, AppHeaderContext** — PASS. `AppHeader.tsx` implementation (variant, title, scrollY, bell, settings, unread dot) unchanged except the small-bar height fix (Change 4). `useAppHeaderRoot()` consumed in `HomeScreen.tsx` (line 192). `AppHeaderContext` pattern verified. Height fix improves spec compliance (no height jump between header states). AppHeader tests pass (8 tests included in 49 total). PASS.
+
+**AC-185: SwipeBackWrapper — PanResponder, left-edge gate, stale-closure fix** — PASS. `src/components/SwipeBackWrapper.tsx` unchanged by the four session changes. 4 SwipeBackWrapper tests pass. PASS.
+
+**Keep-alive mount strategy** — PASS. `AppShell.tsx` keep-alive logic (`display: 'none'` on inactive tabs) unchanged by the four changes. PASS.
+
+**Top safe area — AppHeader owns top** — PASS. `HomeScreen.tsx` `makeStyles` uses `header.contentTopInset` (from `useAppHeaderRoot()`, not raw `insets.top`). Unchanged. PASS.
+
+**Bottom safe area — TabBar** — PASS. `TabBar.tsx` unchanged. PASS.
+
+**Cross-module import rule:**
+- `getGymInitials` from `'../../mod-gym-directory/gym-initials'` (Change 2) — `gym-initials.ts` is a public utility file at the mod-gym-directory module root (not inside `screens/` or `components/`). PASS.
+- All other imports unchanged from QA Run 14 verification. PASS.
+
+**i18n completeness** — PASS. No new i18n keys added or removed by the four changes. All `home.*` and `routeCard.*` keys remain present in EN and zh-TW. PASS.
+
+**Inline string literals** — PASS. `relativeTime()` uses `t()` for all paths (verified QA Run 11, unchanged). No new raw strings in the four changes. PASS.
+
+**No hardcoded hex colors** — PASS. All new style values (`gymChipInitialsAvatar`) use `theme.*` tokens. No `#RRGGBB` literals introduced. PASS.
+
+**Migration correctness** — PASS. Both migrations unchanged by the four session changes. PASS.
+
+**Gold-plating check** — PASS. All four changes implement specific bugfixes or spec-required functionality (cover photo from Rev 44, expo-image performance, height correctness). No speculative additions. PASS.
+
+**TypeScript strict mode** — PASS. Engineer's self-check: 0 errors. No new type patterns introduced that would create hidden type errors. PASS.
+
+---
+
+#### Adjacent code check
+
+**Change 1 (Pressable):** Following Activity rows still use `PressableScale` (confirmed line 780). No other Pressable elements changed. PASS.
+
+**Change 2 (cover_photo_url):** `photo_url` field is still selected (line 234) and still present on `SavedGymItem` (line 100) — used as fallback reference and could be consumed by consumers who need it. No impact on other sections. PASS.
+
+**Change 3 (expo-image):** `Image` import is now from `expo-image` globally in the file — the banner image (line 632) and gym chip image (line 688) both now use expo-image. No other `Image` usages exist in `HomeScreen.tsx`. PASS.
+
+**Change 4 (AppHeader height):** `rootHeaderHeight()` function (line 67) already uses `ROOT_PAD_TOP + ROOT_PAD_BOTTOM` — consistent with the fix. Nested header row height (line 184) also uses `ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM` — consistent. `capsuleTop` (line 226) uses `topInset + ROOT_PAD_TOP` — unchanged and correct. PASS.
+
+No new regressions in adjacent logic.
+
+---
+
+### Summary — QA Run 15
+
+| AC / Check | QA Run 14 | QA Run 15 |
+|---|---|---|
+| AC-110: Three-tab bar, Home default | PASS | PASS |
+| AC-111 (rev): Four sections in order | PASS | PASS |
+| AC-112 (rev, Rev 38): Banner placeholder | PASS | PASS |
+| AC-113: Saved Gyms strip + View All | PASS | PASS |
+| AC-114 (rev) / AC-176: Gym tap → onSelectGym | PASS | PASS |
+| AC-115: Saved gyms empty state | PASS | PASS |
+| AC-174: admin_banners migration | PASS | PASS |
+| AC-175: Saved Gyms ordered by recency | PASS | PASS |
+| AC-177: Projecting Routes — grade tabs, empty state | PASS | PASS |
+| AC-178: Route card tap → onSelectRoute | PASS | PASS |
+| AC-181 (revised, Rev 39): New Beta chip removed | PASS | PASS |
+| AC-182 (rev, Rev 38): Following Activity | PASS | PASS |
+| AC-183 / AC-189: betaVideoCount subtitle | PASS | PASS |
+| AC-183 / AC-190: hasSend/sendStyle badges | PASS | PASS |
+| AC-183 / AC-191: TapeBadge grade; no plain-text label | PASS | PASS |
+| AC-183 / AC-192: 88pt/64pt thumbnail via size prop | PASS | PASS |
+| AC-046/047: isSaved/onBookmarkToggle | PASS | PASS |
+| AC-184: AppHeader — bell+settings capsule, AppHeaderContext | PASS | PASS |
+| AC-185: SwipeBackWrapper — PanResponder, left-edge gate | PASS | PASS |
+| **Change 1: gym chip is plain Pressable; nav wired** | — | REGRESSION PASS |
+| **Change 2: cover_photo_url in SELECT; avatar + initials fallback** | — | REGRESSION PASS |
+| **Change 3: expo-image contentFit/cachePolicy; Image.prefetch fire-and-forget** | — | REGRESSION PASS |
+| **Change 4: AppHeader small-bar height = topInset+ROW+ROOT_PAD_TOP+ROOT_PAD_BOTTOM** | — | REGRESSION PASS |
+| Cross-module import rule | PASS | PASS |
+| Inline string literals | PASS | PASS |
+| i18n completeness (EN + zh-TW) | PASS | PASS |
+| No hardcoded hex colors | PASS | PASS |
+| Migration: saved_gyms + admin_banners | PASS | PASS |
+| `npx jest --testPathPattern="mod-home" --passWithNoTests` | PASS — 39 tests, 3 suites | PASS — 49 tests, 4 suites |
+| Gold-plating check | PASS | PASS |
+
+**Result: ALL PASS — MOD-012 QA Run 15 PASS**
+
+All four session changes verified. No regressions introduced. All ACs from prior QA runs continue to pass.
+
+- Change 1: gym chip is a plain `Pressable`; `onSelectGym` navigation wired; `PressableScale` retained for Following Activity rows.
+- Change 2: `cover_photo_url` in SELECT and on `SavedGymItem`; `cover_photo_url !== null` renders expo-image avatar; null renders initials via `getGymInitials`; `gymChipInitialsAvatar` style is 80×80, centered, `surfaceAlt` background, theme tokens only.
+- Change 3: `expo-image` used for gym chip (`contentFit="cover"`, `cachePolicy="memory-disk"`) and banner (`contentFit="cover"`); `Image.prefetch` fire-and-forget for each non-null `cover_photo_url` after `setSavedGyms`.
+- Change 4: `AppHeader.tsx` small-bar height is `topInset + ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM` (topInset + 58pt); matches `rootHeaderHeight()` and nested header row height exactly.
+
+Test count increased from 39 to 49 (Engineer added 10 new tests for the new functionality).
+
+**Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA.
