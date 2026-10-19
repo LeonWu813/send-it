@@ -36,7 +36,7 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import RouteCard from '../../../components/RouteCard';
 import { AppText } from '../../../components/ui/AppText';
@@ -51,6 +51,7 @@ import { ICON } from '../../../lib/icons';
 import { useMotion } from '../../../lib/motion';
 import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
+import { getGymInitials } from '../../mod-gym-directory/gym-initials';
 import { fetchSavedRouteIds, saveRoute, unsaveRoute } from '../../mod-route-catalog/route-service';
 import type { RouteGrade } from '../../mod-route-catalog/types';
 import { fetchUserAchievements } from '../../mod-send-logging';
@@ -96,6 +97,8 @@ interface SavedGymItem {
   id: string;
   name: string;
   photo_url: string | null;
+  /** Google Places cover photo (Rev 44). Null = initials avatar fallback. */
+  cover_photo_url: string | null;
   /** MAX last_viewed_at for this gym from user_route_visits; null = no visits. */
   lastViewedAt: string | null;
 }
@@ -227,7 +230,7 @@ export default function HomeScreen({
       // When no visits exist, last_viewed_at is null — gym still appears (AC-175).
       const { data: savedRows, error: savedError } = await supabase
         .from('saved_gyms')
-        .select('gym_id, gyms(id, name, photo_url)')
+        .select('gym_id, gyms(id, name, photo_url, cover_photo_url)')
         .eq('user_id', session.user.id);
 
       if (savedError) {
@@ -242,7 +245,7 @@ export default function HomeScreen({
       }
 
       // Extract gym IDs for the recency query.
-      const gymIds = (savedRows as unknown as Array<{ gym_id: string; gyms: { id: string; name: string; photo_url: string | null } | null }>)
+      const gymIds = (savedRows as unknown as Array<{ gym_id: string; gyms: { id: string; name: string; photo_url: string | null; cover_photo_url: string | null } | null }>)
         .filter((r) => r.gyms !== null)
         .map((r) => r.gym_id);
 
@@ -275,13 +278,14 @@ export default function HomeScreen({
       // Build SavedGymItem list.
       const gymItems: SavedGymItem[] = (savedRows as unknown as Array<{
         gym_id: string;
-        gyms: { id: string; name: string; photo_url: string | null } | null;
+        gyms: { id: string; name: string; photo_url: string | null; cover_photo_url: string | null } | null;
       }>)
         .filter((r) => r.gyms !== null)
         .map((r) => ({
           id: r.gyms!.id,
           name: r.gyms!.name,
           photo_url: r.gyms!.photo_url,
+          cover_photo_url: r.gyms!.cover_photo_url,
           lastViewedAt: recencyMap.get(r.gym_id) ?? null,
         }));
 
@@ -662,28 +666,31 @@ export default function HomeScreen({
             contentContainerStyle={styles.gymStripRow}
           >
             {savedGyms.map((gym) => (
-              <PressableScale
+              <Pressable
                 key={gym.id}
-                pressedColor={c.surfaceAltPressed}
                 style={styles.gymChip}
                 onPress={() => onSelectGym(gym.id, gym.name)}
                 accessibilityRole="button"
                 accessibilityLabel={gym.name}
               >
-                {gym.photo_url !== null ? (
+                {gym.cover_photo_url !== null ? (
                   <Image
-                    source={{ uri: gym.photo_url }}
+                    source={{ uri: gym.cover_photo_url }}
                     style={styles.gymChipImage}
                     resizeMode="cover"
                     accessibilityIgnoresInvertColors
                   />
                 ) : (
-                  <View style={styles.gymChipImagePlaceholder} />
+                  <View style={styles.gymChipInitialsAvatar}>
+                    <AppText variant="caption1" color="textSecondary">
+                      {getGymInitials(gym.name)}
+                    </AppText>
+                  </View>
                 )}
                 <AppText variant="caption1" align="center" numberOfLines={2}>
                   {gym.name}
                 </AppText>
-              </PressableScale>
+              </Pressable>
             ))}
           </ScrollView>
         )}
@@ -882,12 +889,14 @@ function makeStyles(
       borderCurve: 'continuous',
       marginBottom: theme.spacing.xs,
     },
-    gymChipImagePlaceholder: {
+    gymChipInitialsAvatar: {
       width: 80,
       height: 80,
       borderRadius: theme.radius.media,
       borderCurve: 'continuous',
       backgroundColor: c.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
       marginBottom: theme.spacing.xs,
     },
     // ── Grade filter chips ──────────────────────────────────────────────────

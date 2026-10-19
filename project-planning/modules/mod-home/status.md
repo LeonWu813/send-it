@@ -295,6 +295,40 @@
 
 ---
 
+### UI Fixes — saved gym tap animation + cover photo avatar — 2026-10-19
+
+**Changes:**
+
+1. **Remove tap animation on saved gym chip (Fix 1)**: Replaced `PressableScale` with a plain `Pressable` for each gym chip in the Saved Gyms strip. The scale/opacity press animation is eliminated; tap navigation (`onSelectGym`) is preserved. `PressableScale` import is retained as it remains in use for the Following Activity rows.
+
+2. **Show gym cover photo as avatar (Fix 2)**: Updated the saved gym chip avatar to use `gym.cover_photo_url` (public URL from Supabase Storage, added Rev 44) instead of `gym.photo_url`. When `cover_photo_url` is null, falls back to an initials avatar using `getGymInitials` from `src/modules/mod-gym-directory/gym-initials.ts` — matching the 80×80 centered-initials pattern used by GymListScreen (adjusted from GymListScreen's 56×56 to the chip's existing 80×80 size). Initials avatar style key renamed from `gymChipImagePlaceholder` to `gymChipInitialsAvatar` with `alignItems: 'center'` and `justifyContent: 'center'` added.
+
+3. **SELECT includes `cover_photo_url`**: The `saved_gyms` join query now selects `cover_photo_url` from the `gyms` relation. `SavedGymItem` interface and all type casts updated accordingly.
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — added `Pressable` to RN imports; added `getGymInitials` import from `mod-gym-directory/gym-initials`; added `cover_photo_url` to `SavedGymItem` interface; updated SELECT query; updated type casts in `loadSavedGyms`; replaced `PressableScale` with `Pressable` for gym chip; changed avatar render from `photo_url` to `cover_photo_url` with `getGymInitials` initials fallback; renamed `gymChipImagePlaceholder` style to `gymChipInitialsAvatar` with centered alignment.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx jest --testPathPattern="mod-home" --passWithNoTests` | PASS — 49 tests, 4 suites, 0 failures |
+| `npx tsc --noEmit` | PASS — 0 errors |
+| Gym chip is plain `Pressable` — no scale/opacity animation | PASS |
+| Tap action (`onSelectGym`) preserved | PASS |
+| `cover_photo_url` selected in Supabase query | PASS |
+| `cover_photo_url !== null` → `Image` with `uri: gym.cover_photo_url` | PASS |
+| `cover_photo_url === null` → initials avatar via `getGymInitials(gym.name)` | PASS |
+| Initials avatar: 80×80, `surfaceAlt` background, centered text (matches GymListScreen pattern) | PASS |
+| `PressableScale` import retained (still used in Following Activity rows) | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24
