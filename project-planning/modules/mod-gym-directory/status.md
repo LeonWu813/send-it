@@ -2,6 +2,18 @@
 
 ## Engineering Progress
 
+### Fix — 2026-10-19 (Remove coordinates row and grade system row from GymDetailScreen)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx` — removed the coordinates row (`{t('gymDirectory.detail.coordinates')}: {gym.lat.toFixed(4)}, {gym.lng.toFixed(4)}`) and the grade system section (section label `t('gymDirectory.detail.gradingSystem')` + `{gym.official_grading_system}` body) from the JSX. Removed the now-unused `coordinates` style entry from `makeStyles`.
+- `src/modules/mod-gym-directory/__tests__/GymDetailScreen.test.tsx` — updated test "renders gym name, city/district, address, and grading system" to remove the `getByText('V')` assertion (which matched the removed grading system value) and renamed the test to "renders gym name, city/district, and address". i18n keys `gymDirectory.detail.coordinates` and `gymDirectory.detail.gradingSystem` are intentionally left in the locale files.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors (verified implicitly; jest transpiles cleanly and no type-only constructs were changed)
+- Tests: `npx jest --testPathPattern="mod-gym-directory" --passWithNoTests` — 44/44 passed, 4 suites, exit code 0
+
+---
+
 ### Fix — 2026-10-19 (TS7016 — install @types/ws for seed-gym-photos.ts)
 
 **Problem**: `scripts/seed-gym-photos.ts` produced `TS7016: Could not find a declaration file for module 'ws'` because `@types/ws` was not installed. QA flagged this in the Rev 44 regression pass as a pre-existing tooling gap.

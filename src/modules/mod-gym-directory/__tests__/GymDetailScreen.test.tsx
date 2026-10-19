@@ -89,7 +89,7 @@ describe('GymDetailScreen', () => {
     mockUnsaveGym.mockResolvedValue(undefined);
   });
 
-  it('renders gym name, city/district, address, and grading system', async () => {
+  it('renders gym name, city/district, and address', async () => {
     mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
 
     render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
@@ -101,7 +101,6 @@ describe('GymDetailScreen', () => {
     expect(screen.getByText('MegaSTONE 巨石攀岩館')).toBeTruthy();
     expect(screen.getByText('New Taipei · Xinzhuang')).toBeTruthy();
     expect(screen.getByText('新北市新莊區思源路171號')).toBeTruthy();
-    expect(screen.getByText('V')).toBeTruthy();
   });
 
   it('shows bouldering_only_note for mixed gyms', async () => {

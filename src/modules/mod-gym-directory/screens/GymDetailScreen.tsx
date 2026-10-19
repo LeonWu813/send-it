@@ -223,16 +223,6 @@ export default function GymDetailScreen({
           {localizedCity(gym)} · {localizedDistrict(gym)}
         </AppText>
         <AppText variant="body">{gym.address_text}</AppText>
-        <AppText variant="footnote" color="textSecondary" numeric style={styles.coordinates}>
-          {t('gymDirectory.detail.coordinates')}: {gym.lat.toFixed(4)},{' '}
-          {gym.lng.toFixed(4)}
-        </AppText>
-
-        {/* Grade system */}
-        <AppText variant="pageSection" style={styles.sectionLabel}>
-          {t('gymDirectory.detail.gradingSystem')}
-        </AppText>
-        <AppText variant="body">{gym.official_grading_system}</AppText>
 
         {/* Mixed gym note */}
         {isMixed && gym.bouldering_only_note ? (
@@ -301,9 +291,6 @@ function makeStyles(
     sectionLabel: {
       marginTop: theme.layout.sectionGap,
       marginBottom: theme.layout.sectionHeaderGap,
-    },
-    coordinates: {
-      marginTop: theme.spacing.xs,
     },
     noteBox: {
       marginTop: theme.layout.sectionGap,
