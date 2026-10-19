@@ -22,7 +22,8 @@
         }
       ],
       "./app.plugin",
-      "expo-video"
+      "expo-video",
+      "expo-image"
     ],
     "extra": {
       "eas": {

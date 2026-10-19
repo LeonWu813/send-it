@@ -34,9 +34,10 @@
  */
 
 import type { Session } from '@supabase/supabase-js';
+import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import RouteCard from '../../../components/RouteCard';
 import { AppText } from '../../../components/ui/AppText';
@@ -298,6 +299,15 @@ export default function HomeScreen({
       });
 
       setSavedGyms(gymItems);
+
+      // Prefetch all non-null cover photos into memory-disk cache (fire-and-forget).
+      // cover_photo_url uses permanent public URLs, so disk caching is safe.
+      // Images are warmed before the user sees the chips (AC-113/AC-175).
+      gymItems.forEach((gym) => {
+        if (gym.cover_photo_url !== null) {
+          void Image.prefetch(gym.cover_photo_url);
+        }
+      });
     } catch (err) {
       console.error('[HomeScreen] loadSavedGyms error:', err);
       setSavedGyms([]);
@@ -622,7 +632,7 @@ export default function HomeScreen({
                 <Image
                   source={{ uri: activeBanner.image_url }}
                   style={styles.bannerImage}
-                  resizeMode="cover"
+                  contentFit="cover"
                   accessibilityLabel={activeBanner.title}
                   accessibilityIgnoresInvertColors
                 />
@@ -677,7 +687,8 @@ export default function HomeScreen({
                   <Image
                     source={{ uri: gym.cover_photo_url }}
                     style={styles.gymChipImage}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
                     accessibilityIgnoresInvertColors
                   />
                 ) : (

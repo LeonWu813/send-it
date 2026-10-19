@@ -329,6 +329,49 @@
 
 ---
 
+### Perf — expo-image swap + gym cover photo prefetch — 2026-10-19
+
+**Task**: Switch saved gym avatar `<Image>` from `react-native` to `expo-image` for persistent disk caching; prefetch all non-null `cover_photo_url` values when the saved gym list loads.
+
+**Changes:**
+
+1. **`expo-image` installed**: `npx expo install expo-image` added `expo-image@~57.0.5` (SDK 57 compatible). Config plugin registered in `app.json` automatically.
+
+2. **HomeScreen.tsx — Image import swap**: Removed `Image` from the `react-native` import; added `import { Image } from 'expo-image'` as a named import. All `<Image>` usages in HomeScreen (banner image, gym chip image) now use expo-image.
+
+3. **Gym chip image — expo-image props**: `resizeMode="cover"` replaced with `contentFit="cover"`, `cachePolicy="memory-disk"` added. The `placeholder={{ color: ... }}` shape is not supported by this version of expo-image (`placeholder` takes `ImageSource | string | null`, not `{ color }`); placeholder omitted — the initials avatar already fills the null-URL path, so no visual regression.
+
+4. **Banner image — expo-image prop**: `resizeMode="cover"` replaced with `contentFit="cover"` (no cachePolicy added — banner URLs may not be permanent).
+
+5. **Prefetch on load**: After `setSavedGyms(gymItems)` in `loadSavedGyms`, added a `gymItems.forEach` loop that calls `void Image.prefetch(gym.cover_photo_url)` for each non-null `cover_photo_url`. Fire-and-forget (no await). Images are warmed in disk cache before the user sees the chips.
+
+**Files changed:**
+- `src/modules/mod-home/screens/HomeScreen.tsx` — Image import swap; `contentFit`/`cachePolicy` on gym chip; `contentFit` on banner; `Image.prefetch` forEach after `setSavedGyms`.
+- `package.json` — `expo-image@~57.0.5` added.
+- `package-lock.json` — dependency lock updated.
+- `app.json` — expo-image config plugin registered by `expo install`.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx jest --testPathPattern="mod-home" --passWithNoTests` | PASS — 49 tests, 4 suites, 0 failures |
+| `npx tsc --noEmit` (HomeScreen.tsx) | PASS — 0 errors in mod-home files (pre-existing errors in mod-gym-directory from separate engineer work) |
+| expo-image installed via `npx expo install` (SDK-compatible) | PASS |
+| `Image` import from `expo-image` (not react-native) | PASS |
+| Gym chip: `contentFit="cover"` + `cachePolicy="memory-disk"` | PASS |
+| `Image.prefetch` called for each non-null `cover_photo_url` after load | PASS |
+| Prefetch is fire-and-forget (`void`; no await) | PASS |
+| `placeholder={{ color }}` not used — invalid type for this expo-image version | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| Native build gate: expo-image adds a native dependency — iOS build required before QA | NOTE — native build not run in this session; must confirm before QA handoff |
+
+**Result: READY FOR QA (pending native build gate confirmation)**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24
