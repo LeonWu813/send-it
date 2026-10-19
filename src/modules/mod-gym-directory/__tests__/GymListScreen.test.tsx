@@ -37,6 +37,7 @@ const GYM_FIXTURES: GymSummary[] = [
     district_zh: '新莊區',
     gym_type: 'bouldering',
     photo_url: null,
+    cover_photo_url: null,
   },
   {
     id: 'gym-002',
@@ -49,6 +50,7 @@ const GYM_FIXTURES: GymSummary[] = [
     district_zh: '萬華區',
     gym_type: 'bouldering',
     photo_url: null,
+    cover_photo_url: null,
   },
   {
     id: 'gym-003',
@@ -61,6 +63,7 @@ const GYM_FIXTURES: GymSummary[] = [
     district_zh: '大同區',
     gym_type: 'both',
     photo_url: null,
+    cover_photo_url: null,
   },
 ];
 

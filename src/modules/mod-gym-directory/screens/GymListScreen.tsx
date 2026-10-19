@@ -8,6 +8,10 @@
  * gym showing name, city/district, and (if present) photo when a user opens
  * the Gyms tab.
  * AC-122: saved gym cards display a filled bookmark status marker (read-only).
+ * AC-197: cover_photo_url shown as thumbnail on each gym card when non-null;
+ *   initials avatar (AC-198) shown when null. "Photos from Google" attribution
+ *   shown at the bottom of the list when at least one card has a Google photo.
+ * AC-198: initials avatar derived from gym name shown when cover_photo_url is null.
  *
  * Filter support: text search (name/city/district in both languages) + city filter chips.
  */
@@ -15,7 +19,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, AppState, FlatList, StyleSheet, View } from 'react-native';
+import { Animated, AppState, FlatList, Image, StyleSheet, View } from 'react-native';
 
 import {
   AppText,
@@ -35,6 +39,7 @@ import { useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
 import { fetchSavedGymIds, listGyms } from '../gym-service';
 import type { GymSummary } from '../types';
+import { getGymInitials } from '../gym-initials';
 
 interface GymListScreenProps {
   onSelectGym: (gymId: string) => void;
@@ -143,6 +148,12 @@ export default function GymListScreen({
     });
   }, [filteredGyms, savedGymIds]);
 
+  // AC-197: show "Photos from Google" attribution when at least one visible card has a Google photo.
+  const hasGooglePhotos = useMemo(
+    () => sortedGyms.some((gym) => gym.cover_photo_url !== null),
+    [sortedGyms],
+  );
+
   function renderGymCard({ item }: { item: GymSummary }): React.JSX.Element {
     const isItemSaved = savedGymIds.has(item.id);
     return (
@@ -152,30 +163,50 @@ export default function GymListScreen({
         onPress={() => onSelectGym(item.id)}
         accessibilityLabel={`${item.name}, ${localizedDistrict(item)}`}
       >
-        <View style={styles.cardHeader}>
-          <View style={styles.cardTitleBlock}>
-            <AppText variant="headline" numberOfLines={2}>
-              {item.name}
-            </AppText>
-            {item.branch_label ? (
-              <AppText variant="footnote" color="textSecondary">
-                {item.branch_label}
-              </AppText>
-            ) : null}
-          </View>
-          {/* AC-122: filled bookmark status marker for saved gyms only (read-only, not pressable) */}
-          {isItemSaved ? (
-            <Ionicons
-              name={ICON.bookmark.filled}
-              size={theme.iconSize.sm}
-              color={theme.colors.textSecondary}
-              accessibilityLabel={t('gymDirectory.bookmark.saved')}
+        <View style={styles.cardRow}>
+          {/* AC-197: thumbnail slot — cover photo or initials avatar (AC-198) */}
+          {item.cover_photo_url ? (
+            <Image
+              source={{ uri: item.cover_photo_url }}
+              style={styles.thumbnail}
+              resizeMode="cover"
+              accessibilityLabel={item.name}
             />
-          ) : null}
+          ) : (
+            <View style={styles.initialsAvatar}>
+              <AppText variant="headline" color="textSecondary">
+                {getGymInitials(item.name)}
+              </AppText>
+            </View>
+          )}
+
+          <View style={styles.cardContent}>
+            <View style={styles.cardHeader}>
+              <View style={styles.cardTitleBlock}>
+                <AppText variant="headline" numberOfLines={2}>
+                  {item.name}
+                </AppText>
+                {item.branch_label ? (
+                  <AppText variant="footnote" color="textSecondary">
+                    {item.branch_label}
+                  </AppText>
+                ) : null}
+              </View>
+              {/* AC-122: filled bookmark status marker for saved gyms only (read-only, not pressable) */}
+              {isItemSaved ? (
+                <Ionicons
+                  name={ICON.bookmark.filled}
+                  size={theme.iconSize.sm}
+                  color={theme.colors.textSecondary}
+                  accessibilityLabel={t('gymDirectory.bookmark.saved')}
+                />
+              ) : null}
+            </View>
+            <AppText variant="subhead" color="textSecondary" style={styles.district}>
+              {localizedCity(item)} · {localizedDistrict(item)}
+            </AppText>
+          </View>
         </View>
-        <AppText variant="subhead" color="textSecondary" style={styles.district}>
-          {localizedCity(item)} · {localizedDistrict(item)}
-        </AppText>
       </Card>
     );
   }
@@ -249,17 +280,25 @@ export default function GymListScreen({
     </>
   );
 
-  // Request a gym link
+  // Request a gym link + AC-197 "Photos from Google" attribution
   const listFooter = (
-    <View style={styles.requestRow}>
-      <Button
-        variant="ghost"
-        size="md"
-        on="background"
-        label={t('gymDirectory.requestGym.cta')}
-        trailingIcon={ICON.forward.outline}
-        onPress={onRequestGym}
-      />
+    <View>
+      {/* AC-197: Google Maps Platform ToS — show attribution when any card has a Google photo */}
+      {hasGooglePhotos ? (
+        <AppText variant="caption" color="textSecondary" style={styles.googleAttribution}>
+          {t('gymDirectory.googlePhotosAttribution')}
+        </AppText>
+      ) : null}
+      <View style={styles.requestRow}>
+        <Button
+          variant="ghost"
+          size="md"
+          on="background"
+          label={t('gymDirectory.requestGym.cta')}
+          trailingIcon={ICON.forward.outline}
+          onPress={onRequestGym}
+        />
+      </View>
     </View>
   );
 
@@ -324,6 +363,30 @@ function makeStyles(
       paddingTop: topPad,
       paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.lg,
     },
+    cardRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.sm,
+    },
+    thumbnail: {
+      width: 56,
+      height: 56,
+      borderRadius: theme.spacing.sm,
+      backgroundColor: theme.colors.surfaceAlt,
+      flexShrink: 0,
+    },
+    initialsAvatar: {
+      width: 56,
+      height: 56,
+      borderRadius: theme.spacing.sm,
+      backgroundColor: theme.colors.surfaceAlt,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0,
+    },
+    cardContent: {
+      flex: 1,
+    },
     cardHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -335,6 +398,11 @@ function makeStyles(
     },
     district: {
       marginTop: theme.spacing.xs,
+    },
+    googleAttribution: {
+      textAlign: 'center',
+      marginTop: theme.spacing.sm,
+      marginBottom: theme.spacing.xs,
     },
     requestRow: {
       alignItems: 'center',

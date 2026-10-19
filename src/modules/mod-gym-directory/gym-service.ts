@@ -15,11 +15,11 @@ import type { Gym, GymRequestInput, GymSummary } from './types';
 
 /** Fields fetched for the gym list. */
 const GYM_SUMMARY_SELECT =
-  'id, name, name_zh, branch_label, city, city_zh, district, district_zh, gym_type, photo_url';
+  'id, name, name_zh, branch_label, city, city_zh, district, district_zh, gym_type, photo_url, cover_photo_url';
 
 /** Fields fetched for the gym detail page. */
 const GYM_DETAIL_SELECT =
-  'id, name, name_zh, branch_label, city, city_zh, district, district_zh, address_text, lat, lng, gym_type, photo_url, official_grading_system, bouldering_only_note, created_at, updated_at';
+  'id, name, name_zh, branch_label, city, city_zh, district, district_zh, address_text, lat, lng, gym_type, photo_url, cover_photo_url, google_place_id, official_grading_system, bouldering_only_note, created_at, updated_at';
 
 /**
  * Load all gyms for the directory list, ordered by city then name.

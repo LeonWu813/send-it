@@ -47,6 +47,8 @@ const BOULDERING_GYM: Gym = {
   lng: 121.4447,
   gym_type: 'bouldering',
   photo_url: null,
+  cover_photo_url: null,
+  google_place_id: null,
   official_grading_system: 'V',
   bouldering_only_note: null,
   created_at: '2026-01-01T00:00:00Z',
@@ -67,6 +69,8 @@ const MIXED_GYM: Gym = {
   lng: 121.5098,
   gym_type: 'both',
   photo_url: null,
+  cover_photo_url: null,
+  google_place_id: null,
   official_grading_system: 'V',
   bouldering_only_note:
     'Only the bouldering area is represented in Send It. Top-rope routes are excluded.',

@@ -127,7 +127,8 @@
     "errors": {
       "loadFailed": "載入岩館失敗，請再試一次。",
       "notFound": "找不到該岩館。"
-    }
+    },
+    "googlePhotosAttribution": "相片來自 Google"
   },
   "routeCatalog": {
     "noResults": "找不到符合的路線",

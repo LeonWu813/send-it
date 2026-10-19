@@ -9,6 +9,9 @@
  * map pin, gym type, and (if present) photo when a user opens the gym.
  * AC-120: bookmark icon reflecting saved state (filled primary / outline textSecondary).
  * AC-121: tapping the bookmark icon optimistically toggles save/unsave.
+ * AC-196: cover_photo_url rendered at top when non-null; "Photos from Google"
+ *   attribution shown adjacent to the image (Google Maps Platform ToS requirement).
+ * AC-198: initials avatar derived from gym name shown when cover_photo_url is null.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
@@ -32,6 +35,7 @@ import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
 import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import type { Gym } from '../types';
+import { getGymInitials } from '../gym-initials';
 
 interface GymDetailScreenProps {
   gymId: string;
@@ -177,18 +181,25 @@ export default function GymDetailScreen({
         contentContainerStyle={styles.contentContainer}
         scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
-        {/* Gym photo (when present) */}
-        {gym.photo_url ? (
-          <Image
-            source={{ uri: gym.photo_url }}
-            style={styles.photo}
-            accessibilityLabel={gym.name}
-            resizeMode="cover"
-          />
+        {/* AC-196: cover photo from Places API seeder (when present) */}
+        {gym.cover_photo_url ? (
+          <>
+            <Image
+              source={{ uri: gym.cover_photo_url }}
+              style={styles.coverPhoto}
+              accessibilityLabel={gym.name}
+              resizeMode="cover"
+            />
+            {/* AC-196: Google Maps Platform ToS — attribution required */}
+            <AppText variant="caption" color="textSecondary" style={styles.googleAttribution}>
+              {t('gymDirectory.googlePhotosAttribution')}
+            </AppText>
+          </>
         ) : (
-          <View style={styles.photoPlaceholder}>
-            <AppText variant="footnote" color="textDisabled">
-              {t('gymDirectory.detail.noPhoto')}
+          /* AC-198: initials avatar fallback when cover_photo_url is null */
+          <View style={styles.initialsAvatar} accessibilityLabel={gym.name}>
+            <AppText variant="title1" color="textSecondary">
+              {getGymInitials(gym.name)}
             </AppText>
           </View>
         )}
@@ -261,18 +272,22 @@ function makeStyles(
     skeletonGroup: {
       gap: theme.layout.cardGap,
     },
-    photo: {
+    coverPhoto: {
       width: '100%',
-      aspectRatio: 2,
+      height: 200,
       borderRadius: RADIUS.card,
       ...CONTINUOUS,
       overflow: 'hidden',
-      marginBottom: theme.spacing.md,
       backgroundColor: theme.colors.surfaceAlt,
     },
-    photoPlaceholder: {
+    googleAttribution: {
+      marginTop: theme.spacing.xs,
+      marginBottom: theme.spacing.md,
+      textAlign: 'right',
+    },
+    initialsAvatar: {
       width: '100%',
-      minHeight: 160,
+      height: 200,
       borderRadius: RADIUS.card,
       ...CONTINUOUS,
       backgroundColor: theme.colors.surfaceAlt,

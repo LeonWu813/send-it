@@ -26,6 +26,10 @@ export interface Gym {
   lng: number;
   gym_type: GymType;
   photo_url: string | null;
+  /** Populated by the one-time Places API seeder (AC-195). Null = initials avatar fallback. */
+  cover_photo_url: string | null;
+  /** Stored for future use; not surfaced in Phase 1 UI. */
+  google_place_id: string | null;
   official_grading_system: string;
   bouldering_only_note: string | null;
   created_at: string;
@@ -47,6 +51,8 @@ export interface GymSummary {
   district_zh: string;
   gym_type: GymType;
   photo_url: string | null;
+  /** Populated by the one-time Places API seeder (AC-195). Null = initials avatar fallback. */
+  cover_photo_url: string | null;
 }
 
 /**

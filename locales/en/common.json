@@ -127,7 +127,8 @@
     "errors": {
       "loadFailed": "Failed to load gyms. Please try again.",
       "notFound": "Gym not found."
-    }
+    },
+    "googlePhotosAttribution": "Photos from Google"
   },
   "routeCatalog": {
     "noResults": "No routes match the filter",
