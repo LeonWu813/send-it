@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: tech-lead
+mode: confirm-fix
 module: n/a
 result: success
-commit: b7f597fab88810348ca49f2543607f3c13c7d48b
+commit: c53b3fff66b1f4646d21a474b2dc9244c71f632d
 timestamp: 2026-10-19T00:00:00Z
 ```
 
@@ -349,6 +349,52 @@ Scan clean on migration prefix collisions (40 migrations, all unique/namespaced)
 - **BLK-2 (soft, data-correction):** Module Map shows MOD-004/MOD-005 as "QA Pending Human Sign-off," but their module `status.md` files record QA PASS (MOD-004 with human sign-off). Needs a PM `[TRIVIAL]` Module Map correction.
 
 The two Concerns (INT-001, INT-002) should be fixed or explicitly accepted by the human before checkpoint. All four findings are proposals; the human decides which to approve/defer/reject.
+
+### Review — 2026-10-19 — INT-004 closure (signed-URL cache already implemented)
+
+**Context**: Asked to close INT-004 (the per-`RouteCard` signed-URL optimization from the Phase 1 Integration Review) and produce an engineer implementation spec for a module-level signed-URL cache in `route-service.ts`. On reading the actual code, the optimization is **already implemented, wired in, and tested** — so the correct outcome is a closure, not a build spec. Advisory only; no source, spec, or PRD files edited.
+
+**Read**: `src/modules/mod-route-catalog/route-service.ts`, `src/lib/signedUrlCache.ts`, `src/components/RouteCard.tsx` (call site), and the test suites. Ran a repo-wide grep of every `getPhotoSignedUrl` / `createSignedUrl` / `getSignedUrl` call site, and ran the cache + route-service test suites.
+
+---
+
+#### Decision: CONFIRMED CLOSED — no engineer work required
+
+The task brief assumed INT-004's pre-fix state ("`getPhotoSignedUrl` re-signs on every mount, no shared cache"). The code no longer matches that assumption. The cache the brief asked me to spec **exists already**, and is a strict superset of the proposed design.
+
+**What the brief proposed** (module-level `Map<string, Promise<string>>` in `route-service.ts`, cache the Promise to prevent thundering-herd, no TTL):
+
+```ts
+const signedUrlCache = new Map<string, Promise<string>>();
+export function getPhotoSignedUrl(path): Promise<string> {
+  if (!signedUrlCache.has(path)) signedUrlCache.set(path, /* fetch */);
+  return signedUrlCache.get(path)!;
+}
+```
+
+**What is actually in the codebase** (`src/lib/signedUrlCache.ts`, consumed by `route-service.ts:168`):
+
+- `getPhotoSignedUrl(photoUrl)` extracts the storage path from the stored public URL, then delegates to the shared helper: `return getSignedUrl('route-photos', storagePath, async () => { …createSignedUrl(storagePath, 3600)… })`.
+- `getSignedUrl(bucket, path, fetcher)` holds **two** maps:
+  - `inFlight: Map<string, Promise<string>>` — this is exactly the brief's "cache the Promise, not the value" thundering-herd protection. N cards mounting simultaneously with the same path join one in-flight request; all N resolve from the single network round-trip.
+  - `cache: Map<string, { signedUrl, expiresAt }>` — resolved-value cache with a **55-minute TTL** (3300 s), deliberately below the 1-hour (3600 s) signed-URL validity so a served URL always has meaningful remaining life.
+- Plus FIFO eviction at 500 entries (Map insertion order) and on-error cleanup (`inFlight.delete(key)` in `.catch`) so a failed sign doesn't poison future callers.
+- Keyed `"<bucket>:<storagePath>"`, so it is shared across all three INT-004 consuming surfaces (RouteListScreen MOD-003, HomeScreen MOD-012, profile-history MOD-008) **and** across buckets — MOD-005's `beta-video-service.ts:189,210` use the same helper for video + thumbnail signing.
+
+**On the brief's "no TTL needed" point**: the implemented version adds a TTL anyway, which is strictly safer, not a conflict. Without a TTL a long-lived process (the Map only resets on process restart, as the brief notes) could serve a cached URL after its 1-hour signature expired; the 55-minute TTL closes that window. For a mobile app this is the more robust choice and costs nothing. I am closing against the implemented behavior, not re-specifying it down to a plain untTL'd Map.
+
+**Ownership** (as the brief states, and matches the code): `RouteCard` is the app-level shared component (MOD-012-authored) and calls into MOD-003's `getPhotoSignedUrl`. The cache lives one level lower in `src/lib/signedUrlCache.ts` (a shared lib, owned in practice by MOD-003 which is the primary route-photo consumer and where `getPhotoSignedUrl` lives). **No change is needed in `RouteCard` or any consuming screen** — they already benefit transparently.
+
+#### Evidence (so this closure rests on observation, not assumption)
+
+- Grep: the only non-test `getPhotoSignedUrl` call sites are `RouteCard.tsx:114` and `RouteDetailScreen.tsx:198`; both go through the cached service function. No code path calls `createSignedUrl` directly outside the two service fetchers (`route-service.ts:171`, `beta-video-service.ts:192,213`), each of which is wrapped by `getSignedUrl`. No un-cached signing path exists.
+- Tests (ran 2026-10-19, both PASS, 39/39): `route-service.test.ts:413` — "calls createSignedUrl only once when getPhotoSignedUrl is called twice with the same URL (cache hit)"; `signedUrlCache.test.ts` — cache hit, TTL expiry re-fetch, in-flight dedup (two concurrent calls → one fetch), FIFO eviction at MAX_ENTRIES, and cross-bucket key isolation.
+
+#### Engineer spec
+
+**None.** The item is closed as already-satisfied by existing infrastructure. There is no code to write, no migration, no RouteCard/screen change. If the human disagrees and wants a behavioral change (e.g. a different TTL, a manual `invalidate()` call at a future delete-and-reupload write site — see the WARNING docblock in `signedUrlCache.ts`), that would be a *new* finding, not INT-004, and a delete+reupload at the same path doesn't occur in the current codebase (all uploads use unique `userId/timestamp-random` paths — `route-service.ts:57`), so no invalidation hook is needed today.
+
+`integration-review.md` INT-004 row updated `PROPOSED` → `CONFIRMED CLOSED` with this rationale and the verifying tests.
 
 ### Review — 2026-10-16 — Signed URL Cache Design
 
