@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 43
-**Date**: 2026-10-18
-**Revision**: 43
+**Status**: [SUBSTANTIVE] — Revision 44
+**Date**: 2026-10-19
+**Revision**: 44
 
 ---
 
@@ -119,7 +119,7 @@ The route list uses grade and hold-color filter chips only (no free-text search)
 **I want** to open my gym's page and filter its route list by grade and active status,
 **so that** I know what's currently set before I show up.
 
-**Acceptance Criteria**: AC-005, AC-006, AC-040, AC-041, AC-042, AC-045, AC-125, AC-126
+**Acceptance Criteria**: AC-005, AC-006, AC-040, AC-041, AC-042, AC-045, AC-125, AC-126, AC-194, AC-195, AC-196, AC-197, AC-198
 
 ---
 
@@ -520,6 +520,16 @@ The data flow for the two most important loops:
 
 **AC-122** (new): The gym list screen shall display a filled yellow bookmark indicator on gym cards that are in the current user's saved gyms list; no indicator is shown for unsaved gyms. The list indicator is read-only — tapping it performs no save/unsave action.
 
+**AC-194** (new, Rev 44, MOD-002 — Data model migration): The system shall add two nullable columns to the `gyms` table via a new migration file (`supabase/migrations/<timestamp>_mod_002_gym_cover_photo.sql`): `cover_photo_url TEXT` and `google_place_id TEXT`. Both columns are nullable so existing rows are unaffected. Gyms with no cover photo continue to render the initials avatar fallback (AC-198). The `cover_photo_url` column is the authoritative cover photo for both the gym list and gym detail screen. A gym's official photo may overwrite `cover_photo_url` in a later cooperation phase without any schema change.
+
+**AC-195** (new, Rev 44, MOD-002 — One-time seeder script): The system shall provide a one-time server-side seeder script that populates `cover_photo_url` and `google_place_id` for each gym in the seeded directory. The script shall: (1) call the Google Places Text Search API with the gym's name and address to obtain a `place_id`; (2) call the Place Details API with the `place_id` to obtain a `photo_reference` list; (3) call the Place Photo API with the first `photo_reference` to download an image; (4) upload the image to Supabase Storage in a bucket named `gym-photos`; (5) store the resulting public URL in `gyms.cover_photo_url` and the resolved `place_id` in `gyms.google_place_id`. The script is run once by the admin before Phase 1 launch and is not triggered from any client flow. The script shall skip gyms that already have a non-null `cover_photo_url`, making it safe to re-run. The Google Places API key used by the seeder must be server-side only — it must never be included in the client bundle, any client environment file, or any file committed to the repository. The key is supplied at script run-time via a secure environment variable (e.g. a `.env` file excluded from source control, or a CI secret).
+
+**AC-196** (new, Rev 44, MOD-002 — Gym detail screen cover photo): The gym detail screen (GymDetailScreen) shall display `cover_photo_url` as a cover photo at the top of the screen when the value is non-null. When `cover_photo_url` is null, the cover photo slot shall not render (the layout falls back gracefully with no blank space). Every screen that displays a gym cover photo sourced from `cover_photo_url` shall show a visible “Photos from Google” attribution label adjacent to or below the image, as required by Google Maps Platform Terms of Service.
+
+**AC-197** (new, Rev 44, MOD-002 — Gym list cover photo thumbnail): The gym list shall display `cover_photo_url` as a thumbnail on each gym card when the value is non-null. When `cover_photo_url` is null, the gym card shall display the initials avatar (AC-198) in the thumbnail slot instead. The “Photos from Google” attribution required by AC-196 shall also be shown on the gym list screen when at least one card is displaying a Google-sourced cover photo.
+
+**AC-198** (new, Rev 44, MOD-002 — Initials avatar fallback): The system shall generate an initials avatar for the gym avatar slot on both the gym list card and the gym detail screen. The initials are derived from the gym's `name` field (first letter of each word, up to two letters, uppercased). The initials avatar is shown whenever `cover_photo_url` is null. It requires no Google API call and no network request. The fallback is purely client-generated and has no external dependency.
+
 ---
 
 ### MOD-003 (Route Catalog) Acceptance Criteria
@@ -872,6 +882,11 @@ Gym  (admin-maintained, branch-level rows for multi-branch gyms)
  - id, name, branch_label (nullable, e.g. "萬華", "南港"), city, district,
    address_text, lat, lng, gym_type (bouldering | top_rope | both),
    photo_url (nullable), official_grading_system (default 'V'),
+   cover_photo_url (TEXT, nullable — populated by the one-time Places API seeder,
+     AC-195; overwritable by official gym photo in a later cooperation phase.
+     NULL = initials avatar fallback shown per AC-197/AC-198.),
+   google_place_id (TEXT, nullable — stored by the seeder for future use;
+     not surfaced in the UI in Phase 1.),
    created_at, updated_at
 
 SavedGym  (join table — a user's bookmarked gyms)
@@ -1053,6 +1068,7 @@ Block  (App Store Guideline 1.2 requirement)
 
 - All tables are guarded by Supabase Row-Level Security policies.
 - **`User.beta_video_privacy` is a new column (requires a migration).** It is an enum `public` (default) | `followers_only`, independent from `privacy_setting`. It governs beta-video visibility only (AC-156/AC-158): when `followers_only`, a poster's beta videos are visible only to the poster and their followers; when `public`, to all users. MOD-001 owns the write via a public service function (consumed by MOD-010's SettingsScreen, AC-157). The AC-158 filter reads this value from the poster's user record (via the existing `fetchBetaVideosForRoute` poster join, AC-144) and composes it with the `Follow` relationship across every beta-video listing surface (route-detail grid, fullscreen viewer set, activity feed), in addition to the reported-video (AC-142) and blocked-user (AC-154) exclusions. The migration adds the column with a `public` default so existing rows backfill to the current (public) behavior.
+- **`gyms.cover_photo_url` and `gyms.google_place_id` (new columns, requires a migration)**: Both columns are nullable TEXT, added by the Phase 1 one-time seeder migration (AC-194/AC-195). `cover_photo_url` is the authoritative cover photo URL for the gym list and gym detail screen (AC-196/AC-197); null rows display the initials avatar fallback (AC-198). Images are uploaded to Supabase Storage bucket `gym-photos` by the seeder. `google_place_id` is stored for potential future use and is not surfaced in the Phase 1 UI. Any screen displaying a Google-sourced cover photo must show “Photos from Google” attribution (AC-196/AC-197, Google Maps Platform Terms of Service).
 - `SavedGym` is the join table backing the multi-gym saved list (it replaces the removed single `User.home_gym_id`). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved gyms.
 - `UserRouteVisits` is a **new** per-user route-visit table (AC-179) with composite PK `(user_id, route_id)` and a `last_viewed_at` timestamp, upserted when the user opens a route detail screen. It backs the Home "new beta video" tag (AC-180 — a route qualifies when a visible beta video's `created_at` is newer than the user's `last_viewed_at`, or when no visit row exists) and the most-recently-viewed Saved Gyms ordering (AC-175, derived via each saved gym's routes). **This is a new table and requires Tech Lead architecture review before Doc-Sync/Engineering implements it** — table placement/ownership (candidate: MOD-003), composite-key upsert pattern, own-rows-only SELECT/INSERT/UPDATE RLS (`user_id = auth.uid()`), explicit grants, and the owning module + query shape for the AC-180 cross-module read against beta videos (MOD-005). Mirror the confirmed `saved_gyms` / `saved_routes` RLS design (own-rows-only, dual `ON DELETE CASCADE`).
 - `SavedRoute` is the join table backing the saved-routes bookmark (US-021, AC-046/AC-047). Its RLS policies must scope reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()` — a user can never see or modify another user's saved routes. `route_id` is `ON DELETE CASCADE` so a saved-route row disappears if the underlying route is deleted (e.g. a withdrawn pending route). **This is a new join table and requires Tech Lead architecture review (table placement/ownership, RLS policy set, grants) before Doc-Sync/Engineering implements it** — mirror the confirmed `saved_gyms` design (composite PK, dual `ON DELETE CASCADE`, own-rows-only SELECT/INSERT/DELETE RLS, no UPDATE, explicit grants).
@@ -1087,6 +1103,7 @@ Block  (App Store Guideline 1.2 requirement)
 - **Route identity and duplicate detection (Rev 37)**: A route is identified only by its `id` (UUID primary key). There is no application-level or database uniqueness constraint on `(gym_id, grade, color_tag)` — two active routes with identical grade and color at the same gym are valid by design. The non-unique partial index `routes_active_grade_color_idx ON public.routes (gym_id, grade, color_tag) WHERE status = 'active'` exists solely to back the AC-187 duplicate-warning count query and must not be misread as a uniqueness guarantee. Duplicate detection is a **two-layer non-blocking guard** (AC-187): (1) while the form is being filled, when the submit screen detects ≥1 active route at the gym with the selected grade + color, it shows a neutral-colored inline notice; (2) when the user taps "Add Route" with duplicate candidates present, a non-dismissable confirmation sheet intercepts before `uploadRoutePhoto()` is called, showing RouteCards for matching routes; the user must tap "Cancel" or "Add Route" on the sheet. Neither layer disables the Add Route action. The duplicate candidate list is derived **client-side** from the already-fetched `activeRoutes` list (the `useMemo` from the original AC-187 is reused) — no dedicated count RPC is needed. `findMatchingActiveRoutes` in `route-service.ts` is dead code (the match-before-create flow was removed in Rev 37) and must be deleted. `match_key` was specified in earlier planning docs but was **never implemented** in any migration — no `match_key` column exists in the database; do not reference it.
 - **Analytics**: PostHog free tier. Ship the core funnel events listed in AC-100. No PII beyond `user_id` sent to PostHog.
 - **Performance targets**: App cold start ≤3 seconds on iPhone 12 or newer. Feed initial render ≤2 seconds on a normal 4G/LTE connection with a warm cache.
+- **Google Places API key (server-side only)**: The Google Places API key used by the gym cover-photo seeder (AC-195) must never appear in the client bundle, any client-side environment variable, or any file committed to the repository. It is supplied to the seeder script at run-time via a secure environment variable or CI secret only. This constraint applies to all Google API keys used in this project.
 - **Security**: All Storage buckets have RLS policies aligned with the corresponding table policies (e.g., a user cannot fetch a private ascent's associated media). All Edge Functions validate the JWT and re-check authorization against Postgres. Edge Functions read the service-role key from the secret named `SERVICE_ROLE_KEY` (Supabase reserves the `SUPABASE_` prefix); the service-role key is never inlined into the client bundle.
 - **Native dependency installation**: All Expo native dependencies shall be installed via `npx expo install <package>`, never `npm install <package>`. Expo resolves the SDK-compatible version automatically; a plain `npm install` can silently install an SDK-incompatible version that passes the Jest suite (via mocks) but fails the native iOS/Android build. Hand-pinning a native module's version string in `package.json` is prohibited.
 - **Native build gate before QA handoff**: When a module adds or changes a native dependency (a package with iOS/Android native code), the module's engineer shall run the native build (`npx expo run:ios`, or the platform equivalent) and confirm it compiles before marking the module QA-ready. Passing unit tests alone are insufficient evidence that a native dependency compiles, because Jest mocks native modules.
