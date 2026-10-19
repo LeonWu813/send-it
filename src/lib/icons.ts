@@ -69,7 +69,7 @@ export const ICON = {
   uploaded: { outline: 'cloud-done-outline', filled: 'cloud-done' },
   library: { outline: 'images-outline' },
   camera: { outline: 'camera-outline' },
-  like: { outline: 'heart-outline', filled: 'heart' },
+  like: { outline: 'thumbs-up-outline', filled: 'thumbs-up' },
   report: { outline: 'flag-outline', filled: 'flag' },
   // E. Social
   follow: { outline: 'person-add-outline' },

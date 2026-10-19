@@ -16,7 +16,7 @@
  * Design system v1.2 (off-spec design work): everything that sits on the video uses the fixed
  * media tokens (`onMedia`, `mediaScrim`, `mediaScrimStrong`, `mediaBackground`) so it stays
  * visible in both themes; controls sit inside the safe area (no `|| 34` fallback, no fixed
- * padding); the like heart is `onMedia` (filled vs outline, never red) with the like motion
+ * padding); the like fistbump is `onMedia` (filled vs outline, never red) with the like motion
  * (celebratePeak + topOut + particles, Reduce Motion = cross-fade only).
  *
  * Architecture (Tech Lead decisions, Rev 13 + Rev 16):
@@ -935,7 +935,7 @@ export default function BetaVideoReelViewer({
                 {/* Right sidebar: like placeholder + report button (AC-138) */}
                 <View style={styles.sidebar}>
 
-                  {/* Like button (AC-052): heart, onMedia, filled = liked (never red). */}
+                  {/* Like button (AC-052): thumbs-up/fistbump, onMedia, filled = liked (never red). */}
                   <ReelAction
                     testID="reel-like-button"
                     accessibilityLabel={t('betaVideo.reel.likeLabel', { count: likeCount })}

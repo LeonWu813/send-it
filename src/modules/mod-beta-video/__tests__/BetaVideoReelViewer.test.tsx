@@ -711,12 +711,12 @@ describe('BetaVideoReelViewer', () => {
     });
   });
 
-  it('AC-052: like button shows heart-outline when not liked and heart when liked', async () => {
+  it('AC-052: like button shows thumbs-up-outline when not liked and thumbs-up when liked', async () => {
     mockFetchLikeInfo.mockResolvedValue({ like_count: 3, user_has_liked: false });
 
     render(<BetaVideoReelViewer {...BASE_PROPS} />, renderOptions());
 
-    // After fetchLikeInfo resolves, count should be 3 and icon heart-outline.
+    // After fetchLikeInfo resolves, count should be 3 and icon thumbs-up-outline.
     await waitFor(() => {
       expect(screen.getByTestId('reel-like-button')).toBeTruthy();
     });

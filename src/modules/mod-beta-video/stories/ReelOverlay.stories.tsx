@@ -169,5 +169,5 @@ export default meta;
 
 type Story = StoryObj<DemoArgs>;
 
-/** Tap the heart (peak scale, particles; Reduce Motion cross-fades only), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
+/** Tap the fistbump/thumbs-up (peak scale, particles; Reduce Motion cross-fades only), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
 export const Playground: Story = {};

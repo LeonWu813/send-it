@@ -2,6 +2,15 @@
 
 ## Engineering Progress
 
+### Bugfix: change like icon from heart to thumbs-up/fistbump — 2026-10-19
+
+- **Change**: Updated `ICON.like` in `src/lib/icons.ts` from `{ outline: 'heart-outline', filled: 'heart' }` to `{ outline: 'thumbs-up-outline', filled: 'thumbs-up' }`. All consumers of `ICON.like.*` (BetaVideoReelViewer, FeedScreen, NotificationInboxScreen) pick up the change automatically via the icon dictionary.
+- **Comments updated**: BetaVideoReelViewer.tsx (file header and inline like-button comment), ReelOverlay.stories.tsx (JSDoc), BetaVideoReelViewer.test.tsx (test description and comment).
+- **No AC impact**: this is a cosmetic icon glyph change only; AC-138 and AC-052 behavior is unchanged.
+- **Self-check**: `npx jest --testPathPattern="mod-beta-video" --passWithNoTests` — 109/109 PASS. `src/lib/icons.ts` git-scope flag is expected (shared icon dictionary; raw glyph strings in components would violate the dictionary convention).
+
+---
+
 ### Off-spec design work: design system v2.2 applied to mod-beta-video (pending PR review) — 2026-10-16
 
 - BetaVideoGrid: 3:4 tiles (`mediaTileAspect`), gap 2, one outer View clips the inset grid at `media` 12; per-tile badge and play disc removed; press = `mediaScrim` overlay (press 100 / release 120, `unstable_pressDelay` 50, no scale); empty route + new optional `onUpload` prop = first tile is the upload slot (`add` + `emptyUpload`, existing launcher) + dashed placeholder. BetaVideoSection passes `onUpload` (existing `selectHandlerRef`) and uses `pageSection` header.
