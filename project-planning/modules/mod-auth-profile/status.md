@@ -1878,3 +1878,166 @@ Visual-only. No behaviour, auth-logic, locale or dependency changes. Not a PRD/A
 - `EditProfileScreen`: display name + bio in one grouped `Card`; privacy header uses `groupHeader`.
 - `ProfileScreen`: beta-video section header uses `pageSection`. These screens draw no title/back row, so nothing to remove; header top padding unchanged (spec G.7 does not say to change it; AppShell large title interaction to be confirmed).
 - Self-check: jest 3 suites / 20 tests pass; `tsc --noEmit` clean for this module; `check:i18n` OK.
+
+---
+
+## QA Run 9 — Regression — 2026-10-18 (Rev 43: privacy_setting toggle removal, AC-117/AC-063)
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification after Rev 43 engineer change — `privacy_setting` toggle removed from `EditProfileScreen`; AC-117 now specifies display name, avatar, bio only; AC-063 now "always public, no user toggle")
+**Scope**: AC-117 primary (EditProfileScreen fields); AC-063 primary (no user-facing toggle anywhere in MOD-001); full regression of AC-001, AC-116, AC-118, AC-145, AC-156, AC-157, AC-164, AC-167, AC-184; automated test suite; TypeScript
+
+---
+
+### 1. Primary Verification — AC-117 (Edit Profile fields: display name, avatar, bio only)
+
+**Criterion: EditProfileScreen contains no privacy_setting state, Chip, radiogroup, or privacy toggle**
+
+PASS. Full read of `src/modules/mod-auth-profile/screens/EditProfileScreen.tsx` confirmed. The file's JSX (lines 126–206) contains exactly three editable sections: (1) avatar picker block (`<View style={styles.avatarContainer}>` with `<Avatar size="xl">` and `<Button label={t('profile.changeAvatar')}>`), (2) a `<Card>` with a display name `<TextField>` and a bio `<TextField variant="multiline">`, (3) a `<View style={styles.actionsRow}>` with Cancel and Save `<Button>` elements. There is no `<Chip>`, no `accessibilityRole="radiogroup"`, no `privacySetting` state, no `privacy_setting` state variable, no privacy-setting selector UI of any kind.
+
+Grep for `privacy_setting`, `privacySetting`, `followers_only`, `Chip`, `radiogroup`, `toggle`, `Toggle` in `EditProfileScreen.tsx` returns only the file-level JSDoc comment: `"AC-063: privacy_setting is always 'public'; there is no user-facing toggle."` — no functional code matches. The comment correctly documents the constraint rather than implementing a toggle.
+
+**Criterion: EditProfileScreen state contains only display name, bio, avatar, isUploadingAvatar, isSaving, errorMessage**
+
+PASS. The `useState` declarations (lines 58–65): `displayName`, `bio`, `avatarUri`, `isUploadingAvatar`, `isSaving`, `errorMessage`. No privacy-related state variable present.
+
+**Criterion: upsertProfile call passes only display_name, bio, avatar_url — not privacy_setting**
+
+PASS. `handleSave()` (lines 111–115) calls `upsertProfile(userId, { display_name: displayName.trim(), bio: bio.trim() || null, avatar_url: avatarUri })`. No `privacy_setting` field passed to upsertProfile from the EditProfileScreen — confirmed.
+
+---
+
+### 2. Primary Verification — AC-063 (No user-facing privacy toggle anywhere in MOD-001)
+
+**Criterion: No user-facing privacy toggle in EditProfileScreen**
+
+PASS. Confirmed above — no toggle, Chip, or radiogroup rendered in EditProfileScreen.
+
+**Criterion: No user-facing privacy toggle in ProfileScreen**
+
+PASS. Grep for `privacy_setting`, `privacySetting`, `followers_only`, `toggle`, `Toggle`, `Chip`, `radiogroup` in `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` returns zero matches.
+
+**Criterion: No user-facing privacy toggle in ProfileNavigator**
+
+PASS. Grep for `privacy_setting`, `privacySetting`, `followers_only` in `src/modules/mod-auth-profile/ProfileNavigator.tsx` returns zero matches.
+
+**Criterion: `privacy_setting` column retained in schema and TypeScript types (schema compat)**
+
+PASS. Three retention points confirmed:
+1. `supabase/migrations/20260920000001_mod_001_user_profile.sql` line 16–25: `CREATE TYPE privacy_setting AS ENUM ('public', 'followers_only')` and `privacy_setting privacy_setting NOT NULL DEFAULT 'public'` — column and enum retained.
+2. `src/modules/mod-auth-profile/types.ts` lines 6, 14: `export type PrivacySetting = 'public' | 'followers_only'` and `privacy_setting: PrivacySetting` on `UserProfile` — TypeScript type retained.
+3. `auth-service.ts` SELECT strings in `loadProfile()` (line 207) and `upsertProfile()` (line 234) include `privacy_setting` in the column list — the column is selected and returned in the profile object.
+
+**Criterion: `privacy_setting` is NOT used as an access gate in any query or RLS policy (AC-063)**
+
+PASS. Grep for `privacy_setting` across all of `src/modules/mod-auth-profile/` returns references only to: the comment in `EditProfileScreen.tsx`, the type definition in `types.ts`, the SELECT strings in `auth-service.ts`, and test fixtures. No RLS policy, no WHERE clause, no conditional block reads `privacy_setting` as an access gate in any MOD-001 source file. The column is selected and surfaced on the profile object but is not acted upon as a gate.
+
+**Criterion: `beta_video_privacy` (AC-156) is distinct and independent from `privacy_setting`**
+
+PASS. `updateBetaVideoPrivacy()` in `auth-service.ts` (lines 288–307) updates `users.beta_video_privacy` only. The migration `20260930000002_mod_001_beta_video_privacy.sql` adds `beta_video_privacy` as a separate column using the existing `privacy_setting` enum type. Neither column writes to the other; they are fully independent. `loadProfile()` and `upsertProfile()` SELECT string do not include `beta_video_privacy` (that column is consumed only by MOD-005/MOD-010 write paths, not the profile read path).
+
+---
+
+### 3. Automated Test Suite
+
+Command: `npx jest --testPathPattern="mod-auth-profile|EditProfile|AuthProfile" --passWithNoTests`
+Result: 20 tests, 3 suites — all PASS
+Exit code: 0
+
+Suites:
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx` — PASS
+
+Note: `act()` warnings in test output are pre-existing infrastructure warnings from async state updates in `loadData` (follower counts + beta videos loading). Documented since QA Run 6; not introduced by this change.
+
+Note: `auth-service.test.ts` retains a test case at line 230–234 that calls `upsertProfile('user-123', { display_name: 'New Name', privacy_setting: 'followers_only' })`. This exercises the service-layer write path (schema compat — the column accepts writes when called directly). It does NOT represent a user-facing toggle and is not a regression — the test verifies that the service can write the column, which is the correct compat behavior per AC-063. No test exercises any UI toggle for `privacy_setting`.
+
+---
+
+### 4. TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors in `src/modules/mod-auth-profile/` — PASS
+
+Note: pre-existing errors in `src/components/ui/stories/` (storybook: `@storybook/react-native-web-vite` not found) and in other modules are outside mod-auth-profile scope and were present before this change.
+
+---
+
+### 5. Regression — All Previously Passing ACs
+
+**AC-001 (revised)** — PASS. `AuthNavigator.tsx` unchanged; session → children directly, no gym selection gate.
+
+**AC-116** — PASS. `ProfileScreen.tsx` unchanged. Avatar, display name, bio rendered from `useSession().profile`. EditProfileScreen change did not touch ProfileScreen display logic.
+
+**AC-117 (revised — regression of the new spec)** — PASS. Verified above: EditProfileScreen exposes display name, avatar, and bio only. No privacy setting field present. `ProfileNavigator.tsx` wires `onNavigateEditProfile() => setView('editProfile')` → `EditProfileScreen`. The three required fields and zero forbidden fields are confirmed.
+
+**AC-118** — PASS. `SendHistoryProfile` via `listHeaderComponent`/`listFooterComponent` pattern unchanged.
+
+**AC-145** — PASS. Follower/following count `<Pressable>` elements in `ProfileScreen.tsx` unchanged. `fetchFollowerCounts` import from `mod-social-feed` unchanged.
+
+**AC-156** — PASS. Migration `20260930000002_mod_001_beta_video_privacy.sql` confirmed: `beta_video_privacy privacy_setting NOT NULL DEFAULT 'public'` column retained on `users`. `updateBetaVideoPrivacy` function in `auth-service.ts` (lines 288–307) unchanged.
+
+**AC-157** — PASS. `updateBetaVideoPrivacy` confirmed exported from `src/modules/mod-auth-profile/index.ts` (line 25). Function unchanged from QA Run 8.
+
+**AC-158 (dependency: MOD-005 surface via `updateBetaVideoPrivacy` service call)** — PASS. The MOD-001-owned public service `updateBetaVideoPrivacy(value)` is the write surface that MOD-010's SettingsScreen calls for AC-157. The function correctly updates `users.beta_video_privacy` (not `privacy_setting`). MOD-005's AC-158 filter reads `beta_video_privacy` via the poster join — MOD-005 dependency status confirms `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer` are available per the dependency status file.
+
+**AC-164** — PASS. `BetaVideoGrid`, `BetaVideoReelViewer`, `fetchBetaVideosByUser` integration in `ProfileScreen.tsx` (`profileFooter` JSX) unchanged. `reelContext="profile"` confirmed. No changes to the video grid section.
+
+**AC-167** — PASS. No `signOut` import, no logout `<Pressable>` in `ProfileScreen.tsx`. Confirmed unchanged from QA Run 8.
+
+**AC-184** — PASS. No bell `<Pressable>`, no settings gear `<Pressable>`, no `Ionicons` import in `ProfileScreen.tsx`. Unchanged from QA Run 8.
+
+**No hardcoded hex colors** — PASS. `EditProfileScreen.tsx` — no hex literals; all style values use `theme.colors.*`, `theme.spacing.*`, `theme.fontSize.*`, `theme.borderRadius.*` tokens.
+
+**No inline string literals** — PASS. All `<TextField label>`, `<Button label>`, and `<InlineError message>` values in `EditProfileScreen.tsx` are drawn from `t('...')` calls or runtime error values. No raw string literals rendered to the user.
+
+**Supabase singleton convention** — PASS. No new `createClient()` call sites introduced.
+
+**Cross-module import rule** — PASS. `EditProfileScreen.tsx` imports only `uploadAvatar`/`upsertProfile` from `../auth-service` and `UserProfile` from `../types` — all internal to `mod-auth-profile`. No cross-module boundary violation.
+
+**No gold-plating** — PASS. The Rev 43 change removed the privacy toggle. No new UI elements or features were added beyond the spec. The three spec-required fields (display name, avatar, bio) are present and no additional fields were added.
+
+**No spec requirements left unimplemented** — PASS. AC-117 requires display name, avatar, and bio as the only three Edit Profile fields. All three are present and functional.
+
+---
+
+### 6. Summary
+
+| Item | Result |
+|------|--------|
+| AC-117: EditProfileScreen fields = display name, avatar, bio only | PASS |
+| AC-117: No privacy_setting state in EditProfileScreen | PASS |
+| AC-117: No Chip, radiogroup, or privacy toggle in EditProfileScreen | PASS |
+| AC-117: upsertProfile called with display_name, bio, avatar_url only | PASS |
+| AC-063: No user-facing privacy toggle in EditProfileScreen | PASS |
+| AC-063: No user-facing privacy toggle in ProfileScreen | PASS |
+| AC-063: No user-facing privacy toggle in ProfileNavigator | PASS |
+| AC-063: privacy_setting column retained in migration (schema compat) | PASS |
+| AC-063: privacy_setting type retained in types.ts (schema compat) | PASS |
+| AC-063: privacy_setting not used as access gate in any source | PASS |
+| AC-063: beta_video_privacy independent of privacy_setting | PASS |
+| Automated test suite (20 tests, 3 suites) | PASS |
+| TypeScript strict mode — 0 errors in mod-auth-profile | PASS |
+| AC-001 regression | PASS |
+| AC-116 regression | PASS |
+| AC-118 regression | PASS |
+| AC-145 regression | PASS |
+| AC-156 regression | PASS |
+| AC-157 regression | PASS |
+| AC-158 (service call via updateBetaVideoPrivacy) regression | PASS |
+| AC-164 regression | PASS |
+| AC-167 regression | PASS |
+| AC-184 regression | PASS |
+| No hardcoded hex colors | PASS |
+| No inline string literals | PASS |
+| Supabase singleton convention | PASS |
+| Cross-module import rule | PASS |
+| No gold-plating | PASS |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**MOD-001 Rev 43 regression (AC-117/AC-063 privacy toggle removal) — QA PASS.**
