@@ -12,12 +12,14 @@
  * AC-196: cover_photo_url rendered at top when non-null; "Photos from Google"
  *   attribution shown adjacent to the image (Google Maps Platform ToS requirement).
  * AC-198: initials avatar derived from gym name shown when cover_photo_url is null.
+ * Tappable address: pressing the address row opens Google Maps via Linking.openURL.
  */
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
@@ -224,7 +226,23 @@ export default function GymDetailScreen({
         <AppText variant="body">
           {localizedCity(gym)} · {localizedDistrict(gym)}
         </AppText>
-        <AppText variant="body">{gym.address_text}</AppText>
+        <TouchableOpacity
+          accessibilityRole="link"
+          accessibilityLabel={gym.address_text}
+          onPress={() => {
+            const mapsUrl =
+              gym.lat != null && gym.lng != null
+                ? `https://maps.google.com/?q=${gym.lat},${gym.lng}`
+                : `https://maps.google.com/?q=${encodeURIComponent(gym.address_text)}`;
+            void Linking.openURL(mapsUrl);
+          }}
+          style={styles.addressRow}
+        >
+          <AppText variant="body" color="primary" style={styles.addressText}>
+            {gym.address_text}
+          </AppText>
+          <Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />
+        </TouchableOpacity>
 
         {/* Mixed gym note */}
         {isMixed && gym.bouldering_only_note ? (
@@ -286,6 +304,14 @@ function makeStyles(
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: theme.spacing.md,
+    },
+    addressRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.xs,
+    },
+    addressText: {
+      flex: 1,
     },
     branchLabel: {
       marginTop: theme.spacing.xxs,

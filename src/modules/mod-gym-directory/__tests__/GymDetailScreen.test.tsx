@@ -13,6 +13,7 @@ jest.mock('../../../lib/supabase', () => ({
 
 // ── Imports ───────────────────────────────────────────────────────────────────
 import React from 'react';
+import { Linking } from 'react-native';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
 import GymDetailScreen from '../screens/GymDetailScreen';
 import * as gymService from '../gym-service';
@@ -190,6 +191,50 @@ describe('GymDetailScreen', () => {
 
     fireEvent.press(screen.getByText('View Routes'));
     expect(onViewRoutes).toHaveBeenCalledWith('gym-001', 'MegaSTONE Climbing Gym');
+  });
+
+  // Tappable address — opens Google Maps
+  it('opens Google Maps with coordinates when the address row is pressed (lat/lng present)', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    mockLoadGym.mockResolvedValueOnce(BOULDERING_GYM);
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByLabelText('新北市新莊區思源路171號'));
+
+    expect(openURL).toHaveBeenCalledWith(
+      'https://maps.google.com/?q=25.0363,121.4447',
+    );
+    openURL.mockRestore();
+  });
+
+  it('opens Google Maps with encoded address when lat/lng are null', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const gymNoCoords: Gym = { ...BOULDERING_GYM, lat: null as unknown as number, lng: null as unknown as number };
+    mockLoadGym.mockResolvedValueOnce(gymNoCoords);
+
+    render(
+      <GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />,
+      renderOptions(),
+    );
+
+    await waitFor(() =>
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
+    );
+
+    fireEvent.press(screen.getByLabelText('新北市新莊區思源路171號'));
+
+    expect(openURL).toHaveBeenCalledWith(
+      `https://maps.google.com/?q=${encodeURIComponent('新北市新莊區思源路171號')}`,
+    );
+    openURL.mockRestore();
   });
 
   // AC-120, AC-121: Bookmark icon

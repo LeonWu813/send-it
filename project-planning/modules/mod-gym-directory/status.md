@@ -2,6 +2,26 @@
 
 ## Engineering Progress
 
+### Fix — 2026-10-19 (Tappable address opens Google Maps in GymDetailScreen)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx` — imported `Ionicons` from `@expo/vector-icons`, imported `Linking` and `TouchableOpacity` from `react-native`. Replaced the plain `<AppText variant="body">{gym.address_text}</AppText>` row with a `<TouchableOpacity accessibilityRole="link" accessibilityLabel={gym.address_text}>` that calls `Linking.openURL`. Primary URL uses `https://maps.google.com/?q=${gym.lat},${gym.lng}` (coordinates); fallback to `https://maps.google.com/?q=${encodeURIComponent(gym.address_text)}` when lat/lng are null. Address text rendered with `color="primary"` to signal interactivity; an `<Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />` icon sits to the right. Added `addressRow` (flexDirection row, alignItems center, gap xs) and `addressText` (flex 1) styles to `makeStyles`.
+- `src/modules/mod-gym-directory/__tests__/GymDetailScreen.test.tsx` — imported `Linking` from `react-native`; added two new tests: (1) "opens Google Maps with coordinates when the address row is pressed (lat/lng present)" — spies on `Linking.openURL`, presses the address row (found by `accessibilityLabel`), asserts `openURL` called with the lat/lng URL; (2) "opens Google Maps with encoded address when lat/lng are null" — same pattern with null coords, asserts fallback `encodeURIComponent` URL.
+
+**Design decisions:**
+- `TouchableOpacity` chosen over `Pressable` for consistency with the project's existing interactive elements in this module.
+- `ICON.external.outline` (`open-outline`) is the correct icon for "opens external link" per the icon dictionary.
+- `theme.colors.primary` used for both the text color and icon color — `theme.colors.link` does not exist in the palette; `primary` signals interactivity without a hardcoded color.
+- `accessibilityRole="link"` and `accessibilityLabel={gym.address_text}` satisfy the accessibility requirement; the label is the address text itself.
+- No new locale keys added — the accessibility label is the dynamic address text, not a static translated key.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Tests: `npx jest --testPathPattern="mod-gym-directory" --passWithNoTests` — 46/46 passed (was 44), 4 suites, exit code 0; 2 new tests added
+- Scope: changes limited to `GymDetailScreen.tsx` and `GymDetailScreen.test.tsx`; no service, migration, or locale file changes
+
+---
+
 ### Performance fix — 2026-10-19 (Switch cover photo Image to expo-image for disk+memory caching)
 
 **Files modified:**
