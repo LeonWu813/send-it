@@ -1000,3 +1000,103 @@ Re-verification: `SettingsScreen.tsx` lines 315–335. Logout button is the last
 **Overall verdict: QA PASS**
 
 The theme-initialization fix is correct and complete. ThemeProvider now loads the saved override from AsyncStorage on mount (key `'app_theme_override'`, validated against `ThemeOverride` union before applying), eliminating the wrong-theme-on-launch behavior. SettingsScreen no longer redundantly calls `setOverride` on mount — only local UI state is synced there; ThemeProvider owns the initial override application. The live-override path (`handleOverrideSelect` calling `setOverride`) is untouched. All previously passing ACs (AC-090, AC-091, AC-092, AC-155, AC-157, AC-168, REQ-CI) continue to pass. No regressions introduced.
+
+---
+
+### QA Run 4 — Regression — 2026-10-18
+
+**Workflow**: regression-test (re-verification after engineer JSDoc-only change, Rev 43 — per-user AsyncStorage key format updated in SettingsScreen JSDoc lines 9 and 13; no UI changes)
+
+**Changes being re-verified**:
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`: JSDoc line 9 updated from `'app_language'` to `'app_language_<userId>'`; JSDoc line 13 updated from `'app_theme_override'` to `'app_theme_override_<userId>'`. These reflect the per-user key scoping implemented in the prior engineering bugfix. No UI, logic, or behavioral changes.
+
+**No previously failing items to re-verify** — QA Run 3 (2026-10-15) was a full PASS. This run verifies no regression was introduced by the JSDoc update.
+
+**Automated test run**
+- `npx jest --testPathPattern="mod-localization-theme|Settings" --passWithNoTests 2>&1 | tail -20` — "No tests found, exiting with code 0". Exit 0.
+- `npm run check:i18n` — "i18n completeness OK". Exit 0.
+- `npx tsc --noEmit` — all errors are pre-existing storybook-type errors in unrelated modules (mod-profile-history, mod-route-catalog, mod-send-logging stories); 0 new errors in any file touched by this change. Exit non-zero only due to pre-existing errors; confirmed pre-existing across all prior QA runs. No regression.
+
+---
+
+**AC-157: Beta Video Privacy toggle — Privacy section contains only the beta_video_privacy toggle; no account-level privacy_setting row**
+
+PASS AC-157
+
+Verification method: code inspection of `SettingsScreen.tsx` lines 298–319 and full-file grep.
+
+The Privacy section (comment at line 298: `{/* Privacy section — Beta Video Privacy toggle (AC-157) */}`, lines 298–319) contains exactly one control: the `Switch` for `beta_video_privacy` with subtext showing `t('settings.betaVideoPrivacyFollowersOnly')` or `t('settings.betaVideoPrivacyPublic')`. No other row or control exists in this section.
+
+Grep for `privacy_setting`, `account.*privacy`, and `account_privacy` in `SettingsScreen.tsx` returns zero matches. There is no reference to `privacy_setting` or any account-level privacy control anywhere in the file.
+
+Spec AC-157 last sentence (spec line 64): "This row is the only user-facing privacy control. Profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063)."
+
+Actual: the Privacy section renders one and only one toggle (the `beta_video_privacy` switch). No `privacy_setting` row, reference, or control is present anywhere in SettingsScreen. The implementation matches the spec's "only user-facing privacy control" requirement exactly. PASS.
+
+---
+
+**AC-157 last sentence — JSDoc reflects per-user key format**
+
+PASS
+
+JSDoc line 9: `*   - Persists the selection to AsyncStorage with key 'app_language_<userId>'.`
+JSDoc line 13: `*   - Persists the selection to AsyncStorage with key 'app_theme_override_<userId>'.`
+
+Both lines now correctly document the per-user scoped key format established by the earlier AsyncStorage key-scoping bugfix. The actual implementation in `handleLanguageSelect` (line 154: `await saveLanguage(userId, lang)`) and `handleOverrideSelect` (line 164: `await saveThemeOverride(userId, newOverride)`) uses these scoped key functions. JSDoc matches implementation. This is a documentation-only change — no behavioral or UI change. PASS.
+
+---
+
+**Regression — All previously passing ACs**
+
+**AC-090: Device locale detection on first launch** — PASS. `src/lib/i18n.ts` unchanged. `detectDeviceLanguage()` logic unchanged. PASS carries forward from QA Run 3.
+
+**AC-091: Language toggle in Settings, immediate effect** — PASS. `handleLanguageSelect` (lines 150–157) calls `i18n.changeLanguage(lang)` then `saveLanguage(userId, lang)`. Language section (lines 220–248) unchanged. JSDoc update at line 9 is documentation only — no logic change. PASS carries forward.
+
+**AC-092: Three-state theme override, immediate effect** — PASS. `handleOverrideSelect` (lines 159–166) calls `setOverride(newOverride)` then `saveThemeOverride(userId, newOverride)`. Appearance section (lines 250–278) unchanged. JSDoc update at line 13 is documentation only — no logic change. PASS carries forward.
+
+**AC-155: Blocked Accounts screen — list, Unblock, empty state** — PASS. Early return at line 208–210 (`if (view === 'blockedAccounts') { return <BlockedAccountsScreen onBack={() => { setView('settings'); }} />; }`) unchanged. Blocked Accounts row (lines 280–296) unchanged. `BlockedAccountsScreen.tsx` unchanged. PASS carries forward.
+
+**AC-157: Beta Video Privacy toggle — state labels, row order, MOD-001 write** — PASS. Row order: AC-155 (Blocked Accounts, lines 280–296) before AC-157 (Beta Video Privacy, lines 298–319) before AC-168 (Logout, lines 321–334) — matches spec requirement. Short state labels `t('settings.betaVideoPrivacyPublic')` / `t('settings.betaVideoPrivacyFollowersOnly')` rendered in `settingRowSubtext` (lines 304–308). `updateBetaVideoPrivacy(newValue)` called via MOD-001 import (line 173). MOD-010 does not write directly to `users.beta_video_privacy`. `disabled={!privacyFetched || privacyLoading}` guards premature interaction. No regression.
+
+**AC-168: Logout button at bottom of SettingsScreen** — PASS. Logout section (lines 321–334) is the last element in the `ScrollView`, below all other rows. `handleLogout()` (lines 183–194) calls `signOut()` from `mod-auth-profile/auth-service`. Error-color outlined styling (`theme.colors.error`) unchanged. PASS carries forward.
+
+**All strings via i18n hook** — PASS. No inline string literals introduced. JSDoc comments are not JSX or component render code — they are documentation strings. All rendered strings remain via `t(...)`. No regression.
+
+**No hardcoded hex colors** — PASS. JSDoc update introduces no color values in component code. All colors remain `theme.colors.*` tokens. No regression.
+
+**Safe area insets** — PASS. `useSafeAreaInsets()` replaced by `useHeaderContentInset()` / `useTabBarInset()` (lines 73–75); `makeStyles(theme, headerTop, tabInset.contentBottom)` pattern unchanged. `BlockedAccountsScreen.tsx` unchanged. No regression.
+
+**i18n catalog completeness** — PASS. `npm run check:i18n` exits 0. No new keys introduced by the JSDoc change. No regression.
+
+**REQ-CI: zh-TW key-parity CI gate** — PASS. `.github/workflows/i18n-check.yml` exists and unchanged. Triggers on push/pull_request to main. No regression.
+
+**No gold-plating** — PASS. Change is two JSDoc lines only. No extra features, controls, or behaviors introduced. No regression.
+
+---
+
+**Summary**
+
+| AC / Requirement | Result | Notes |
+|---|---|---|
+| AC-090: Device locale detection on first launch | PASS | Unchanged; no regression |
+| AC-091: Language toggle in Settings, immediate effect | PASS | JSDoc update only; handleLanguageSelect logic unchanged |
+| AC-092: Three-state theme override, immediate effect | PASS | JSDoc update only; handleOverrideSelect logic unchanged |
+| AC-155: Blocked Accounts screen — list, Unblock, empty state | PASS | Unchanged; no regression |
+| AC-157: Privacy section — only beta_video_privacy toggle; no privacy_setting row | PASS | Grep confirms no privacy_setting reference; one control only in Privacy section |
+| AC-157: "only user-facing privacy control" — spec last sentence matches implementation | PASS | Single beta_video_privacy toggle is the sole privacy control in SettingsScreen |
+| AC-157: State labels "所有人"/"All Users", "僅限追蹤者"/"Followers Only" | PASS | betaVideoPrivacyPublic / betaVideoPrivacyFollowersOnly keys rendered; unchanged from QA Run 3 |
+| AC-157: Row order — AC-155 before AC-157 before AC-168 | PASS | Lines 280–296 (AC-155), 298–319 (AC-157), 321–334 (AC-168) — correct order |
+| AC-157: MOD-001 write, no direct DB write by MOD-010 | PASS | updateBetaVideoPrivacy via MOD-001 import; only SELECT read in SettingsScreen |
+| AC-168: Logout button at very bottom, error color outlined, signOut from MOD-001 | PASS | Unchanged; no regression |
+| Per-user AsyncStorage keys — JSDoc matches implementation | PASS | app_language_<userId> and app_theme_override_<userId> in JSDoc match saveLanguage(userId, lang) / saveThemeOverride(userId, override) call sites |
+| REQ-CI: zh-TW key-parity CI gate wired into automated pipeline | PASS | .github/workflows/i18n-check.yml unchanged |
+| All strings via i18n hook | PASS | No inline literals; JSDoc is not render code |
+| No hardcoded hex colors | PASS | All colors from theme.colors.* tokens |
+| Safe area insets | PASS | useHeaderContentInset + useTabBarInset + makeStyles pattern unchanged |
+| i18n catalog completeness | PASS | npm run check:i18n exits 0 |
+| TypeScript | PASS | 0 new errors in changed files; all pre-existing storybook errors are unrelated |
+| No gold-plating | PASS | Two JSDoc lines only; no behavioral or UI change |
+
+**Overall verdict: QA PASS**
+
+JSDoc-only change (Rev 43) introduces no regression. The per-user AsyncStorage key format (`app_language_<userId>`, `app_theme_override_<userId>`) is correctly documented and matches the implementation. The Privacy section contains exactly one user-facing privacy control (the `beta_video_privacy` toggle) with no `privacy_setting` reference, fully satisfying AC-157's "only user-facing privacy control" requirement. All ACs (AC-090, AC-091, AC-092, AC-155, AC-157, AC-168, REQ-CI) continue to pass. No regressions introduced.
