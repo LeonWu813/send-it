@@ -160,6 +160,16 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
     }).start();
   };
 
+  // When the first row is not full (total < NUM_COLUMNS), the outer container's
+  // overflow:hidden clips the top corners of the grid container — but the spacer
+  // Views to the right of the last real tile sit between the tile and the clipped
+  // corner, so the top-right of the last real tile is NOT rounded by the outer
+  // clip. Apply explicit top corner radii to the relevant tiles instead.
+  const topLeftRadius = index === 0 ? metrics.radius : 0;
+  const topRightRadius = (total < NUM_COLUMNS && index === total - 1) || index === NUM_COLUMNS - 1
+    ? metrics.radius
+    : 0;
+
   return (
     <Pressable
       onPress={() => { onPress(index); }}
@@ -174,6 +184,8 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
         height: metrics.cellHeight,
         overflow: 'hidden',
         backgroundColor: theme.isDark ? c.surfaceAlt : c.border,
+        borderTopLeftRadius: topLeftRadius,
+        borderTopRightRadius: topRightRadius,
       }}
     >
       {uri && !failed ? (
