@@ -9,7 +9,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, View } from 'react-native';
+import { Animated, Text, View } from 'react-native';
 import { AppText } from '../../../components/ui/AppText';
 import { ParticleBurst } from '../../../components/ui/Particles';
 import { PressableScale } from '../../../components/ui/PressableScale';
@@ -25,9 +25,16 @@ export interface ReelActionProps {
   testID: string;
   accessibilityLabel: string;
   onPress: () => void;
-  /** Outline when off, filled when on (never a colour change). */
-  nameOff: IoniconName;
-  nameOn: IoniconName;
+  /** Outline when off, filled when on (never a colour change). Ignored when `emoji` is set. */
+  nameOff?: IoniconName;
+  /** Ignored when `emoji` is set. */
+  nameOn?: IoniconName;
+  /**
+   * When set, renders this emoji character instead of an Ionicons glyph.
+   * Selected state is shown via full opacity (selected) vs 0.5 opacity (unselected).
+   * `nameOff` / `nameOn` are ignored when this prop is provided.
+   */
+  emoji?: string;
   selected: boolean;
   disabled?: boolean;
   /** Replaces the glyph (report in flight). */
@@ -45,6 +52,7 @@ export function ReelAction({
   onPress,
   nameOff,
   nameOn,
+  emoji,
   selected,
   disabled,
   busy,
@@ -109,6 +117,15 @@ export function ReelAction({
       >
         {busy ? (
           <Spinner color="onMedia" size="small" />
+        ) : emoji !== undefined ? (
+          // Emoji variant: single character, opacity conveys selected state.
+          <Animated.View
+            style={{ width: glyph, height: glyph, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pop }], opacity: selected ? 1 : 0.5 }}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Text style={{ fontSize: glyph, lineHeight: glyph * 1.2 }}>{emoji}</Text>
+          </Animated.View>
         ) : (
           <Animated.View
             style={{ width: glyph, height: glyph, transform: [{ scale: pop }] }}
@@ -116,10 +133,10 @@ export function ReelAction({
             importantForAccessibility="no-hide-descendants"
           >
             <Animated.View style={{ position: 'absolute', opacity: fade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
-              <Ionicons name={nameOff} size={glyph} color={c.onMedia} />
+              <Ionicons name={nameOff!} size={glyph} color={c.onMedia} />
             </Animated.View>
             <Animated.View style={{ position: 'absolute', opacity: fade }}>
-              <Ionicons name={nameOn} size={glyph} color={c.onMedia} />
+              <Ionicons name={nameOn!} size={glyph} color={c.onMedia} />
             </Animated.View>
           </Animated.View>
         )}

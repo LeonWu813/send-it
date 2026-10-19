@@ -935,13 +935,12 @@ export default function BetaVideoReelViewer({
                 {/* Right sidebar: like placeholder + report button (AC-138) */}
                 <View style={styles.sidebar}>
 
-                  {/* Like button (AC-052): thumbs-up/fistbump, onMedia, filled = liked (never red). */}
+                  {/* Like button (AC-052): 👊 fistbump emoji, opacity = selected state (never red). */}
                   <ReelAction
                     testID="reel-like-button"
                     accessibilityLabel={t('betaVideo.reel.likeLabel', { count: likeCount })}
                     onPress={() => { void handleLike(); }}
-                    nameOff={ICON.like.outline}
-                    nameOn={ICON.like.filled}
+                    emoji="👊"
                     selected={isLiked}
                     disabled={isLikePending}
                     likeMotion

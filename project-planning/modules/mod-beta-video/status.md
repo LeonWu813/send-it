@@ -2,12 +2,14 @@
 
 ## Engineering Progress
 
-### Bugfix: change like icon from heart to thumbs-up/fistbump — 2026-10-19
+### Bugfix: change like button to 👊 oncoming fist emoji — 2026-10-19
 
-- **Change**: Updated `ICON.like` in `src/lib/icons.ts` from `{ outline: 'heart-outline', filled: 'heart' }` to `{ outline: 'thumbs-up-outline', filled: 'thumbs-up' }`. All consumers of `ICON.like.*` (BetaVideoReelViewer, FeedScreen, NotificationInboxScreen) pick up the change automatically via the icon dictionary.
-- **Comments updated**: BetaVideoReelViewer.tsx (file header and inline like-button comment), ReelOverlay.stories.tsx (JSDoc), BetaVideoReelViewer.test.tsx (test description and comment).
-- **No AC impact**: this is a cosmetic icon glyph change only; AC-138 and AC-052 behavior is unchanged.
-- **Self-check**: `npx jest --testPathPattern="mod-beta-video" --passWithNoTests` — 109/109 PASS. `src/lib/icons.ts` git-scope flag is expected (shared icon dictionary; raw glyph strings in components would violate the dictionary convention).
+- **Change**: Replaced the Ionicons thumbs-up glyph on the reel like button with the 👊 emoji. Selected state (liked) renders at full opacity; unselected at 0.5 opacity. No outline/filled variant needed.
+- **Implementation**: Added an optional `emoji?: string` prop to `ReelAction`. When `emoji` is set, the component renders a `<Text>` with the emoji character inside an `Animated.View` that has `opacity: selected ? 1 : 0.5`, skipping the Ionicons cross-fade path entirely. `nameOff` and `nameOn` are made optional on the interface (only `emoji` is passed for the like button). The pop/scale likeMotion animation and the `ParticleBurst` continue to work unchanged.
+- **Call site**: `BetaVideoReelViewer.tsx` like button passes `emoji="👊"` and omits `nameOff`/`nameOn`. `ICON.like` in `src/lib/icons.ts` is left as-is (it may still be used by other modules for the like icon concept).
+- **Touch target**: unchanged — the 44pt `PressableScale` disc is unaffected.
+- **No AC impact**: cosmetic change only; AC-138 and AC-052 behavior is unchanged.
+- **Self-check**: `npx jest --testPathPattern="mod-beta-video" --passWithNoTests` — 109/109 PASS.
 
 ---
 
