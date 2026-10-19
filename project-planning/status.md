@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
-module: n/a
+agent: qa-mod-auth-profile
+mode: regression
+module: mod-auth-profile
 result: success
-commit: e4cb92607b391a4fd1d3770ea89eaacb1298475d
-timestamp: 2026-10-18T00:00:00Z
+commit: d40a165
+timestamp: 2026-10-18T14:00:00Z
 ```
 
 
