@@ -4,7 +4,7 @@
 **Module Name**: Gym Directory
 **Phase**: 1
 **Dependencies**: MOD-001
-**Last Synced from PRD Revision**: 7
+**Last Synced from PRD Revision**: 44
 
 ---
 
@@ -20,6 +20,8 @@ Indoor bouldering has grown fast in Taiwan, but climbers have no dedicated app w
 
 MOD-002 also owns the save/unsave bookmark interaction for gyms. The `saved_gyms` table is created in MOD-012's migration — MOD-002 engineer must coordinate with MOD-012 engineer on migration sequencing (MOD-012 migration must run first to create the `saved_gyms` table before MOD-002 can write to it). MOD-002 owns the INSERT/DELETE write operations on `saved_gyms`. MOD-012 reads `saved_gyms` (SELECT + join to gyms) for the Home screen Saved Gyms strip — that read is MOD-012's concern, not MOD-002's.
 
+Gym cover photos are populated by a one-time server-side seeder script (AC-195) that calls the Google Places API to fetch a photo for each seeded gym, uploads it to Supabase Storage, and stores the resulting URL in `gyms.cover_photo_url`. The seeder also stores the resolved `place_id` in `gyms.google_place_id`. Both columns are nullable so existing rows are unaffected before the seeder runs. Gyms with no cover photo display an initials avatar fallback (AC-198). Every surface displaying a Google-sourced cover photo must show "Photos from Google" attribution as required by Google Maps Platform Terms of Service (AC-196, AC-197).
+
 **Non-goals for this module:**
 - User-created gyms (Phase 1 — admin-curated only; missing gyms captured via request form).
 - Cities other than Taipei and New Taipei (Phase 2+ backlog).
@@ -27,12 +29,13 @@ MOD-002 also owns the save/unsave bookmark interaction for gyms. The `saved_gyms
 - In-app admin tooling for gym CRUD (Supabase Studio only).
 - The `saved_gyms` table creation (owned by MOD-012 migration).
 - The saved-gyms strip on the Home screen (owned by MOD-012).
+- `google_place_id` is not surfaced in the Phase 1 UI — it is stored for potential future use only.
 
 ---
 
 ## Related User Stories
 
-- **US-006**: Browse currently active routes at a gym (gym directory list row → gym detail screen → route catalog entry point; partially — the gym-detail-to-routes navigation belongs to AC-005)
+- **US-006**: Browse currently active routes at a gym (gym directory list row → gym detail screen → route catalog entry point; partially — the gym-detail-to-routes navigation belongs to AC-005; AC-194–AC-198 cover cover photo display on gym list and gym detail screens)
 - **US-013**: Request a missing gym
 - **US-019**: Save multiple gyms for quick access
 
@@ -53,6 +56,16 @@ MOD-002 also owns the save/unsave bookmark interaction for gyms. The `saved_gyms
 **AC-121** (new): Tapping the bookmark icon on the gym detail screen shall add or remove the gym from the current user's `saved_gyms` list and update the icon state immediately (optimistic update). The gym detail screen is the only save/unsave action point.
 
 **AC-122** (new): The gym list screen shall display a filled yellow bookmark indicator on gym cards that are in the current user's saved gyms list; no indicator is shown for unsaved gyms. The list indicator is read-only — tapping it performs no save/unsave action.
+
+**AC-194** (new, Rev 44, MOD-002 — Data model migration): The system shall add two nullable columns to the `gyms` table via a new migration file (`supabase/migrations/<timestamp>_mod_002_gym_cover_photo.sql`): `cover_photo_url TEXT` and `google_place_id TEXT`. Both columns are nullable so existing rows are unaffected. Gyms with no cover photo continue to render the initials avatar fallback (AC-198). The `cover_photo_url` column is the authoritative cover photo for both the gym list and gym detail screen. A gym's official photo may overwrite `cover_photo_url` in a later cooperation phase without any schema change.
+
+**AC-195** (new, Rev 44, MOD-002 — One-time seeder script): The system shall provide a one-time server-side seeder script that populates `cover_photo_url` and `google_place_id` for each gym in the seeded directory. The script shall: (1) call the Google Places Text Search API with the gym's name and address to obtain a `place_id`; (2) call the Place Details API with the `place_id` to obtain a `photo_reference` list; (3) call the Place Photo API with the first `photo_reference` to download an image; (4) upload the image to Supabase Storage in a bucket named `gym-photos`; (5) store the resulting public URL in `gyms.cover_photo_url` and the resolved `place_id` in `gyms.google_place_id`. The script is run once by the admin before Phase 1 launch and is not triggered from any client flow. The script shall skip gyms that already have a non-null `cover_photo_url`, making it safe to re-run. The Google Places API key used by the seeder must be server-side only — it must never be included in the client bundle, any client environment file, or any file committed to the repository. The key is supplied at script run-time via a secure environment variable (e.g. a `.env` file excluded from source control, or a CI secret).
+
+**AC-196** (new, Rev 44, MOD-002 — Gym detail screen cover photo): The gym detail screen (GymDetailScreen) shall display `cover_photo_url` as a cover photo at the top of the screen when the value is non-null. When `cover_photo_url` is null, the cover photo slot shall not render (the layout falls back gracefully with no blank space). Every screen that displays a gym cover photo sourced from `cover_photo_url` shall show a visible "Photos from Google" attribution label adjacent to or below the image, as required by Google Maps Platform Terms of Service.
+
+**AC-197** (new, Rev 44, MOD-002 — Gym list cover photo thumbnail): The gym list shall display `cover_photo_url` as a thumbnail on each gym card when the value is non-null. When `cover_photo_url` is null, the gym card shall display the initials avatar (AC-198) in the thumbnail slot instead. The "Photos from Google" attribution required by AC-196 shall also be shown on the gym list screen when at least one card is displaying a Google-sourced cover photo.
+
+**AC-198** (new, Rev 44, MOD-002 — Initials avatar fallback): The system shall generate an initials avatar for the gym avatar slot on both the gym list card and the gym detail screen. The initials are derived from the gym's `name` field (first letter of each word, up to two letters, uppercased). The initials avatar is shown whenever `cover_photo_url` is null. It requires no Google API call and no network request. The fallback is purely client-generated and has no external dependency.
 
 ---
 
@@ -79,6 +92,11 @@ Gym  (admin-maintained, branch-level rows for multi-branch gyms)
  - id, name, branch_label (nullable, e.g. "萬華", "南港"), city, district,
    address_text, lat, lng, gym_type (bouldering | top_rope | both),
    photo_url (nullable), official_grading_system (default 'V'),
+   cover_photo_url (TEXT, nullable — populated by the one-time Places API seeder,
+     AC-195; overwritable by official gym photo in a later cooperation phase.
+     NULL = initials avatar fallback shown per AC-197/AC-198.),
+   google_place_id (TEXT, nullable — stored by the seeder for future use;
+     not surfaced in the UI in Phase 1.),
    created_at, updated_at
 
 GymRequest
@@ -93,6 +111,10 @@ SavedGym  (join table — a user's bookmarked gyms; table created in MOD-012 mig
 
 All tables guarded by Supabase Row-Level Security policies. `Gym` rows are readable by all authenticated users and writable only by admins. `GymRequest` rows are insertable by authenticated users and readable by admins only. `SavedGym` RLS scopes reads and writes so an authenticated user can only read and write rows where `user_id = auth.uid()`. GRANT: `SELECT, INSERT, DELETE ON public.saved_gyms TO authenticated` (no UPDATE).
 
+**Migration note (AC-194)**: a new migration file (`supabase/migrations/<timestamp>_mod_002_gym_cover_photo.sql`) adds `cover_photo_url TEXT` (nullable) and `google_place_id TEXT` (nullable) to the `gyms` table. Both columns are nullable so existing rows are unaffected. Images are uploaded to Supabase Storage bucket `gym-photos` by the seeder.
+
+**Data model notes (§9, Rev 44)**: `gyms.cover_photo_url` is the authoritative cover photo URL for the gym list and gym detail screen (AC-196/AC-197); null rows display the initials avatar fallback (AC-198). `gyms.google_place_id` is stored for potential future use and is not surfaced in the Phase 1 UI. Any screen displaying a Google-sourced cover photo must show "Photos from Google" attribution (AC-196/AC-197, Google Maps Platform Terms of Service).
+
 ---
 
 ## Input / Output Contract
@@ -102,8 +124,8 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - Filter parameters: city, gym type, text search
 
 **Outputs (gym directory):**
-- List of `Gym` rows for the Gyms tab
-- `Gym` detail record for the gym detail page (name, branch_label, city, district, address_text, lat, lng, gym_type, photo_url, official_grading_system)
+- List of `Gym` rows for the Gyms tab, each including `cover_photo_url` (nullable) and `google_place_id` (nullable) alongside existing fields
+- `Gym` detail record for the gym detail page (name, branch_label, city, district, address_text, lat, lng, gym_type, photo_url, cover_photo_url, google_place_id, official_grading_system)
 
 **Inputs (gym request):**
 - `name` (required), `city` (required), `google_maps_url` (optional)
@@ -122,6 +144,15 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - Optimistic UI update on GymDetailScreen bookmark icon (AC-121)
 - Read-only filled yellow indicator on gym list cards for saved gyms (AC-122)
 
+**Inputs (cover photo seeder script — server-side only):**
+- Google Places API key (server-side environment variable only; never in the client bundle or repository)
+- Gym name and address for each seeded gym
+
+**Outputs (cover photo seeder script):**
+- `gyms.cover_photo_url` populated with the public Supabase Storage URL for each gym that receives a photo
+- `gyms.google_place_id` populated with the resolved Google `place_id`
+- Image file uploaded to Supabase Storage bucket `gym-photos`
+
 ---
 
 ## Key Implementation Notes
@@ -137,6 +168,12 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - **Saved-gym write ownership**: MOD-002 engineer implements the INSERT (save) and DELETE (unsave) operations on `saved_gyms` for the bookmark toggle on GymDetailScreen (AC-120, AC-121). The `saved_gyms` table is created in MOD-012's migration file — MOD-012 migration must run first. MOD-002 engineer must coordinate with MOD-012 engineer on migration sequencing.
 - **Saved-gym read on gym list (AC-122)**: the gym list screen must read the current user's `saved_gyms` to determine which gym cards to display the filled yellow indicator on. This is a SELECT query scoped by RLS to `user_id = auth.uid()`. No save/unsave action is triggered by tapping the indicator on the list.
 - **Optimistic update (AC-121)**: the GymDetailScreen bookmark icon must update immediately on tap before the Supabase INSERT/DELETE round-trip completes. If the round-trip fails, the icon must revert to the pre-tap state.
+- **Cover photo display (AC-196, AC-197)**: the gym detail screen renders `cover_photo_url` as a cover photo at the top when non-null; the cover photo slot does not render (no blank space) when null. The gym list card renders `cover_photo_url` as a thumbnail when non-null; when null, the initials avatar fallback (AC-198) is rendered instead.
+- **"Photos from Google" attribution (AC-196, AC-197)**: every screen that displays a gym cover photo sourced from `cover_photo_url` must show a visible "Photos from Google" attribution label adjacent to or below the image. The gym list screen must show this attribution when at least one card is displaying a Google-sourced photo. This is required by Google Maps Platform Terms of Service.
+- **Initials avatar fallback (AC-198)**: the initials avatar is derived from the gym's `name` field — first letter of each word, up to two letters, uppercased (e.g., "MegaSTONE Climbing Gym" → "MC"). It requires no network request and has no external dependency. It is shown whenever `cover_photo_url` is null.
+- **Google Places API key (AC-195, §10 NFR)**: the Google Places API key used by the seeder script must never appear in the client bundle, any client-side environment variable, or any file committed to the repository. It is supplied to the seeder script at run-time via a secure environment variable or CI secret only. This constraint applies to all Google API keys used in this project.
+- **Seeder script idempotency (AC-195)**: the seeder skips gyms that already have a non-null `cover_photo_url`, making it safe to re-run. The script is not triggered from any client flow; it is run once by the admin before Phase 1 launch.
+- **`google_place_id` (AC-194, AC-195)**: stored for potential future use; not surfaced in any Phase 1 UI.
 
 ---
 
@@ -149,6 +186,7 @@ All tables guarded by Supabase Row-Level Security policies. `Gym` rows are reada
 - Route data (owned by MOD-003).
 - The `saved_gyms` table DDL/migration (owned by MOD-012).
 - The Saved Gyms strip on the Home screen (owned by MOD-012).
+- `google_place_id` surfacing in the Phase 1 UI (stored only; future use).
 
 ## Phase 1 Seed Gym List
 

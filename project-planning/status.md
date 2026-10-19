@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-commit: be4ce8385cb8ca0800cdee3fcd52fce3c3b337b4
-timestamp: 2026-10-19T17:10:14Z
+commit: 2e6833afabfce5420c15f4106cdf9689c6fed8c0
+timestamp: 2026-10-19T18:00:00Z
 ```
 
 
@@ -4225,6 +4225,35 @@ This is a targeted optimization, not a full caching layer. Engineer-mod-route-ca
 **No PRD change required.** These are implementation-layer decisions within the existing Phase 2 scope. The TanStack Query adoption should be added to the Phase 2 module list when the Phase 2 PRD is written.
 
 **Approved**: CloudFront CDN for video (confirmed as the correct layer per Rev 24). Redis rejection (no persistent server to host it; pgBouncer already handles connection pooling). In-memory signed URL cache for Phase 1 (non-breaking, scoped to a single service function in MOD-003).
+
+
+### Sync Report — Delta Sync — 2026-10-19
+
+**Sync type:** delta
+**PRD Revision:** 44
+**PM Update reference:** 2026-10-19 [SUBSTANTIVE] — Rev 44 — Gym cover photos via Google Places API seeder added to MOD-002. New ACs: AC-194 (migration: cover_photo_url + google_place_id columns), AC-195 (one-time Places API seeder script), AC-196 (GymDetailScreen cover photo + Google attribution), AC-197 (gym list thumbnail + Google attribution), AC-198 (initials avatar fallback). §9 data model updated. §10 NFR: Google Places API key server-side only. US-006 AC list extended.
+
+**Files modified:**
+- `project-planning/modules/mod-gym-directory/spec.md` — Added AC-194 through AC-198 to Acceptance Criteria Covered; updated Data Model section with cover_photo_url and google_place_id columns (including migration note and §9 data model note from PRD); updated Input/Output Contract to include cover_photo_url and google_place_id in gym directory outputs plus new seeder I/O contract; updated Key Implementation Notes with Google Places API key server-side constraint, cover photo display rules, attribution requirement, initials avatar fallback logic, seeder idempotency, and google_place_id storage-only note; updated Context to include cover photo seeder context and google_place_id non-goal; updated Out of Scope; bumped Last Synced from PRD Revision 7 → 44.
+- `project-planning/status.md` — Sync report added (this entry). Last Action block updated.
+
+**Files created:**
+- none
+
+**Module removals noted:**
+- none
+
+**AMBIGUITY markers added:**
+- none
+
+**AMBIGUITY markers resolved:**
+- none
+
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh:** 4/6 — same two pre-existing script bugs as all prior delta syncs since Rev 18. Check 4 FAIL (script bug): awk range pattern terminates immediately on macOS — all module specs have correct Related User Stories sections with US-IDs; alternative grep confirms. Check 6 FAIL (script bug): script over-matches non-phase-plan PRD content (gym seed data lines, table headers) as phase names; Phase Plan section in status.md is correctly written. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
+
 
 ## Skill Recommendations
 
