@@ -3,11 +3,11 @@
 ## Last Action
 
 ```
-agent: qa-mod-gym-directory
-mode: regression
-module: mod-gym-directory
-result: success
-commit: 550bc95f41fc85c9b77869ce4c92c40418cb485f
+agent: tech-lead
+mode: integration-review
+module: n/a
+result: issues-found
+commit: 61fb023cdc9c3d2ba1b07ed4efb050634c4b55f6
 timestamp: 2026-10-19T00:00:00Z
 ```
 
@@ -330,6 +330,24 @@ timestamp: 2026-10-19T00:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Integration & Optimization Review — Phase 1 — 2026-10-19
+
+Reviewed: MOD-001 … MOD-012 (all Phase 1 modules). Read every current-phase module's `spec.md`/`status.md`, ran `scripts/scan-integration.sh`, applied the cross-module conflict/leak checklist and the optimization criteria. Advisory only — no source, spec, or PRD files edited.
+
+Findings: **2 Concerns, 2 Recommendations** (see `project-planning/integration-review.md`).
+- INT-001 (Concern) — `RouteDetailScreen` deep-imports `LogSendScreen` from MOD-004's private `screens/`; symbol is not in MOD-004's barrel. Cross-Module Imports convention break.
+- INT-002 (Concern) — `BetaVideoReelViewer` imports `TapeBadge` from MOD-003's private `components/` instead of the mandated `@/lib/tape` façade (production.md line 386). Boundary break + convention drift.
+- INT-003 (Recommendation) — `RouteDetailScreen` deep-imports `BetaVideoSection` via MOD-005's `components/` though it is barrel-exported; same drift, lower risk.
+- INT-004 (Recommendation) — `RouteCard` per-mount signed-URL fetch × N cards across 3 consuming surfaces, no shared cache; pre-TestFlight optimization (see 2026-10-16 Signed URL Cache Design review). Candidate to DEFER.
+
+Scan clean on migration prefix collisions (40 migrations, all unique/namespaced) and duplicate routes/endpoints. No open repeat-failure escalation markers.
+
+**Phase 1 is NOT signed off for the PM checkpoint:**
+- **BLK-1 (hard):** MOD-011 (mod-analytics) is unbuilt — empty Engineering Progress + QA Results. A Phase-1 module with zero implementation; phase cannot be integration-complete. Route to PM/coordinator to schedule MOD-011, or a PM change-flow decision to formally defer it out of Phase 1 (PRD §7 scope change — PM-owned, not decidable here).
+- **BLK-2 (soft, data-correction):** Module Map shows MOD-004/MOD-005 as "QA Pending Human Sign-off," but their module `status.md` files record QA PASS (MOD-004 with human sign-off). Needs a PM `[TRIVIAL]` Module Map correction.
+
+The two Concerns (INT-001, INT-002) should be fixed or explicitly accepted by the human before checkpoint. All four findings are proposals; the human decides which to approve/defer/reject.
 
 ### Review — 2026-10-16 — Signed URL Cache Design
 
