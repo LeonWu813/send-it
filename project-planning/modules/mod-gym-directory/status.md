@@ -2,6 +2,20 @@
 
 ## Engineering Progress
 
+### Fix — 2026-10-19 (TS7016 — install @types/ws for seed-gym-photos.ts)
+
+**Problem**: `scripts/seed-gym-photos.ts` produced `TS7016: Could not find a declaration file for module 'ws'` because `@types/ws` was not installed. QA flagged this in the Rev 44 regression pass as a pre-existing tooling gap.
+
+**Fix**:
+- Ran `npm install --save-dev @types/ws` — adds `@types/ws` to `devDependencies` in `package.json`.
+- Added `as any` cast at line 49 of `scripts/seed-gym-photos.ts` for the `realtime: { transport: ws }` option: `@types/ws` defines the `ws` constructor with `address: string` while Supabase's `WebSocketLikeConstructor` expects `address: string | URL`; the cast is the minimal safe bridge since the runtime behavior is correct. Comment documents the reason.
+
+**Verification**:
+- `npx tsc --noEmit` → EXIT 0, 0 errors (was exit code 2, 1 error before fix).
+- `scripts/seed-gym-photos.ts` is not imported by any `src/` file; this is a dev-only seeder script.
+
+---
+
 ### Off-spec design work, pending PR review - 2026-10-16 (design system v2.2 migration)
 
 - `GymListScreen.tsx`: city chips `on="background"` (inverted selection from Chip); content-shaped skeleton (headline, branch, district lines inside Card radius 20).

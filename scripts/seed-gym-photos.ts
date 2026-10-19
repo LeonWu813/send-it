@@ -46,7 +46,10 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
-  realtime: { transport: ws },
+  // ws constructor is compatible at runtime; cast required because @types/ws uses
+  // `address: string` while Supabase's WebSocketLikeConstructor expects `string | URL`.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  realtime: { transport: ws as any },
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
