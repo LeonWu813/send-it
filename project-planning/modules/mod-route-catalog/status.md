@@ -3,6 +3,23 @@
 ## Engineering Progress
 
 
+### BLOCKER — "地圖位置" / "難度系統" UI removal is in MOD-002, not MOD-003 (2026-10-19)
+
+**Task**: Remove the "地圖位置" (Map Location / coordinates row) and "難度系統" (Grade System section) UI elements from what was described as the "Route Detail screen".
+
+**Finding**: These strings and their rendering code do NOT exist anywhere in `src/modules/mod-route-catalog/`. Full grep confirmed:
+- `gymDirectory.detail.coordinates` (renders `{gym.lat.toFixed(4)}, {gym.lng.toFixed(4)}`) — rendered at `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx` lines 226–229.
+- `gymDirectory.detail.gradingSystem` (renders `{gym.official_grading_system}`) — rendered at `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx` lines 231–235.
+- `RouteDetailScreen.tsx` contains none of these strings or their i18n keys.
+
+**Blocker**: Both elements are in `GymDetailScreen.tsx` (MOD-002, `mod-gym-directory`). Editing that file is outside MOD-003's write scope. Route this fix to `engineer-mod-gym-directory`.
+
+**Exact locations to remove (for the MOD-002 engineer):**
+- Lines 226–229: the `{t('gymDirectory.detail.coordinates')}` footnote text (the `<AppText variant="footnote" ... style={styles.coordinates}>` block showing lat/lng).
+- Lines 231–235: the `{/* Grade system */}` comment block with the `{t('gymDirectory.detail.gradingSystem')}` pageSection label and its `<AppText variant="body">{gym.official_grading_system}</AppText>` value line.
+- The `coordinates` style entry in `makeStyles` (line ~305) can also be removed if no other usage remains — confirm with grep after line removal.
+- i18n keys `gymDirectory.detail.coordinates` and `gymDirectory.detail.gradingSystem` in both locale files should be left in place per the instruction ("do not delete locale keys").
+
 ### Storybook stories for RouteColorBadge (2026-10-16)
 
 Off-spec design tooling (branch `design/storybook`), pending PR review. Added `src/modules/mod-route-catalog/stories/RouteColorBadge.stories.tsx` (Single, AllColorsAndSizes, LightVsDark). No component source changes.
