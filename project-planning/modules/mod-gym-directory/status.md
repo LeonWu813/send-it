@@ -2,6 +2,25 @@
 
 ## Engineering Progress
 
+### Performance fix — 2026-10-19 (Switch cover photo Image to expo-image for disk+memory caching)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/screens/GymDetailScreen.tsx` — replaced `import { Image } from 'react-native'` with `import { Image } from 'expo-image'`; changed `resizeMode="cover"` to `contentFit="cover"` and added `cachePolicy="memory-disk"` on the cover photo `<Image>`. The `coverPhoto` style already carries `backgroundColor: theme.colors.surfaceAlt` so no blank flash occurs while loading. The `placeholder={{ color: ... }}` form proposed in the task brief is not a valid prop type in expo-image ~57.0.5 (`placeholder` accepts `ImageSource | string | number`, not a color-keyed object); the style `backgroundColor` is the correct mechanism here.
+- `src/modules/mod-gym-directory/screens/GymListScreen.tsx` — same swap; `resizeMode="cover"` → `contentFit="cover"` and `cachePolicy="memory-disk"` added on the thumbnail `<Image>`. Same rationale for not using `placeholder={{ color }}`.
+
+**Why expo-image:** gym cover photos are served from permanent public Supabase Storage URLs (not expiring signed URLs), so disk caching across app sessions is safe. `expo-image` with `cachePolicy="memory-disk"` caches the decoded image to disk — second visit is instant with no network hit. `expo-image` was already present in `package.json` (`"expo-image": "~57.0.5"`) and installed in `node_modules` before this change.
+
+**API deviation from task brief:** `placeholder={{ color: theme.colors.surfaceAlt }}` is not a valid prop in expo-image ~57.0.5 — the `placeholder` prop's type is `ImageSource | string | number | ImageSource[] | string[] | SharedRefType<'image'>` (confirmed from `.d.ts`). The loading-state background is already handled by `backgroundColor: theme.colors.surfaceAlt` on `styles.coverPhoto` and `styles.thumbnail`.
+
+**No changes to:** initials avatar fallback (remains a `<View>` + `<AppText>` — unchanged per task brief), tests, service layer, i18n keys, or any other screen.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Tests: `npx jest --testPathPattern="mod-gym-directory" --passWithNoTests` — 44/44 passed, 4 suites, exit code 0
+- Scope: changes limited to the two screen files; no logic, service, or test changes
+
+---
+
 ### Fix — 2026-10-19 (Remove coordinates row and grade system row from GymDetailScreen)
 
 **Files modified:**

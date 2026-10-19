@@ -16,7 +16,8 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import { ScrollView, StyleSheet, View } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
@@ -188,7 +189,8 @@ export default function GymDetailScreen({
               source={{ uri: gym.cover_photo_url }}
               style={styles.coverPhoto}
               accessibilityLabel={gym.name ?? ''}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
             {/* AC-196: Google Maps Platform ToS — attribution required */}
             <AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>

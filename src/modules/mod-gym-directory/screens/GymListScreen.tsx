@@ -19,7 +19,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Animated, AppState, FlatList, Image, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
+import { Animated, AppState, FlatList, StyleSheet, View } from 'react-native';
 
 import {
   AppText,
@@ -169,7 +170,8 @@ export default function GymListScreen({
             <Image
               source={{ uri: item.cover_photo_url }}
               style={styles.thumbnail}
-              resizeMode="cover"
+              contentFit="cover"
+              cachePolicy="memory-disk"
               accessibilityLabel={item.name}
             />
           ) : (
