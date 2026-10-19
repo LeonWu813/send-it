@@ -264,7 +264,7 @@ export default function AppHeader({
           style={[
             styles.smallBar,
             {
-              height: topInset + ROW + theme.spacing.sm,
+              height: topInset + ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM,
               paddingTop: topInset,
               backgroundColor: c.background,
               borderBottomWidth: theme.stroke.hairline,

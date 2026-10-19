@@ -372,6 +372,29 @@
 
 ---
 
+### Bugfix — small-bar height jump on navigation — 2026-10-19
+
+**Bug**: The collapsed small-bar Animated.View (root variant, scrolled state) used `height: topInset + ROW + theme.spacing.sm` (8pt). The large-title header and all nested headers use `topInset + ROOT_PAD_TOP + ROOT_PAD_BOTTOM` (6 + 8 = 14pt padding). This left the small-bar 6pt shorter than every other header state, producing a visible height jump when pushing or popping nested screens.
+
+**Fix**: Changed line 267 inside the `smallBar` Animated.View style from `theme.spacing.sm` to `ROOT_PAD_TOP + ROOT_PAD_BOTTOM`. Both constants (6pt and 8pt) are already module-level constants in scope. No other lines changed — `rootHeaderHeight()` and all screen inset hooks already return the correct 58pt total.
+
+**File changed:**
+- `src/modules/mod-home/components/AppHeader.tsx` — line 267: `height: topInset + ROW + theme.spacing.sm` → `height: topInset + ROW + ROOT_PAD_TOP + ROOT_PAD_BOTTOM`
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx jest --testPathPattern="mod-home" --passWithNoTests` | PASS — 49 tests, 4 suites, 0 failures |
+| Small-bar height matches large-title and nested header (topInset + ROW + 14pt) | PASS |
+| `ROOT_PAD_TOP` (6) and `ROOT_PAD_BOTTOM` (8) are module-level constants — already in scope | PASS |
+| No other lines changed | PASS |
+| No hardcoded values introduced | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24
