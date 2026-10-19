@@ -1062,3 +1062,202 @@ Safe-area inset removal touches only the `useSafeAreaInsets()` call and the `mak
 **Overall verdict: PASS** — the safe-area fix is correct and introduced no regressions. The screen test suite failures are a pre-existing test-infrastructure issue (missing `@react-native-async-storage/async-storage` Jest mock, introduced by commit `8d4c6e4` which post-dates the safe-area fix). Route to engineer to add the AsyncStorage mock to the Jest configuration.
 
 **MOD-002 GymListScreen/GymDetailScreen/RequestGymScreen safe-area fix — QA PASS.**
+
+---
+
+## QA Results — Regression (Rev 44 cover photos — AC-194 through AC-198, crash fix commit 91efaa8)
+
+**Workflow**: regression
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-10-19
+**Scope**: Engineer fixed a crash: `variant="caption"` changed to `variant="caption1"` on the "Photos from Google" `AppText` in GymDetailScreen.tsx (line 194) and GymListScreen.tsx (line 288), commit 91efaa8. This regression pass verifies (1) the crash fix itself, (2) all AC-194 through AC-198 acceptance criteria, and (3) no regressions in any previously-passing AC.
+
+---
+
+### Automated Test Suite
+
+Command: `npx jest --testPathPattern="mod-gym-directory" --passWithNoTests 2>&1 | tail -20`
+Result: **44/44 tests passed, 4 suites, exit code 0**
+
+Suites: gym-service.test.ts (17 tests), GymDetailScreen.test.tsx, GymListScreen.test.tsx, RequestGymScreen.test.tsx — all pass.
+
+Note: The pre-existing AsyncStorage mock gap (reported in the prior safe-area QA pass, 2026-10-15) is resolved — all 4 screen test suites run and pass. The test suite count has returned to the full 44/44 baseline.
+
+Console warnings: pre-existing `act(...)` warnings from `@expo/vector-icons` Icon font loading — upstream issue, unchanged from all prior passes.
+
+---
+
+### TypeScript Compilation
+
+Command: `npx tsc --noEmit`
+Result: **FAIL — exit code 2, 1 error**
+
+```
+scripts/seed-gym-photos.ts(24,16): error TS7016: Could not find a declaration file for module 'ws'.
+  '/Users/.../node_modules/ws/wrapper.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/ws` if it exists or add a new declaration (.d.ts) file.
+```
+
+**Classification: pre-existing, not introduced by commit 91efaa8.**
+
+The error originates in `scripts/seed-gym-photos.ts` at line 24 (`import ws from 'ws'`), which was introduced in commit `8abfe1e` (2026-10-19 10:45 — "fix(scripts): pass ws transport to Supabase client for Node 20 compatibility"). Commit 91efaa8 (the crash fix under review, 2026-10-19 11:22) did not touch `scripts/seed-gym-photos.ts` and did not introduce or worsen this error. The error is present in the commit immediately before 91efaa8 and is unrelated to the GymDetailScreen/GymListScreen changes.
+
+The fix is to install `@types/ws` as a dev dependency (`npm i --save-dev @types/ws`) or to add a `declare module 'ws';` ambient declaration. Neither was applied by the current commit.
+
+The app source tree (`src/`) compiles clean — all `src/**/*.ts` and `src/**/*.tsx` files are error-free. The `scripts/` directory contains server-side tooling that is never included in the app bundle.
+
+**Not a blocker for this regression pass.** Route to Engineer as a separate follow-up: `scripts/seed-gym-photos.ts` needs `@types/ws` installed.
+
+---
+
+### Primary Verification — Crash Fix (commit 91efaa8)
+
+**REGRESSION PASS — GymDetailScreen.tsx line 194: `variant="caption1"` confirmed.**
+
+`GymDetailScreen.tsx` line 194:
+```tsx
+<AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
+  {t('gymDirectory.googlePhotosAttribution')}
+</AppText>
+```
+
+`variant="caption"` (invalid) has been replaced by `variant="caption1"` (valid). The attribution `AppText` is rendered inside the `gym.cover_photo_url ? (<> ... </>) : (...)` branch — it only renders when `cover_photo_url` is non-null. The fix is correctly scoped.
+
+**REGRESSION PASS — GymListScreen.tsx line 288: `variant="caption1"` confirmed.**
+
+`GymListScreen.tsx` line 288:
+```tsx
+<AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
+  {t('gymDirectory.googlePhotosAttribution')}
+</AppText>
+```
+
+`variant="caption"` (invalid) has been replaced by `variant="caption1"` (valid). The attribution `AppText` is wrapped in `{hasGooglePhotos ? (...) : null}` — it only renders when at least one card has a non-null `cover_photo_url`. The fix is correctly scoped.
+
+Both fixes are minimal and surgical — no other code was changed in either file.
+
+---
+
+### AC-194 (migration — cover_photo_url and google_place_id columns)
+
+**PASS AC-194**: Migration file `supabase/migrations/20261019000001_mod_002_gym_cover_photo.sql` exists and contains:
+
+```sql
+ALTER TABLE gyms ADD COLUMN IF NOT EXISTS cover_photo_url TEXT;
+ALTER TABLE gyms ADD COLUMN IF NOT EXISTS google_place_id TEXT;
+```
+
+Both columns are TEXT (nullable by default in Postgres — no NOT NULL constraint). `IF NOT EXISTS` makes the migration idempotent. Both column names match the spec exactly (`cover_photo_url`, `google_place_id`). The migration file timestamp `20261019000001` is correctly ordered before the service_role GRANT migration `20261019000002`. The `Gym` and `GymSummary` TypeScript interfaces in `types.ts` include both new fields with `| null` type annotations. `GYM_SUMMARY_SELECT` in `gym-service.ts` includes `cover_photo_url`. `GYM_DETAIL_SELECT` includes both `cover_photo_url` and `google_place_id`. Verified by reading the migration file, `types.ts`, and `gym-service.ts`.
+
+---
+
+### AC-195 (one-time seeder script)
+
+**PASS AC-195**: `scripts/seed-gym-photos.ts` exists and implements the full five-step pipeline:
+
+1. **Text Search** (`resolvePlaceId`): calls `https://places.googleapis.com/v1/places:searchText` (Places API New) with `X-Goog-Api-Key` header and `textQuery: "${gymName} ${address}"` body — resolves to a `place_id`. Returns `null` if no results.
+2. **Place Details** (`resolvePhotoReference`): calls `https://places.googleapis.com/v1/places/${placeId}` with `X-Goog-FieldMask: photos` — retrieves the first `photos[0].name` (photo resource name). Returns `null` if no photos.
+3. **Place Photo** (`downloadPhoto`): calls `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=800&skipHttpRedirect=true` — receives `{ photoUri }` JSON response, then fetches the resolved URI to obtain image bytes as `Uint8Array`.
+4. **Storage upload** (`uploadToStorage`): uploads image bytes to Supabase Storage bucket `gym-photos` at path `${gymId}/cover.jpg`, `upsert: true`, returns public URL.
+5. **DB update** (`updateGymRecord`): writes `cover_photo_url` (public URL) and `google_place_id` (place_id) to `gyms` row via `.update().eq('id', gymId)`.
+
+**Idempotency**: `main()` fetches only gyms with `.is('cover_photo_url', null)` — gyms that already have a cover photo are skipped automatically. Safe to re-run.
+
+**API key security**: `GOOGLE_PLACES_API_KEY` is read exclusively from `process.env.GOOGLE_PLACES_API_KEY`. The script validates the variable at startup and exits with an error if unset. No hardcoded key value exists anywhere in `scripts/seed-gym-photos.ts` or any other committed file. Grep of `src/`, `locales/`, and `.env.example` for any Google API key pattern (`AIza`) returns no results. The seeder uses `SUPABASE_SERVICE_ROLE_KEY` (also environment-variable-only) for the service-role Supabase client required for Storage uploads. Both keys are server-side only — never in the client bundle.
+
+**Not triggered from client flow**: the script is a standalone Node.js program (`npx ts-node scripts/seed-gym-photos.ts`), not imported by any source file in `src/`. Verified by grep.
+
+**Note on TypeScript error**: `import ws from 'ws'` at line 24 produces a `TS7016` error because `@types/ws` is not installed. This is a tooling gap in the seeder script (not in app source), pre-existing relative to this regression window. The script logic itself is correct; the error is a missing type declaration, not a runtime bug. Flagged for follow-up.
+
+---
+
+### AC-196 (GymDetailScreen cover photo + attribution)
+
+**PASS AC-196**: GymDetailScreen renders `cover_photo_url` correctly when non-null.
+
+- Cover photo: `<Image source={{ uri: gym.cover_photo_url }} style={styles.coverPhoto} resizeMode="cover" />`. Style `coverPhoto` defines `height: 200` (200pt per spec), `width: '100%'`, `borderRadius: RADIUS.card`, `...CONTINUOUS`. Matches spec requirements exactly.
+- Cover photo slot when null: the entire `<><Image .../><AppText .../></>` fragment is replaced by the initials avatar `<View>` — no blank space. The conditional is `gym.cover_photo_url ? (<> cover photo + attribution </>) : (<View> initials avatar </View>)`. The null case is handled gracefully with no layout gap.
+- "Photos from Google" attribution: `<AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>{t('gymDirectory.googlePhotosAttribution')}</AppText>`. Rendered immediately after the `<Image>` inside the truthy branch — adjacent to the image as required. The `googleAttribution` style has `marginTop: theme.spacing.xs` and `textAlign: 'right'`. The attribution is only shown when `cover_photo_url` is non-null (i.e., when a Google-sourced photo is actually displayed). EN locale value: "Photos from Google". zh-TW locale value: "相片來自 Google". Both verified in `locales/en/common.json` line 131 and `locales/zh-TW/common.json` line 131.
+
+---
+
+### AC-197 (GymListScreen thumbnail + footer attribution)
+
+**PASS AC-197**: GymListScreen renders `cover_photo_url` correctly as a thumbnail.
+
+- Thumbnail when non-null: `<Image source={{ uri: item.cover_photo_url }} style={styles.thumbnail} resizeMode="cover" />`. Style `thumbnail`: `width: 56, height: 56` (56×56 per spec), `borderRadius: theme.spacing.sm`. Matches spec.
+- Initials avatar when null: `<View style={styles.initialsAvatar}><AppText variant="headline" color="textSecondary">{getGymInitials(item.name ?? '')}</AppText></View>`. Style `initialsAvatar`: `width: 56, height: 56`. The `??  ''` guard prevents null-propagation to `getGymInitials`.
+- "Photos from Google" footer attribution: `hasGooglePhotos` memo is `sortedGyms.some((gym) => gym.cover_photo_url !== null)` — evaluates to `true` when at least one visible card has a Google photo. When `true`, `listFooter` renders the `<AppText variant="caption1" ...>` attribution. When `false`, the attribution is `null` — not rendered. Correctly conditional on whether any photo is actually displayed.
+
+---
+
+### AC-198 (getGymInitials helper)
+
+**PASS AC-198**: `src/modules/mod-gym-directory/gym-initials.ts` implements `getGymInitials(name: string | null | undefined): string`.
+
+- Splits on whitespace (`/\s+/`), takes first character of each word using `Array.from(word)` (CJK-safe — multi-byte Unicode counts as one unit), slices to at most 2 words, joins and uppercases.
+- Returns `'?'` for null, undefined, or empty string (after trim + filter(Boolean)).
+- Requires no network request and no external dependency — purely client-generated from the `name` field.
+- Signature accepts `string | null | undefined` per the guard added in commit `9ca5ebf` ("guard undefined text props causing maxFontSizeMultiplier crash").
+- Examples verified analytically against spec: "MegaSTONE Climbing Gym" → "MC" (M from MegaSTONE, C from Climbing; "Gym" is word 3, beyond the 2-word limit). "奇岩攀岩館" (single word) → "奇" (single initial). CJK first-char extraction uses `Array.from` — verified in code.
+- Called with `?? ''` guard at both call sites: `GymDetailScreen.tsx` line 200 `getGymInitials(gym.name ?? '')` and `GymListScreen.tsx` line 178 `getGymInitials(item.name ?? '')`. Combined with the function's own null guard, crash-proof for any falsy name value.
+
+---
+
+### Regression — All Previously-Passing ACs
+
+**PASS AC-004**: GymListScreen and GymDetailScreen rendering unchanged beyond the cover photo additions. City filter, bilingual display, search unchanged. All GymListScreen tests pass. No regression.
+
+**PASS AC-005**: "View Routes" button and GymNavigator `routes` view state unchanged. `onViewRoutes` prop contract unchanged. `onBackToGym` callback unchanged. Verified by passing GymDetailScreen tests (includes the "calls onViewRoutes" test).
+
+**PASS AC-006**: GymListScreen tap-to-navigate (`onSelectGym`) unchanged. Verified by passing GymListScreen tests.
+
+**PASS AC-070**: RequestGymScreen and `submitGymRequest()` unchanged. 5/5 RequestGymScreen tests pass. No regression.
+
+**PASS AC-120**: GymDetailScreen bookmark icon state unchanged. 2/2 bookmark state tests pass. No regression.
+
+**PASS AC-121**: Optimistic bookmark toggle (`handleBookmarkToggle`, `saveGym`, `unsaveGym`, revert on error) unchanged. 3/3 optimistic-update tests pass. No regression.
+
+**PASS AC-122**: GymListScreen read-only saved indicator unchanged. 2/2 indicator tests pass. No regression. `sortedGyms` memo and FlatList `data={sortedGyms}` untouched.
+
+---
+
+### Shared Conventions Check
+
+**PASS no hardcoded hex colors**: No hex color literals in any MOD-002 source file. Cover photo, initials avatar, and attribution use `theme.colors.*` tokens and `RADIUS.card`/`CONTINUOUS` from `src/lib/theme`. Verified by code inspection.
+
+**PASS no hardcoded strings**: `t('gymDirectory.googlePhotosAttribution')` is used for the attribution text in both screens. No inline JSX string literals for user-facing text. Verified by reading both screen files.
+
+**PASS Supabase client singleton**: No new `createClient()` calls in `src/modules/mod-gym-directory/`. Seeder script (`scripts/seed-gym-photos.ts`) correctly creates its own service-role client (not the shared singleton) — this is appropriate for a server-side script and does not violate the convention, which applies to client-bundle code in `src/`.
+
+**PASS Google API key not in client code or repository**: `GOOGLE_PLACES_API_KEY` exists only as a `process.env` reference in `scripts/seed-gym-photos.ts`. No committed `.env` file contains the key. Grep of `src/` and locale files for `AIza` prefix returns zero results.
+
+**PASS `google_place_id` not surfaced in Phase 1 UI**: `google_place_id` is present in `GYM_DETAIL_SELECT` (fetched by `loadGym`) and in the `Gym` TypeScript type, but is not rendered in any JSX in `GymDetailScreen.tsx` or `GymListScreen.tsx`. The spec states it is "stored for potential future use; not surfaced in Phase 1 UI." Verified by reading both screen files — no JSX element references `gym.google_place_id`.
+
+---
+
+### Gold-Plating Check
+
+No features beyond AC-194 through AC-198:
+- No UI surfaces for `google_place_id` (correctly absent per spec).
+- No lazy-loading or progressive image reveal beyond React Native's standard `<Image>` behavior.
+- No caching logic added beyond what Supabase Storage public URLs provide inherently.
+- Seeder script is standalone and not wired into any app flow (correct per spec).
+
+---
+
+### Overall Verdict
+
+**QA PASS** — The `caption → caption1` crash fix is verified. All five Rev 44 ACs pass:
+
+| AC | Result |
+|----|--------|
+| AC-194: migration adds `cover_photo_url` and `google_place_id` (nullable) | PASS |
+| AC-195: seeder script — 5-step pipeline, idempotent, API key server-side only | PASS |
+| AC-196: GymDetailScreen cover photo (200pt, resizeMode cover), attribution (caption1), null gracefully collapses | PASS |
+| AC-197: GymListScreen 56×56 thumbnail, initials fallback, footer attribution conditional on hasGooglePhotos | PASS |
+| AC-198: `getGymInitials()` — ≤2 uppercase initials, CJK-safe, '?' for nullish | PASS |
+
+All previously-passing ACs (AC-004, AC-005, AC-006, AC-070, AC-120, AC-121, AC-122) pass with no regressions. 44/44 automated tests pass, 4 suites, exit code 0.
+
+One follow-up item flagged (not a blocker): `scripts/seed-gym-photos.ts` produces a `TS7016` TypeScript error because `@types/ws` is not installed — pre-existing relative to commit 91efaa8, not introduced by the crash fix. Engineer should run `npm i --save-dev @types/ws` to resolve.
