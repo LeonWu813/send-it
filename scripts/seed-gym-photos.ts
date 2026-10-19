@@ -58,93 +58,108 @@ interface GymRow {
 }
 
 interface PlacesTextSearchResult {
-  candidates: Array<{ place_id: string }>;
-  status: string;
+  places?: Array<{ id: string }>;
 }
 
 interface PlaceDetailsResult {
-  result: {
-    photos?: Array<{ photo_reference: string }>;
-  };
-  status: string;
+  photos?: Array<{ name: string }>;
+}
+
+interface PlacePhotoMediaResult {
+  photoUri: string;
 }
 
 // ── Google Places REST helpers ────────────────────────────────────────────────
 
 /**
- * Step 1: Text Search — resolve gym name + address to a place_id.
- * Uses the Places Text Search API (REST, no JS SDK).
+ * Step 1: Text Search — resolve gym name + address to a place id.
+ * Uses the Places API (New) Text Search endpoint.
  */
 async function resolvePlaceId(gymName: string, address: string): Promise<string | null> {
-  const query = encodeURIComponent(`${gymName} ${address}`);
-  const url =
-    `https://maps.googleapis.com/maps/api/place/findplacefromtext/json` +
-    `?input=${query}` +
-    `&inputtype=textquery` +
-    `&fields=place_id` +
-    `&key=${GOOGLE_PLACES_API_KEY}`;
+  const url = `https://places.googleapis.com/v1/places:searchText`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY as string,
+      'X-Goog-FieldMask': 'places.id',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ textQuery: `${gymName} ${address}` }),
+  });
+
   if (!response.ok) {
     throw new Error(`Text Search HTTP error: ${response.status}`);
   }
   const data = (await response.json()) as PlacesTextSearchResult;
 
-  if (data.status !== 'OK' || !data.candidates?.length) {
-    console.warn(`  [Places] Text Search returned status=${data.status} for "${gymName}"`);
+  if (!data.places?.length) {
+    console.warn(`  [Places] Text Search returned no results for "${gymName}"`);
     return null;
   }
 
-  return data.candidates[0].place_id;
+  return data.places[0].id;
 }
 
 /**
- * Step 2: Place Details — get the first photo_reference for a place_id.
+ * Step 2: Place Details — get the first photo name for a place id.
+ * Uses the Places API (New) Place Details endpoint.
+ * Returns the photo resource name (e.g. "places/ChIJ.../photos/xxx").
  */
 async function resolvePhotoReference(placeId: string): Promise<string | null> {
-  const url =
-    `https://maps.googleapis.com/maps/api/place/details/json` +
-    `?place_id=${encodeURIComponent(placeId)}` +
-    `&fields=photos` +
-    `&key=${GOOGLE_PLACES_API_KEY}`;
+  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY as string,
+      'X-Goog-FieldMask': 'photos',
+    },
+  });
+
   if (!response.ok) {
     throw new Error(`Place Details HTTP error: ${response.status}`);
   }
   const data = (await response.json()) as PlaceDetailsResult;
 
-  if (data.status !== 'OK') {
-    console.warn(`  [Places] Details returned status=${data.status} for place_id=${placeId}`);
-    return null;
-  }
-
-  const photos = data.result?.photos;
-  if (!photos?.length) {
+  if (!data.photos?.length) {
     console.warn(`  [Places] No photos found for place_id=${placeId}`);
     return null;
   }
 
-  return photos[0].photo_reference;
+  return data.photos[0].name;
 }
 
 /**
  * Step 3: Place Photo — download the image bytes.
- * maxwidth=800 keeps file size reasonable.
+ * Uses the Places API (New) Place Photo endpoint with skipHttpRedirect=true
+ * to receive a JSON { photoUri } response instead of a redirect, then
+ * fetches the resolved URI to obtain the actual image bytes.
+ * maxWidthPx=800 keeps file size reasonable.
  */
-async function downloadPhoto(photoReference: string): Promise<Uint8Array> {
-  const url =
-    `https://maps.googleapis.com/maps/api/place/photo` +
-    `?photoreference=${encodeURIComponent(photoReference)}` +
-    `&maxwidth=800` +
+async function downloadPhoto(photoName: string): Promise<Uint8Array> {
+  const mediaUrl =
+    `https://places.googleapis.com/v1/${photoName}/media` +
+    `?maxWidthPx=800` +
+    `&skipHttpRedirect=true` +
     `&key=${GOOGLE_PLACES_API_KEY}`;
 
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Place Photo HTTP error: ${response.status}`);
+  const mediaResponse = await fetch(mediaUrl);
+  if (!mediaResponse.ok) {
+    throw new Error(`Place Photo media HTTP error: ${mediaResponse.status}`);
+  }
+  const mediaData = (await mediaResponse.json()) as PlacePhotoMediaResult;
+
+  if (!mediaData.photoUri) {
+    throw new Error(`Place Photo response missing photoUri`);
   }
 
-  const arrayBuffer = await response.arrayBuffer();
+  const imageResponse = await fetch(mediaData.photoUri);
+  if (!imageResponse.ok) {
+    throw new Error(`Place Photo image fetch HTTP error: ${imageResponse.status}`);
+  }
+
+  const arrayBuffer = await imageResponse.arrayBuffer();
   return new Uint8Array(arrayBuffer);
 }
 
@@ -224,14 +239,14 @@ async function main(): Promise<void> {
       }
       console.log(`  place_id: ${placeId}`);
 
-      // Step 2: get photo_reference
+      // Step 2: get photo name
       const photoReference = await resolvePhotoReference(placeId);
       if (!photoReference) {
-        console.log(`  Skipped — no photo_reference found.\n`);
+        console.log(`  Skipped — no photo name found.\n`);
         skipCount++;
         continue;
       }
-      console.log(`  photo_reference: ${photoReference.slice(0, 40)}...`);
+      console.log(`  photo name: ${photoReference.slice(0, 60)}...`);
 
       // Step 3: download image
       const imageBytes = await downloadPhoto(photoReference);
