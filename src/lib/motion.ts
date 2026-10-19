@@ -54,12 +54,13 @@ export const MOTION = {
   },
   spring: {
     grip: { stiffness: 400, damping: 20, mass: 0.6 },
+    gripSoft: { stiffness: 320, damping: 26, mass: 0.6 },
     topOut: { stiffness: 260, damping: 10, mass: 0.8 },
     settle: { stiffness: 280, damping: 28, mass: 1 },
     /** Selection indicator moving between items (SegmentedControl thumb, TabBar pill). */
     glide: { stiffness: 380, damping: 34, mass: 1 },
   },
-  scale: { pressControl: 0.96, pressWide: 0.98, pop: 1.2, celebratePeak: 1.3 },
+  scale: { pressControl: 0.96, pressWide: 0.98, pop: 1.2, popSoft: 1.09, celebratePeak: 1.3 },
   /** Failure shake: translateX 0 -> +d -> -d -> +d -> 0 in `segments` linear steps over duration.short. */
   shake: { distancePt: 4, segments: 4 },
   /** Translate distances. Not affected by timeScale; unused under Reduce Motion. */

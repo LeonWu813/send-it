@@ -76,8 +76,9 @@ export interface RouteCardProps {
 /** Font scale from which the thumbnail is hidden (AX layout, §32.1). */
 const AX_FONT_SCALE = 1.6;
 /** Bookmark pop (Motion C9) numbers. */
-const POP_ROTATE_DOWN = -12;
-const POP_ROTATE_UP = 6;
+const POP_ROTATE_DOWN = -5;
+const POP_ROTATE_UP = 2;
+const BOOKMARK_PIVOT_MS = 60;
 /** Image glyph in the empty thumbnail (§32.1). */
 const PLACEHOLDER_ICON = 26;
 /** Beta-count glyph size (§32.1). */
@@ -143,14 +144,14 @@ export default function RouteCard({
     Animated.sequence([
       Animated.parallel([
         Animated.timing(popY, { toValue: distance.bookmarkDrop, duration: duration.micro, easing: ease, useNativeDriver: USE_NATIVE_DRIVER }),
-        Animated.timing(popScale, { toValue: scale.pop, duration: duration.micro, easing: ease, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(popScale, { toValue: scale.popSoft, duration: duration.micro, easing: ease, useNativeDriver: USE_NATIVE_DRIVER }),
         Animated.timing(popRotate, { toValue: POP_ROTATE_DOWN, duration: duration.micro, easing: ease, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
-      Animated.timing(popRotate, { toValue: POP_ROTATE_UP, duration: duration.micro, easing: bezierFor('linear'), useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.timing(popRotate, { toValue: POP_ROTATE_UP, duration: BOOKMARK_PIVOT_MS, easing: bezierFor('linear'), useNativeDriver: USE_NATIVE_DRIVER }),
       Animated.parallel([
-        Animated.spring(popY, { toValue: 0, ...spring.grip, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }),
-        Animated.spring(popScale, { toValue: 1, ...spring.grip, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }),
-        Animated.spring(popRotate, { toValue: 0, ...spring.grip, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.spring(popY, { toValue: 0, ...spring.gripSoft, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.spring(popScale, { toValue: 1, ...spring.gripSoft, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.spring(popRotate, { toValue: 0, ...spring.gripSoft, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }),
       ]),
     ]).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
