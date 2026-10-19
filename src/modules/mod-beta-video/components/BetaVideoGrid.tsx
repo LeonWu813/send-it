@@ -169,6 +169,7 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
   const topRightRadius = (total < NUM_COLUMNS && index === total - 1) || index === NUM_COLUMNS - 1
     ? metrics.radius
     : 0;
+  const bottomRightRadius = total < NUM_COLUMNS && index === total - 1 ? metrics.radius : 0;
 
   return (
     <Pressable
@@ -186,6 +187,7 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
         backgroundColor: theme.isDark ? c.surfaceAlt : c.border,
         borderTopLeftRadius: topLeftRadius,
         borderTopRightRadius: topRightRadius,
+        borderBottomRightRadius: bottomRightRadius,
       }}
     >
       {uri && !failed ? (
