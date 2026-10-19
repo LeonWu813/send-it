@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: doc-sync
-mode: delta
+agent: tech-lead
+mode: review
 module: n/a
 result: success
-commit: 2e6833afabfce5420c15f4106cdf9689c6fed8c0
-timestamp: 2026-10-19T18:00:00Z
+commit: 312ad4ddf933cf02c3f4d50ed62f813c5194b5c9
+timestamp: 2026-10-19T18:30:00Z
 ```
 
 
@@ -4254,6 +4254,76 @@ This is a targeted optimization, not a full caching layer. Engineer-mod-route-ca
 
 **verify-sync.sh:** 4/6 — same two pre-existing script bugs as all prior delta syncs since Rev 18. Check 4 FAIL (script bug): awk range pattern terminates immediately on macOS — all module specs have correct Related User Stories sections with US-IDs; alternative grep confirms. Check 6 FAIL (script bug): script over-matches non-phase-plan PRD content (gym seed data lines, table headers) as phase names; Phase Plan section in status.md is correctly written. Checks 1, 2, 3, 5 PASS. No new structural issues introduced by this delta.
 
+
+### Review — 2026-10-19 — Advisory: Places API (New) migration for gym cover photo seeder (AC-195)
+
+**Context**: The project's Google API key has only the **Places API (New)** enabled. The gym cover photo seeder (`scripts/seed-gym-photos.ts`) was written targeting classic Places API endpoints (`findplacefromtext`, classic details, classic photo). Those endpoints will return 403 / quota errors with the current key. Decision accepted by the human: rewrite the seeder to use Places API (New) exclusively.
+
+This is a seeder script — it runs once in a developer environment, not in production app code. No mobile app code, no Supabase Edge Function, and no PRD AC is affected beyond AC-195 (seeder script) itself. No PRD revision is required.
+
+---
+
+#### Decision
+
+**Migrate `scripts/seed-gym-photos.ts` from classic Places API to Places API (New) for all three network calls.**
+
+The three replacement endpoints are specified below. Engineer-mod-gym-directory owns the implementation.
+
+---
+
+#### Endpoint specifications
+
+**1. Text Search — finds a gym's Place ID by name + address**
+
+| | |
+|---|---|
+| Method | `POST` |
+| URL | `https://places.googleapis.com/v1/places:searchText` |
+| Headers | `X-Goog-Api-Key: <key>`, `X-Goog-FieldMask: places.id`, `Content-Type: application/json` |
+| Body | `{ "textQuery": "<gym name> <address>" }` |
+| Response shape | `{ places: [{ id: "ChIJ..." }, ...] }` |
+
+Critical difference from classic: the Place ID field is `id`, not `place_id`. The seeder must read `places[0].id`.
+
+---
+
+**2. Place Details — fetches the list of photo references for a given Place ID**
+
+| | |
+|---|---|
+| Method | `GET` |
+| URL | `https://places.googleapis.com/v1/places/<place_id>` |
+| Headers | `X-Goog-Api-Key: <key>`, `X-Goog-FieldMask: photos` |
+| Response shape | `{ photos: [{ name: "places/ChIJ.../photos/xxx" }, ...] }` |
+
+Critical difference from classic: photo references are in `photos[n].name` (a full resource path string), not `photos[n].photo_reference` (a bare reference token). The seeder must read `photos[0].name` and pass the full `name` string to the photo endpoint below.
+
+---
+
+**3. Place Photo — fetches the actual image bytes for a photo reference**
+
+| | |
+|---|---|
+| Method | `GET` |
+| URL | `https://places.googleapis.com/v1/<photo_name>/media?maxWidthPx=800&skipHttpRedirect=true&key=<key>` |
+| Notes | `<photo_name>` is the full `name` string from step 2 (e.g. `places/ChIJ.../photos/xxx`). `skipHttpRedirect=true` suppresses the redirect and returns JSON instead. |
+| Response shape | `{ photoUri: "https://..." }` |
+
+Critical difference from classic: without `skipHttpRedirect=true` the response is a 302 redirect to the image — Node's `fetch` may or may not follow it depending on configuration. With the flag, the response is JSON containing `photoUri`. The seeder must parse the JSON, extract `photoUri`, and then fetch that URL to obtain the raw image bytes for upload.
+
+---
+
+#### Risk note
+
+The seeder is idempotent by AC-195 spec (skips gyms that already have a `google_place_id`). The endpoint migration does not affect idempotency logic — only the three HTTP calls change. No data model change, no migration, and no Supabase RLS change is required.
+
+**Approved**: Places API (New) as the sole endpoint family for `scripts/seed-gym-photos.ts`.
+
+**No PRD change required**: AC-195 specifies "Google Places API seeder script" without pinning an API version; this is an implementation-level correction within that AC's scope.
+
+---
+
+**Next step**: invoke `engineer-mod-gym-directory` to implement the three endpoint changes in `scripts/seed-gym-photos.ts`.
 
 ## Skill Recommendations
 
