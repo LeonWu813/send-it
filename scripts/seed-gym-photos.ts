@@ -21,6 +21,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import ws from 'ws';
 
 // ── Environment ───────────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
+  realtime: { transport: ws },
 });
 
 // ── Types ─────────────────────────────────────────────────────────────────────
