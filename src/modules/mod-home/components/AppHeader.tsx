@@ -266,6 +266,7 @@ export default function AppHeader({
             {
               height: topInset + ROW,
               paddingTop: topInset,
+              paddingBottom: theme.spacing.sm,
               backgroundColor: c.background,
               borderBottomWidth: theme.stroke.hairline,
               borderBottomColor: c.border,
