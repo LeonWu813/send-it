@@ -175,7 +175,7 @@ export default function GymListScreen({
           ) : (
             <View style={styles.initialsAvatar}>
               <AppText variant="headline" color="textSecondary">
-                {getGymInitials(item.name)}
+                {getGymInitials(item.name ?? '')}
               </AppText>
             </View>
           )}

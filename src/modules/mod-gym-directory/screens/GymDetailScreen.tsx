@@ -187,7 +187,7 @@ export default function GymDetailScreen({
             <Image
               source={{ uri: gym.cover_photo_url }}
               style={styles.coverPhoto}
-              accessibilityLabel={gym.name}
+              accessibilityLabel={gym.name ?? ''}
               resizeMode="cover"
             />
             {/* AC-196: Google Maps Platform ToS — attribution required */}
@@ -197,9 +197,9 @@ export default function GymDetailScreen({
           </>
         ) : (
           /* AC-198: initials avatar fallback when cover_photo_url is null */
-          <View style={styles.initialsAvatar} accessibilityLabel={gym.name}>
+          <View style={styles.initialsAvatar} accessibilityLabel={gym.name ?? ''}>
             <AppText variant="title1" color="textSecondary">
-              {getGymInitials(gym.name)}
+              {getGymInitials(gym.name ?? '')}
             </AppText>
           </View>
         )}
