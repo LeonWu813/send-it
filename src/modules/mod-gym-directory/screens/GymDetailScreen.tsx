@@ -191,7 +191,7 @@ export default function GymDetailScreen({
               resizeMode="cover"
             />
             {/* AC-196: Google Maps Platform ToS — attribution required */}
-            <AppText variant="caption" color="textSecondary" style={styles.googleAttribution}>
+            <AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
               {t('gymDirectory.googlePhotosAttribution')}
             </AppText>
           </>

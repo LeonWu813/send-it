@@ -285,7 +285,7 @@ export default function GymListScreen({
     <View>
       {/* AC-197: Google Maps Platform ToS — show attribution when any card has a Google photo */}
       {hasGooglePhotos ? (
-        <AppText variant="caption" color="textSecondary" style={styles.googleAttribution}>
+        <AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
           {t('gymDirectory.googlePhotosAttribution')}
         </AppText>
       ) : null}
