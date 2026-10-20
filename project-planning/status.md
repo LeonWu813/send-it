@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: doc-sync
-mode: delta
+agent: tech-lead
+mode: integration-review
 module: n/a
-result: success
-next: Phase 1 is complete (every Phase 1 module passed QA); the coordinator runs /pstack:thermos on the Phase 1 code (diff from the first doc-sync(initial) commit, 76a292c, to HEAD), then claude --agent tech-lead "phase-end integration review"
-timestamp: 2026-10-20T13:00:00Z
+result: issues-found
+next: Review integration-review.md rows INT-005…INT-023 (6 CRITICAL/HIGH blockers: INT-005/006/009/010/011/012), then claude --agent tech-lead "decisions: INT-005 APPROVED, ..." to record APPROVED/REJECTED/DEFERRED per row. Phase 1 sign-off is WITHHELD until every blocking row is CONFIRMED CLOSED / REJECTED / DEFERRED / ACCEPTED (KNOWN ISSUE).
+timestamp: 2026-10-20T16:30:00Z
 
 ## PM Updates
 
@@ -289,6 +289,29 @@ timestamp: 2026-10-20T13:00:00Z
   - For Doc-Sync: regenerate every engineer-/qa- agent from ~/.claude/agent-templates/ with the new Source Paths; copy CONV-000 into production.md Shared Conventions; confirm the Phase Plan. No spec content changes.
 
 ## Tech Lead Reviews
+
+### Phase 1 Integration Review — THERMOS RE-REVIEW — 2026-10-20 — SIGN-OFF WITHHELD
+
+Re-invoked (integration-review) to verify the thermos Phase 1 findings against the actual code and fold them into `integration-review.md`. Advisory/read-only on code — I verified each finding at its cited `file:line`, authored no fix.
+
+**pstack input:** `project-planning/pstack-findings/2026-10-20-thermos-phase-1.md` (19 findings: 4 CRITICAL · 4 HIGH · 7 MEDIUM · 4 LOW). Each finding was checked against the code before logging; findings I could not confirm were rejected with evidence. Logged as `integration-review.md` rows INT-005…INT-023.
+
+**Accepted (CONFIRMED, 17):**
+- **INT-005 (C-4, CRITICAL)** — `avatars_update_own`/`avatars_delete_own` compare `auth.uid()::text` to `storage.filename(name)` which keeps the file extension, so the strings never match; with `uploadAvatar` using `upsert: true`, every avatar *replacement* and *deletion* is permanently 403'd (`20260920000001_mod_001_user_profile.sql:107–121` vs `auth-service.ts:254–255`). Not caught in QA because first-upload INSERT uses `foldername` and succeeds.
+- **INT-006 (C-3, CRITICAL)** — Google Places key in a URL query string in `seed-gym-photos.ts:144–148` (steps 1–2 correctly use the `X-Goog-Api-Key` header; step 3 regresses). Seeder-only scope, but rotate the key if it has already transited a logged proxy.
+- **INT-009 (H-1, HIGH)** — `get_profile_history`/`get_profile_stats` have a privacy gate but no `blocks` predicate, while `get_activity_feed` does; a blocked user reads the blocker's history/stats.
+- **INT-010 (H-3, HIGH)** — `fetchBetaVideosByUser` filters reported videos only, not blocked users.
+- **INT-011 (H-2, HIGH)** — `blocks` has no `CHECK (blocker <> blocked)` and `blockUser` has no guard, unlike the `follows_no_self_follow` precedent; self-block poisons the user's own feed.
+- **INT-012 (H-4, HIGH)** — `mod-social-feed`/`mod-moderation`/`mod-notifications` have no barrel; 12+ non-test deep `*-service` imports across 10 files. Same drift class as closed INT-001/002/003 with root cause (missing barrels) unaddressed. **Scope correction:** the `ProfileNavigator` screen-component imports are the blessed navigator-entry-point exception, not violations — only the `*-service` deep imports count.
+- MEDIUM/LOW confirmed: **INT-013 (M-1)**, **INT-014 (M-2)**, **INT-015 (M-7)**, **INT-016 (M-3)**, **INT-017 (M-4, 1089 lines)**, **INT-018 (M-5)**, **INT-019 (M-6)**, **INT-020 (L-2)**, **INT-021 (L-1)**, **INT-022 (L-3)**, **INT-023 (L-4)** — all verified in code; details and fix recommendations in the matching `integration-review.md` rows.
+
+**Rejected (2):**
+- **INT-007 (C-1) — REJECTED.** `notify-beta-video-like` is trigger-invoked server-to-server behind the `verify_jwt: true` gateway; an unauthenticated POST is 401'd at the gateway before the body runs. Migration `20261009000001_mod_007_trigger_auth_header.sql` exists precisely because the gateway rejected the trigger's call until a service-role Bearer header was attached — that is the proof the gateway enforces JWT. The reviewer read only the Deno body and missed the gateway layer. The function also derives the recipient server-side and never trusts a client-supplied recipient. Evidence limitation: `config.toml` isn't in the repo, so `verify_jwt: true` is asserted from the migration's authored rationale, not from checked-in config.
+- **INT-008 (C-2) — REJECTED as CRITICAL, downgraded to LOW defensive-depth.** `report-digest` is cron-scheduled behind the same gateway; `_req` is unused because it's a scheduled job, not an auth hole; the full report rows go to `console.log` (server logs), not the HTTP response body (which returns only a count + the hardcoded admin email). Optional shared-secret/cron gating is a Phase-2 hardening item, not a Phase-1 gate.
+
+**Sign-off decision:** **PHASE 1 SIGN-OFF WITHHELD.** Six confirmed CRITICAL/HIGH rows are open and blocking — INT-005, INT-006, INT-009, INT-010, INT-011, INT-012. The earlier 2026-10-20 sign-off (which covered only INT-001…INT-004 + BLK-1/BLK-2) is superseded; see `integration-review.md` → "Sign-off — REVISED after thermos re-review." All other rows (INT-007/008 rejected; INT-013…INT-023 MEDIUM/LOW) may be DEFERRED or ACCEPTED as known issues at the human's discretion. Recommended fix groupings and the full deferrable list are in the REVISED sign-off.
+
+**Next:** the human reviews the rows and gives decisions, then re-invoke me to record them (`claude --agent tech-lead "decisions: INT-005 APPROVED, …"`).
 
 ### Phase 1 Integration Review — SIGN-OFF — 2026-10-20
 
