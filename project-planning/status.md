@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: on-demand-review
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-next: claude --agent doc-sync
-timestamp: 2026-10-20T12:25:52Z
+next: Phase 1 is complete (every Phase 1 module passed QA); the coordinator runs /pstack:thermos on the Phase 1 code (diff from the first doc-sync(initial) commit, 76a292c, to HEAD), then claude --agent tech-lead "phase-end integration review"
+timestamp: 2026-10-20T13:00:00Z
 
 ## PM Updates
 
@@ -3317,6 +3317,57 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 ---
 
 ## Sync Reports
+
+### Sync Report — Delta Sync — 2026-10-20 (Rev 46)
+
+**Sync type:** delta
+**PRD Revision:** 46
+**PM Update reference:** 2026-10-20 [SUBSTANTIVE] — Rev 46 — Framework v2 migration: Module Map gains Source Paths, PRD gains §15 Adopted Conventions (CONV-000), status.md gains structural sections. No requirement or AC changes.
+**Files modified:**
+- `project-planning/production.md` — Header: Last synced from PRD rev 45 → 46. Shared Conventions: CONV-000 subsection inserted before Directory Layout (verbatim from PRD §15).
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+**Files regenerated (agent wrappers — all 24):**
+- `.claude/agents/engineer-mod-auth-profile.md`
+- `.claude/agents/qa-mod-auth-profile.md`
+- `.claude/agents/engineer-mod-gym-directory.md`
+- `.claude/agents/qa-mod-gym-directory.md`
+- `.claude/agents/engineer-mod-route-catalog.md`
+- `.claude/agents/qa-mod-route-catalog.md`
+- `.claude/agents/engineer-mod-send-logging.md`
+- `.claude/agents/qa-mod-send-logging.md`
+- `.claude/agents/engineer-mod-beta-video.md`
+- `.claude/agents/qa-mod-beta-video.md`
+- `.claude/agents/engineer-mod-social-feed.md`
+- `.claude/agents/qa-mod-social-feed.md`
+- `.claude/agents/engineer-mod-notifications.md`
+- `.claude/agents/qa-mod-notifications.md`
+- `.claude/agents/engineer-mod-profile-history.md`
+- `.claude/agents/qa-mod-profile-history.md`
+- `.claude/agents/engineer-mod-moderation.md`
+- `.claude/agents/qa-mod-moderation.md`
+- `.claude/agents/engineer-mod-localization-theme.md`
+- `.claude/agents/qa-mod-localization-theme.md`
+- `.claude/agents/engineer-mod-analytics.md`
+- `.claude/agents/qa-mod-analytics.md`
+- `.claude/agents/engineer-mod-home.md`
+- `.claude/agents/qa-mod-home.md`
+**Reason for regeneration:** old wrappers referenced broken path `~/.claude/agents/templates/` (removed); regenerated from correct `~/.claude/agent-templates/engineer.md` and `~/.claude/agent-templates/qa.md` with hardcoded spec paths, Source Paths from the updated Module Map, and dependency status file read access per each module's spec.
+**Files created:**
+- none
+**Module removals noted:**
+- none
+**Spec content changes:**
+- none — no requirement or AC changed in Rev 46.
+**Phase Plan confirmed:**
+- Phase 1: MOD-001..MOD-010, MOD-012 (MOD-011 deferred to Phase 2). Matches PRD §7.
+**AMBIGUITY markers added:**
+- none
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh result:** pass — all checks passed.
+
+---
 
 ### Sync Report — Delta Sync — 2026-10-20
 

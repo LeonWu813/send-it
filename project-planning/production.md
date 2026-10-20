@@ -2,7 +2,7 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 45 (2026-10-20)
+**Last synced from PRD**: rev 46 (2026-10-20)
 **Last Updated**: 2026-10-20
 
 ---
@@ -70,6 +70,10 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 ---
 
 ## Shared Conventions
+
+### CONV-000
+
+**CONV-000**: Every convention recorded in production.md Shared Conventions as of PRD Revision 45 is adopted as written. New conventions are added below as CONV-001 and up. (Approved: Leon, 2026-10-20, framework v2 migration.)
 
 ### Directory Layout
 
