@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 45
+**Status**: [SUBSTANTIVE] — Revision 46
 **Date**: 2026-10-20
-**Revision**: 45
+**Revision**: 46
 
 ---
 
@@ -1181,3 +1181,9 @@ Most previously-open questions were resolved during PRD confirmation. Remaining 
 | 記石 (Ji Shi) | Only real Taiwan-native app found | Log-only — no beta video, no route database, no social layer |
 
 **Wedge**: Send It is the first app actually built around Taiwan's indoor bouldering scene — local branch-level gym coverage on day one, tape-color-based route matching that reflects how climbers actually talk about routes, and the log + beta + social loop that Kaya proved works — without waiting on official gym buy-in.
+
+---
+
+## 15. Adopted Conventions
+
+**CONV-000**: Every convention recorded in production.md Shared Conventions as of PRD Revision 45 is adopted as written. New conventions are added below as CONV-001 and up. (Approved: Leon, 2026-10-20, framework v2 migration.)
