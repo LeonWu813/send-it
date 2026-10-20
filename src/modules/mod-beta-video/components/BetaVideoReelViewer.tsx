@@ -83,7 +83,7 @@ import { ICON } from '../../../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
-import TapeBadge from '../../mod-route-catalog/components/TapeBadge';
+import { TapeBadge } from '@/lib/tape';
 import { ACTION_SIZE, ReelAction } from './ReelAction';
 import { ReelScrim } from './ReelScrim';
 import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed/social-feed-service';

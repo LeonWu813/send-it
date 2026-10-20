@@ -2,6 +2,16 @@
 
 ## Engineering Progress
 
+### Fix: import TapeBadge from @/lib/tape facade (INT-002) — 2026-10-20
+
+- **Change**: Resolved integration violation INT-002. `BetaVideoReelViewer.tsx` was importing `TapeBadge` directly from the private MOD-003 path (`../../mod-route-catalog/components/TapeBadge`) instead of the shared `@/lib/tape` facade defined in `production.md`.
+- **Fix**: Changed the import on line 86 of `BetaVideoReelViewer.tsx` to `import { TapeBadge } from '@/lib/tape';`.
+- **Self-check**: `npx jest --testPathPattern="mod-beta-video" --passWithNoTests` — 109/109 PASS.
+- **Files modified**: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`
+- **ACs addressed**: n/a (integration hygiene fix; no AC logic change)
+
+---
+
 ### Bugfix: change like button to 👊 oncoming fist emoji — 2026-10-19
 
 - **Change**: Replaced the Ionicons thumbs-up glyph on the reel like button with the 👊 emoji. Selected state (liked) renders at full opacity; unselected at 0.5 opacity. No outline/filled variant needed.
