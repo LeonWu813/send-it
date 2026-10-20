@@ -10,6 +10,8 @@
 - **Files modified**: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`
 - **ACs addressed**: n/a (integration hygiene fix; no AC logic change)
 
+**Follow-up (2026-10-20)**: `ReelOverlay.stories.tsx` line 10 had the same INT-002 deep import (`../../mod-route-catalog/components/TapeBadge`) — missed in the original fix. Changed to `import { TapeBadge } from '@/lib/tape';`. Self-check: 109/109 PASS. File modified: `src/modules/mod-beta-video/stories/ReelOverlay.stories.tsx`.
+
 ---
 
 ### Bugfix: change like button to 👊 oncoming fist emoji — 2026-10-19

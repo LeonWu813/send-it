@@ -7,7 +7,7 @@ import { Avatar } from '../../../components/ui/Avatar';
 import { IconButton } from '../../../components/ui/IconButton';
 import { ICON } from '../../../lib/icons';
 import { LIGHT_PALETTE, useTheme } from '../../../lib/theme';
-import TapeBadge from '../../mod-route-catalog/components/TapeBadge';
+import { TapeBadge } from '@/lib/tape';
 import { ACTION_SIZE, ReelAction } from '../components/ReelAction';
 import { ReelScrim } from '../components/ReelScrim';
 
