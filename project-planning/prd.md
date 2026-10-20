@@ -1,9 +1,9 @@
 # Send It — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 44
-**Date**: 2026-10-19
-**Revision**: 44
+**Status**: [SUBSTANTIVE] — Revision 45
+**Date**: 2026-10-20
+**Revision**: 45
 
 ---
 
@@ -430,7 +430,7 @@ The data flow for the two most important loops:
 
 **Purpose**: Ship product events (signup, first send, first video, retention markers, like events) to PostHog, wired throughout the app.
 
-**User Stories**: (cross-cutting; supports goals in Section 2 rather than a single US)
+**User Stories**: (cross-cutting; supports goals in Section 2 rather than a single US) — **deferred to Phase 2 (Rev 45)**
 
 **Dependencies**: MOD-001
 
@@ -450,9 +450,9 @@ The data flow for the two most important loops:
 
 ### Phase 1: iOS MVP — Taipei/New Taipei launch
 
-**Modules**: MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-011, MOD-012
+**Modules**: MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-012
 
-**Scope summary**: iOS-only React Native + Expo app. Auth (Email + Apple + Google). Admin-curated gym directory seeded with Taipei/New Taipei branch-level rows (top-rope-only gyms excluded). Route submission using fixed hold/tape color enum, V-scale grade forced across all gyms (duplicates allowed by design — no uniqueness constraint; a two-layer duplicate guard on same-grade/same-color at the gym: inline notice + non-dismissable confirmation sheet on submit, AC-187); routes carry a composed display name (grade + color + optional section label). Route bookmarking in the browse flow (bookmark on route detail, read-only saved indicator on the gym route list). Send logging (no offline queue — error message on failure) with a three-value ascent style (flash, top, attempt). Beta video upload (60 sec cap, no client-side compression — original native file uploaded as-is behind a 45 MB size gate, AC-031/AC-169, client-generated thumbnail). Follow + chronological activity feed. Beta-video likes with APNs push notifications + preference toggle. Profile history + basic stats with per-send achievement icons. Report + Block (App Store 1.2 compliance) — user-profile reports (category + note) plus one-tap beta-video reports that hide the video pending admin review. English + zh-TW (device-locale default, zh-TW fallback, Settings toggle). Light + Dark mode (OS preference + Settings override). PostHog analytics. Admin surface = Supabase Studio only. Video hosting = Supabase Storage.
+**Scope summary**: iOS-only React Native + Expo app. Auth (Email + Apple + Google). Admin-curated gym directory seeded with Taipei/New Taipei branch-level rows (top-rope-only gyms excluded). Route submission using fixed hold/tape color enum, V-scale grade forced across all gyms (duplicates allowed by design — no uniqueness constraint; a two-layer duplicate guard on same-grade/same-color at the gym: inline notice + non-dismissable confirmation sheet on submit, AC-187); routes carry a composed display name (grade + color + optional section label). Route bookmarking in the browse flow (bookmark on route detail, read-only saved indicator on the gym route list). Send logging (no offline queue — error message on failure) with a three-value ascent style (flash, top, attempt). Beta video upload (60 sec cap, no client-side compression — original native file uploaded as-is behind a 45 MB size gate, AC-031/AC-169, client-generated thumbnail). Follow + chronological activity feed. Beta-video likes with APNs push notifications + preference toggle. Profile history + basic stats with per-send achievement icons. Report + Block (App Store 1.2 compliance) — user-profile reports (category + note) plus one-tap beta-video reports that hide the video pending admin review. English + zh-TW (device-locale default, zh-TW fallback, Settings toggle). Light + Dark mode (OS preference + Settings override). PostHog analytics is deferred to Phase 2 (MOD-011 moved out of Phase 1, Rev 45). Admin surface = Supabase Studio only. Video hosting = Supabase Storage.
 
 **Milestone**: All Phase 1 acceptance criteria pass on a production Supabase project and a TestFlight build; the seeded gym directory (branch-level Taipei/New Taipei, excluding Camp4 達文西攀岩館 and Wusa 攀岩館) is loaded and every gym has a verified address and map pin; the App Store submission passes Guideline 1.2 review with Report and Block flows functional.
 
@@ -460,7 +460,7 @@ The data flow for the two most important loops:
 
 ### Phase 2: Community depth + Android
 
-**Modules**: (new modules TBD in a later PRD revision — Android build config, offline send queue, expanded notifications, comments, retire/reset voting, ascent pyramid, gym-info edit suggestions, AWS video pipeline migration (S3 + CloudFront + MediaConvert, superseding Cloudflare Stream) once the storage-watch trigger has fired, dedicated saved-routes list surface, beta-video thumbnail frame extraction)
+**Modules**: MOD-011 (Analytics — deferred from Phase 1, Rev 45), (new modules TBD in a later PRD revision — Android build config, offline send queue, expanded notifications, comments, retire/reset voting, ascent pyramid, gym-info edit suggestions, AWS video pipeline migration (S3 + CloudFront + MediaConvert, superseding Cloudflare Stream) once the storage-watch trigger has fired, dedicated saved-routes list surface, beta-video thumbnail frame extraction)
 
 **Scope summary**: Android build (Expo config extension). Offline send queue with local persistence + sync-on-reconnect. Expanded push notifications (new routes at followed gyms, someone flashed your project, new follower). Comments (if community demand and moderation bandwidth exist). Community-driven route retire/reset workflow with light voting. Ascent pyramid visualization. "Suggest an edit" flow for gym metadata. A dedicated saved-routes list surface (Phase 1 only surfaces saved routes in the browse flow). AWS video pipeline migration (S3 ingest/storage + MediaConvert HDR→SDR + H.264 transcode + CloudFront CDN delivery) executed if Phase 1 crossed the storage-watch trigger (AC-170); this is a conscious override of the previously documented Cloudflare Stream target (Rev 24), with Supabase keeping Postgres/Auth/RLS/PostgREST and all non-video storage. Supabase Pro was weighed and rejected as the Phase 2 path (see §12).
 
