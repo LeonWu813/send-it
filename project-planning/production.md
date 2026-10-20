@@ -2,8 +2,8 @@
 
 **Project**: Send It (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 41 (2026-10-16)
-**Last Updated**: 2026-10-16
+**Last synced from PRD**: rev 45 (2026-10-20)
+**Last Updated**: 2026-10-20
 
 ---
 
@@ -64,7 +64,7 @@ Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking d
 | MOD-008 | mod-profile-history    | Profile History & Stats      | Send history with filters, stats bar chart, streak, highest grade — for self and (per privacy) others.    |
 | MOD-009 | mod-moderation         | Moderation (Report & Block)  | Report submission, symmetric block/unblock, feed filtering, scheduled report-digest Edge Function.        |
 | MOD-010 | mod-localization-theme | Localization & Theming       | i18n catalog loading, device-locale detection, zh-TW fallback, language toggle, Light/Dark theming.       |
-| MOD-011 | mod-analytics          | Analytics                    | PostHog event instrumentation across the app (cross-cutting; no user-facing UI).                          |
+| MOD-011 | mod-analytics          | Analytics                    | PostHog event instrumentation across the app (cross-cutting; no user-facing UI). Deferred to Phase 2 (Rev 45). |
 | MOD-012 | mod-home               | Home                         | Persistent three-tab bottom navigation shell (AppShell), Home screen (Events Banner, Saved Gyms, Projecting Routes, Following activity), global app-level header (bell + settings), shared src/components/ (RouteCard with 80×80 thumbnail + betaVideoCount + hasSend/sendStyle badges + interactive bookmark + hidden grade label, AC-183/189/190/191/192; SwipeBackWrapper). |
 
 ---

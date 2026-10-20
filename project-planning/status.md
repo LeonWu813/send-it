@@ -3,12 +3,12 @@
 ## Last Action
 
 ```
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-next: run `claude --agent doc-sync` to sync Rev 45 (MOD-011 phase relocation Phase 1 -> Phase 2) into production.md and the MOD-011 (mod-analytics) spec
-timestamp: 2026-10-20T00:00:00Z
+next: All Phase 1 modules are QA Passed. MOD-011 is now Phase 2. No Phase 1 engineering work remains for this sync. When Phase 2 begins, invoke `engineer-mod-analytics "implement"`.
+timestamp: 2026-10-20T10:00:00Z
 ```
 
 
@@ -3271,7 +3271,61 @@ The column drop touches **migrations, one service function, types, the onboardin
 | MOD-011 | mod-analytics          | Not started (Phase 2 — deferred from Phase 1, Rev 45) | —                         |
 | MOD-012 | mod-home               | QA Passed   | qa-mod-home               |
 
+## Current Phase
+
+Phase 1 — iOS MVP, Taipei + New Taipei launch
+
+## Phase Plan
+
+### Phase 1: iOS MVP — Taipei/New Taipei launch
+
+**Modules**: MOD-001, MOD-002, MOD-003, MOD-004, MOD-005, MOD-006, MOD-007, MOD-008, MOD-009, MOD-010, MOD-012
+
+**Milestone**: All Phase 1 acceptance criteria pass on a production Supabase project and a TestFlight build; the seeded gym directory (branch-level Taipei/New Taipei, excluding Camp4 達文西攀岩館 and Wusa 攀岩館) is loaded and every gym has a verified address and map pin; the App Store submission passes Guideline 1.2 review with Report and Block flows functional.
+
+---
+
+### Phase 2: Community depth + Android
+
+**Modules**: MOD-011 (Analytics — deferred from Phase 1, Rev 45), (new modules TBD in a later PRD revision — Android build config, offline send queue, expanded notifications, comments, retire/reset voting, ascent pyramid, gym-info edit suggestions, AWS video pipeline migration (S3 + CloudFront + MediaConvert), dedicated saved-routes list surface, beta-video thumbnail frame extraction)
+
+**Milestone**: Android build published to Play Store; offline queue verified across airplane-mode/reconnect cycles; expanded notification types delivering ≥95% within 30 seconds; comments (if shipped) have working report + delete flows.
+
+---
+
+### Phase 3: Gym partnerships
+
+**Modules**: (new modules TBD — Gym Claim, Route-Setter Console, Official Route Publishing, Gym Analytics, Billing)
+
+**Milestone**: At least one Taiwan gym has claimed its profile, is publishing official routes end-to-end, and the app displays a "verified by gym" badge in place of user-submitted labels.
+
+---
+
 ## Sync Reports
+
+### Sync Report — Delta Sync — 2026-10-20
+
+**Sync type:** delta
+**PRD Revision:** 45
+**PM Update reference:** 2026-10-20 [SUBSTANTIVE] — Rev 45 — MOD-011 (Analytics / PostHog) deferred from Phase 1 to Phase 2. Phase-plan relocation only; no AC text changed.
+**Files modified:**
+- `project-planning/production.md` — Header: Last synced from PRD rev 41 → 45; Last Updated 2026-10-16 → 2026-10-20. Module Index MOD-011 row: appended "Deferred to Phase 2 (Rev 45)." to one-line description.
+- `project-planning/modules/mod-analytics/spec.md` — Phase header field: `1` → `2 (deferred from Phase 1, Rev 45)`. Related User Stories note: appended "— deferred to Phase 2 (Rev 45)" to match PRD §6 MOD-011 User Stories line.
+- `project-planning/status.md` — New sync report added (this entry). Last Action block updated.
+**Files created:**
+- none
+**Module removals noted:**
+- none
+**AMBIGUITY markers added:**
+- none — change is a pure phase-plan relocation; all content is explicit.
+**AMBIGUITY markers resolved:**
+- none
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh result:** 6/6 — all checks passed. This sync also added the missing `## Current Phase` and `## Phase Plan` sections to `status.md` (a gap from the initial sync; the Phase Plan section was required for Check 6 to pass). No pre-existing failures remain.
+
+---
 
 ### 2026-10-18 — Delta Sync (Revision 43, [SUBSTANTIVE])
 

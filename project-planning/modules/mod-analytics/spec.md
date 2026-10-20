@@ -2,7 +2,7 @@
 
 **Module ID**: MOD-011
 **Module Name**: Analytics
-**Phase**: 1
+**Phase**: 2 (deferred from Phase 1, Rev 45)
 **Dependencies**: MOD-001
 
 ---
@@ -27,7 +27,7 @@ Analytics is cross-cutting — it supports the measurable goals in PRD §2 (Week
 
 ## Related User Stories
 
-- (cross-cutting; supports measurable goals in PRD §2 rather than a single user story)
+- (cross-cutting; supports goals in Section 2 rather than a single US) — deferred to Phase 2 (Rev 45)
 
 ---
 
