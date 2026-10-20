@@ -6,9 +6,9 @@
 agent: tech-lead
 mode: confirm-fix
 module: n/a
-next: claude --agent engineer-mod-beta-video "integration-fix INT-002: src/modules/mod-beta-video/stories/ReelOverlay.stories.tsx:10 still deep-imports TapeBadge from '../../mod-route-catalog/components/TapeBadge'; change to import { TapeBadge } from '@/lib/tape'"
-result: issues-found
-timestamp: 2026-10-20T11:00:00Z
+next: claude --agent pm "checkpoint phase-1"
+result: success
+timestamp: 2026-10-20T15:30:00Z
 ```
 
 
@@ -332,6 +332,22 @@ timestamp: 2026-10-20T11:00:00Z
 **Summary**: All six PM placements are correct — no ownership corrections needed. Two are documentation-only gaps (AC-006, AC-042): the code already navigates correctly and only the specs/QA records need to catch up. Four are code gaps (AC-005, AC-037, AC-058, AC-064). The single most important finding is AC-005: `RouteNavigator` (MOD-003) is fully implemented but never mounted, so the entire route-catalog UI is currently unreachable from the running app — AC-005 is the missing seam that makes MOD-003 (and therefore AC-042's already-shipped code) actually reachable. Three code-gap ACs (AC-037, AC-058, AC-064) sit on module boundaries where the *source affordance or entry point* renders in one module's screen but the *owning flow/destination* belongs to another; in each case I confirmed the PM's destination-ownership assignment is right and flagged the host-screen split so the owning engineer knows they need a small hosting change in the neighboring module's screen (or a slot the neighbor exposes). No architectural concerns with the navigation approach itself — the state-machine-per-navigator pattern already shipped in `GymNavigator`/`RouteNavigator` extends cleanly to all six. No new modules, no dependency changes. Next step: Doc-Sync carries AC-005/AC-006 into MOD-002 spec, AC-042 into MOD-003, AC-037 into MOD-005, AC-058 into MOD-007, AC-064 into MOD-008; Engineering should treat AC-005 as a near-term MOD-002 change (unblocks MOD-003 reachability), while AC-037/AC-058/AC-064 fold into their respective not-yet-started module builds.
 
 ## Tech Lead Reviews
+
+### Phase 1 Integration Review — SIGN-OFF — 2026-10-20
+
+Re-invoked (confirm-fix) to close INT-002's remaining location and sign off Phase 1. **Result: Phase 1 is integration-complete and cleared for the PM Phase 1 checkpoint.** Advisory/read-only on code — I verified the fix, did not author it.
+
+- **INT-002 — CONFIRMED CLOSED** (commit `f47fb3c`). The last open location is fixed: `src/modules/mod-beta-video/stories/ReelOverlay.stories.tsx:10` now reads `import { TapeBadge } from '@/lib/tape'` (verified in code). Grep across `src/modules/mod-beta-video/` (`*.ts`/`*.tsx`) for `TapeBadge` deep-imported from `mod-route-catalog` returned **zero matches** — both named MOD-005 consuming surfaces (`BetaVideoReelViewer.tsx:86` closed in the prior pass, and this Storybook story) now route through the canonical `src/lib/tape.ts` façade. The Rev 41 single-source-of-truth convention is upheld across the module.
+
+**Phase 1 integration status — all items resolved:**
+- INT-001 — CONFIRMED CLOSED (commit `b366515`).
+- INT-002 — CONFIRMED CLOSED (commit `f47fb3c`).
+- INT-003 — CONFIRMED CLOSED (commit `b366515`).
+- INT-004 — CONFIRMED CLOSED (2026-10-19, shared signed-URL cache already implemented/tested).
+- BLK-1 (MOD-011 unbuilt) — RESOLVED (deferred to Phase 2 via PRD Rev 45).
+- BLK-2 (stale Module Map cells) — RESOLVED (PM `[TRIVIAL]`, 2026-10-19).
+
+Every Phase 1 integration-review row is `CONFIRMED CLOSED` and both blockers are resolved — PM's checkpoint-gate precondition is satisfied. The Phase 1 sign-off line is recorded in `project-planning/integration-review.md`. **Next: PM may run the Phase 1 checkpoint.** Advisory reminder (PM-owned): MOD-011 (Analytics) is deferred to Phase 2 and must be scheduled there.
 
 ### Phase 1 Integration Review — Confirm-Fix Pass — 2026-10-20
 
