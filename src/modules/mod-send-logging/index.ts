@@ -9,6 +9,9 @@
 export type { Ascent, AscentLogInput, AscentStyle, AscentWithProfile } from './types';
 export { ASCENT_STYLES } from './types';
 
+// ── Screens ───────────────────────────────────────────────────────────────────
+export { default as LogSendScreen } from './screens/LogSendScreen';
+
 // ── Service functions ──────────────────────────────────────────────────────────
 export {
   deleteAscent,

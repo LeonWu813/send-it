@@ -3,6 +3,30 @@
 ## Engineering Progress
 
 
+### INT-001 + INT-003 — Replace private deep-imports with barrel exports (2026-10-20)
+
+**Issues fixed:**
+- INT-001: `RouteDetailScreen.tsx` imported `LogSendScreen` directly from `src/modules/mod-send-logging/screens/LogSendScreen` — a private internal path.
+- INT-003: `RouteDetailScreen.tsx` imported `BetaVideoSection` directly from `src/modules/mod-beta-video/components/BetaVideoSection` — a private internal path.
+
+**Changes:**
+- `src/modules/mod-send-logging/index.ts`: Added `export { default as LogSendScreen } from './screens/LogSendScreen'` under a new `// ── Screens ──` section. MOD-005's barrel (`mod-beta-video/index.ts`) already exported `BetaVideoSection` — no change needed there.
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` lines 59–60: Replaced both deep-imports with barrel imports:
+  - `import { BetaVideoSection } from '../../mod-beta-video'`
+  - `import { LogSendScreen } from '../../mod-send-logging'`
+
+**Self-check (2026-10-20):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest --testPathPattern="mod-route-catalog|mod-send-logging" --passWithNoTests` — 162 tests pass; 1 pre-existing failure in `RouteSubmitScreen.test.tsx` (duplicate-sheet confirm test, confirmed pre-existing via `git stash` baseline). No new failures introduced.
+- PASS: No logic changes — import path change only; runtime behaviour is identical.
+- PASS: No gold-plating — strictly INT-001 and INT-003.
+
+**Files changed:**
+- `src/modules/mod-send-logging/index.ts` — `LogSendScreen` screen export added
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — lines 59–60: deep-imports replaced with barrel imports
+
+---
+
 ### BLOCKER — "地圖位置" / "難度系統" UI removal is in MOD-002, not MOD-003 (2026-10-19)
 
 **Task**: Remove the "地圖位置" (Map Location / coordinates row) and "難度系統" (Grade System section) UI elements from what was described as the "Route Detail screen".
