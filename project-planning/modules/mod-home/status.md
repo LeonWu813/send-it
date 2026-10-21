@@ -3870,3 +3870,23 @@ All four session changes verified. No regressions introduced. All ACs from prior
 Test count increased from 39 to 49 (Engineer added 10 new tests for the new functionality).
 
 **Migration deployment note (carried forward):** `supabase/migrations/20260924000002_mod_012_home.sql` and `supabase/migrations/20261013000001_mod_012_admin_banners.sql` must be applied to the live Supabase database before human QA.
+
+### Integration Fix — INT-025 — 2026-10-21
+
+**Finding:** `AppHeaderContext.test.tsx` mocked the old private path `../../../mod-notifications/UnreadCountProvider`. After commit `760e444` (INT-012), `AppHeader.tsx:34` imports `useUnreadCount` from the `'../../mod-notifications'` barrel. The barrel loads `notification-service.ts` → `src/lib/supabase.ts`, which throws when env vars are missing in the Jest environment, causing all 8 tests in the suite to fail with "Missing required environment variables".
+
+**Fix:** Updated the `jest.mock` path in `src/modules/mod-home/components/__tests__/AppHeaderContext.test.tsx` from `'../../../mod-notifications/UnreadCountProvider'` to `'../../../mod-notifications'`. No production code changed.
+
+**Files changed:**
+- `src/modules/mod-home/components/__tests__/AppHeaderContext.test.tsx` — mock path updated to target the barrel
+
+**Self-check results:**
+
+| Check | Result |
+|---|---|
+| `npx jest --testPathPattern="mod-home/components/__tests__/AppHeaderContext"` | PASS — 8/8 tests |
+| `npx jest --testPathPattern="mod-home"` | PASS — 62/62 tests, 5 suites |
+| No production code changed | PASS |
+| Change confined to mod-home Source Path | PASS |
+
+**Result: FIXED – AWAITING QA**

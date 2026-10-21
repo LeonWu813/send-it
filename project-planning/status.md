@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: record-decisions
-module: n/a
-next: (1) Coordinator runs /pstack:blast-radius on the planned INT-024 fix, then claude --agent engineer-mod-auth-profile "integration-fix INT-024" (or claude --agent tech-lead "on-demand review of INT-024 blast-radius" if risks change the plan); (2) claude --agent engineer-mod-home "integration-fix INT-025"; (3) claude --agent engineer-mod-route-catalog "integration-fix INT-026"; (4) claude --agent engineer-mod-home "integration-fix INT-027". INT-012 still waits for the human's own verification after INT-025 is fixed.
+agent: engineer-mod-home
+mode: integration-fix
+module: mod-home
+next: claude --agent qa-mod-home "integration-fix-verify INT-025"
 result: success
-timestamp: 2026-10-21T18:00:00Z
+timestamp: 2026-10-21T18:30:00Z
 
 ## PM Updates
 

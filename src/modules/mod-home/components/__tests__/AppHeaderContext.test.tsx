@@ -1,7 +1,7 @@
 /**
  * AppHeaderContext — registration API for nested screens (design system v2.2 §30).
  */
-jest.mock('../../../mod-notifications/UnreadCountProvider', () => ({
+jest.mock('../../../mod-notifications', () => ({
   useUnreadCount: () => 0,
 }));
 
