@@ -4,7 +4,7 @@ import React from 'react';
 import { Animated, View } from 'react-native';
 
 import { setStubData } from '../../../../.storybook/stubs/supabase';
-import { UnreadCountProvider } from '../../mod-notifications/UnreadCountProvider';
+import { UnreadCountProvider } from '../../mod-notifications';
 import AppHeader from '../components/AppHeader';
 
 // Off-spec design tooling. Fake data only.

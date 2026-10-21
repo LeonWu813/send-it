@@ -10,13 +10,13 @@
  * Mocks:
  *   - supabase (all .from() calls)
  *   - mod-route-catalog/route-service (fetchSavedRouteIds)
- *   - mod-social-feed/social-feed-service (fetchFollowing)
+ *   - mod-social-feed barrel (fetchFollowing)
  *   - src/components/RouteCard (isolates RouteCard rendering from HomeScreen)
  */
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 jest.mock('../../mod-route-catalog/route-service');
-jest.mock('../../mod-social-feed/social-feed-service');
+jest.mock('../../mod-social-feed');
 jest.mock('../../mod-send-logging');
 jest.mock('../../../lib/supabase', () => ({
   supabase: {
@@ -61,7 +61,7 @@ import type { Session } from '@supabase/supabase-js';
 
 import HomeScreen, { clearNewBetaCacheForTests } from '../screens/HomeScreen';
 import * as routeService from '../../mod-route-catalog/route-service';
-import * as socialFeedService from '../../mod-social-feed/social-feed-service';
+import * as socialFeedService from '../../mod-social-feed';
 import * as sendLogging from '../../mod-send-logging';
 import { supabase } from '../../../lib/supabase';
 import { renderOptions } from '../test-utils';

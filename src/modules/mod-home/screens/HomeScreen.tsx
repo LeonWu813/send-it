@@ -56,8 +56,8 @@ import { getGymInitials } from '../../mod-gym-directory/gym-initials';
 import { fetchSavedRouteIds, saveRoute, unsaveRoute } from '../../mod-route-catalog/route-service';
 import type { RouteGrade } from '../../mod-route-catalog/types';
 import { fetchUserAchievements } from '../../mod-send-logging';
-import { fetchFollowing } from '../../mod-social-feed/social-feed-service';
-import type { FollowingUser } from '../../mod-social-feed/types';
+import { fetchFollowing } from '../../mod-social-feed';
+import type { FollowingUser } from '../../mod-social-feed';
 import { useAppHeaderRoot } from '../components/AppHeaderContext';
 
 // ── Constants ─────────────────────────────────────────────────────────────────

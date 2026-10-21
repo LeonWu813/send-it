@@ -52,9 +52,9 @@
  * Cross-module imports:
  *   - GymNavigator from mod-gym-directory (public entry-point component).
  *   - ProfileNavigator from mod-auth-profile (public entry-point component).
- *   - UserProfileNavigator from mod-social-feed (public module-root entry point).
- *   - NotificationsNavigator from mod-notifications (public entry-point component).
- *   - UnreadCountProvider from mod-notifications/UnreadCountProvider.
+ *   - UserProfileScreen from mod-social-feed barrel (public entry point).
+ *   - NotificationsNavigator from mod-notifications barrel (public entry point).
+ *   - UnreadCountProvider from mod-notifications barrel.
  *   - SettingsScreen from mod-localization-theme/SettingsScreen (module-root
  *     public entry-point; does not reach into screens/).
  *   - AppHeader from this module's components.
@@ -70,11 +70,10 @@ import { CelebrationHost } from '../../components/ui/CelebrationHost';
 import { ToastProvider } from '../../components/ui/Toast';
 import { loadLanguageForUser } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme';
-import { UnreadCountProvider } from '../mod-notifications/UnreadCountProvider';
+import { UnreadCountProvider, NotificationsNavigator } from '../mod-notifications';
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
 import GymNavigator from '../mod-gym-directory/GymNavigator';
-import NotificationsNavigator from '../mod-notifications/NotificationsNavigator';
-import UserProfileScreen from '../mod-social-feed/UserProfileNavigator';
+import { UserProfileScreen } from '../mod-social-feed';
 import SettingsScreen from '../mod-localization-theme/SettingsScreen';
 import AppHeader from './components/AppHeader';
 import {

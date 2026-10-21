@@ -14,7 +14,7 @@
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
 // Mock UnreadCountProvider so we can control unreadCount in tests.
-jest.mock('../../../mod-notifications/UnreadCountProvider', () => ({
+jest.mock('../../../mod-notifications', () => ({
   useUnreadCount: jest.fn(),
 }));
 
@@ -24,7 +24,7 @@ import { Text } from 'react-native';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 
 import AppHeader from '../AppHeader';
-import * as UnreadCountProviderModule from '../../../mod-notifications/UnreadCountProvider';
+import * as UnreadCountProviderModule from '../../../mod-notifications';
 import { TestProviders } from '../../test-utils';
 
 // ── Typed helpers ─────────────────────────────────────────────────────────────

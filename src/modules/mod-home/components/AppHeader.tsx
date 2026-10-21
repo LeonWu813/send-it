@@ -31,7 +31,7 @@ import { IconButton } from '../../../components/ui/IconButton';
 import { ICON } from '../../../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { useUnreadCount } from '../../mod-notifications/UnreadCountProvider';
+import { useUnreadCount } from '../../mod-notifications';
 
 // ── Types / sizing ────────────────────────────────────────────────────────────
 
