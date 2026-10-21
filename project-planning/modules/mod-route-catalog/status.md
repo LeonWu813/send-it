@@ -2,6 +2,19 @@
 
 ## Engineering Progress
 
+### INT-015 — Verify withdrawRoute row-count check (2026-10-21)
+
+**Fix already landed in commit dd0c771.** No new code written.
+
+Verified at `src/modules/mod-route-catalog/route-service.ts:131–147`:
+- `.delete().eq('id', routeId)` is chained with `.select('id')` so PostgREST returns deleted rows in `data`.
+- After the `error` check, line 142 reads `if (!data || data.length === 0)` and throws `'Route could not be withdrawn — it may not be pending or may belong to another user.'`.
+- This user-facing error surfaces the RLS-silent-block failure on the happy path.
+
+Status set to `FIXED – AWAITING QA` in integration-review.md, citing commit dd0c771.
+
+---
+
 ### INT-023 — Remove remaining non-null assertions in RouteSubmitScreen (2026-10-21)
 
 **Fix:** The previous commit (dd0c771) replaced the `!` assertions in `handleAddRoute` body (lines 253–255) with a proper narrowing guard, but intentionally left `selectedGrade!`, `selectedColor!`, `photoUri!` in the BottomSheet confirm `onPress` closure (formerly line 454, now line 456 after the guard comment).
@@ -3453,3 +3466,42 @@ Full suite run (`npx jest --watchAll=false`): 626 passed, 1 failed, 627 total. T
 | Adjacent suite regressions | NONE (AscentList pre-existing isolation flake) |
 
 **REGRESSION PASS — INT-026 fix verified. AC-187 Layer 2 sheet confirm button selector now correctly targets "Continue to add" / "確認新增" per `routes.duplicateSheet.confirm`. 115/115 mod-route-catalog tests pass. No regressions introduced.**
+
+### QA Run — Integration-Fix Verify — INT-023 — 2026-10-21
+
+**Re-verifying**: INT-023 (non-null assertions `selectedGrade!`, `selectedColor!`, `photoUri!` in `RouteSubmitScreen` BottomSheet confirm handler, commit `94eae99`)
+**Workflow**: regression-test (integration-fix-verify)
+
+#### Check 1: Non-null assertions absent at call site
+
+`src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` lines 456–457 (BottomSheet confirm `onPress`):
+
+- Line 456: `if (!selectedGrade || !selectedColor || !photoUri) return;`
+- Line 457: `void uploadAndSubmit(selectedGrade, selectedColor, photoUri);`
+
+No `!` non-null assertions on `selectedGrade`, `selectedColor`, or `photoUri` anywhere in the file. `grep` for `selectedGrade!\|selectedColor!\|photoUri!` returns zero hits. REGRESSION PASS.
+
+#### Check 2: Guard present before uploadAndSubmit call
+
+The explicit narrowing guard `if (!selectedGrade || !selectedColor || !photoUri) return;` (line 456) immediately precedes the `uploadAndSubmit` call (line 457), inside the BottomSheet confirm `onPress` closure. The compiler can now verify non-null downstream of the guard. REGRESSION PASS.
+
+#### Check 3: TypeScript compilation clean
+
+`npx tsc --noEmit`: exit 0, 0 errors. REGRESSION PASS.
+
+#### Check 4: Full mod-route-catalog suite
+
+Command: `npx jest src/modules/mod-route-catalog --watchAll=false --forceExit`
+Result: **115 passed, 115 total** — 5 suites. Exit 0. REGRESSION PASS.
+
+#### Summary
+
+| Check | Result |
+|-------|--------|
+| No `!` assertions on selectedGrade/selectedColor/photoUri at call site | PASS |
+| Explicit narrowing guard present before uploadAndSubmit | PASS |
+| TypeScript compilation clean (tsc --noEmit) | PASS |
+| Full mod-route-catalog suite: 115/115 | PASS |
+| Adjacent suite regressions | NONE |
+
+**REGRESSION PASS — INT-023 fix verified. Non-null assertions removed; explicit guard `if (!selectedGrade || !selectedColor || !photoUri) return;` confirmed at `RouteSubmitScreen.tsx:456`. 115/115 mod-route-catalog tests pass. No regressions introduced.**
