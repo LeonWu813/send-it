@@ -2390,3 +2390,106 @@ No regressions introduced by the INT-024 fix.
 **Overall verdict: PASS**
 
 **INT-024 fix verified. No new regressions introduced.**
+
+---
+
+## Engineering Progress — Integration-fix — 2026-10-21 (INT-021)
+
+**Task**: Verify fix for INT-021 (`signInWithGoogle` OAuth URL parsing — drops refresh token when redirect URL has both a fragment and a query string).
+
+**Verification**: Fix confirmed present at `src/modules/mod-auth-profile/auth-service.ts:181–184` (commit 572d23d):
+
+- Line 181: `const params = new URLSearchParams(parsedUrl.hash.replace(/^#/, ''));` — initializes URLSearchParams from the fragment (Supabase convention: fragment is the authoritative side for auth data).
+- Lines 182–184: `parsedUrl.searchParams.forEach((value, key) => { if (!params.has(key)) params.set(key, value); });` — fills in any keys present only in the query string; fragment params win on collision.
+- Lines 186–187: `params.get('access_token')` and `params.get('refresh_token')` — both tokens read from the merged set, so neither is dropped regardless of which side of the redirect URL they appear on.
+
+No new code written. The fix was already in place in commit 572d23d. INT-021 row set to `FIXED – AWAITING QA`.
+
+---
+
+### QA Run 7 — Integration-fix — INT-021 — 2026-10-21
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: integration-fix verification (regression-test workflow)
+**Scope**: INT-021 — `signInWithGoogle` OAuth URL parser merges fragment + query params
+
+---
+
+#### Original Bug (INT-021)
+
+`signInWithGoogle` URL parsing dropped the refresh token when the redirect URL had both a fragment and a query string. The original code used `url.includes('#') ? url.split('#')[1] : url.split('?')[1]` — taking only one side, never both. A missing refresh token was then passed as `''` to `setSession`, producing a session that could not silently refresh after ~1 hour.
+
+---
+
+#### Fix Verification
+
+**Location**: `src/modules/mod-auth-profile/auth-service.ts:181–187` (commit 572d23d)
+
+REGRESSION PASS: The original failure scenario no longer reproduces. Confirmed at the cited lines:
+
+- Line 181: `const params = new URLSearchParams(parsedUrl.hash.replace(/^#/, ''));` — initializes URLSearchParams from the fragment (Supabase convention: fragment is authoritative for auth data).
+- Lines 182–184: `parsedUrl.searchParams.forEach((value, key) => { if (!params.has(key)) params.set(key, value); });` — fills in any keys present only in the query string; fragment params win on collision.
+- Lines 186–187: `const accessToken = params.get('access_token'); const refreshToken = params.get('refresh_token');` — both tokens read from the merged set.
+
+The original branch (`url.includes('#') ? url.split('#')[1] : url.split('?')[1]`) is gone. Both sides of the redirect URL are now merged before reading either token, so a token in the non-taken half can no longer be silently dropped.
+
+---
+
+#### Automated Test Suite
+
+Command: `npx jest --testPathPattern="mod-auth-profile" --watchAll=false`
+Result: 22 tests, 3 suites — all PASS
+Exit code: 0
+
+Suites: `auth-service.test.ts`, `ProfileScreen.test.tsx`, `useSession.test.ts`
+
+Pre-existing `act(...)` warnings from third-party components in `useSession.test.ts` and `ProfileScreen.test.tsx` are unchanged from prior runs — not introduced by this fix.
+
+#### TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+#### Adjacent Items Regression Check
+
+All items passing in QA Run 6 (INT-024 verification) continue to pass:
+
+**AC-001 (revised)** — PASS. `AuthNavigator.tsx` unchanged; session → children directly, no gym selection gate.
+**AC-063** — PASS. `EditProfileScreen.tsx`, `upsertProfile()`, and privacy_setting handling unchanged.
+**AC-116** — PASS. `ProfileScreen.tsx` avatar/display_name/bio rendering unchanged.
+**AC-117** — PASS. Edit Profile entry point and `ProfileNavigator.tsx` state machine wiring unchanged.
+**AC-118** — PASS. Send history section unchanged.
+**AC-119** — PASS. Logout Pressable and signOut() call unchanged.
+**AC-145** — PASS. Follower/following count links and navigation unchanged.
+**Supabase singleton** — PASS. No new `createClient()` call sites.
+**No service_role key in client code** — PASS.
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0.
+
+No new regressions found.
+
+---
+
+#### Summary
+
+| Item | Result |
+|------|--------|
+| INT-021 fix: fragment + query params merged (`parsedUrl.hash` → URLSearchParams, then query-fill) | PASS |
+| INT-021 fix: both `access_token` and `refresh_token` read from merged set | PASS |
+| Original failure scenario (token in non-taken half dropped) no longer reproduces | REGRESSION PASS |
+| Automated test suite (22/22, 3 suites) | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS |
+| AC-001 regression | PASS |
+| AC-063 regression | PASS |
+| AC-116 regression | PASS |
+| AC-117 regression | PASS |
+| AC-118 regression | PASS |
+| AC-119 regression | PASS |
+| AC-145 regression | PASS |
+
+**Overall verdict: PASS**
+
+**INT-021 fix verified. No new regressions introduced.**
+
