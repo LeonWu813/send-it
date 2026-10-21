@@ -2,13 +2,13 @@
 
 ## Last Action
 
-agent: engineer-mod-beta-video
-mode: integration-fix
+agent: qa-mod-beta-video
+mode: integration-fix-verify
 module: mod-beta-video
-result: success
-rows: INT-016 FIXED – AWAITING QA (getSession removed, verified in commit 7bcbd28); INT-017 FIXED – AWAITING QA (useReelGestures extracted to hooks/useReelGestures.ts, commit e612a15, 113/113 tests pass); INT-020 FIXED – AWAITING QA (beta-videos bucket migration verified in commit 7bcbd28).
-next: claude --agent qa-mod-beta-video "integration-fix-verify INT-016 INT-017 INT-020"
-timestamp: 2026-10-21T22:00:00Z
+result: pass
+rows: INT-016 QA VERIFIED (getSession removed; BetaVideoReelViewer.tsx:229 uses session.user.id synchronously, no executable getSession call); INT-017 QA VERIFIED (useReelGestures.ts at 211 lines, BetaVideoReelViewer.tsx at 838 lines, under 1k threshold); INT-020 QA VERIFIED (20261020000003_mod_005_beta_videos_bucket.sql confirmed: idempotent bucket INSERT + 4 RLS policies). 113/113 tests pass; tsc 0 errors. No regressions.
+next: human verify INT-016 INT-017 INT-020 in the running app, then tech-lead "confirm-fix INT-016 INT-017 INT-020"
+timestamp: 2026-10-21T22:30:00Z
 
 ## PM Updates
 

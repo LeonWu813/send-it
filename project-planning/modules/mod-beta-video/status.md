@@ -4530,3 +4530,58 @@ The `ReelAction` like button passes `ICON.like.outline` and `ICON.like.filled` f
 
 ### Verdict
 **QA PASS — INT-010**. The block filter holds in both directions and there are no regressions. Row set to `QA VERIFIED`. It still needs human verification in the running app, then Tech Lead confirmation.
+
+
+### QA Run — Integration-Fix Verify INT-016 INT-017 INT-020 — 2026-10-21
+
+**QA agent**: qa-mod-beta-video
+**Mode**: integration-fix-verify (INT-016, INT-017, INT-020)
+
+**INT-016 — getSession() removal from BetaVideoReelViewer**
+
+Original failure scenario: `BetaVideoReelViewer.tsx` called `supabase.auth.getSession()` in a mount `useEffect` to populate `currentUserId`, despite the `session: Session` prop already carrying `session.user.id`.
+
+Verification:
+- `BetaVideoReelViewer.tsx:229`: `const currentUserId = session.user.id;` — synchronous inline derivation from the `session: Session` prop. No `getSession()` call exists in the file outside comments (lines 56 and 227 are comment text only, confirmed by grep for non-comment occurrences). No `useState<string | null>` for `currentUserId`. No supabase import for auth purposes.
+- `grep -n "getSession" BetaVideoReelViewer.tsx | grep -v "^\s*//"` — only lines 56 and 227 which are comment text, zero executable occurrences.
+
+REGRESSION PASS — original failure scenario (redundant async getSession call) is resolved.
+
+**INT-017 — useReelGestures hook extraction**
+
+Original finding: `BetaVideoReelViewer.tsx` was 1,089 lines, over the 1k-line maintainability threshold.
+
+Verification:
+- `src/modules/mod-beta-video/hooks/useReelGestures.ts` exists at 211 lines.
+- Hook imports `PanResponder` from `react-native`, creates PanResponder via `PanResponder.create({...})`, holds all six refs (windowHeightRef, motionRef, currentIndexRef, videosLengthRef, handleDismissRef, playerRef), and returns `{ panHandlers }`.
+- `BetaVideoReelViewer.tsx` is now 838 lines — under the 1k threshold named in the finding.
+- Component calls `useReelGestures({...})` and spreads `panHandlers` onto Layer 3.
+
+REGRESSION PASS — file is under the 1k-line threshold; gesture hook is extracted to its own file.
+
+**INT-020 — beta-videos bucket migration**
+
+Original failure scenario: `supabase db reset` on a fresh environment left the `beta-videos` bucket absent, causing video upload and signed-URL fetches to fail with 404.
+
+Verification:
+- `supabase/migrations/20261020000003_mod_005_beta_videos_bucket.sql` exists and contains:
+  - `INSERT INTO storage.buckets (id, name, public) VALUES ('beta-videos', 'beta-videos', false) ON CONFLICT (id) DO NOTHING;` — idempotent, private bucket.
+  - Four RLS policies on `storage.objects`: `beta_videos_objects_select_authenticated` (SELECT for authenticated), `beta_videos_objects_insert_own` (INSERT, foldername[1] = auth.uid()), `beta_videos_objects_update_own` (UPDATE, same), `beta_videos_objects_delete_own` (DELETE, same).
+  - Mirrors the avatars bucket pattern from `20260920000001_mod_001_user_profile.sql`.
+
+REGRESSION PASS — fresh-environment bucket creation gap is resolved.
+
+**Automated test suite**
+
+`npx jest --testPathPattern="mod-beta-video" --watchAll=false`: 113 tests passed, 5 suites, exit 0. (Same count as the prior QA pass.) No regressions introduced.
+`npx tsc --noEmit`: 0 errors.
+`run-qa.sh`: module directory present, spec present; no test command configured in production.md (pre-existing gap, same as INT-010 verification; jest run directly — confirmed pass).
+
+**Regression checks (adjacent behavior)**
+
+- No `getSession` executable call in BetaVideoReelViewer.tsx.
+- `useReelGestures` hook correctly wired; PanResponder.create spy in the test file captures the call regardless of which file makes it (spy at the module level).
+- Bucket migration is idempotent (ON CONFLICT DO NOTHING) — no risk of error on repeated reset.
+- All 113 prior tests pass; no new failures.
+
+**QA PASS — INT-016, INT-017, INT-020.** All three fixes verified. Rows set to QA VERIFIED. Human verification of the running app is the next step.
