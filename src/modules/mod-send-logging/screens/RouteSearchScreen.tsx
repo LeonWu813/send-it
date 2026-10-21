@@ -28,9 +28,9 @@ import {
   useSkeletonPhase,
 } from '../../../components/ui';
 import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
-import { listRoutes } from '../../mod-route-catalog/route-service';
+import { listRoutes } from '../../mod-route-catalog';
 import { TapeBadge } from '@/lib/tape';
-import type { RouteSummary } from '../../mod-route-catalog/types';
+import type { RouteSummary } from '../../mod-route-catalog';
 
 interface RouteSearchScreenProps {
   /** Authenticated session. */
