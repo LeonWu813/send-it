@@ -23,7 +23,7 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
-jest.mock('../../mod-social-feed/social-feed-service', () => ({
+jest.mock('../../mod-social-feed', () => ({
   fetchFollowerCounts: jest.fn().mockResolvedValue({ follower_count: 5, following_count: 3 }),
 }));
 

@@ -28,7 +28,7 @@ jest.mock('expo-notifications', () => ({
 }));
 
 // AC-054: registerDeviceToken mock — prevents real Supabase calls in tests.
-jest.mock('../../mod-notifications/notification-service', () => ({
+jest.mock('../../mod-notifications', () => ({
   registerDeviceToken: jest.fn().mockResolvedValue(undefined),
 }));
 
