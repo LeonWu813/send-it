@@ -7,10 +7,7 @@
  *   network connection is attempted
  */
 
-// Mock native modules used by supabase.ts
-jest.mock('@react-native-async-storage/async-storage', () =>
-  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
-);
+// AsyncStorage is provided globally by the jest moduleNameMapper in package.json.
 
 // Mock createClient so the test doesn't need a real WebSocket runtime
 jest.mock('@supabase/supabase-js', () => ({
