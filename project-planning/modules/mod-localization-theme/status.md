@@ -2,6 +2,37 @@
 
 ## Engineering Progress
 
+### Integration fix — 2026-10-20 (F-2: cross-module barrel import fix)
+
+**Fix F-2 — BlockedAccountsScreen.tsx and SettingsScreen.tsx barrel imports**
+
+Both files in `src/modules/mod-localization-theme/screens/` were importing from cross-module private paths rather than from the public module barrels, violating INT-012.
+
+**Changes:**
+
+1. `src/modules/mod-localization-theme/screens/BlockedAccountsScreen.tsx`:
+   - `fetchMyBlockedUsers` and `unblockUser` value import: changed from `'../../mod-moderation/moderation-service'` to `'../../mod-moderation'`
+   - `BlockedUser` type import: changed from `'../../mod-moderation/moderation-service'` to `'../../mod-moderation'`
+
+2. `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`:
+   - `signOut` and `updateBetaVideoPrivacy` import: changed from `'../../mod-auth-profile/auth-service'` to `'../../mod-auth-profile'`
+
+Both target barrels (`src/modules/mod-moderation/index.ts` and `src/modules/mod-auth-profile/index.ts`) were confirmed to export all three pairs of symbols before making the change.
+
+**Self-check**
+- [pass] `npx tsc --noEmit` — exit 0, 0 TypeScript errors
+- [pass] `npx jest --testPathPattern="mod-localization-theme" --watchAll=false --passWithNoTests` — exit 0 (no test files in this module)
+- [pass] `grep -rn "from '.*mod-" src/modules/mod-localization-theme/` — zero remaining private-path cross-module imports after fix
+- [pass] No behavioral change — import path only; runtime resolution is identical
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+
+**Files modified**
+- `src/modules/mod-localization-theme/screens/BlockedAccountsScreen.tsx`
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+
+---
+
 ### Bugfix — 2026-10-16 (per-user AsyncStorage key scoping for theme and language)
 
 **Scope theme and language AsyncStorage keys per userId (Option B)**
