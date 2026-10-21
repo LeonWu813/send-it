@@ -3914,3 +3914,75 @@ Test count increased from 39 to 49 (Engineer added 10 new tests for the new func
 **Commit:** cbcc6a8
 
 **Result: FIXED – AWAITING QA**
+
+
+---
+
+### QA Run 16 — Integration-Fix Verify — INT-025 — 2026-10-21
+
+**Workflow**: regression-test (integration-fix-verify INT-025)
+
+**Finding being re-verified:** INT-025 — `AppHeaderContext.test.tsx` mocked the old private path `../../../mod-notifications/UnreadCountProvider` instead of the `../../../mod-notifications` barrel, causing all 8 tests to fail with "Missing required environment variables" after the INT-012 barrel fix (commit `760e444`).
+
+**Engineer fix (commit 2d395f1):** `jest.mock` path updated at `src/modules/mod-home/components/__tests__/AppHeaderContext.test.tsx:4` from `'../../../mod-notifications/UnreadCountProvider'` to `'../../../mod-notifications'`. No production code changed.
+
+---
+
+#### Verification item 1 — Mock path is the barrel, not the private path
+
+Read `src/modules/mod-home/components/__tests__/AppHeaderContext.test.tsx:4`:
+
+```typescript
+jest.mock('../../../mod-notifications', () => ({
+  useUnreadCount: () => 0,
+}));
+```
+
+The barrel path is in use. The old private path `'../../../mod-notifications/UnreadCountProvider'` is absent. PASS.
+
+---
+
+#### Verification item 2 — AppHeaderContext suite passes (8/8)
+
+`npx jest --testPathPattern="AppHeaderContext" --no-coverage --verbose`:
+- PASS src/modules/mod-home/components/__tests__/AppHeaderContext.test.tsx
+- useAppHeader: 2 tests pass
+- AppHeaderOverlayScope: 2 tests pass
+- useHeaderContentInset: 4 tests pass
+- Tests: 8 passed, 8 total — exit 0
+
+Original failure scenario ("Missing required environment variables") no longer reproduces. REGRESSION PASS.
+
+---
+
+#### Verification item 3 — Full mod-home suite, no regressions (62/62)
+
+`npx jest --testPathPattern="src/modules/mod-home" --no-coverage`:
+- Test Suites: 5 passed, 5 total
+- Tests: 62 passed, 62 total — exit 0
+
+No regressions introduced by the fix.
+
+---
+
+#### Verification item 4 — Adjacent mod-home-owned file: supabase.test.ts (INT-027, also mod-home)
+
+`npx jest --testPathPattern="src/lib/__tests__/supabase" --no-coverage`:
+- Tests: 3 passed, 3 total — exit 0
+
+The supabase.test.ts suite (also assigned to mod-home, INT-027) is independently healthy.
+
+---
+
+### Summary — QA Run 16
+
+| Item | Result |
+|---|---|
+| Mock path is barrel () not private path | PASS |
+| AppHeaderContext suite: 8/8 pass | REGRESSION PASS |
+| mod-home full suite: 62/62 pass, 5 suites | PASS — no regressions |
+| src/lib/__tests__/supabase.test.ts: 3/3 pass (INT-027, mod-home-owned) | PASS |
+
+**Result: INTEGRATION FIX VERIFIED — INT-025 PASS**
+
+The original failure scenario no longer reproduces. All 62 mod-home tests pass. No regressions found.
