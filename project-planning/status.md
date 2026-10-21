@@ -2,12 +2,13 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: confirm-fix
-module: n/a
-next: claude --agent tech-lead "confirm-fix INT-025 — Leon: 'I verified INT-025: <what you checked>'" (also still pending from e48b5f7: claude --agent qa-mod-auth-profile "integration-fix-verify INT-024")
-result: needs-human
-timestamp: 2026-10-21T20:05:00Z
+agent: qa-mod-auth-profile
+mode: integration-fix-verify
+module: mod-auth-profile
+int: INT-024
+result: pass
+date: 2026-10-21
+next: coordinator — INT-024 QA VERIFIED; route to tech-lead for HUMAN VERIFIED / CONFIRMED CLOSED
 
 ## PM Updates
 
