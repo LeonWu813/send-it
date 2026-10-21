@@ -2,6 +2,46 @@
 
 ## Engineering Progress
 
+### Bugfix: M-3 remove redundant getSession, M-4 decompose BetaVideoReelViewer, L-2 beta-videos bucket migration — 2026-10-20
+
+**M-3 — Remove redundant getSession() round-trip**
+
+- **Problem**: `BetaVideoReelViewer` received `session: Session` as a prop but also called `supabase.auth.getSession()` on mount to populate `currentUserId` state. The prop already contains `session.user.id`.
+- **Fix**: Removed the `useState<string | null>` for `currentUserId` and the `useEffect` that called `getSession()`. Replaced all uses of `currentUserId` with `session.user.id` (a constant derived inline, no state). Removed the `supabase` runtime import from the component. The `Ionicons` import (unused) was also removed.
+- **Impact check**: `isOwnVideo` is now synchronously correct from the first render instead of requiring an async round-trip. Tests that previously waited for the async `getSession` to complete now pass immediately. The test supabase mock for `getSession` is still in place but uncalled (harmless).
+- **Self-check**: `npm run lint` (tsc --noEmit): 0 errors. `npx jest --testPathPattern="mod-beta-video" --watchAll=false`: 113/113 pass.
+- **Files modified**: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`
+
+**M-4 — Decompose BetaVideoReelViewer.tsx**
+
+- **MarqueeText** extracted to `src/modules/mod-beta-video/components/MarqueeText.tsx`. Pure component: takes `text`, `containerWidth`, optional `style`/`testID`/`reduceMotion`. No cross-module dependencies. Exports `MarqueeTextProps` and `MarqueeText`.
+- **PosterAvatar** extracted to `src/modules/mod-beta-video/components/PosterAvatar.tsx`. Pure component: takes `avatarUrl` and `displayName`. No cross-module dependencies. Exports `PosterAvatarProps` and `PosterAvatar`.
+- **useLikeState** extracted to `src/modules/mod-beta-video/hooks/useLikeState.ts`. Hook takes `videoId: string | null`, `visible: boolean`, `indexKey: number`. Returns `{ liked, likeCount, pending, toggleLike }`. Imports `fetchLikeInfo`/`likeBetaVideo`/`unlikeBetaVideo` from `mod-social-feed` barrel. Removes those imports from `BetaVideoReelViewer.tsx`.
+- **useReelGestures** — extraction skipped (documented). The PanResponder block depends on `dragY` (Animated.Value), `setIsVideoLoading`, `setCurrentIndex`, and five mutable refs all defined in `BetaVideoReelViewer`. Threading all of them as hook parameters would require passing Animated.Value references and setState callbacks externally, risking stale-closure bugs and making the hook's interface harder to understand than the inline block. Correctness over completeness.
+- **BetaVideoReelViewer.tsx** updated to import `MarqueeText`, `PosterAvatar`, and `useLikeState` from their new files. `Avatar` import (now in PosterAvatar.tsx) and `fetchLikeInfo`/`likeBetaVideo`/`unlikeBetaVideo` imports removed. File reduced from ~1,089 lines to ~770 lines.
+- **Self-check**: `npm run lint` (tsc --noEmit): 0 errors. `npx jest --testPathPattern="mod-beta-video" --watchAll=false`: 113/113 pass.
+- **Files created**: `src/modules/mod-beta-video/components/MarqueeText.tsx`, `src/modules/mod-beta-video/components/PosterAvatar.tsx`, `src/modules/mod-beta-video/hooks/useLikeState.ts`
+- **Files modified**: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`
+
+**L-2 — beta-videos storage bucket migration**
+
+- **Problem**: `20260924000005_mod_005_beta_video.sql` explicitly deferred bucket creation to Supabase Studio/CLI. On `supabase db reset` the bucket does not exist, causing all video uploads and signed-URL fetches to fail with 404.
+- **Fix**: Created `supabase/migrations/20261020000003_mod_005_beta_videos_bucket.sql` that inserts the bucket idempotently (`ON CONFLICT (id) DO NOTHING`) with `public: false`. Added four RLS policies on `storage.objects` mirroring the beta_videos table policies (production.md convention: "All Storage buckets have RLS policies aligned with corresponding table policies"): SELECT for authenticated users (required to stream via signed URL), INSERT/UPDATE/DELETE gated on `(storage.foldername(name))[1] = auth.uid()::text` enforcing the own-folder convention.
+- **Policy model**: `avatars` bucket in `20260920000001_mod_001_user_profile.sql` was the reference; adapted for private bucket (no public SELECT, auth.role() required).
+- **Self-check**: `npm run lint` (tsc --noEmit): 0 errors. `npx jest --testPathPattern="mod-beta-video" --watchAll=false`: 113/113 pass.
+- **Files created**: `supabase/migrations/20261020000003_mod_005_beta_videos_bucket.sql`
+
+**Overall self-check (M-3 + M-4 + L-2):**
+- TypeScript strict mode: 0 errors (`npm run lint`)
+- Tests: 113/113 pass (same count as before; no tests added or removed)
+- No new dependencies introduced
+- All changed/created files within MOD-005 write scope (`src/modules/mod-beta-video/`, `supabase/migrations/*_mod_005_*`)
+- No hardcoded values
+- No PII logged
+- `console.error "not wrapped in act()"` warnings in test output: pre-existing pattern from `useLikeState` reset effect firing on mount; tests pass correctly using `waitFor`/`act`; not a new issue introduced by extraction
+
+---
+
 ### Integration fixes: INT-010 block filter + INT-012 barrel imports — 2026-10-20
 
 **INT-010 — fetchBetaVideosByUser block filter (HIGH)**

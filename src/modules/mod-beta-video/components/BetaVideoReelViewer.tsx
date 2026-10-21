@@ -50,10 +50,21 @@
  * - If threshold not crossed: `Animated.spring` snaps back to 0.
  * - The entire content (all four layers) is wrapped in one `Animated.View`
  *   with `transform: [{ translateY: dragY }]`.
+ *
+ * Decomposition (M-3, M-4):
+ * - M-3: currentUserId is derived directly from session.user.id (always available
+ *   since the component requires an authenticated session). The former getSession()
+ *   async round-trip has been removed.
+ * - M-4: MarqueeText and PosterAvatar extracted to their own component files;
+ *   like/unlike state machine extracted to the useLikeState hook.
+ *   useReelGestures was assessed but left in-file: the PanResponder block depends
+ *   on dragY, setIsVideoLoading, setCurrentIndex, and five mutable refs all defined
+ *   in this component; extraction would require threading all of them as parameters,
+ *   risking stale-closure bugs and making the hook's interface harder to understand
+ *   than the inline block.
  */
 
 import type { Session } from '@supabase/supabase-js';
-import { Ionicons } from '@expo/vector-icons';
 import { useEventListener } from 'expo';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import React, {
@@ -76,25 +87,22 @@ import {
 import type { LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '../../../components/ui/AppText';
-import { Avatar } from '../../../components/ui/Avatar';
 import { IconButton } from '../../../components/ui/IconButton';
 import { Spinner } from '../../../components/ui/ProgressBar';
 import { ICON } from '../../../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
-import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { TapeBadge } from '@/lib/tape';
 import { ACTION_SIZE, ReelAction } from './ReelAction';
 import { ReelScrim } from './ReelScrim';
-import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed';
 import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
+import { useLikeState } from '../hooks/useLikeState';
 import type { BetaVideo } from '../types';
+import { MarqueeText } from './MarqueeText';
+import { PosterAvatar } from './PosterAvatar';
 
 /** Minimum dy (in pixels) to trigger a swipe. */
 const SWIPE_THRESHOLD = 50;
-
-/** Duration of one marquee scroll pass in milliseconds (AC-137). */
-const MARQUEE_DURATION_MS = 4000;
 
 export interface BetaVideoReelViewerProps {
   /** Full ordered array of beta videos for the route (created_at DESC). */
@@ -144,92 +152,6 @@ export interface BetaVideoReelViewerProps {
    *     where navigating to the same profile would be redundant.
    */
   reelContext?: 'route' | 'profile';
-}
-
-// ── MarqueeText — pure-JS translateX marquee for overflowing text (AC-137) ────
-
-interface MarqueeTextProps {
-  text: string;
-  containerWidth: number;
-  style?: object;
-  testID?: string;
-  /** Reduce Motion: no scrolling, the single line is truncated instead. */
-  reduceMotion?: boolean;
-}
-
-/**
- * Renders `text` inside an `overflow:'hidden'` container. If the text is wider
- * than `containerWidth`, a looping `Animated.translateX` marquee scrolls it.
- * No native package — pure RN Animated (AC-137).
- */
-function MarqueeText({ text, containerWidth, style, testID, reduceMotion = false }: MarqueeTextProps): React.JSX.Element {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const [textWidth, setTextWidth] = useState(0);
-  const animRef = useRef<Animated.CompositeAnimation | null>(null);
-
-  useEffect(() => {
-    if (!reduceMotion && textWidth > containerWidth && containerWidth > 0) {
-      animRef.current = Animated.loop(
-        Animated.sequence([
-          Animated.timing(translateX, {
-            toValue: -(textWidth - containerWidth),
-            duration: MARQUEE_DURATION_MS,
-            easing: bezierFor('linear'),
-            useNativeDriver: USE_NATIVE_DRIVER,
-          }),
-          Animated.delay(1000),
-          Animated.timing(translateX, {
-            toValue: 0,
-            duration: 0,
-            easing: bezierFor('linear'),
-            useNativeDriver: USE_NATIVE_DRIVER,
-          }),
-          Animated.delay(500),
-        ]),
-      );
-      animRef.current.start();
-    } else {
-      // Reset when text fits or container width not yet known
-      translateX.setValue(0);
-      animRef.current?.stop();
-    }
-
-    return () => {
-      animRef.current?.stop();
-    };
-  }, [textWidth, containerWidth, translateX, reduceMotion]);
-
-  return (
-    <View style={{ width: containerWidth, overflow: 'hidden' }}>
-      <Animated.Text
-        maxFontSizeMultiplier={1.6}
-        style={[style, { transform: [{ translateX }] }]}
-        onTextLayout={(e) => {
-          const lineWidth = e.nativeEvent.lines[0]?.width ?? 0;
-          setTextWidth(lineWidth);
-        }}
-        numberOfLines={1}
-        testID={testID}
-      >
-        {text}
-      </Animated.Text>
-    </View>
-  );
-}
-
-// ── PosterAvatar — ui/ Avatar (sm 32) with the initial-letter fallback (AC-134/AC-138) ─
-
-interface PosterAvatarProps {
-  avatarUrl: string | null;
-  displayName: string | null;
-}
-
-function PosterAvatar({ avatarUrl, displayName }: PosterAvatarProps): React.JSX.Element {
-  return (
-    <View testID={avatarUrl ? 'reel-poster-avatar' : 'reel-poster-avatar-placeholder'}>
-      <Avatar size="sm" uri={avatarUrl} name={displayName ?? undefined} decorative />
-    </View>
-  );
 }
 
 // ── BetaVideoReelViewer ────────────────────────────────────────────────────────
@@ -307,86 +229,23 @@ export default function BetaVideoReelViewer({
   const [urlLoading, setUrlLoading] = useState(false);
   const [urlError, setUrlError] = useState(false);
 
-  // ── Current authenticated user ID (Bug 2 — own-video check) ─────────────
-  // Fetched once on mount via supabase.auth.getSession(). Used to determine
-  // whether the current video belongs to the viewer so the poster row can be
-  // made non-tappable and the report button hidden for own videos (AC-139).
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
-  useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      setCurrentUserId(data.session?.user.id ?? null);
-    });
-  }, []);
+  // ── Current authenticated user ID (AC-139 own-video check) ──────────────
+  // Derived directly from the session prop (always available — the component
+  // requires an authenticated session to render). No async round-trip needed.
+  // M-3: removed the former getSession() useEffect that fetched this value
+  // asynchronously; session.user.id is always in scope from the prop.
+  const currentUserId = session.user.id;
 
   // ── Like state (AC-052) ───────────────────────────────────────────────────
-  // Per-video like state. Fetched from the `get_like_info` RPC whenever the
-  // currentIndex changes and the viewer is visible.
-  const [isLiked, setIsLiked] = useState<boolean>(false);
-  const [likeCount, setLikeCount] = useState<number>(0);
-  // True while a like/unlike request is in flight — prevents double-tap.
-  const [isLikePending, setIsLikePending] = useState<boolean>(false);
-
-  // Fetch like info whenever the active video changes.
-  useEffect(() => {
-    if (!visible || videos.length === 0) return;
-    const video = videos[currentIndex];
-    if (!video) return;
-
-    let cancelled = false;
-    fetchLikeInfo(video.id)
-      .then(({ like_count, user_has_liked }) => {
-        if (cancelled) return;
-        setLikeCount(like_count);
-        setIsLiked(user_has_liked);
-      })
-      .catch(() => {
-        // Non-fatal: keep whatever state was already showing.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [currentIndex, visible, videos]);
-
-  // Reset like UI state when index changes so there is no stale display between
-  // the index change and the fetchLikeInfo response.
-  useEffect(() => {
-    setIsLiked(false);
-    setLikeCount(0);
-    setIsLikePending(false);
-  }, [currentIndex]);
-
-  // ── Like handler (AC-052) ────────────────────────────────────────────────
-  const handleLike = useCallback(async (): Promise<void> => {
-    if (isLikePending) return;
-    const video = videos[currentIndex];
-    if (!video) return;
-
-    // Optimistic update.
-    const wasLiked = isLiked;
-    const prevCount = likeCount;
-    setIsLiked(!wasLiked);
-    setLikeCount(wasLiked ? prevCount - 1 : prevCount + 1);
-    setIsLikePending(true);
-
-    try {
-      if (wasLiked) {
-        await unlikeBetaVideo(video.id);
-      } else {
-        await likeBetaVideo(video.id);
-      }
-      // Re-fetch authoritative count from DB after mutation.
-      const { like_count, user_has_liked } = await fetchLikeInfo(video.id);
-      setLikeCount(like_count);
-      setIsLiked(user_has_liked);
-    } catch {
-      // Revert optimistic update on error.
-      setIsLiked(wasLiked);
-      setLikeCount(prevCount);
-    } finally {
-      setIsLikePending(false);
-    }
-  }, [isLikePending, isLiked, likeCount, currentIndex, videos]);
+  // Delegated to useLikeState hook (M-4 extraction).
+  // videoId is null when videos is empty; useLikeState handles that gracefully.
+  const currentVideoId = videos[currentIndex]?.id ?? null;
+  const {
+    liked: isLiked,
+    likeCount,
+    pending: isLikePending,
+    toggleLike: handleLike,
+  } = useLikeState(currentVideoId, visible, currentIndex);
 
   // ── Report state ─────────────────────────────────────────────────────────
   // Set of video IDs that have been successfully reported in this session.
@@ -506,6 +365,10 @@ export default function BetaVideoReelViewer({
   }, [player, onDismiss]);
 
   // ── PanResponder (vertical-only swipe, Tech Lead decision 5) ─────────────
+  // Note: useReelGestures extraction was assessed (M-4) but left in-file.
+  // The PanResponder block depends on dragY, setIsVideoLoading, setCurrentIndex,
+  // and five mutable refs all defined in this component; threading them as hook
+  // parameters would risk stale-closure issues and reduce readability.
 
   const goToNextRef = useRef(goToNext);
   const goToPrevOrCloseRef = useRef(goToPrevOrClose);
@@ -646,14 +509,11 @@ export default function BetaVideoReelViewer({
     handleDismiss();
   }, [currentVideo, onNavigateToUser, handleDismiss]);
 
-  // ── Own-video check (Bug 2 / AC-139) ─────────────────────────────────────
+  // ── Own-video check (AC-139) ─────────────────────────────────────────────
   // isOwnVideo is true when the current video was uploaded by the authenticated
-  // viewer. Derived from the session-fetched currentUserId (not from the session
-  // prop) so it reflects the actual viewer even when the component is hosted on
-  // a profile screen where the session prop may belong to a different user.
-  // Falls back to false (show report / allow tap) when currentUserId is not yet
-  // loaded — the session fetch is near-instant so this is a momentary state.
-  const isOwnVideo = currentUserId !== null && currentVideo
+  // viewer. Derived synchronously from session.user.id (always available since
+  // the component requires an authenticated session to render).
+  const isOwnVideo = currentVideo
     ? currentVideo.user_id === currentUserId
     : false;
 
