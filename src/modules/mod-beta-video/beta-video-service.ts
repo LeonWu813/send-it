@@ -19,6 +19,7 @@ import { File as ExpoFile } from 'expo-file-system';
 
 import { supabase } from '../../lib/supabase';
 import { getSignedUrl } from '../../lib/signedUrlCache';
+import { isBlocked } from '../mod-moderation';
 import type { BetaVideo, BetaVideoUploadInput, UploadProgress } from './types';
 
 /** Storage bucket for beta video artifacts. */
@@ -247,18 +248,9 @@ export async function fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]
   // block relationship in either direction, return an empty array immediately.
   // Skipped when the viewer is viewing their own profile (currentUserId === userId)
   // or when unauthenticated (guarded above).
-  if (currentUserId !== userId) {
-    const { data: block } = await supabase
-      .from('blocks')
-      .select('blocker_user_id')
-      .or(
-        `and(blocker_user_id.eq.${currentUserId},blocked_user_id.eq.${userId}),` +
-        `and(blocker_user_id.eq.${userId},blocked_user_id.eq.${currentUserId})`,
-      )
-      .limit(1)
-      .maybeSingle();
-    if (block) return [];
-  }
+  // Delegates to mod-moderation's isBlocked (barrel: src/modules/mod-moderation)
+  // which encapsulates the bidirectional-block semantics and owns the blocks table.
+  if (currentUserId !== userId && await isBlocked(userId)) return [];
 
   const { data, error } = await supabase
     .from('beta_videos')

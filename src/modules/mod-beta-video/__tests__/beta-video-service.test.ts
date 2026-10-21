@@ -31,9 +31,16 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }));
 
+// INT-010 / AC-154: block-check is delegated to mod-moderation's isBlocked.
+// Mock the barrel so tests can control the return value without touching the blocks table.
+jest.mock('../../mod-moderation', () => ({
+  isBlocked: jest.fn(),
+}));
+
 import * as ExpoFileSystem from 'expo-file-system';
 import { supabase } from '../../../lib/supabase';
 import { clearCacheForTesting } from '../../../lib/signedUrlCache';
+import { isBlocked } from '../../mod-moderation';
 import {
   fetchBetaVideosForRoute,
   uploadBetaVideo,
@@ -492,21 +499,14 @@ describe('fetchBetaVideosByUser', () => {
   it('AC-162: returns empty array when user has no videos', async () => {
     // user-999 != user-001 (session), so the block check runs first.
     // No block relationship → proceed to the beta_videos query.
-    const blocksChain = {
-      select: jest.fn().mockReturnThis(),
-      or: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
-    };
+    (isBlocked as jest.Mock).mockResolvedValue(false);
     const videosChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       or: jest.fn().mockReturnThis(),
       order: jest.fn().mockResolvedValue({ data: [], error: null }),
     };
-    (mockSupabase.from as jest.Mock)
-      .mockReturnValueOnce(blocksChain)
-      .mockReturnValueOnce(videosChain);
+    (mockSupabase.from as jest.Mock).mockReturnValue(videosChain);
 
     const result = await fetchBetaVideosByUser('user-999');
     expect(result).toHaveLength(0);
@@ -540,17 +540,8 @@ describe('fetchBetaVideosByUser', () => {
 
   it('INT-010: returns empty array when viewer has blocked the target user', async () => {
     // Viewer (user-001) blocked target (user-002).
-    // blocks query returns a row → early return [].
-    const blocksChain = {
-      select: jest.fn().mockReturnThis(),
-      or: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({
-        data: { blocker_user_id: 'user-001' },
-        error: null,
-      }),
-    };
-    (mockSupabase.from as jest.Mock).mockReturnValue(blocksChain);
+    // isBlocked returns true → early return [].
+    (isBlocked as jest.Mock).mockResolvedValue(true);
 
     const result = await fetchBetaVideosByUser('user-002');
     expect(result).toEqual([]);
@@ -558,17 +549,8 @@ describe('fetchBetaVideosByUser', () => {
 
   it('INT-010: returns empty array when target user has blocked the viewer', async () => {
     // Target (user-002) blocked viewer (user-001).
-    // blocks query returns a row (reverse direction) → early return [].
-    const blocksChain = {
-      select: jest.fn().mockReturnThis(),
-      or: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({
-        data: { blocker_user_id: 'user-002' },
-        error: null,
-      }),
-    };
-    (mockSupabase.from as jest.Mock).mockReturnValue(blocksChain);
+    // isBlocked returns true (bidirectional check inside mod-moderation) → early return [].
+    (isBlocked as jest.Mock).mockResolvedValue(true);
 
     const result = await fetchBetaVideosByUser('user-002');
     expect(result).toEqual([]);
@@ -606,7 +588,8 @@ describe('fetchBetaVideosByUser', () => {
 
   it('INT-010: proceeds with videos when no block relationship exists', async () => {
     // Viewing another user (user-002) with no block in either direction.
-    // blocks query returns null → proceed to fetch videos.
+    // isBlocked returns false → proceed to fetch videos.
+    (isBlocked as jest.Mock).mockResolvedValue(false);
     const rawRow = {
       id: 'vid-002',
       route_id: 'route-001',
@@ -621,22 +604,13 @@ describe('fetchBetaVideosByUser', () => {
       users: { display_name: 'Other Climber', avatar_url: null },
       routes: null,
     };
-    const blocksChain = {
-      select: jest.fn().mockReturnThis(),
-      or: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockReturnThis(),
-      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
-    };
     const videosChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       or: jest.fn().mockReturnThis(),
       order: jest.fn().mockResolvedValue({ data: [rawRow], error: null }),
     };
-    // First call to from() is the blocks table; second is beta_videos.
-    (mockSupabase.from as jest.Mock)
-      .mockReturnValueOnce(blocksChain)
-      .mockReturnValueOnce(videosChain);
+    (mockSupabase.from as jest.Mock).mockReturnValue(videosChain);
 
     const result = await fetchBetaVideosByUser('user-002');
     expect(result).toHaveLength(1);
