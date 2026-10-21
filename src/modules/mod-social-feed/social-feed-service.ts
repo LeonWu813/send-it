@@ -13,6 +13,8 @@
  *   fetchFollowing(userId)     — list of users the given user follows
  *   fetchFollowersList(userId) — list of users who follow userId (AC-146)
  *   fetchFollowingList(userId) — list of users that userId follows (AC-147)
+ *
+ * Internal (Phase 2, not exported):
  *   fetchLikeInfoBatch(...)    — batched like count + own-like state (AC-186, deferred)
  *
  * Rules:
@@ -384,14 +386,15 @@ export async function fetchFollowingList(userId: string): Promise<UserListItem[]
  * Fetch like count and own-like state for multiple targets in a single
  * round-trip using the `get_like_info_batch` SECURITY INVOKER RPC.
  *
+ * @internal Phase 2 only — not part of the public API surface in Phase 1.
+ * AC-159 defers this feature. Do NOT import from this service directly or via the barrel.
+ * Will be exported from mod-social-feed/index.ts when Phase 2 activates it.
+ *
  * Phase 1 status — deferred (AC-186): this function is defined now to
  * establish the data-access convention but is not wired into any UI path in
  * Phase 1. Callers continue to use `fetchLikeInfo` (per-video) until the
  * batched RPC is activated in Phase 2, at which point this function supersedes
  * the per-card lookups with zero change to AC-052 behaviour.
- *
- * FeedScreen.tsx remains dead code per AC-159 — do NOT import or call this
- * function from FeedScreen or any active navigator/shell in Phase 1.
  *
  * @param targetType  Reaction target type — 'beta_video' in Phase 1.
  * @param targetIds   Array of target UUIDs to look up.
@@ -399,7 +402,7 @@ export async function fetchFollowingList(userId: string): Promise<UserListItem[]
  *                    supplied id, in no guaranteed order. Returns [] on empty
  *                    input or on RPC error (logs the error; does not throw).
  */
-export async function fetchLikeInfoBatch(
+async function fetchLikeInfoBatch(
   targetType: string,
   targetIds: string[]
 ): Promise<Array<{ targetId: string; isLiked: boolean; likeCount: number }>> {

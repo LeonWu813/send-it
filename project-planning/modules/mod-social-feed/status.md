@@ -2,7 +2,7 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens. INT-012: index.ts barrel created; cross-module deep imports fixed in FollowersListScreen, FollowingListScreen, UserProfileScreen.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens. INT-012: index.ts barrel created; cross-module deep imports fixed in FollowersListScreen, FollowingListScreen, UserProfileScreen. F-4/L-3: fetchLikeInfoBatch removed from public barrel; marked @internal in service.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
@@ -13,7 +13,23 @@
 **AC-052 like button commit**: `0de9d44` — `feat(mod-social-feed): AC-052 — tappable like button in BetaVideoReelViewer`
 **AC-186 + cleanup commit**: pending — `feat(mod-social-feed): AC-186 — get_like_info_batch RPC and service wrapper; remove AC-123/124 refs`
 **INT-012 barrel commit**: pending — `fix(mod-social-feed): INT-012 create index.ts barrel + fix cross-module deep imports`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup); 2026-10-15 (AC-185 SwipeBackWrapper wiring); 2026-10-20 (INT-012 barrel + import fix)
+**F-4/L-3 quality fix commit**: pending — `fix(mod-social-feed): F-4 remove fetchLikeInfoBatch from barrel, L-3 mark as Phase 2 internal`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup); 2026-10-15 (AC-185 SwipeBackWrapper wiring); 2026-10-20 (INT-012 barrel + import fix, F-4/L-3 quality fix)
+
+### F-4 / L-3 — fetchLikeInfoBatch Phase 2 Internal Cleanup (2026-10-20)
+
+**F-4 DONE**: Removed `fetchLikeInfoBatch` from the public barrel (`src/modules/mod-social-feed/index.ts`). The export line (with its "Not wired in Phase 1" comment) is gone. A comment in the barrel explains the exclusion and when to restore it. The function stays in `social-feed-service.ts` and is ready for Phase 2 with zero barrel change needed beyond re-adding the export.
+
+**L-3 DONE**: Updated `fetchLikeInfoBatch` in `social-feed-service.ts`:
+- Added `@internal Phase 2 only` JSDoc tag at the top of the block, making the deferral intent clear to any IDE or tooling that indexes `@internal`.
+- Removed the `export` keyword — the function is now unexported (module-private). No other file imported it except the barrel (which is now fixed by F-4), so this is safe.
+- Updated the file-level JSDoc header to move `fetchLikeInfoBatch` from the "Public API surface" list to a separate "Internal (Phase 2, not exported)" section.
+
+**Self-check (F-4/L-3)**:
+- PASS — `npx tsc --noEmit` — 0 errors
+- PASS — `npx jest --testPathPattern="mod-social-feed" --watchAll=false` — 63/63 pass
+- PASS — `grep -rn "fetchLikeInfoBatch" src/` — only definition in `social-feed-service.ts`; no barrel export; no external importer
+- PASS — No behaviour change; no new npm dependencies; no migration changes
 
 ### INT-012 — Barrel index.ts + Cross-Module Import Fix (2026-10-20)
 

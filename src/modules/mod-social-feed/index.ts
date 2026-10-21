@@ -23,8 +23,9 @@ export {
   fetchFollowing,
   fetchFollowersList,
   fetchFollowingList,
-  /** AC-186 (deferred): batched like count + own-like state. Not wired in Phase 1. */
-  fetchLikeInfoBatch,
+  // fetchLikeInfoBatch is intentionally excluded: AC-186 deferred to Phase 2.
+  // It is defined (unexported) in social-feed-service.ts and will be added
+  // here when Phase 2 activates it.
 } from './social-feed-service';
 
 // ── Navigator entry point ─────────────────────────────────────────────────────
