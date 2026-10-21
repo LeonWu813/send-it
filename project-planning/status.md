@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: confirm-fix
+agent: pm
+mode: checkpoint
 module: n/a
-next: claude --agent pm "checkpoint" (INT-012, INT-024, INT-025, INT-026, INT-027 CONFIRMED CLOSED; no Phase 1 row remains PROPOSED/APPROVED/IN PROGRESS/FIXED/QA VERIFIED — remaining open rows are DEFERRED and go to the human at checkpoint)
-result: success
-timestamp: 2026-10-21T00:00:00Z
+result: needs-human
+next: show project-planning/pm-proposals/2026-10-21-checkpoint-phase-1.md to the human; on approval run claude --agent pm "apply 2026-10-21-checkpoint-phase-1.md" with their exact words quoted
+timestamp: 2026-10-21T17:26:53Z
 
 ## PM Updates
 
