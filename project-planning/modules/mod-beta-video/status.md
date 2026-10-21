@@ -2,6 +2,33 @@
 
 ## Engineering Progress
 
+### Integration fixes: INT-016 INT-017 INT-020 — 2026-10-21
+
+**INT-016 — Remove getSession() from BetaVideoReelViewer (verified in-code)**
+
+- **Verification**: `BetaVideoReelViewer.tsx:237` reads `const currentUserId = session.user.id;` — synchronous inline derivation from the `session: Session` prop. No `getSession()` call, no async state, no supabase import in this component for auth purposes. Fix was landed in commit 7bcbd28 (prior pass). Row set to FIXED – AWAITING QA.
+- **Self-check**: tsc 0 errors; 113/113 mod-beta-video tests pass.
+- **Files modified**: none (fix pre-existing; this entry records the verification).
+
+**INT-017 — Extract useReelGestures hook (Leon request)**
+
+- **Problem**: PanResponder block plus six associated refs were inline in BetaVideoReelViewer.tsx, contributing to the file's 949-line bulk.
+- **Fix**: Created `src/modules/mod-beta-video/hooks/useReelGestures.ts` (211 lines). Hook takes `{ dragY, setIsVideoLoading, setCurrentIndex, videosLength, currentIndex, handleDismiss, player, windowHeight, motion }` and returns `{ panHandlers }`. Moved all refs (windowHeightRef, motionRef, currentIndexRef, videosLengthRef, handleDismissRef, playerRef) and PanResponder.create() into the hook. Component calls `useReelGestures(...)` and spreads `panHandlers` onto Layer 3. Removed PanResponder from react-native import in component; removed SPRING_REST/USE_NATIVE_DRIVER/bezierFor from motion import (now in hook). BetaVideoReelViewer.tsx reduced from 949 to 838 lines.
+- **Gesture behavior preserved**: swipe up (next), swipe down (prev or dismiss), tap-to-play/pause, snap-back, onPanResponderTerminate snap-back. PanResponder.create spy in the test file still works — spy intercepts the call regardless of which file makes it; all 113 tests pass unchanged.
+- **Self-check**: tsc 0 errors; 113/113 pass.
+- **Files created**: `src/modules/mod-beta-video/hooks/useReelGestures.ts`
+- **Files modified**: `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`
+
+**INT-020 — beta-videos bucket migration (verified in-code)**
+
+- **Verification**: `supabase/migrations/20261020000003_mod_005_beta_videos_bucket.sql` is correct and complete. Idempotent bucket INSERT ON CONFLICT DO NOTHING (public: false). Four RLS policies: SELECT for authenticated, INSERT/UPDATE/DELETE gated on `(storage.foldername(name))[1] = auth.uid()::text`. Mirrors avatars bucket pattern. Fix was landed in commit 7bcbd28 (prior pass). Row set to FIXED – AWAITING QA.
+- **Self-check**: tsc 0 errors; 113/113 pass.
+- **Files modified**: none (migration pre-existing; this entry records the verification).
+
+**Commit**: e612a15
+
+---
+
 ### Bugfix: M-3 remove redundant getSession, M-4 decompose BetaVideoReelViewer, L-2 beta-videos bucket migration — 2026-10-20
 
 **M-3 — Remove redundant getSession() round-trip**
