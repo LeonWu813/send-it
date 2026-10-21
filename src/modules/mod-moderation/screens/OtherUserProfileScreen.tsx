@@ -23,8 +23,8 @@ import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { AppText, Avatar, Card, InlineError, Spinner } from '../../../components/ui';
 import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { fetchProfileHistory } from '../../mod-profile-history/history-service';
-import type { HistoryAscent } from '../../mod-profile-history/types';
+import { fetchProfileHistory } from '../../mod-profile-history';
+import type { HistoryAscent } from '../../mod-profile-history';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import ModerationActions from '../components/ModerationActions';
 

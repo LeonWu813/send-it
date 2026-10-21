@@ -48,6 +48,10 @@ export async function reportUser(
     throw new Error('Not authenticated.');
   }
 
+  if (targetUserId === reporterUserId) {
+    throw new Error('Cannot report yourself');
+  }
+
   const { error } = await supabase.from('reports').insert({
     reporter_user_id: reporterUserId,
     target_type: 'user',

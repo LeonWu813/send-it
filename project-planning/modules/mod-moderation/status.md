@@ -2,6 +2,49 @@
 
 ## Engineering Progress
 
+### Phase 1 quality review fixes — M-2, M-6, barrel import (2026-10-20)
+
+**M-2 — User self-report constraint**
+
+Two-part fix to prevent an authenticated user from reporting themselves:
+
+1. **Migration** `supabase/migrations/20261020000002_mod_009_user_self_report_constraint.sql` — drops and recreates the `reports_insert_own` RLS INSERT policy with an additional `AND (target_type <> 'user' OR target_id::text <> auth.uid()::text)` guard. Follows the DROP + CREATE pattern established in migration `20260929000006` for RLS policy updates. The `target_type` guard is retained so the constraint remains forward-compatible if non-user target types are added in future phases.
+
+2. **Service guard** in `moderation-service.ts` `reportUser()` — guard added after `reporterUserId` is resolved from session, before the Supabase INSERT:
+   ```typescript
+   if (targetUserId === reporterUserId) {
+     throw new Error('Cannot report yourself');
+   }
+   ```
+   Provides an early client-side rejection before the DB round-trip. Matches the pattern of the existing self-block guard in `blockUser()`.
+
+**M-6 — Unit tests for moderation-service.ts**
+
+Created `src/modules/mod-moderation/__tests__/moderation-service.test.ts` covering all five public service functions:
+
+- `blockUser` — happy path (inserts block row with correct columns), self-block throws without hitting Supabase, auth error throws, duplicate block (23505) is idempotent, non-duplicate DB error throws
+- `unblockUser` — happy path (deletes with correct `eq` filters), auth error, DB error
+- `fetchBlockedUserIds` — returns Set of IDs blocked by current user, returns IDs of users who blocked current user, empty Set on no blocks, empty Set on unauthenticated, DB error throws
+- `isBlocked` — returns true when block row exists, false when no block exists
+- `reportUser` — happy path (insert payload verified), optional note passed, null note when omitted, self-report throws without hitting Supabase, auth error throws, DB error throws
+
+Follows the mock pattern from `mod-send-logging/send-service.test.ts`: `jest.mock` before imports, typed mock helpers, `makeQueryBuilder` chainable builder, `beforeEach` clears all mocks. Mocks `supabase.auth.getSession` (matching the actual service, which uses `getSession` not `getUser`).
+
+**Barrel import fix — OtherUserProfileScreen.tsx**
+
+Changed two direct private-path imports:
+- `from '../../mod-profile-history/history-service'` → `from '../../mod-profile-history'`
+- `from '../../mod-profile-history/types'` → `from '../../mod-profile-history'`
+
+Both `fetchProfileHistory` and `HistoryAscent` are exported from the `mod-profile-history` barrel (`index.ts`). No other private-path cross-module imports were found in `src/modules/mod-moderation/` source files (verified with `grep -rn "from '.*mod-" src/modules/mod-moderation/`).
+
+**Verification:**
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- [pass] `npx jest --testPathPattern="mod-moderation" --watchAll=false` — 24 tests passed, 3 suites, 0 failures
+- [pass] No new cross-module private-path imports remain in source files
+
+**Date**: 2026-10-20
+
 ### INT-011 self-block constraint + INT-012 barrel index.ts (2026-10-20)
 
 **INT-011 — No self-block constraint (HIGH)**
