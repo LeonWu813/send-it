@@ -7,6 +7,16 @@
 
 **Off-spec design tooling (2026-10-16)**: Added Storybook stories for StatsPanel, FilterBar and AscentHistoryItem in `src/modules/mod-profile-history/stories/` on branch `design/storybook`. Not part of the spec; no component source changed. Pending PR review.
 
+### Patch — 2026-10-20: INT-009 — Block filter on profile RPCs
+
+**Issue**: INT-009 (HIGH) — `get_profile_history` and `get_profile_stats` had no block predicate. A blocked user could navigate to the blocker's profile and read their full send history and stats despite the block relationship.
+
+**Migration**: `supabase/migrations/20261013000006_mod_008_int009_block_filter.sql`
+- `get_profile_history`: Added block predicate to the WHERE clause, wrapped in `auth.uid() = p_user_id OR NOT EXISTS (...)` so a user can always read their own history. All existing predicates (privacy_setting, follows check, filters) preserved exactly.
+- `get_profile_stats`: Added `v_is_blocked` DECLARE variable and an early-return guard after the followers_only check. When a block exists in either direction (and caller is not the profile owner), the function returns `0, '[]', 0, NULL` — same shape as the privacy-blocked path. All other logic identical to v5.
+
+Both functions: `CREATE OR REPLACE FUNCTION`, `SECURITY INVOKER`, `SET search_path = public`, original signatures, REVOKE/GRANT pattern — all preserved.
+
 ### Patch — 2026-10-13: AC-183 — Shared RouteCard integration (MOD-008 v6)
 
 **AC**: AC-183 (Rev 35) — send-history section uses shared `RouteCard` component.
