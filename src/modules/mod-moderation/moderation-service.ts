@@ -87,6 +87,10 @@ export async function blockUser(blockedUserId: string): Promise<void> {
     throw new Error('Not authenticated.');
   }
 
+  if (blockedUserId === blockerUserId) {
+    throw new Error('Cannot block yourself');
+  }
+
   const { error } = await supabase.from('blocks').insert({
     blocker_user_id: blockerUserId,
     blocked_user_id: blockedUserId,

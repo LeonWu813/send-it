@@ -2,6 +2,36 @@
 
 ## Engineering Progress
 
+### INT-011 self-block constraint + INT-012 barrel index.ts (2026-10-20)
+
+**INT-011 — No self-block constraint (HIGH)**
+
+Two-part fix:
+
+1. **Migration** `supabase/migrations/20261013000007_mod_009_int_011_blocks_no_self_block.sql` — adds `CHECK (blocker_user_id <> blocked_user_id)` constraint named `blocks_no_self_block` to `public.blocks`. Prevents self-block at the database level. Filed as a new migration (existing migration not edited).
+
+2. **Service guard** in `moderation-service.ts` `blockUser()` — guard added after `blockerUserId` is resolved from session, before the Supabase INSERT:
+   ```typescript
+   if (blockedUserId === blockerUserId) {
+     throw new Error('Cannot block yourself');
+   }
+   ```
+   Follows the existing auth-check pattern (same variable, same throw style). Provides an early client-side rejection before the DB round-trip.
+
+**INT-012 — Create missing barrel index.ts**
+
+Created `src/modules/mod-moderation/index.ts` with named re-exports of all public API surface:
+- Functions: `reportUser`, `blockUser`, `unblockUser`, `fetchBlockedUserIds`, `isBlocked`, `fetchMyBlockedUsers`
+- Types from `moderation-service`: `BlockedUser`
+- Types from `types.ts`: `ReportCategory`, `BlockStatus`, `Report`, `Block`
+
+No intra-module cross-imports were found that needed fixing (`grep -rn "from '.*mod-moderation"` returned no results within the module).
+
+- [pass] `npx tsc --noEmit` — 0 TypeScript errors
+- Migration filename uses `*_mod_009_*` pattern per Source Path constraint
+
+**Date**: 2026-10-20
+
 ### Design system v2.2 migration (2026-10-16) — off-spec design work, pending PR review
 
 Visual/layout only; no new flows, deps, illustrations or haptics. Spec: design system v2.2 §32.10, §32.11, Appendix G.7.
