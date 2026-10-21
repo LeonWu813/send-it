@@ -3385,3 +3385,48 @@ No production code changed. No locale files changed.
 - Production code / locale files unchanged: PASS.
 - Judgment items: test-only fix; no new logic, no cross-module wiring, no DB queries, no hardcoded values. N/A items skipped (Spring, Docker, LLM, CORS).
 - Verified: tsc, jest (110/110), check:i18n, storybook build.
+
+---
+
+### QA Run — Integration-Fix Verify — INT-026 — 2026-10-21
+
+**Re-verifying**: INT-026 (test-only fix to `src/modules/mod-route-catalog/__tests__/RouteSubmitScreen.test.tsx` — stale "Add Route" label in AC-187 Layer 2 sheet confirm button selector replaced with `routes.duplicateSheet.confirm` label)
+**Engineer commit**: `1417a2c`
+**Workflow**: regression-test (integration-fix-verify)
+
+#### Check 1: Old label absent from sheet confirm button selector
+
+`grep -n "Add Route"` in `RouteSubmitScreen.test.tsx` — "Add Route" appears only in form button selectors and test titles/comments. The sheet confirm button at lines 673–678 now selects by:
+
+```
+el.props.accessibilityLabel?.includes('Continue to add') ||
+el.props.accessibilityLabel?.includes('確認新增')
+```
+
+No reference to "Add Route" as the sheet confirm button selector. REGRESSION PASS.
+
+#### Check 2: AC-187 Layer 2 test passes
+
+Suite: `RouteSubmitScreen.test.tsx` — PASS, 19/19 including "proceeds with upload only after tapping confirm on Layer 2 sheet (AC-187)". Exit 0.
+
+#### Check 3: Full mod-route-catalog suite
+
+Command: `npx jest --testPathPattern="mod-route-catalog" --watchAll=false`
+Result: **115 passed, 115 total** — 5 suites (RouteSubmitScreen, RouteListScreen, RouteDetailScreen, SendHistoryDetailScreen, route-service). Exit 0.
+
+Previous passing count (pre-fix): 114 with 1 pre-existing failure in RouteSubmitScreen AC-187 Layer 2. The formerly failing test now passes.
+
+#### Check 4: Adjacent suite regressions
+
+Full suite run (`npx jest --watchAll=false`): 626 passed, 1 failed, 627 total. The 1 failure is `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — a pre-existing test-isolation ordering artifact. When run in isolation, `AscentList.test.tsx` passes 12/12 (exit 0). The INT-026 fix is test-only in `mod-route-catalog` and cannot cause a failure in `mod-send-logging`. No regression introduced.
+
+#### Summary
+
+| Check | Result |
+|-------|--------|
+| Old "Add Route" label absent from sheet confirm selector | PASS |
+| AC-187 Layer 2 test passes (19/19 RouteSubmitScreen) | PASS |
+| Full mod-route-catalog suite: 115/115 | PASS |
+| Adjacent suite regressions | NONE (AscentList pre-existing isolation flake) |
+
+**REGRESSION PASS — INT-026 fix verified. AC-187 Layer 2 sheet confirm button selector now correctly targets "Continue to add" / "確認新增" per `routes.duplicateSheet.confirm`. 115/115 mod-route-catalog tests pass. No regressions introduced.**
