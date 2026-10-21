@@ -4037,3 +4037,28 @@ No regressions introduced by the fix.
 | Full mod-home + src/lib suite: 90/90 pass, 9 suites | PASS — no regressions |
 
 **Result: INTEGRATION FIX VERIFIED — INT-027 PASS**
+
+---
+
+### Integration Fix — INT-018 — 2026-10-21
+
+**Finding:** `HomeScreen.tsx` contained one remaining inline `supabase.rpc('routes_with_new_beta', { route_ids: savedRouteIds })` call at line 280, inside `loadProjectingRoutes`. The main queries (`fetchSavedGym`, `fetchProjectingRoutes`) and the cache singleton had been extracted to `home-service.ts` in commit 1296d25, but this RPC call was not. No exported cache singletons (`clearNewBetaCacheForTests`) remained in `HomeScreen.tsx`, and no `as unknown` casts remained in `HomeScreen.tsx` — those had been moved to `home-service.ts` already.
+
+**Fix:** Added `fetchRoutesWithNewBeta(savedRouteIds: string[]): Promise<Set<string>>` to `home-service.ts`. The function encapsulates the `routes_with_new_beta` RPC call and the 60-second in-memory cache logic (keyed by sorted route-id set). `HomeScreen.tsx` now imports and calls `fetchRoutesWithNewBeta`; the inline `supabase.rpc` call and the direct `getNewBetaCache`/`setNewBetaCache` imports are removed from `HomeScreen.tsx`. Cache helpers remain exported for test isolation.
+
+**Files changed:**
+- `src/modules/mod-home/home-service.ts` — added `fetchRoutesWithNewBeta` export
+- `src/modules/mod-home/screens/HomeScreen.tsx` — replaced inline RPC block with `fetchRoutesWithNewBeta` call; updated imports
+- `src/modules/mod-home/__tests__/home-service.test.ts` — added 7 tests for `fetchRoutesWithNewBeta`
+
+**Self-check results:**
+
+| Check | Result |
+|---|---|
+| No inline `supabase.rpc` in `HomeScreen.tsx` | PASS — grep returns 0 matches |
+| No `getNewBetaCache`/`setNewBetaCache` imports in `HomeScreen.tsx` | PASS — grep returns 0 matches |
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-home|src/lib/__tests__"` | PASS — 97/97 tests, 9 suites |
+| Files changed are within mod-home Source Path | PASS |
+
+**Result: FIXED – AWAITING QA**

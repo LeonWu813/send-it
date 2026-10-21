@@ -67,8 +67,7 @@ import {
   clearCache,
   fetchSavedGym,
   fetchProjectingRoutes,
-  getNewBetaCache,
-  setNewBetaCache,
+  fetchRoutesWithNewBeta,
 } from '../home-service';
 import type { SavedGymItem, ProjectingRoute } from '../home-service';
 
@@ -267,31 +266,16 @@ export default function HomeScreen({
         setAchievementMap({});
       }
 
-      // Step 4: Call routes_with_new_beta RPC (with in-memory cache, ~60s TTL).
-      // Retained for AC-175 Saved Gyms ordering — not used for the card chip
-      // (chip removed per AC-181 Rev 39). Cache keyed by route-id set + time.
-      // Cache singleton lives in home-service.ts (not module scope here).
-      const currentRouteIdsKey = savedRouteIds.slice().sort().join(',');
-      const cached = getNewBetaCache(currentRouteIdsKey);
-      if (cached !== null) {
-        // Cache still valid for the same route-id set — reuse.
-        setNewBetaRouteIds(cached);
-      } else {
-        const { data: rpcData, error: rpcError } = await supabase.rpc(
-          'routes_with_new_beta',
-          { route_ids: savedRouteIds },
-        );
-
-        if (rpcError) {
-          console.error('[HomeScreen] routes_with_new_beta RPC error:', rpcError);
-          setNewBetaRouteIds(new Set());
-        } else {
-          const ids = new Set<string>(
-            ((rpcData as Array<{ route_id: string }>) ?? []).map((r) => r.route_id),
-          );
-          setNewBetaCache(currentRouteIdsKey, ids);
-          setNewBetaRouteIds(ids);
-        }
+      // Step 4: Call routes_with_new_beta RPC via home-service (with in-memory
+      // cache, ~60s TTL). Retained for AC-175 Saved Gyms ordering — not used for
+      // the card chip (chip removed per AC-181 Rev 39). Non-fatal on failure.
+      try {
+        const newBetaIds = await fetchRoutesWithNewBeta(savedRouteIds);
+        setNewBetaRouteIds(newBetaIds);
+      } catch (rpcErr) {
+        // Non-fatal: new-beta data unavailable; AC-175 ordering degrades gracefully.
+        console.error('[HomeScreen] routes_with_new_beta RPC error:', rpcErr);
+        setNewBetaRouteIds(new Set());
       }
     } catch (err) {
       console.error('[HomeScreen] loadProjectingRoutes error:', err);

@@ -15,6 +15,7 @@ jest.mock('../../../lib/supabase', () => ({
 import {
   fetchSavedGym,
   fetchProjectingRoutes,
+  fetchRoutesWithNewBeta,
   clearCache,
   getNewBetaCache,
   setNewBetaCache,
@@ -22,6 +23,7 @@ import {
 import { supabase } from '../../../lib/supabase';
 
 const mockFrom = supabase.from as jest.MockedFunction<typeof supabase.from>;
+const mockRpc = supabase.rpc as jest.MockedFunction<typeof supabase.rpc>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeQueryBuilder(result: { data: unknown; error: null | object }): any {
@@ -211,6 +213,84 @@ describe('home-service', () => {
 
       const result = await fetchProjectingRoutes(['route-001']);
       expect(result[0].gym_name).toBeNull();
+    });
+  });
+
+  // ── fetchRoutesWithNewBeta ──────────────────────────────────────────────────
+
+  describe('fetchRoutesWithNewBeta', () => {
+    it('returns an empty Set without calling RPC when given no route IDs', async () => {
+      const result = await fetchRoutesWithNewBeta([]);
+      expect(result).toEqual(new Set());
+      expect(mockRpc).not.toHaveBeenCalled();
+    });
+
+    it('calls the routes_with_new_beta RPC with the given route IDs', async () => {
+      mockRpc.mockResolvedValueOnce({ data: [], error: null } as never);
+      await fetchRoutesWithNewBeta(['route-001', 'route-002']);
+      expect(mockRpc).toHaveBeenCalledWith('routes_with_new_beta', {
+        route_ids: ['route-001', 'route-002'],
+      });
+    });
+
+    it('returns a Set of route_id values from the RPC response', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: [{ route_id: 'route-001' }, { route_id: 'route-003' }],
+        error: null,
+      } as never);
+      const result = await fetchRoutesWithNewBeta(['route-001', 'route-002', 'route-003']);
+      expect(result).toEqual(new Set(['route-001', 'route-003']));
+    });
+
+    it('throws when the RPC returns an error', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'RPC error' },
+      } as never);
+      await expect(fetchRoutesWithNewBeta(['route-001'])).rejects.toThrow(
+        'Failed to load new beta route data.',
+      );
+    });
+
+    it('returns the cached Set on a subsequent call without hitting the RPC', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: [{ route_id: 'route-001' }],
+        error: null,
+      } as never);
+
+      // First call — populates cache.
+      const first = await fetchRoutesWithNewBeta(['route-001', 'route-002']);
+      expect(mockRpc).toHaveBeenCalledTimes(1);
+
+      // Second call — cache hit; RPC not called again.
+      const second = await fetchRoutesWithNewBeta(['route-001', 'route-002']);
+      expect(mockRpc).toHaveBeenCalledTimes(1);
+      expect(second).toBe(first);
+    });
+
+    it('re-fetches when the route-id set differs from the cached key', async () => {
+      mockRpc.mockResolvedValue({ data: [], error: null } as never);
+
+      await fetchRoutesWithNewBeta(['route-001']);
+      await fetchRoutesWithNewBeta(['route-002']);
+
+      // Different route-id sets → two separate RPC calls.
+      expect(mockRpc).toHaveBeenCalledTimes(2);
+    });
+
+    it('treats route-id order as irrelevant (cache key is sorted)', async () => {
+      mockRpc.mockResolvedValueOnce({
+        data: [{ route_id: 'route-001' }],
+        error: null,
+      } as never);
+
+      // First call with one ordering.
+      await fetchRoutesWithNewBeta(['route-002', 'route-001']);
+      // Second call with reversed order — same sorted key → cache hit.
+      const second = await fetchRoutesWithNewBeta(['route-001', 'route-002']);
+
+      expect(mockRpc).toHaveBeenCalledTimes(1);
+      expect(second).toEqual(new Set(['route-001']));
     });
   });
 

@@ -230,3 +230,43 @@ export function getNewBetaCache(routeIdsKey: string): Set<string> | null {
 export function setNewBetaCache(routeIdsKey: string, data: Set<string>): void {
   newBetaCache = { data, populatedAt: Date.now(), routeIdsKey };
 }
+
+// ── fetchRoutesWithNewBeta ─────────────────────────────────────────────────────
+
+/**
+ * Calls the `routes_with_new_beta` RPC and returns a Set of route IDs that
+ * have at least one new beta video. Results are cached in-memory for 60 seconds
+ * (keyed by the sorted route-id set) to avoid redundant RPC calls on tab switch.
+ *
+ * Retained for AC-175 Saved Gyms ordering; the "new beta" chip was removed from
+ * RouteCard in AC-181 Rev 39, but the backing data is still needed.
+ *
+ * @param savedRouteIds - Route IDs to check. Returns an empty Set when empty.
+ * @throws {Error} when the Supabase RPC call fails.
+ */
+export async function fetchRoutesWithNewBeta(savedRouteIds: string[]): Promise<Set<string>> {
+  if (savedRouteIds.length === 0) {
+    return new Set();
+  }
+
+  const routeIdsKey = savedRouteIds.slice().sort().join(',');
+  const cached = getNewBetaCache(routeIdsKey);
+  if (cached !== null) {
+    return cached;
+  }
+
+  const { data, error } = await supabase.rpc('routes_with_new_beta', {
+    route_ids: savedRouteIds,
+  });
+
+  if (error) {
+    console.error('[fetchRoutesWithNewBeta] routes_with_new_beta error:', error);
+    throw new Error('Failed to load new beta route data.');
+  }
+
+  const ids = new Set<string>(
+    ((data as Array<{ route_id: string }>) ?? []).map((r) => r.route_id),
+  );
+  setNewBetaCache(routeIdsKey, ids);
+  return ids;
+}
