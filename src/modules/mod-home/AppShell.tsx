@@ -72,7 +72,7 @@ import { loadLanguageForUser } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme';
 import { UnreadCountProvider, NotificationsNavigator } from '../mod-notifications';
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
-import GymNavigator from '../mod-gym-directory/GymNavigator';
+import { GymNavigator } from '../mod-gym-directory';
 import { UserProfileScreen } from '../mod-social-feed';
 import SettingsScreen from '../mod-localization-theme/SettingsScreen';
 import AppHeader from './components/AppHeader';

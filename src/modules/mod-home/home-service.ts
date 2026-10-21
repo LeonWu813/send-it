@@ -13,7 +13,7 @@
  */
 
 import { supabase } from '../../lib/supabase';
-import type { RouteGrade } from '../mod-route-catalog/types';
+import type { RouteGrade } from '../mod-route-catalog';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

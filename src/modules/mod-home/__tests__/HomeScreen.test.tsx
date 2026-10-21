@@ -15,7 +15,7 @@
  */
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
-jest.mock('../../mod-route-catalog/route-service');
+jest.mock('../../mod-route-catalog');
 jest.mock('../../mod-social-feed');
 jest.mock('../../mod-send-logging');
 jest.mock('../../../lib/supabase', () => ({
@@ -61,7 +61,7 @@ import type { Session } from '@supabase/supabase-js';
 
 import HomeScreen from '../screens/HomeScreen';
 import { clearCache as clearNewBetaCache } from '../home-service';
-import * as routeService from '../../mod-route-catalog/route-service';
+import * as routeService from '../../mod-route-catalog';
 import * as socialFeedService from '../../mod-social-feed';
 import * as sendLogging from '../../mod-send-logging';
 import { supabase } from '../../../lib/supabase';
