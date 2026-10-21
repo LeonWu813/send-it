@@ -1,6 +1,8 @@
-# Send It — Environment Setup Runbook
+# ProjectDay — Environment Setup Runbook
 
-This runbook walks Leon through provisioning everything needed to run and build the Send It iOS app in development. Do these steps in order. When done, run the Setup Confirmation step at the bottom.
+This runbook walks Leon through provisioning everything needed to run and build the ProjectDay iOS app (formerly "Send It"; renamed in PRD Rev 47) in development. Do these steps in order. When done, run the Setup Confirmation step at the bottom.
+
+> **Rename in progress (Rev 47).** Steps 1–10 record the original setup and still show the old folder path `/Users/tsan/Desktop/MacBookPro/send-it` and the old Expo project name. Section 11 lists what you must do again or newly for ProjectDay. Paths in this file are updated after you rename the folder (step 11.8).
 
 **Project shape**: React Native + Expo (TypeScript), iOS-only, Supabase hosted BaaS, PostHog analytics. There is **no self-hosted backend** and **no Docker** in this project — Supabase is a hosted service.
 
@@ -131,7 +133,7 @@ npx create-expo-app@latest . --template blank-typescript
 APNs credential upload requires the Apple Developer account (step 4, deferred). Do the non-APNs parts now:
 
 1. Sign up / log in at https://expo.dev
-2. Create an Expo organization and a project called `send-it`
+2. Create an Expo organization and a project called `send-it` *(superseded by step 11.4: a new Expo project for ProjectDay)*
 3. Create an Expo access token (Account Settings → Access Tokens)
 4. Store the access token as a Supabase secret:
 
@@ -184,6 +186,86 @@ npm test
 # Production build for TestFlight (requires steps 4 + 8 complete)
 eas build --profile production --platform ios
 ```
+
+---
+
+## 11. Rename to ProjectDay (PRD Rev 47, AC-199 / AC-200) — steps only Leon can do
+
+Added 2026-10-21 by Tech Lead (change review). These steps happen in your own accounts and dashboards, outside the repository. Do them **in the order of the "When" column**: some must happen before the Engineers' changes reach a build, some only after.
+
+`<BUNDLE_ID>` and `<SLUG>` below mean the values you choose in the Tech Lead's question Q2 (recommended: `com.projectday.twbouldering` and `projectday`). Do not start 11.2 or 11.5 until you have answered Q2. A bundle ID cannot be changed once its App Store Connect record exists.
+
+| Step | When |
+|---|---|
+| 11.1 Supabase redirect URL: add | **Before** any ProjectDay build is installed |
+| 11.2 Supabase Apple provider Client ID | Before Apple Sign-In is tested on the new build |
+| 11.3 Google consent screen name | Any time |
+| 11.4 New Expo project | **Before** engineer-mod-home edits `app.json` (it needs the project ID) |
+| 11.5 Apple Developer + App Store Connect | When the Apple Developer account is active (step 4) |
+| 11.6 Devices | After the first ProjectDay build installs |
+| 11.7 Deploy migration + Edge Functions | After the MOD-002 / MOD-007 / MOD-009 Engineers finish |
+| 11.1b Supabase redirect URL: remove old | After a ProjectDay build signs in with Google |
+| 11.8 Rename the repo folder | **Last**, after every Engineer change for AC-200 is committed and no agent is running |
+
+### 11.1 Supabase Auth: redirect URL allow-list
+
+Supabase dashboard → **Authentication → URL Configuration → Redirect URLs**:
+
+1. **Add** `projectday://**`.
+2. **Keep** `send-it://**` for now. Debug builds of the current code still redirect to `send-it://`, so removing it first breaks Google sign-in in development before the code change lands.
+3. **11.1b (later):** once a ProjectDay build completes Google sign-in, **remove** `send-it://**`.
+
+If `projectday://**` is missing, Supabase silently redirects to the Site URL instead and Google sign-in never returns to the app.
+
+### 11.2 Supabase Auth: Apple provider Client IDs
+
+Supabase dashboard → **Authentication → Providers → Apple → Client IDs**: add `<BUNDLE_ID>`. Remove `com.sendit.twbouldering` once no "Send It" build is still in use. (Native Apple sign-in sends an ID token whose audience is the bundle ID, and Supabase rejects any audience that is not on this list.)
+
+### 11.3 Google Cloud Console: OAuth consent screen
+
+Google Cloud Console → **APIs & Services → OAuth consent screen** (Branding): change the app name from "Send It" to **ProjectDay**, and update the logo and home-page links if they mention the old name. The OAuth **client** does not change: the Google flow goes through Supabase's `/auth/v1/callback`, which does not depend on the bundle ID or the app scheme.
+
+### 11.4 Expo: new project for the new slug
+
+1. On https://expo.dev, create a new project named `<SLUG>` under your account or organization.
+2. Copy its **Project ID** (a UUID such as `1a2b3c4d-…`; it is not a secret).
+3. Give the Project ID to the coordinator for `engineer-mod-home`. It goes into `app.json` → `extra.eas.projectId`. The current value (`send-it-tw-bouldering-app`) is not a UUID, so `getExpoPushTokenAsync()` cannot work with it once APNs is set up.
+4. Do **not** run `eas init` in the repo yourself. It rewrites `app.json`, which belongs to `engineer-mod-home`.
+5. `EXPO_ACCESS_TOKEN` (Supabase secret, step 8) is account-level and does not change.
+
+### 11.5 Apple Developer + App Store Connect (when the account is active)
+
+1. developer.apple.com → **Identifiers → +** → App ID with bundle ID `<BUNDLE_ID>`. Enable the **Sign in with Apple** and **Push Notifications** capabilities.
+2. The APNs `.p8` key (step 4) works for every app in your team. Run `eas credentials` (iOS → production → Push Notifications) for `<BUNDLE_ID>`.
+3. App Store Connect → **Apps → + → New App**: platform iOS, name **ProjectDay**, bundle ID `<BUNDLE_ID>`, SKU of your choice. Set the **subtitle** to the 30-character-or-shorter text you choose in the Tech Lead's question Q1. The 46-character "Taiwan Climbing Route Tracker and Beta Sharing" will be rejected by App Store Connect.
+4. Builds and TestFlight testers under any old "Send It" record do **not** move over. Testers must install ProjectDay as a new app. Leave or remove the old record as you like.
+
+### 11.6 Devices and simulators
+
+- ProjectDay installs as a **separate app** next to any "Send It" build. Delete the old app.
+- You will be signed out once. The session is stored in the iOS keychain, which is tied to the bundle ID.
+- Old push tokens in the database belong to the old app and will stop working. The app registers new ones on sign-in (AC-054). No action needed before launch.
+
+### 11.7 Deploy the server-side parts
+
+Code changes to Edge Functions and migrations take effect only after deployment. Once the Engineers for MOD-002, MOD-007 and MOD-009 have committed (and if they did not deploy themselves):
+
+```bash
+supabase db push                                   # applies the new mod_002 gym-notes UPDATE migration
+supabase functions deploy notify-beta-video-like   # push title "ProjectDay"
+supabase functions deploy report-digest            # email header; keep its existing schedule
+supabase migration list                            # confirm the new migration shows as applied on remote
+```
+
+### 11.8 Rename the repository folder (last)
+
+Do this only after every AC-200 Engineer change is committed and no Claude Code session or agent is running in this folder.
+
+1. Quit Claude Code. `mv /Users/tsan/Desktop/MacBookPro/send-it /Users/tsan/Desktop/MacBookPro/<new-folder-name>`
+2. Move Claude Code's project memory so it carries over: `mv ~/.claude/projects/-Users-tsan-Desktop-MacBookPro-send-it ~/.claude/projects/-Users-tsan-Desktop-MacBookPro-<new-folder-name>` (the key is the absolute path with `/` replaced by `-`).
+3. Reopen Claude Code in the new folder and run `claude --agent doc-sync "template refresh"`. This regenerates the 24 engineer/QA agents, which embed the old absolute path.
+4. Run `cd ios && pod install`, then do one clean Xcode build (Product → Clean Build Folder). Pods and DerivedData cache absolute paths.
+5. Run `claude --agent tech-lead "Setup is complete"` so the Tech Lead can update the paths in this file and run the AC-200(3) check.
 
 ---
 

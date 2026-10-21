@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: pm
-mode: change
+agent: tech-lead
+mode: change-review
 module: n/a
-result: success
-next: the coordinator runs /pstack:how on the code the rename affects (app.json, ios/, package.json, locales/, and every "Send It" / send-it / sendit occurrence in src/ and supabase/), saves it to project-planning/pstack-findings/2026-10-21-how-rename-projectday.md, then claude --agent tech-lead "change review" (Rev 47: AC-199, AC-200; App Store subtitle is 46 characters vs Apple's 30-character limit), then claude --agent doc-sync
-timestamp: 2026-10-22T00:30:00Z
+result: needs-human
+next: show Leon questions Q1–Q6 in Tech Lead Reviews "Review — 2026-10-21 — change (Rev 47: rename to ProjectDay)" word for word, plus setup.md section 11 (Setup Changed — 2026-10-21); then claude --agent pm "change" (proposal pass revising AC-200: subtitle per Q1, bundle ID/slug per Q2, AC-200(3) command + carve-out per Q3/Q4, ownership table from this review) with Leon's answers quoted; Q6 (INT-028) goes to claude --agent tech-lead "decisions: ..."; after PM applies, claude --agent doc-sync
+timestamp: 2026-10-22T01:30:00Z
 
 ## PM Updates
 
@@ -298,6 +298,101 @@ timestamp: 2026-10-22T00:30:00Z
   - Approved by Leon in the coordinator session: "change all the internal id, comments, documents etc. to ProjectDay include this folder name, and for things that doesn't allowed capitalize use projectday. Q5 Taiwan Climbing Route Tracker and Beta Sharing. Q6 rename to ProjectDay. Substantive / Architectural. Change it right now. ProjectDay is available."
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-21 — change (Rev 47: rename to ProjectDay — AC-199, AC-200)
+
+pstack input: `project-planning/pstack-findings/2026-10-21-how-rename-projectday.md`. I checked every finding against the code at HEAD `55a6e23`.
+- Accepted: the OAuth scheme bug. `app.json` has no `scheme`, and `node_modules/expo-linking/build/Schemes.js:94–96` throws "Cannot make a deep link into a standalone app with no custom scheme defined" when `!__DEV__`. `collectManifestSchemes` reads only `expoConfig.scheme` and `ios.scheme`, not the bundle ID. The `'send-it'` literal is at `auth-service.ts:142` and the mock at `auth-service.test.ts:46`.
+- Accepted: the file-to-owner table. `git grep` finds hits in exactly the listed files.
+- Accepted: the applied seed migration cannot be edited.
+- Accepted: the nonce defect at `auth-service.ts:111–114`.
+- Accepted: the `ios/` regeneration recommendation, with a correction (Concern 3).
+- Corrected: the migration item is incomplete (Concern 4).
+- Corrected: the `.gitignore` owner is Tech Lead, not MOD-012 (`.gitignore` is in my write scope). I changed its header comment in this commit.
+- Corrected: "Google sign-in throws in production today" is accurate only for release builds. No release or TestFlight build exists yet (Apple Developer account still deferred, setup.md step 4), so no user has hit it.
+- Rejected: none.
+
+**Concerns** (must address before proceeding):
+- **C1. The App Store subtitle in AC-200(1) cannot be entered.** "Taiwan Climbing Route Tracker and Beta Sharing" is 46 characters. App Store Connect's subtitle limit is 30, and it refuses longer text. The subtitle exists only in App Store Connect, not in the repository, so AC-200(1) is checked by Leon in App Store Connect, not by QA. PM must revise the AC text before Doc-Sync copies it into a spec. Question Q1 for Leon is below.
+- **C2. The scheme fix is one atomic change across two owners plus one dashboard step.** `app.json` `"scheme": "projectday"` (MOD-012), `auth-service.ts:142` `'projectday'` with the test mock at `:46` (MOD-001), and Supabase Redirect URLs `projectday://**` (Leon, setup.md 11.1) must all be in place before any build is tested.
+  - If `app.json` has the scheme but the code still passes `'send-it'`: the debug build warns, ASWebAuthenticationSession waits for a scheme Supabase never redirects to, and the release build has no fix at all.
+  - If the allow-list entry is missing: Supabase silently redirects to the Site URL.
+  - Recommended order: Leon adds `projectday://**` (keeping `send-it://**`), then engineer-mod-home, then engineer-mod-auth-profile, with no build in between, then QA mod-auth-profile runs Google sign-in on a build that has both. Leon removes `send-it://**` after that passes.
+  - Adding a `scheme` also makes Expo add `projectday` to `CFBundleURLSchemes` on prebuild. Sign-in does not need it (ASWebAuthenticationSession matches the callback without it), but it is expected and harmless.
+- **C3. `expo prebuild --clean` is the right way to rename `ios/`, but it changes more than names.** I ran prebuild on an isolated copy of the project files in a scratch directory and diffed it against the committed `ios/`:
+  - **`SendIt.entitlements`**: committed as an empty `<dict/>` (commit `c1f708d`). Prebuild adds `aps-environment: development` from the expo-notifications plugin. While the Apple Developer account is deferred, a personal signing team cannot sign the Push Notifications capability, so the regenerated project would fail to build on a device. If the account is still deferred, MOD-012 must strip `aps-environment` through `app.plugin.js` (a MOD-012 file that already strips the Apple Sign-In entitlement), not by hand-editing after prebuild. If the account is active, keep it.
+  - **`PrivacyInfo.xcprivacy`**: committed, but not produced by prebuild with `--no-install`. Engineer must confirm it exists after `pod install`. App Store submission requires a privacy manifest.
+  - **`Info.plist`**: the committed file has `RCTNewArchEnabled: true`, which the prebuild output lacks. Engineer checks that the New Architecture setting is unchanged (Podfile.properties `newArchEnabled`).
+  - **`Podfile.properties.json`**: gains `expo-image.disable-libdav1d: "false"` (harmless).
+  - The `project.pbxproj` differences outside the renames are CocoaPods build phases that `pod install` restores.
+  - Acceptance for MOD-012: after prebuild and `pod install`, `git diff --stat ios/` shows only renames plus the items above, each kept or deliberately accepted. The Native Build Gate must pass: a device build, not just tsc and jest.
+- **C4. The gym-notes migration cannot reach AC-200(3)'s zero matches.** The applied migration `20260920000002_mod_002_gym_directory.sql:246,306` keeps "Send It" forever. The new UPDATE migration has to name the old text to find it. AC-200(3) needs a carve-out for both (C5).
+- **C5. AC-200(3) needs an exact carve-out and an exact command. PM must write both into the AC.** Changing what the AC checks is a requirement change, so it goes through PM, not me. Proposed text:
+  - **Command**: `git grep -n -i -E "send it|send-it|send_it|sendit" -- . ':!project-planning' ':!README.md'` (tracked files only, so `node_modules/`, `ios/Pods/`, `ios/build/` and untracked files are out of scope). Expected output: only lines matching the exemptions below.
+  - **Exempt (a)**: migration files under `supabase/migrations/` dated before Rev 47, and the one MOD-002 rename migration. Applied migrations are immutable.
+  - **Exempt (b)**: the literal path token `send-it-design`, an external design repository on another machine that this repo does not own (`src/lib/theme.ts:2,18`, `.storybook/MIGRATION.md:3,16`, five design-team agent files). The prose around these paths is still renamed.
+  - **Exempt (c)**: the English verb phrase "send it back" (12 `qa-mod-*` agents, from the framework template). It is not the app name.
+  - **Not exempt, sequencing only**: the absolute path `/Users/tsan/Desktop/MacBookPro/send-it` in the 24 engineer/QA agents. It disappears when Leon renames the folder (setup.md 11.8) and Doc-Sync then runs `"template refresh"`. The AC-200(3) check therefore runs only after both.
+  - **Decision for Leon (Q3)**: the two files no module owns (Concern C6).
+- **C6. Two tracked files have no owner.** `PRD_TW_Bouldering_App.md` (root, a stale duplicate of the PRD) and `scratchpad/edit_prd.py`, `scratchpad/edit_status.py` (tracked one-off scripts with absolute paths; `scratchpad/edit1.py` and `header.txt` are also tracked). Neither is on the Module Map Project files line, so the pstack guard blocks every Engineer from touching them. Options for Q3: (i) Leon deletes them in a `human:` commit, and I add `scratchpad/` to `.gitignore`. This is my recommendation: neither is used by the app or the framework. (ii) PM adds them to the Project files line and engineer-mod-home renames inside them. (iii) PM exempts them in AC-200(3).
+- **C7. The bundle ID and slug values are not set anywhere, and the bundle ID is permanent once the App Store Connect record exists.** AC-200(2) says only "use projectday". Q2 for Leon is below. My recommendation mirrors the current pattern: bundle ID `com.projectday.twbouldering`, slug `projectday`. `extra.eas.projectId` must be the real Expo project UUID from setup.md 11.4, not a slug-like string. Today's value `send-it-tw-bouldering-app` is not a UUID, so `getExpoPushTokenAsync()` (`useSession.ts:94`) will fail once APNs is set up even with the rename. That failure is hidden today only because the call's error is swallowed at `:96–100`.
+
+**AC-200 ownership allocation (proposed; PM records it in AC-200, and Doc-Sync adds each module's part to its spec):**
+
+| Owner | Files | Notes |
+|---|---|---|
+| MOD-012 `engineer-mod-home` (project files + shared code) | `app.json`: `name` "ProjectDay"; `slug`; `ios.bundleIdentifier`; **add `"scheme": "projectday"`**; `extra.eas.projectId` (real UUID from Leon); `photosPermission` copy. `package.json` + `package-lock.json` (name `projectday`, lock regenerated with `npm install`). `ios/` regenerated with `expo prebuild --clean` + `pod install` per C3 (`SendIt*` becomes `ProjectDay*`). `app.plugin.js` (only if `aps-environment` must be stripped). `.env.example:2`. `.storybook/MIGRATION.md` (prose only; keep the `send-it-design` path). `src/lib/theme.ts:2,18` (same). `src/components/ui/Stepper.tsx:38` (`ACCESSORY_ID`; only that file uses it, confirmed by grep). `src/components/ui/ListRow.tsx:21`, `src/components/ui/stories/AppText.stories.tsx:12`, `src/components/ui/stories/ListRow.stories.tsx:73`. `src/modules/mod-home/components/__tests__/AppHeader.test.tsx:11` (stale comment). | Lands **first**, together with MOD-001 (C2). Native Build Gate applies. |
+| MOD-001 `engineer-mod-auth-profile` | `src/modules/mod-auth-profile/auth-service.ts:142` becomes `'projectday'`; `__tests__/auth-service.test.ts:46` mock becomes `'projectday://auth'`. | Same batch as MOD-012. QA needs a device build with both changes. |
+| MOD-010 `engineer-mod-localization-theme` | `locales/en/common.json:3`, `locales/zh-TW/common.json:3` (`app.name`; zh-TW is also "ProjectDay" per AC-199); `src/modules/mod-localization-theme/stories/Tokens.stories.tsx:87`. | Carries AC-199. Independent of the others. |
+| MOD-007 `engineer-mod-notifications` | `supabase/functions/notify-beta-video-like/index.ts:185` (push title). | Needs redeployment (setup.md 11.7). Part of AC-199 (push text). |
+| MOD-009 `engineer-mod-moderation` | `supabase/functions/report-digest/index.ts:114` (email header). | Needs redeployment, keeping its schedule. Part of AC-199 (email text). |
+| MOD-002 `engineer-mod-gym-directory` | New `supabase/migrations/<ts>_mod_002_rename_projectday_gym_notes.sql`. It must use `UPDATE … SET notes = replace(notes, 'Send It', 'ProjectDay') WHERE notes LIKE '%Send It%'`, which only changes rows that still have the old text and is safe to re-run. `__tests__/GymDetailScreen.test.tsx:77,118`. Never edit `20260920000002`. | Needs `supabase db push` (setup.md 11.7). Part of AC-199 (user-visible gym notes). |
+| Tech Lead | `.gitignore` header (done in this commit); `project-planning/setup.md` (section 11 added; paths after the folder rename). | — |
+| Doc-Sync | `production.md` app name; the 24 generated engineer/QA agents with `"template refresh"`, **after** Leon renames the folder. | Doc-Sync generates these agents. Never hand-edit them. |
+| Coordinator, **only on Leon's explicit instruction** | The 5 design-team agents (`design-lead`, `ui-designer`, `ux-designer`, `ux-researcher`, `motion-designer`): prose "Send It design team" becomes "ProjectDay design team". Keep the `send-it-design` paths. | These agents are outside Doc-Sync's set (CLAUDE.md ownership row "other `.claude/agents/*.md`"). |
+| Leon | Supabase dashboard, Google consent screen, Expo project, Apple Developer / App Store Connect, folder rename (setup.md section 11); `PRD_TW_Bouldering_App.md` and `scratchpad/` per Q3. | — |
+| Out of scope | Supabase and PostHog project names (Decision 2026-10-21); `README.md` (final checkpoint); `project-planning/`. | — |
+
+Note for Doc-Sync and PM: AC-200 is labelled MOD-012, but every row above that names a module must reach that module's spec. If a module's spec does not have its row, its Engineer cannot see the work and its QA cannot test it.
+
+**Recommendations** (suggested improvements):
+- **R1. Open an integration row for the Apple nonce defect. Logged as INT-028 (PROPOSED, HIGH, mod-auth-profile).**
+  - At `auth-service.ts:111–114`, `signInWithIdToken` receives `nonce: credential.authorizationCode`. Supabase's type documentation (`@supabase/auth-js` `types.d.ts:586`) defines `nonce` as the raw value whose hash is compared with the ID token's `nonce` claim. `signInAsync` (`:92`) is called without a `nonce`, so the token has no claim to compare against. The value sent is a one-time authorization code, not a nonce.
+  - Expected failure: Supabase Auth rejects the mismatch, so every Apple sign-in ends in "Apple Sign-In failed". If it were accepted instead, the token would have no replay protection.
+  - Evidence gap: this has never run, because `app.plugin.js` strips the entitlement, so the device symptom is unobserved. The row asks QA to confirm it on the first build with the entitlement enabled.
+  - Why it is in Phase 1: App Store Guideline 4.8 requires Sign in with Apple alongside Google, and the Phase 1 milestone includes App Store submission.
+  - Fix, no behaviour change: generate a raw nonce, pass `SHA256(raw)` to `signInAsync({ nonce })`, and pass `raw` to `signInWithIdToken`.
+  - Gate: the row is `PROPOSED`, so it blocks the Phase 1 checkpoint until Leon approves, rejects or defers it.
+- **R2. Native Build Gate for this change.** QA for MOD-012 and MOD-001 must install and launch a device build. Jest mocks `expo-auth-session` (`auth-service.test.ts:45–47`) and cannot see the scheme, the plist or the entitlements. That is the same gap as the 2026-10-03 "green-but-broken" Skill Recommendation.
+- **R3. Run blast-radius on MOD-012's change.** Almost every module depends on mod-home, so the coordinator's blast-radius step will trigger on its fix. Point it at the `ios/` and `app.json` diff, where a regenerated native project is most likely to break other modules (expo-video, expo-image, notifications).
+- **R4. Status.md has two `## Last Action` blocks.** One is at the top (the live one, which I updated). The other is at the bottom (line 4731: `agent: qa-mod-route-catalog … next: … "confirm-fix INT-015"`, already done in `0eeed5e`). The bottom one is stale and could mislead a resuming session. PM owns the layout and should remove it at the next pass.
+
+**Approved**:
+- Module ownership for the rename follows the Module Map Source Paths exactly. No module needs to write outside its path except as listed for the coordinator, Doc-Sync and Leon.
+- The climbing-verb exemption in AC-199/AC-200 (`mod-send-logging`, `send-service.ts`) is correct and complete. None of those identifiers matches the four search patterns.
+- Shipping the rename before the Phase 1 checkpoint is technically sound. The changes are identifiers and copy, plus one bug fix (C2) that the release build needs anyway.
+
+**Questions for Leon** (needs-human; PM folds the answers into an AC-200 revision before Doc-Sync runs):
+- **Q1.** The App Store subtitle must be 30 characters or fewer. Options: "Taiwan Climbing Route Tracker" (29, the approved text shortened), "Taiwan Climbing & Beta Sharing" (30), "Route Tracker & Beta Sharing" (28), or your own text.
+- **Q2.** Bundle ID and Expo slug: accept `com.projectday.twbouldering` and `projectday`, or give other values? The bundle ID is permanent once the App Store Connect record exists.
+- **Q3.** `PRD_TW_Bouldering_App.md` and `scratchpad/`: (i) you delete them yourself and I gitignore `scratchpad/` (recommended), (ii) engineer-mod-home renames inside them, or (iii) exempt them from AC-200(3)?
+- **Q4.** Do you accept the AC-200(3) carve-out in C5: pre-Rev-47 migrations and the rename migration, the `send-it-design` path token, and the verb "send it back"? The search runs after the folder rename and the template refresh.
+- **Q5.** Is the Apple Developer account active now? If not, MOD-012 strips `aps-environment` (C3), and setup.md 11.5 waits.
+- **Q6.** INT-028 (Apple nonce): approve, reject or defer?
+
+### Setup Changed — 2026-10-21
+
+Rev 47 changes the app's external identity: scheme, bundle ID, Expo slug and App Store record. setup.md now has **section 11** with what Leon must redo or do newly:
+- 11.1 Supabase Redirect URLs: add `projectday://**` (remove `send-it://**` later).
+- 11.2 Supabase Apple provider Client IDs: the new bundle ID.
+- 11.3 Google consent screen name.
+- 11.4 New Expo project and its Project ID for engineer-mod-home.
+- 11.5 Apple App ID, push credentials and App Store Connect record (when the account is active).
+- 11.6 Devices: reinstall, one forced sign-out.
+- 11.7 Deploy the new migration and two Edge Functions.
+- 11.8 Folder rename, memory move, Doc-Sync template refresh, `pod install`.
+
+`.gitignore` header comment renamed. No `.env` variable changes. Re-confirm with `claude --agent tech-lead "Setup is complete"` after 11.1–11.4 (before the first ProjectDay build), and again after 11.8.
 
 ### Review — 2026-10-21 — on-demand (INT-005 close request; QA Run 3 failing suites)
 

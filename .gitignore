@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────
-# Send It — .gitignore
+# ProjectDay — .gitignore
 # Derived from PRD tech stack: React Native + Expo (TS), Supabase (hosted BaaS),
 # PostHog analytics. iOS-only Phase 1. No self-hosted backend or Docker.
 # ─────────────────────────────────────────────────────────────
