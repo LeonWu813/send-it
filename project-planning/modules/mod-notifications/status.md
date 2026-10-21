@@ -2,6 +2,44 @@
 
 ## Engineering Progress
 
+**INT-012: Create index.ts barrel — complete 2026-10-20**
+
+Created `src/modules/mod-notifications/index.ts` to give other modules a single, stable import surface for the notification domain.
+
+### What was implemented
+
+- Created `src/modules/mod-notifications/index.ts` re-exporting the public API surface consumed by external modules:
+  - `NotificationsNavigator` (default re-export as named) and `NotificationsView` type — consumed by `mod-auth-profile/ProfileNavigator.tsx` and `mod-home/AppShell.tsx`.
+  - `UnreadCountProvider`, `useUnreadCount`, `useUnreadCountContext` — consumed by `mod-home/AppShell.tsx`, `mod-home/components/AppHeader.tsx`, and stories.
+  - `registerDeviceToken`, `fetchNotifications`, `markNotificationsRead`, `fetchUnreadNotificationCount`, `fetchNotificationPreference`, `updateNotificationPreference` — service functions; `registerDeviceToken` consumed by `mod-auth-profile/hooks/useSession.ts`.
+  - Types: `Notification`, `NotificationType`, `NotificationPreference`, `DeviceToken`.
+- No files inside `src/modules/mod-notifications/` had cross-module deep-imports to other modules (verified by grep — zero matches for `from '.*mod-'` paths inside the module), so no intra-module fixes were needed.
+
+### Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npm run lint` (tsc --noEmit) | PASS | 0 errors |
+| `npm test -- --testPathPattern=mod-notifications` | PASS | 46/46 tests pass across 3 suites; 0 failures |
+| Files changed outside module Source Path | PASS | Only `src/modules/mod-notifications/index.ts` created and `project-planning/modules/mod-notifications/status.md` updated — no out-of-scope edits |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| Barrel exports only public API (coding-conventions: index files for public API only) | PASS | Internal files (`test-utils.tsx`, `screens/`) are not re-exported. Only symbols actually consumed externally are exported. |
+| No new dependencies | PASS | Pure re-export file; no imports added. |
+| TypeScript strict mode | PASS | 0 compile errors with `tsc --noEmit`. |
+| Cross-module import rule satisfied | PASS | Consumers may now import from barrel path instead of deep-importing private sub-paths. Existing deep imports continue to work; the barrel makes barrel-path imports possible. |
+
+### Files Created
+
+- `src/modules/mod-notifications/index.ts` — public barrel re-exporting navigator, context hooks, service functions, and types
+
+---
+
 **AC-185: SwipeBackWrapper added to NotificationInboxScreen — complete 2026-10-15**
 
 Added `SwipeBackWrapper` to `NotificationInboxScreen` per the AC-185 rule: every screen that shows a back icon must be wrapped.
