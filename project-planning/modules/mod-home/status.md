@@ -3986,3 +3986,54 @@ The supabase.test.ts suite (also assigned to mod-home, INT-027) is independently
 **Result: INTEGRATION FIX VERIFIED — INT-025 PASS**
 
 The original failure scenario no longer reproduces. All 62 mod-home tests pass. No regressions found.
+
+---
+
+### QA Run 17 — Integration-Fix Verify — INT-027 — 2026-10-21
+
+**Workflow**: regression-test (integration-fix-verify INT-027)
+
+**Finding being re-verified:** INT-027 — `src/lib/__tests__/supabase.test.ts` lines 11–13 contained a per-test `jest.mock` for `@react-native-async-storage/async-storage`. Since commit `735e974` (2026-10-15), the global `moduleNameMapper` in `package.json` already maps `^@react-native-async-storage/async-storage$` to the AsyncStorage mock. The per-test factory's own `require()` call was intercepted by that same mapper, causing infinite recursion ("Maximum call stack size exceeded"). All 3 supabase tests failed.
+
+**Engineer fix (commit cbcc6a8):** Removed the redundant per-test `jest.mock` block (old lines 11–13) from `src/lib/__tests__/supabase.test.ts`. A comment was added noting that the global `moduleNameMapper` provides the mock. No production code changed.
+
+---
+
+#### Verification item 1 — Redundant jest.mock block is absent
+
+Read `src/lib/__tests__/supabase.test.ts` lines 1–20: line 10 contains only a comment (`// AsyncStorage is provided globally by the jest moduleNameMapper in package.json.`). No `jest.mock('@react-native-async-storage/async-storage', ...)` call is present anywhere in the file. The redundant per-test `jest.mock` block is absent. PASS.
+
+---
+
+#### Verification item 2 — All 3 supabase tests pass
+
+`npx jest src/lib/__tests__/supabase.test.ts --no-coverage`:
+- PASS src/lib/__tests__/supabase.test.ts
+- supabase singleton: 3 tests pass (exports client, throws on missing URL, throws on missing key)
+- Tests: 3 passed, 3 total — exit 0
+
+Original failure scenario ("Maximum call stack size exceeded") no longer reproduces. REGRESSION PASS.
+
+---
+
+#### Verification item 3 — Full mod-home + src/lib suite: 90/90, no regressions
+
+`npx jest --testPathPattern="src/modules/mod-home|src/lib" --no-coverage`:
+- Test Suites: 9 passed, 9 total
+- Tests: 90 passed, 90 total — exit 0
+
+Suites covered: supabase.test.ts (3/3), design-tokens.test.ts, i18n.test.ts, signedUrlCache.test.ts, home-service.test.ts, TabBar.test.tsx, AppHeaderContext.test.tsx (8/8, INT-025 fix intact), AppHeader.test.tsx, HomeScreen.test.tsx.
+
+No regressions introduced by the fix.
+
+---
+
+### Summary — QA Run 17
+
+| Item | Result |
+|---|---|
+| Redundant jest.mock block absent from supabase.test.ts | PASS |
+| supabase.test.ts: 3/3 pass | REGRESSION PASS |
+| Full mod-home + src/lib suite: 90/90 pass, 9 suites | PASS — no regressions |
+
+**Result: INTEGRATION FIX VERIFIED — INT-027 PASS**

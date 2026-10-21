@@ -4621,8 +4621,8 @@ Agent: tech-lead
 
 ## Last Action
 
-agent: engineer-mod-route-catalog
-action: integration-fix INT-026
-result: fixed
+agent: qa-mod-home
+action: integration-fix-verify INT-027
+result: pass
 date: 2026-10-21
 next: qa-mod-route-catalog "integration-fix-verify INT-026"
