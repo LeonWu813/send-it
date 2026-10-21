@@ -3,11 +3,11 @@
 ## Last Action
 
 agent: tech-lead
-mode: integration-review
+mode: record-decisions
 module: n/a
-next: claude --agent tech-lead "decisions: INT-009 APPROVED, INT-011 APPROVED, INT-013 <decision>, … INT-023 <decision>" — then each owning Engineer marks its already-fixed rows FIXED – AWAITING QA (citing commits), QA verifies per module (incl. the pending `claude --agent qa-mod-gym-directory "regression-test INT-012 barrel creation"`), the human verifies, and Tech Lead runs confirm-fix
-result: issues-found
-timestamp: 2026-10-20T00:00:00Z
+next: claude --agent qa-mod-auth-profile "verify INT-005" — remaining open Phase 1 rows are INT-005 (mod-auth-profile), INT-006 (seeder / project files), INT-010 (mod-beta-video), INT-012 (barrel owners + consumers, incl. `claude --agent qa-mod-gym-directory "regression-test INT-012 barrel creation"`), all FIXED – AWAITING QA; after QA VERIFIED + human verification → claude --agent tech-lead "I verified INT-0NN" for confirm-fix
+result: success
+timestamp: 2026-10-20T12:00:00Z
 
 ## PM Updates
 
