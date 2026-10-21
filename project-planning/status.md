@@ -2,13 +2,13 @@
 
 ## Last Action
 
-agent: qa-mod-home
-mode: integration-fix-verify
-module: mod-home
-result: done
-rows: INT-018 → QA VERIFIED
-next: tech-lead "confirm-fix INT-018"
-timestamp: 2026-10-21T20:00:00Z
+agent: tech-lead
+mode: confirm-fix
+module: n/a
+result: needs-human
+rows: INT-018 stays QA VERIFIED. HUMAN VERIFIED needs the human's own verification statement, and none has been given yet. Code pre-check is clean (HomeScreen.tsx is 800 lines, with no supabase.rpc/from, no `as unknown as`, and no module-level cache).
+next: claude --agent tech-lead "confirm-fix INT-018" with the human's quoted verification statement (Leon: "<exact words>")
+timestamp: 2026-10-21T20:15:00Z
 
 ## PM Updates
 
