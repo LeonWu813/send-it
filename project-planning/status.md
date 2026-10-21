@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: doc-sync
-mode: template-refresh
-module: n/a
-result: success
-next: claude --agent tech-lead "new finding from INT-005 verification: avatar replace uploads but old image still shown (same storage path and public URL, cached); decide whether to add an INT row and fix". INT-006 is CONFIRMED CLOSED. INT-005 is QA VERIFIED for the policy fix and needs human verification. INT-012 still needs QA.
-timestamp: 2026-10-21T14:00:00Z
+agent: qa-mod-social-feed
+mode: integration-fix-verify INT-012
+module: mod-social-feed
+result: QA VERIFIED
+next: claude --agent tech-lead "confirm-fix INT-012". INT-012 is QA VERIFIED: all three barrels (mod-social-feed, mod-moderation, mod-notifications) confirmed present with public API exports; zero non-test source files retain deep service imports; mod-social-feed 63/63 tests pass. Also still pending: avatar-stale-image finding from INT-005 (tech lead to decide on new INT row).
+timestamp: 2026-10-21T15:00:00Z
 
 ## PM Updates
 
