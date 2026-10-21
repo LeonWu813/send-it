@@ -2,13 +2,13 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: confirm-fix
-module: n/a
+agent: engineer-mod-beta-video
+mode: integration-fix
+module: mod-beta-video
 result: success
-rows: INT-009, INT-011, INT-013, INT-014, INT-015, INT-019, INT-023 → HUMAN VERIFIED → CONFIRMED CLOSED. Still open (blocking the Phase 1 checkpoint): INT-018, INT-021 (QA VERIFIED, waiting for the human's verification statement); INT-016, INT-017, INT-020 (APPROVED, waiting for the Engineer to set FIXED – AWAITING QA); INT-017 carry-over question to Leon still open.
-next: claude --agent engineer-mod-beta-video "integration-fix INT-016 INT-017 INT-020" (re-check the landed commit 7bcbd28 and set FIXED – AWAITING QA). In parallel: claude --agent tech-lead "confirm-fix INT-018 INT-021" with the human's quoted verification statement (Leon: "<exact words>")
-timestamp: 2026-10-21T21:00:00Z
+rows: INT-016 FIXED – AWAITING QA (getSession removed, verified in commit 7bcbd28); INT-017 FIXED – AWAITING QA (useReelGestures extracted to hooks/useReelGestures.ts, commit e612a15, 113/113 tests pass); INT-020 FIXED – AWAITING QA (beta-videos bucket migration verified in commit 7bcbd28).
+next: claude --agent qa-mod-beta-video "integration-fix-verify INT-016 INT-017 INT-020"
+timestamp: 2026-10-21T22:00:00Z
 
 ## PM Updates
 
