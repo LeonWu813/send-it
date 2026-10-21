@@ -450,8 +450,11 @@ export default function RouteSubmitScreen({
             loading={isSubmitting}
             onPress={() => {
               setShowDuplicateSheet(false);
-              // TypeScript narrowing — validated before the sheet was shown
-              void uploadAndSubmit(selectedGrade!, selectedColor!, photoUri!);
+              // Narrowing guard — values were validated in handleAddRoute before
+              // the sheet was shown, so this branch is unreachable at runtime.
+              // The explicit guard lets the compiler verify non-null here too.
+              if (!selectedGrade || !selectedColor || !photoUri) return;
+              void uploadAndSubmit(selectedGrade, selectedColor, photoUri);
             }}
           />
           <Button

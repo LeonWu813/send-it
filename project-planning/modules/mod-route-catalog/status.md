@@ -2,6 +2,29 @@
 
 ## Engineering Progress
 
+### INT-023 — Remove remaining non-null assertions in RouteSubmitScreen (2026-10-21)
+
+**Fix:** The previous commit (dd0c771) replaced the `!` assertions in `handleAddRoute` body (lines 253–255) with a proper narrowing guard, but intentionally left `selectedGrade!`, `selectedColor!`, `photoUri!` in the BottomSheet confirm `onPress` closure (formerly line 454, now line 456 after the guard comment).
+
+- Replaced `void uploadAndSubmit(selectedGrade!, selectedColor!, photoUri!)` with an explicit guard followed by `void uploadAndSubmit(selectedGrade, selectedColor, photoUri)`.
+- The guard `if (!selectedGrade || !selectedColor || !photoUri) return;` is unreachable at runtime — the sheet is only shown after `handleAddRoute` validates all three values.
+- `uploadAndSubmit` call signature is unchanged. No validation logic changed.
+
+**Self-check (2026-10-21):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest --testPathPattern="mod-route-catalog" --watchAll=false` — 115/115 tests pass across 5 suites.
+- PASS: Scope check — only `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` changed (within MOD-003 Source Path).
+- PASS: No logic change — the narrowing guard is unreachable at runtime; behavior is identical.
+- PASS: No new dependencies introduced.
+- N/A: Not a React Native screen layout change — no safe-area check required.
+- N/A: No LLM/AI API calls in this module.
+- N/A: No new database queries or joins.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — BottomSheet confirm `onPress` closure: `!` assertions replaced with explicit narrowing guard.
+
+---
+
 ### Phase 1 quality review fixes: M-7, L-4, barrel index.ts (2026-10-20)
 
 **M-7 — withdrawRoute silently succeeds when 0 rows deleted**
