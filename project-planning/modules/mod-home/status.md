@@ -3890,3 +3890,27 @@ Test count increased from 39 to 49 (Engineer added 10 new tests for the new func
 | Change confined to mod-home Source Path | PASS |
 
 **Result: FIXED – AWAITING QA**
+
+---
+
+### Integration Fix — INT-027 — 2026-10-21
+
+**Finding:** `src/lib/__tests__/supabase.test.ts` lines 11–13 contained a per-test `jest.mock` for `@react-native-async-storage/async-storage`. Since commit `735e974` (2026-10-15), `package.json` jest `moduleNameMapper` already maps `^@react-native-async-storage/async-storage$` to the AsyncStorage mock. The per-test factory called `require('@react-native-async-storage/async-storage/jest/async-storage-mock')`, which the mapper intercepted and forwarded back to the same factory, causing infinite recursion ("Maximum call stack size exceeded"). All 3 supabase tests failed.
+
+**Fix:** Removed lines 11–13 (the per-test `jest.mock` block). The global `moduleNameMapper` already provides the AsyncStorage mock and no per-test override is needed. No production code changed.
+
+**Files changed:**
+- `src/lib/__tests__/supabase.test.ts` — removed redundant `jest.mock` for `@react-native-async-storage/async-storage`; replaced with a comment noting the global mapper provides the mock
+
+**Self-check results:**
+
+| Check | Result |
+|---|---|
+| `npx jest src/lib/__tests__/supabase.test.ts` | PASS — 3/3 tests |
+| `npx jest src/modules/mod-home src/lib` | PASS — 90/90 tests, 9 suites |
+| No production code changed | PASS |
+| Change confined to mod-home Source Path (`src/lib/`) | PASS |
+
+**Commit:** cbcc6a8
+
+**Result: FIXED – AWAITING QA**
