@@ -59,7 +59,8 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
 
-import HomeScreen, { clearNewBetaCacheForTests } from '../screens/HomeScreen';
+import HomeScreen from '../screens/HomeScreen';
+import { clearCache as clearNewBetaCache } from '../home-service';
 import * as routeService from '../../mod-route-catalog/route-service';
 import * as socialFeedService from '../../mod-social-feed';
 import * as sendLogging from '../../mod-send-logging';
@@ -155,7 +156,7 @@ function setupDefaultMocks() {
 describe('HomeScreen (Rev 36)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    clearNewBetaCacheForTests();
+    clearNewBetaCache();
     setupDefaultMocks();
   });
 

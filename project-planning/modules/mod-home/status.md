@@ -395,6 +395,63 @@
 
 ---
 
+### Bugfix — M-5: extract inline queries to home-service.ts — 2026-10-20
+
+**Problem (M-5 from Phase 1 quality review):**
+1. `loadSavedGyms` and `loadProjectingRoutes` executed Supabase queries inline in the screen component, including a JS `MAX(last_viewed_at)` aggregation loop.
+2. The `newBetaCache` singleton lived at module scope in the screen file and was exported as `clearNewBetaCacheForTests` — tests were coupled to internal screen state.
+3. Four `as unknown as Array<{...}>` casts were inline in data-loading callbacks, belonging in typed service return types.
+
+**Fix:**
+
+1. Created `src/modules/mod-home/home-service.ts` with:
+   - `fetchSavedGym(userId)` — the saved-gyms query with recency ordering, typed return `SavedGymItem[]`.
+   - `fetchProjectingRoutes(savedRouteIds)` — the routes query, typed return `ProjectingRoute[]`. The `MAX(last_viewed_at)` JS aggregation is preserved as-is per the spec note ("The existing batched-fetch + JS-group pattern is correct and must be preserved"); a TODO comment marks where a SQL MAX could replace it if MOD-003 ships an RPC.
+   - `newBetaCache` singleton at module scope (unexported). Exported `clearCache()` for test use, and `getNewBetaCache()` / `setNewBetaCache()` as typed accessors so the screen never touches the raw cache variable.
+   - Proper TypeScript types on all return values — no `as unknown as Array<{...}>` casts in service functions (typed inline with named `type` aliases).
+
+2. Updated `HomeScreen.tsx`:
+   - Imported `fetchSavedGym`, `fetchProjectingRoutes`, `clearCache`, `getNewBetaCache`, `setNewBetaCache` from `home-service.ts`.
+   - Imported `SavedGymItem` and `ProjectingRoute` types from `home-service.ts`; removed inline interface definitions for both.
+   - Removed `NewBetaCache` interface, `newBetaCache` variable, `clearNewBetaCacheForTests` export, and `clearNewBetaCache` local function.
+   - Removed `NEW_BETA_CACHE_TTL_MS` constant (moved to home-service).
+   - `loadSavedGyms`: now delegates entirely to `fetchSavedGym(session.user.id)`.
+   - `loadProjectingRoutes`: now delegates route fetch to `fetchProjectingRoutes(savedRouteIds)`; cache read/write uses `getNewBetaCache`/`setNewBetaCache`.
+   - Auth-clear `useEffect`: calls `clearCache()` (from home-service) instead of the removed `clearNewBetaCache()`.
+
+3. Updated `src/modules/mod-home/__tests__/HomeScreen.test.tsx`:
+   - Import changed from `{ clearNewBetaCacheForTests }` from the screen to `{ clearCache as clearNewBetaCache }` from `home-service`.
+   - `beforeEach` now calls `clearNewBetaCache()` (aliased from the service's `clearCache`).
+
+4. Created `src/modules/mod-home/__tests__/home-service.test.ts`:
+   - 13 tests covering `fetchSavedGym` (empty result, error, lastViewedAt wiring, sort order), `fetchProjectingRoutes` (empty ids, mapped result, error, null gym embed), and cache helpers (`clearCache`, `getNewBetaCache`, `setNewBetaCache`, key mismatch).
+
+**Files changed:**
+- `src/modules/mod-home/home-service.ts` — created
+- `src/modules/mod-home/screens/HomeScreen.tsx` — inline queries/cache removed, service imports added
+- `src/modules/mod-home/__tests__/HomeScreen.test.tsx` — import updated
+- `src/modules/mod-home/__tests__/home-service.test.ts` — created
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-home" --watchAll=false` | PASS — 54 tests, 4 suites pass (AppHeaderContext.test.tsx failure is pre-existing env-var issue, unrelated to this change) |
+| `clearNewBetaCacheForTests` removed from screen export | PASS — grep finds 0 occurrences in src/ |
+| `SavedGymItem` and `ProjectingRoute` types moved to home-service | PASS |
+| `NewBetaCache` interface and `newBetaCache` variable removed from screen | PASS |
+| `fetchSavedGym` — typed return, no inline `as unknown as` casts | PASS |
+| `fetchProjectingRoutes` — typed return, no inline `as unknown as` casts | PASS |
+| Behavior identical to before: same queries, same loading states, same sort order | PASS |
+| One test file per source file (`home-service.test.ts` created) | PASS |
+| No hardcoded hex colors, no inline string literals | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24

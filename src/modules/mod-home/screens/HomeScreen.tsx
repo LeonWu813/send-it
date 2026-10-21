@@ -31,6 +31,10 @@
  *   - fetchUserAchievements() from mod-send-logging (AC-190)
  *   - fetchFollowing() from mod-social-feed (for followed user list)
  *   - RouteCard from src/components/RouteCard (app-level shared component)
+ *
+ * Data-access layer:
+ *   - Saved Gyms query and Projecting Routes query are extracted to home-service.ts.
+ *   - The in-memory new-beta RPC cache singleton lives in home-service.ts (not here).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -59,11 +63,16 @@ import { fetchUserAchievements } from '../../mod-send-logging';
 import { fetchFollowing } from '../../mod-social-feed';
 import type { FollowingUser } from '../../mod-social-feed';
 import { useAppHeaderRoot } from '../components/AppHeaderContext';
+import {
+  clearCache,
+  fetchSavedGym,
+  fetchProjectingRoutes,
+  getNewBetaCache,
+  setNewBetaCache,
+} from '../home-service';
+import type { SavedGymItem, ProjectingRoute } from '../home-service';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-
-/** Cache TTL for `routes_with_new_beta` RPC results (milliseconds). */
-const NEW_BETA_CACHE_TTL_MS = 60_000;
 
 /** How many days back to look for "new" beta videos in the Following section. */
 const FOLLOWING_ACTIVITY_DAYS = 14;
@@ -93,28 +102,6 @@ interface AdminBanner {
   image_url: string | null;
 }
 
-/** Minimal gym shape for the saved-gyms strip. */
-interface SavedGymItem {
-  id: string;
-  name: string;
-  photo_url: string | null;
-  /** Google Places cover photo (Rev 44). Null = initials avatar fallback. */
-  cover_photo_url: string | null;
-  /** MAX last_viewed_at for this gym from user_route_visits; null = no visits. */
-  lastViewedAt: string | null;
-}
-
-/** Route row for the Projecting Routes section. */
-interface ProjectingRoute {
-  id: string;
-  gym_id: string;
-  grade: RouteGrade;
-  color_tag: string;
-  photo_url: string | null;
-  section_label: string | null;
-  gym_name: string | null;
-}
-
 /** Following-activity row per followed climber. */
 interface FollowingActivity {
   userId: string;
@@ -122,32 +109,6 @@ interface FollowingActivity {
   avatarUrl: string | null;
   /** ISO timestamp of the most-recent beta video activity (MAX updated_at). */
   latestAt: string | null;
-}
-
-// ── In-memory cache for routes_with_new_beta RPC ─────────────────────────────
-
-interface NewBetaCache {
-  /** Route IDs that have a new beta video (Set for O(1) lookup). */
-  data: Set<string>;
-  /** Timestamp when this cache entry was populated. */
-  populatedAt: number;
-  /**
-   * Stable key derived from the route-id set this cache entry was computed for.
-   * Formed by sorting the route IDs and joining with ','.
-   * A cache hit is only valid when the current route-id set produces the same key.
-   */
-  routeIdsKey: string;
-}
-
-let newBetaCache: NewBetaCache | null = null;
-
-/** Exported only for test use — clears the in-memory new-beta RPC cache. */
-export function clearNewBetaCacheForTests(): void {
-  newBetaCache = null;
-}
-
-function clearNewBetaCache(): void {
-  newBetaCache = null;
 }
 
 // ── Relative timestamp helper ─────────────────────────────────────────────────
@@ -225,79 +186,7 @@ export default function HomeScreen({
   const loadSavedGyms = useCallback(async () => {
     setSavedGymsLoading(true);
     try {
-      // Fetch saved gyms joined with gym details, and LEFT JOIN user_route_visits
-      // to get the most-recently-viewed timestamp per gym (AC-175).
-      // The join on user_route_visits uses routes' gym_id to aggregate recency.
-      // When no visits exist, last_viewed_at is null — gym still appears (AC-175).
-      const { data: savedRows, error: savedError } = await supabase
-        .from('saved_gyms')
-        .select('gym_id, gyms(id, name, photo_url, cover_photo_url)')
-        .eq('user_id', session.user.id);
-
-      if (savedError) {
-        console.error('[HomeScreen] loadSavedGyms saved_gyms error:', savedError);
-        setSavedGyms([]);
-        return;
-      }
-
-      if (!savedRows || savedRows.length === 0) {
-        setSavedGyms([]);
-        return;
-      }
-
-      // Extract gym IDs for the recency query.
-      const gymIds = (savedRows as unknown as Array<{ gym_id: string; gyms: { id: string; name: string; photo_url: string | null; cover_photo_url: string | null } | null }>)
-        .filter((r) => r.gyms !== null)
-        .map((r) => r.gym_id);
-
-      // Fetch recency data: MAX(last_viewed_at) per gym via user_route_visits → routes.
-      // This uses a raw SQL approach via RPC isn't available; instead we query
-      // user_route_visits directly with a join to routes to get per-gym recency.
-      let recencyMap: Map<string, string> = new Map();
-
-      if (gymIds.length > 0) {
-        const { data: visitRows, error: visitError } = await supabase
-          .from('user_route_visits')
-          .select('last_viewed_at, routes(gym_id)')
-          .eq('user_id', session.user.id);
-
-        if (!visitError && visitRows) {
-          // Group by gym_id, take MAX last_viewed_at.
-          for (const row of visitRows as unknown as Array<{ last_viewed_at: string; routes: { gym_id: string } | null }>) {
-            if (!row.routes) continue;
-            const gId = row.routes.gym_id;
-            if (!gymIds.includes(gId)) continue;
-            const existing = recencyMap.get(gId);
-            if (existing === undefined || row.last_viewed_at > (existing ?? '')) {
-              recencyMap.set(gId, row.last_viewed_at);
-            }
-          }
-        }
-        // On visitError: recencyMap stays empty — gyms still render, no ordering data.
-      }
-
-      // Build SavedGymItem list.
-      const gymItems: SavedGymItem[] = (savedRows as unknown as Array<{
-        gym_id: string;
-        gyms: { id: string; name: string; photo_url: string | null; cover_photo_url: string | null } | null;
-      }>)
-        .filter((r) => r.gyms !== null)
-        .map((r) => ({
-          id: r.gyms!.id,
-          name: r.gyms!.name,
-          photo_url: r.gyms!.photo_url,
-          cover_photo_url: r.gyms!.cover_photo_url,
-          lastViewedAt: recencyMap.get(r.gym_id) ?? null,
-        }));
-
-      // Sort: gyms with recency data first (descending), then gyms without (AC-175).
-      gymItems.sort((a, b) => {
-        if (a.lastViewedAt === null && b.lastViewedAt === null) return 0;
-        if (a.lastViewedAt === null) return 1;
-        if (b.lastViewedAt === null) return -1;
-        return b.lastViewedAt.localeCompare(a.lastViewedAt);
-      });
-
+      const gymItems = await fetchSavedGym(session.user.id);
       setSavedGyms(gymItems);
 
       // Prefetch all non-null cover photos into memory-disk cache (fire-and-forget).
@@ -347,36 +236,15 @@ export default function HomeScreen({
         return;
       }
 
-      // Step 2: Fetch route details for the saved route IDs.
-      const { data: routeRows, error: routeError } = await supabase
-        .from('routes')
-        .select('id, gym_id, grade, color_tag, photo_url, section_label, gyms!routes_gym_id_fkey(name)')
-        .in('id', savedRouteIds)
-        .eq('status', 'active');
-
-      if (routeError) {
-        console.error('[HomeScreen] loadProjectingRoutes routes error:', routeError);
+      // Step 2: Fetch route details via home-service (no inline Supabase query here).
+      let routes: ProjectingRoute[];
+      try {
+        routes = await fetchProjectingRoutes(savedRouteIds);
+      } catch (routeErr) {
+        console.error('[HomeScreen] loadProjectingRoutes routes error:', routeErr);
         setProjectingRoutes([]);
         return;
       }
-
-      const routes: ProjectingRoute[] = ((routeRows as unknown as Array<{
-        id: string;
-        gym_id: string;
-        grade: RouteGrade;
-        color_tag: string;
-        photo_url: string | null;
-        section_label: string | null;
-        gyms: { name: string } | null;
-      }>) ?? []).map((row) => ({
-        id: row.id,
-        gym_id: row.gym_id,
-        grade: row.grade,
-        color_tag: row.color_tag,
-        photo_url: row.photo_url,
-        section_label: row.section_label,
-        gym_name: row.gyms?.name ?? null,
-      }));
       setProjectingRoutes(routes);
 
       // All projecting routes are saved routes — initialize savedProjectingIds
@@ -402,15 +270,12 @@ export default function HomeScreen({
       // Step 4: Call routes_with_new_beta RPC (with in-memory cache, ~60s TTL).
       // Retained for AC-175 Saved Gyms ordering — not used for the card chip
       // (chip removed per AC-181 Rev 39). Cache keyed by route-id set + time.
-      const now = Date.now();
+      // Cache singleton lives in home-service.ts (not module scope here).
       const currentRouteIdsKey = savedRouteIds.slice().sort().join(',');
-      if (
-        newBetaCache !== null &&
-        newBetaCache.routeIdsKey === currentRouteIdsKey &&
-        now - newBetaCache.populatedAt < NEW_BETA_CACHE_TTL_MS
-      ) {
+      const cached = getNewBetaCache(currentRouteIdsKey);
+      if (cached !== null) {
         // Cache still valid for the same route-id set — reuse.
-        setNewBetaRouteIds(newBetaCache.data);
+        setNewBetaRouteIds(cached);
       } else {
         const { data: rpcData, error: rpcError } = await supabase.rpc(
           'routes_with_new_beta',
@@ -424,7 +289,7 @@ export default function HomeScreen({
           const ids = new Set<string>(
             ((rpcData as Array<{ route_id: string }>) ?? []).map((r) => r.route_id),
           );
-          newBetaCache = { data: ids, populatedAt: now, routeIdsKey: currentRouteIdsKey };
+          setNewBetaCache(currentRouteIdsKey, ids);
           setNewBetaRouteIds(ids);
         }
       }
@@ -545,7 +410,7 @@ export default function HomeScreen({
   const prevUserIdRef = useRef<string | null>(session.user.id);
   useEffect(() => {
     if (prevUserIdRef.current !== session.user.id) {
-      clearNewBetaCache();
+      clearCache();
       prevUserIdRef.current = session.user.id;
     }
   }, [session.user.id]);
