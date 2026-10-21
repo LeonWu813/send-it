@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-home
+agent: qa-mod-auth-profile
 mode: integration-fix-verify
-module: mod-home
-result: success
-next: human verifies INT-006 (run the seeder once with the key in env and confirm gym photos still download; rotate the Google Places key if the old seeder ran through a logged proxy), then claude --agent tech-lead "INT-006 verified: <what you checked>". Remaining Phase 1 rows awaiting QA: INT-010, INT-012. Two unrelated pre-existing test failures are logged under Open items in modules/mod-home/status.md.
-timestamp: 2026-10-20T14:00:00Z
+module: mod-auth-profile
+result: bugs-found
+next: claude --agent engineer-mod-auth-profile "integration-fix INT-005" — avatar replace still fails in the running app after migration 000005 applied; see the INT-005 row Notes. Give Engineer the exact error text or tell it the old image is still shown.
+timestamp: 2026-10-21T10:00:00Z
 
 ## PM Updates
 
