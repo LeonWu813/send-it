@@ -2126,3 +2126,28 @@ Only `signInWithGoogle()` reads the URL params block that was changed. No other 
 | TypeScript strict mode — no unguarded `any` | PASS |
 
 **Result: READY FOR QA**
+
+
+### QA Run 3 — Regression (integration-fix-verify INT-005) — 2026-10-20
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: integration-fix-verify INT-005 (regression-test workflow; chosen because the row is FIXED – AWAITING QA and the invocation named it)
+**Scenario re-verified**: INT-005 / C-4 — avatar UPDATE/DELETE storage policies compare `auth.uid()::text` to `storage.filename(name)` (includes extension), so avatar replacement and deletion are always 403'd.
+
+**INT-005 fix: REGRESSION PASS (policy logic) — caveats below**
+- Migration `supabase/migrations/20261013000005_mod_001_int_005_fix_avatar_storage_policies.sql` (commit 10a2b2d) drops and recreates `avatars_update_own` (USING + WITH CHECK) and `avatars_delete_own` with `split_part(storage.filename(name), '.', 1) = auth.uid()::text`. INSERT and SELECT policies are untouched. It is a new migration; the original 20260920000001 file was not edited.
+- Upload path is unchanged: `uploadAvatar` writes `avatars/${userId}.${ext}` with `upsert: true`, so `filename(name)` = `<uuid>.<ext>` and the stripped value = `<uuid>`.
+- Behavior check on a scratch local Postgres (not Supabase; `storage.filename`/`foldername`/`auth.uid()` stubbed to match the Supabase definitions), user 1111…, rows `avatars/1111….jpg` and `avatars/2222….png`:
+  - Old predicate (`auth.uid()::text = storage.filename(name)`): 0 rows matched, so the user's own object was not matchable. This reproduces the bug.
+  - New predicate: 1 row matched (own), 0 rows matched (other user). The fix works and ownership isolation holds.
+- **Caveats (not a FAIL):** (1) This was not run against a live Supabase Storage endpoint. Docker is not running and there is no linked local stack, so I did not exercise a real second `upload(..., {upsert:true})` or `remove()` call. (2) I did not confirm the migration is applied to the hosted project. (3) The `verify` skill does not exist (`.claude/skills/verify/` is absent). The human check in the handoff covers (1) and (2).
+
+**Regression re-run for MOD-001 (AC-001, AC-002, AC-003, AC-063)**
+- `npx jest src/modules/mod-auth-profile`: 3 suites, 20 tests, all PASS. `npx tsc --noEmit`: 0 errors.
+- Full `npm test`: 4 suites fail (`src/lib/__tests__/supabase.test.ts`, mod-route-catalog `RouteSubmitScreen`, mod-home `AppHeaderContext`, mod-send-logging `AscentList`). Totals: 5 failed, 612 passed. None are in mod-auth-profile and none touch the migration. They are noted for Tech Lead, not attributed to this fix.
+- `run-qa.sh` reported no `Test:` command in production.md, so I ran jest directly, as above.
+- AC-001/AC-002/AC-003/AC-063: still PASS. The fix is SQL-only (storage policies); no client code, `users` table or privacy column changed. The `git status` check shows no source edits by QA.
+
+### Integration notes (for Tech Lead)
+- The 4 failing suites in the full run above are outside MOD-001. They may relate to INT-012 barrel changes (mod-home/mod-send-logging/mod-route-catalog) and should be checked before Phase 1 sign-off.
+- `scan-integration.sh` was not run: the dependency list for this fix is SQL-only.

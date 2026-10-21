@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: record-decisions
-module: n/a
-next: claude --agent qa-mod-auth-profile "verify INT-005" — remaining open Phase 1 rows are INT-005 (mod-auth-profile), INT-006 (seeder / project files), INT-010 (mod-beta-video), INT-012 (barrel owners + consumers, incl. `claude --agent qa-mod-gym-directory "regression-test INT-012 barrel creation"`), all FIXED – AWAITING QA; after QA VERIFIED + human verification → claude --agent tech-lead "I verified INT-0NN" for confirm-fix
+agent: qa-mod-auth-profile
+mode: integration-fix-verify
+module: mod-auth-profile
 result: success
-timestamp: 2026-10-20T12:00:00Z
+next: human verifies INT-005 in the running app (replace avatar, then delete it; confirm migration 20261013000005 is applied to the hosted project), then claude --agent tech-lead "INT-005 verified: <what you checked>". Remaining Phase 1 rows awaiting QA: INT-006, INT-010, INT-012.
+timestamp: 2026-10-20T13:00:00Z
 
 ## PM Updates
 
