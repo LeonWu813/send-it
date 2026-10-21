@@ -2,12 +2,13 @@
 
 ## Last Action
 
-agent: engineer-mod-route-catalog
+agent: engineer-mod-moderation
 mode: integration-fix
-module: mod-route-catalog
+module: mod-moderation
 result: done
-next: claude --agent qa-mod-route-catalog "integration-fix-verify INT-023"
-timestamp: 2026-10-21T18:05:00Z
+rows: INT-011, INT-014, INT-019 → FIXED – AWAITING QA
+next: claude --agent qa-mod-moderation "integration-fix-verify INT-011, INT-014, INT-019"
+timestamp: 2026-10-21T19:00:00Z
 
 ## PM Updates
 

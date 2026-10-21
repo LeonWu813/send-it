@@ -2,6 +2,23 @@
 
 ## Engineering Progress
 
+### Integration-fix: INT-011, INT-014, INT-019 set to FIXED – AWAITING QA (2026-10-21)
+
+Verified all three already-landed fixes are in place and set each row to `FIXED – AWAITING QA` in `integration-review.md`.
+
+**INT-011 — Self-block constraint (commit `8fd7d35`)**
+- `supabase/migrations/20261013000007_mod_009_int_011_blocks_no_self_block.sql` confirmed present: adds `CHECK (blocker_user_id <> blocked_user_id)` (constraint `blocks_no_self_block`) to `public.blocks`.
+- `moderation-service.ts:94–95` confirmed: `if (blockedUserId === blockerUserId) { throw new Error('Cannot block yourself'); }` — fires before any Supabase INSERT.
+
+**INT-014 — Self-report constraint (commit `37417a5`)**
+- `supabase/migrations/20261020000002_mod_009_user_self_report_constraint.sql` confirmed present: drops and recreates `reports_insert_own` INSERT policy with `AND (target_type <> 'user' OR target_id::text <> auth.uid()::text)` guard.
+- `moderation-service.ts:52` confirmed: throws `'Cannot report yourself'` before any Supabase INSERT.
+
+**INT-019 — Unit tests for moderation-service (commit `37417a5`)**
+- `src/modules/mod-moderation/__tests__/moderation-service.test.ts` confirmed present at 352 lines. Covers all five service functions with happy paths, error paths, self-block/self-report guards, and idempotent 23505 branch.
+
+No new code written; verification only.
+
 ### Phase 1 quality review fixes — M-2, M-6, barrel import (2026-10-20)
 
 **M-2 — User self-report constraint**
