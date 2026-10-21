@@ -2,7 +2,7 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens. INT-012: index.ts barrel created; cross-module deep imports fixed in FollowersListScreen, FollowingListScreen, UserProfileScreen.
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`
@@ -12,7 +12,36 @@
 **AC-150/151/152/153 commit**: pending — `feat(mod-social-feed): AC-150/151(UI)/152/153 — three-dots sheet, block/report, blocked state`
 **AC-052 like button commit**: `0de9d44` — `feat(mod-social-feed): AC-052 — tappable like button in BetaVideoReelViewer`
 **AC-186 + cleanup commit**: pending — `feat(mod-social-feed): AC-186 — get_like_info_batch RPC and service wrapper; remove AC-123/124 refs`
-**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup); 2026-10-15 (AC-185 SwipeBackWrapper wiring)
+**INT-012 barrel commit**: pending — `fix(mod-social-feed): INT-012 create index.ts barrel + fix cross-module deep imports`
+**Date**: 2026-09-24 (initial); 2026-09-30 (AC-146/147/148, follow() bug fix, human QA UI changes, AC-150/151/152/153); 2026-10-07 (AC-052); 2026-10-13 (AC-186, AC-123/124 cleanup); 2026-10-15 (AC-185 SwipeBackWrapper wiring); 2026-10-20 (INT-012 barrel + import fix)
+
+### INT-012 — Barrel index.ts + Cross-Module Import Fix (2026-10-20)
+
+**INT-012 DONE**: Created `src/modules/mod-social-feed/index.ts` barrel and fixed three screen files that were importing from other modules via deep internal paths instead of their barrels.
+
+**Barrel created**: `src/modules/mod-social-feed/index.ts`
+- Exports all public service functions from `./social-feed-service`: `follow`, `unfollow`, `fetchIsFollowing`, `fetchFollowerCounts`, `fetchActivityFeed`, `likeBetaVideo`, `unlikeBetaVideo`, `fetchLikeInfo`, `fetchFollowing`, `fetchFollowersList`, `fetchFollowingList`, `fetchLikeInfoBatch`
+- Exports navigator entry-point `UserProfileScreen` (via `./UserProfileNavigator`)
+- Exports screen components `FollowersListScreen` and `FollowingListScreen` with their props types (consumed by mod-auth-profile ProfileNavigator)
+- Exports all types from `./types`: `Follow`, `Reaction`, `FeedItem`, `FollowerCounts`, `LikeInfo`, `FollowingUser`, `UserListItem`
+
+**Cross-module deep imports fixed (inside mod-social-feed screens only)**:
+- `screens/FollowersListScreen.tsx`: `from '../../mod-moderation/moderation-service'` → `from '../../mod-moderation'`
+- `screens/FollowingListScreen.tsx`: `from '../../mod-moderation/moderation-service'` → `from '../../mod-moderation'`
+- `screens/UserProfileScreen.tsx`:
+  - `from '../../mod-profile-history/history-service'` → `from '../../mod-profile-history'`
+  - `from '../../mod-profile-history/types'` → `from '../../mod-profile-history'` (combined into one import)
+  - `from '../../mod-moderation/moderation-service'` → `from '../../mod-moderation'`
+  - `from '../../mod-beta-video'` — was already a correct barrel import, unchanged
+
+**Note on external consumers**: Files in other modules (`mod-auth-profile/ProfileScreen.tsx`, `mod-auth-profile/ProfileNavigator.tsx`, `mod-beta-video/BetaVideoReelViewer.tsx`, `mod-home/HomeScreen.tsx`, `mod-home/AppShell.tsx`) still import from `mod-social-feed` via deep paths (`social-feed-service`, `types`, `screens/`, `UserProfileNavigator`). These are in other modules' source paths and cannot be edited by this engineer. They are the consumers INT-012 is intended to resolve at the framework level.
+
+**Self-check (INT-012)**:
+- PASS — `npx tsc --noEmit` — 0 errors
+- PASS — `npx jest --testPathPattern="mod-social-feed" --watchAll=false --passWithNoTests` — 63/63 tests pass (no regressions from import path changes)
+- PASS — No files changed outside `src/modules/mod-social-feed/` and `project-planning/modules/mod-social-feed/status.md`
+- PASS — Barrel exports only public API; internal implementation details (`FeedScreen.tsx`, dead code) are not re-exported
+- PASS — No new npm dependencies; no behaviour changes — import path fixes only
 
 ### Design system v2.2 migration (2026-10-16) - off-spec design work, pending PR review
 

@@ -18,7 +18,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, StyleSheet, View } from 'react-native';
 
-import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
+import { fetchBlockedUserIds } from '../../mod-moderation';
 import { ICON } from '../../../lib/icons';
 import { AVATAR_SIZE, useLayout, useTheme } from '../../../lib/theme';
 import { fetchFollowingList } from '../social-feed-service';

@@ -3,6 +3,32 @@
 ## Engineering Progress
 
 
+### INT-012 — Fix deep cross-module imports to use barrels (2026-10-20)
+
+**Issues fixed:**
+- `RouteDetailScreen.tsx` lines 65–66: imported `fetchMyAscentsForRoute`, `fetchUserAchievements`, `summarizeAscents` from `'../../mod-send-logging/send-service'` (deep private path) and `AscentWithProfile` from `'../../mod-send-logging/types'` (deep private path).
+- `RouteListScreen.tsx` line 38: imported `fetchUserAchievements` from `'../../mod-send-logging/send-service'` (deep private path).
+- `__tests__/RouteListScreen.test.tsx`: `jest.mock` and `import` both used `'../../mod-send-logging/send-service'` (deep private path).
+- `__tests__/RouteDetailScreen.test.tsx`: `jest.mock` and `import` used `'../../mod-send-logging/send-service'` (deep private path); `jest.mock` used `'../../mod-beta-video/components/BetaVideoSection'` (deep private path).
+
+**Changes:**
+- All four files updated to use barrel paths: `'../../mod-send-logging'` and `'../../mod-beta-video'`.
+- `RouteDetailScreen.test.tsx`: `jest.mock('../../mod-beta-video', ...)` factory updated from `default` export shape to `BetaVideoSection` named-export shape (matching the barrel's actual export contract); `jest.mock('../../mod-send-logging', ...)` factory extended to include `LogSendScreen` mock (since the barrel mock now intercepts the whole barrel, including the `LogSendScreen` screen import in the source file).
+
+**Self-check (2026-10-20):**
+- PASS: 4/5 `mod-route-catalog` test suites pass (RouteDetailScreen, RouteListScreen, SendHistoryDetailScreen, route-service — 112 tests).
+- PRE-EXISTING: `RouteSubmitScreen.test.tsx` 1 test failure confirmed pre-existing via `git stash` baseline — unrelated to INT-012.
+- PASS: No logic changes — import path changes only; runtime behaviour is identical.
+- PASS: `grep -rn "from '.*mod-" src/modules/mod-route-catalog/` — all cross-module imports use barrel paths only; zero deep private paths remain.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — deep imports replaced with barrel imports
+- `src/modules/mod-route-catalog/screens/RouteListScreen.tsx` — deep import replaced with barrel import
+- `src/modules/mod-route-catalog/__tests__/RouteDetailScreen.test.tsx` — jest.mock and import paths fixed; mock factories updated for barrel shape
+- `src/modules/mod-route-catalog/__tests__/RouteListScreen.test.tsx` — jest.mock and import paths fixed
+
+---
+
 ### INT-001 + INT-003 — Replace private deep-imports with barrel exports (2026-10-20)
 
 **Issues fixed:**

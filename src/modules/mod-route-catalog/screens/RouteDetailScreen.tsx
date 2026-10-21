@@ -62,8 +62,8 @@ import {
   fetchMyAscentsForRoute,
   fetchUserAchievements,
   summarizeAscents,
-} from '../../mod-send-logging/send-service';
-import type { AscentWithProfile } from '../../mod-send-logging/types';
+} from '../../mod-send-logging';
+import type { AscentWithProfile } from '../../mod-send-logging';
 import { fetchSavedRouteIds, getPhotoSignedUrl, loadRoute, saveRoute, unsaveRoute, upsertRouteVisit } from '../route-service';
 import type { Route, RouteColor } from '../types';
 

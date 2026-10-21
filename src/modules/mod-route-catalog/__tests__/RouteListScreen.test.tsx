@@ -34,7 +34,7 @@ jest.mock('../route-service', () => ({
   getPhotoSignedUrl: jest.fn().mockResolvedValue('https://signed.url/photo.jpg'),
 }));
 
-jest.mock('../../mod-send-logging/send-service', () => ({
+jest.mock('../../mod-send-logging', () => ({
   fetchUserAchievements: jest.fn(),
 }));
 
@@ -49,7 +49,7 @@ import {
   saveRoute,
   unsaveRoute,
 } from '../route-service';
-import { fetchUserAchievements } from '../../mod-send-logging/send-service';
+import { fetchUserAchievements } from '../../mod-send-logging';
 import RouteListScreen, { clearNewBetaCacheForTesting } from '../screens/RouteListScreen';
 import type { RouteSummary } from '../types';
 import { renderOptions } from '../test-utils';

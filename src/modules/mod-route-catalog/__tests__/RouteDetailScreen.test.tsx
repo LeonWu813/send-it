@@ -28,29 +28,39 @@ jest.mock('../route-service', () => ({
   upsertRouteVisit: jest.fn(),
 }));
 
-jest.mock('../../mod-send-logging/send-service', () => ({
-  fetchUserAchievements: jest.fn(),
-  fetchMyAscentsForRoute: jest.fn(),
-  deleteAscent: jest.fn(),
-  summarizeAscents: jest.fn(),
-}));
+jest.mock('../../mod-send-logging', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    fetchUserAchievements: jest.fn(),
+    fetchMyAscentsForRoute: jest.fn(),
+    deleteAscent: jest.fn(),
+    summarizeAscents: jest.fn(),
+    // LogSendScreen is rendered in a Modal; mock it as a no-op view.
+    LogSendScreen: function MockLogSendScreen() {
+      return React.createElement(View, { testID: 'log-send-screen' });
+    },
+  };
+});
 
 // Mock the BetaVideoSection entry point from MOD-005 so RouteDetailScreen tests
 // are not affected by MOD-005 internals (cross-module boundary).
-jest.mock('../../mod-beta-video/components/BetaVideoSection', () => {
+jest.mock('../../mod-beta-video', () => {
   const React = require('react');
   const { View, Text } = require('react-native');
+  function MockBetaVideoSection(props: { onRegisterUploadLauncher?: (fn: () => void) => void }) {
+    // Register a no-op launcher so the ref is populated in tests
+    React.useEffect(() => {
+      props.onRegisterUploadLauncher?.(() => { /* no-op in tests */ });
+    }, [props.onRegisterUploadLauncher]);
+    return React.createElement(View, { testID: 'beta-video-section' },
+      React.createElement(Text, null, 'BetaVideoSection')
+    );
+  }
   return {
     __esModule: true,
-    default: function MockBetaVideoSection(props: { onRegisterUploadLauncher?: (fn: () => void) => void }) {
-      // Register a no-op launcher so the ref is populated in tests
-      React.useEffect(() => {
-        props.onRegisterUploadLauncher?.(() => { /* no-op in tests */ });
-      }, [props.onRegisterUploadLauncher]);
-      return React.createElement(View, { testID: 'beta-video-section' },
-        React.createElement(Text, null, 'BetaVideoSection')
-      );
-    },
+    BetaVideoSection: MockBetaVideoSection,
   };
 });
 
@@ -59,7 +69,7 @@ import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
 import { loadRoute, getPhotoSignedUrl, fetchSavedRouteIds, saveRoute, unsaveRoute, upsertRouteVisit } from '../route-service';
-import { fetchUserAchievements, fetchMyAscentsForRoute, deleteAscent, summarizeAscents } from '../../mod-send-logging/send-service';
+import { fetchUserAchievements, fetchMyAscentsForRoute, deleteAscent, summarizeAscents } from '../../mod-send-logging';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
 import { renderOptionsWithHeader as renderOptions } from '../test-utils';

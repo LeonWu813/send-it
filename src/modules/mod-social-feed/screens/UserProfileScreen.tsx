@@ -32,8 +32,8 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { fetchProfileStats } from '../../mod-profile-history/history-service';
-import type { ProfileStats } from '../../mod-profile-history/types';
+import { fetchProfileStats } from '../../mod-profile-history';
+import type { ProfileStats } from '../../mod-profile-history';
 import {
   BetaVideoGrid,
   BetaVideoReelViewer,
@@ -45,7 +45,7 @@ import {
   fetchBlockedUserIds,
   reportUser,
   unblockUser,
-} from '../../mod-moderation/moderation-service';
+} from '../../mod-moderation';
 import { supabase } from '../../../lib/supabase';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
