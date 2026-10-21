@@ -3505,3 +3505,79 @@ Result: **115 passed, 115 total** — 5 suites. Exit 0. REGRESSION PASS.
 | Adjacent suite regressions | NONE |
 
 **REGRESSION PASS — INT-023 fix verified. Non-null assertions removed; explicit guard `if (!selectedGrade || !selectedColor || !photoUri) return;` confirmed at `RouteSubmitScreen.tsx:456`. 115/115 mod-route-catalog tests pass. No regressions introduced.**
+
+### QA Run — Integration-Fix Verify — INT-015 — 2026-10-21
+
+**Re-verifying**: INT-015 (`withdrawRoute` silently succeeds when 0 rows deleted — commit dd0c771)
+**Workflow**: regression-test (integration-fix-verify)
+
+#### Original failure scenario
+
+`withdrawRoute` called `.delete().eq('id', routeId)` without chaining `.select()`. PostgREST returns HTTP 200 with zero rows when RLS blocks the delete (wrong owner or non-pending route), but no error object. The function returned `void` (success) even though no row was removed. Callers could not distinguish a successful withdrawal from an RLS-blocked no-op.
+
+#### Check 1: `.select('id')` chain present
+
+`route-service.ts:131–135`:
+```
+const { data, error } = await supabase
+  .from('routes')
+  .delete()
+  .eq('id', routeId)
+  .select('id');
+```
+`.select('id')` is chained — PostgREST now returns the deleted row set. PASS.
+
+#### Check 2: Row-count guard present with correct message
+
+`route-service.ts:142–146`:
+```
+if (!data || data.length === 0) {
+  throw new Error(
+    'Route could not be withdrawn — it may not be pending or may belong to another user.',
+  );
+}
+```
+Guard covers both `null` data and empty-array response. Error message matches the user-facing text specified in the fix description. PASS.
+
+#### Check 3: Existing error branch preserved
+
+`route-service.ts:137–140`:
+```
+if (error) {
+  console.error('[withdrawRoute] error:', error);
+  throw new Error('Failed to withdraw route. Please try again.');
+}
+```
+Original Supabase error path unchanged. PASS.
+
+#### Check 4: Unit test coverage
+
+`route-service.test.ts` `describe('withdrawRoute')` — 4 tests:
+1. `'resolves when the route row is deleted (data contains 1 row)'` — happy path: `data: [{ id: 'route-001' }]`. Verifies `.delete()` and `.eq('id', 'route-001')` called. PASS.
+2. `'throws when RLS silently blocks the delete (data is empty array)'` — `data: []`. Expects throw with user-facing message. PASS.
+3. `'throws when PostgREST returns null data (treat as 0 rows affected)'` — `data: null`. Expects same user-facing throw. PASS.
+4. `'throws a user-friendly error when the delete fails'` — `error: { code: 'PGRST301', message: 'DB error' }`. Expects generic error message. PASS.
+
+All 4 withdrawal tests pass. REGRESSION PASS.
+
+#### Check 5: Full mod-route-catalog suite
+
+Command: `npx jest --testPathPattern="mod-route-catalog" --watchAll=false`
+Result: **115 passed, 115 total** — 5 suites. Exit 0. No regressions. PASS.
+
+#### Check 6: TypeScript compilation
+
+`npx tsc --noEmit`: exit 0, 0 errors. PASS.
+
+#### Summary
+
+| Check | Result |
+|-------|--------|
+| `.select('id')` chained on delete call | PASS |
+| `if (!data \|\| data.length === 0)` guard with correct user-facing message | PASS |
+| Original Supabase error branch preserved | PASS |
+| withdrawRoute unit tests — 4 tests (happy path, empty-array, null data, DB error) | PASS |
+| Full mod-route-catalog suite: 115/115 | PASS |
+| TypeScript compilation clean (tsc --noEmit) | PASS |
+
+**REGRESSION PASS — INT-015 fix verified. `withdrawRoute` now throws 'Route could not be withdrawn — it may not be pending or may belong to another user.' when PostgREST returns 0 deleted rows (RLS-silent-block scenario). 115/115 mod-route-catalog tests pass. No regressions introduced.**
