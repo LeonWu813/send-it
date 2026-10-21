@@ -6,8 +6,8 @@ agent: pm
 mode: change
 module: n/a
 result: needs-human
-next: show project-planning/pm-proposals/2026-10-21-rename-send-train.md to the human (apply only after the pending Phase 1 checkpoint proposal, project-planning/pm-proposals/2026-10-21-checkpoint-phase-1.md, is resolved); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-21-rename-send-train.md" with their exact words quoted
-timestamp: 2026-10-21T23:30:00Z
+next: show project-planning/pm-proposals/2026-10-21-rename-projectday.md to the human (apply only after the pending Phase 1 checkpoint proposal, project-planning/pm-proposals/2026-10-21-checkpoint-phase-1.md, is resolved); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-21-rename-projectday.md" with their exact words quoted
+timestamp: 2026-10-21T23:45:00Z
 
 ## PM Updates
 

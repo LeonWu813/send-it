@@ -1,4 +1,4 @@
-Status: pending
+Status: superseded by 2026-10-21-rename-projectday.md
 
 # PM proposal: rename "Send It" to "Send Train 刷線列車" (2026-10-21)
 
