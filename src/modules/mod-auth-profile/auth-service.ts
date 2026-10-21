@@ -164,9 +164,25 @@ export async function signInWithGoogle(): Promise<void> {
     return;
   }
 
-  // Extract the session from the URL fragment that Supabase returns
-  const url = result.url;
-  const params = new URLSearchParams(url.includes('#') ? url.split('#')[1] : url.split('?')[1]);
+  // Extract the session tokens from the redirect URL.
+  //
+  // Supabase PKCE can return the refresh token in the query string while other
+  // params (access_token, token_type, …) are in the fragment. Picking only one
+  // side drops whichever the other side carries — the original `url.split('#')[1]`
+  // approach silently dropped the refresh token, producing a session that could
+  // not silently refresh after ~1 hour.
+  //
+  // Strategy: parse both sides and merge them. Fragment params win on collision
+  // (Supabase convention — the fragment is the authoritative side for auth data).
+  const parsedUrl = new URL(result.url);
+
+  // Start from fragment params (authoritative per Supabase convention), then
+  // fill in any keys that only appear in the query string.
+  const params = new URLSearchParams(parsedUrl.hash.replace(/^#/, ''));
+  parsedUrl.searchParams.forEach((value, key) => {
+    if (!params.has(key)) params.set(key, value);
+  });
+
   const accessToken = params.get('access_token');
   const refreshToken = params.get('refresh_token');
 

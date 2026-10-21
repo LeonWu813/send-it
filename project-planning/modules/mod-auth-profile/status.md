@@ -2081,3 +2081,48 @@ Note: pre-existing errors in `src/components/ui/stories/` (storybook: `@storyboo
 **Blocker**: `src/modules/mod-social-feed/index.ts` and `src/modules/mod-notifications/index.ts` do not exist. Repointing the deep imports to barrel paths (`'../../mod-social-feed'`, `'../../mod-notifications'`) would break `npx tsc --noEmit` until the barrel files are created by the owning module engineers (engineer-mod-social-feed and engineer-mod-notifications respectively). Per the engineer-checklist, TypeScript must pass before handoff. The import repoints for violations 1–3 above are deferred pending barrel creation by the owning modules.
 
 **Status**: INT-012 import fixes inside mod-auth-profile are blocked on barrel files from engineer-mod-social-feed (mod-social-feed/index.ts) and engineer-mod-notifications (mod-notifications/index.ts). Once those barrels land, the three violations listed above can be repointed in a follow-on commit.
+
+---
+
+## Engineering Progress — Bugfix — 2026-10-20 (L-1: OAuth URL parser drops refresh token)
+
+### Problem
+
+`signInWithGoogle()` in `auth-service.ts` parsed the Supabase redirect URL with:
+```
+new URLSearchParams(url.includes('#') ? url.split('#')[1] : url.split('?')[1])
+```
+This picked either the fragment or the query string, never both. Supabase PKCE can return `refresh_token` in the query string while `access_token` and other params are in the fragment. When the query string was silently discarded, `refreshToken ?? ''` passed an empty string to `supabase.auth.setSession`, creating a session that could not silently refresh — the user was signed out unexpectedly after ~1 hour.
+
+### Fix applied — one file changed
+
+`src/modules/mod-auth-profile/auth-service.ts` (lines 167–187):
+
+Replaced the fragment/query-string picker with a parser that merges both sides:
+1. Construct a real `URL` object from `result.url`.
+2. Build `params` from the fragment (`parsedUrl.hash.replace(/^#/, '')`).
+3. Walk `parsedUrl.searchParams` and add any key not already in `params` (fragment wins on collision — Supabase convention).
+4. Extract `access_token` and `refresh_token` from the merged `params`.
+
+The `!accessToken` null-guard and the `supabase.auth.setSession` call are unchanged.
+
+### Impact note
+
+Only `signInWithGoogle()` reads the URL params block that was changed. No other function in the module, no screen, and no test depends on the internal URL parsing logic. The function's public contract (throws on failure, resolves on success) is unchanged.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors, exit 0 |
+| `npx jest --testPathPattern="mod-auth-profile" --watchAll=false` | PASS — 20 tests, 3 suites, all pass |
+| Fragment params merged with query string params | PASS |
+| Fragment keys win on collision (Supabase convention) | PASS |
+| `accessToken` null-guard preserved | PASS |
+| No other function or behavior touched | PASS |
+| No hardcoded hex colors introduced | PASS |
+| No inline string literals introduced | PASS |
+| No new dependencies outside production.md tech stack | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+
+**Result: READY FOR QA**
