@@ -1584,6 +1584,46 @@ All acceptance criteria pass. The AC-114 deep-link fix is verified: tapping a sa
 
 ---
 
+---
+
+### Integration-fix verification — INT-006 — 2026-10-20
+
+**Workflow**: integration-fix-verify (regression-test workflow; INT-006 row in `integration-review.md` substituted for prior QA Results). INT-006 is assigned to `scripts/`, which belongs to mod-home as Project files owner.
+
+**Finding**: `scripts/seed-gym-photos.ts` `downloadPhoto` sent the Google Places API key in the URL query string (`&key=...`).
+
+**Fix under test**: commit `4721d47`. It changes only `scripts/seed-gym-photos.ts`: `&key=${GOOGLE_PLACES_API_KEY}` is removed from `mediaUrl`, and the call becomes `fetch(mediaUrl, { headers: { 'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY as string } })`.
+
+| Check | Result |
+|---|---|
+| `grep -rnE "key=\|[?&]key" scripts/` | PASS — 0 matches. No API key in any URL under `scripts/` |
+| Key usage in `seed-gym-photos.ts` | PASS — lines 87, 118 and 150 all use the `X-Goog-Api-Key` header (steps 1, 2 and 3). No other use of the key |
+| Step 3 `mediaUrl` | PASS — now `…/media?maxWidthPx=800&skipHttpRedirect=true`. Query parameters kept, key removed |
+| Follow-up `fetch(mediaData.photoUri)` | PASS — it uses the resolved `photoUri`, which carries no key. Unchanged |
+| Error handling and return path | PASS — `!ok` throw, `photoUri` check and `Uint8Array` return are unchanged |
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `jest src/modules/mod-home src/lib src/components` | 108 passed, 3 failed (see below). No test touches `scripts/` |
+
+**Regression check (mod-home ACs)**: `HomeScreen`, `TabBar`, `home-service`, `AppHeader`, `RouteCard`, `SwipeBackWrapper`, `design-tokens`, `i18n` and `signedUrlCache` all PASS. The fix diff is 1 file, 4 insertions and 3 deletions, all in `scripts/`. It cannot affect any AC for the Home module, shell or shared code.
+
+**Pre-existing test failures (unrelated to INT-006; the fix commit does not touch these files):**
+- `src/lib/__tests__/supabase.test.ts` — 3 tests fail with `RangeError: Maximum call stack size exceeded` at the `jest.mock('@react-native-async-storage/…')` factory (line 13). This is a test-mock problem.
+- `src/modules/mod-home/components/__tests__/AppHeaderContext.test.tsx` — the suite fails to load with `Missing required environment variables: EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY`. The test env has no Supabase env vars, and the test does not mock `@/lib/supabase`.
+- I did not read `.env`. Both are logged under Open items.
+
+**Not verified by QA (cannot be from source or without the secret):**
+- Live seeder run against Google Places. It needs `GOOGLE_PLACES_API_KEY`, which I did not read. The human should run `GOOGLE_PLACES_API_KEY=… npx tsx scripts/seed-gym-photos.ts` once and confirm photos still download. This proves that the Places Photo media endpoint accepts the `X-Goog-Api-Key` header. Steps 1 and 2 already use that header.
+- Key rotation if the old query-string version ran through a logged proxy. This is a human action.
+- `.claude/skills/verify/` does not exist, so no verify-skill evidence.
+
+**Verdict**: INT-006 — the failure scenario (key in URL query string) no longer reproduces, and no regression was introduced. `QA VERIFIED` is set in `integration-review.md`. It is not closed. It still needs human verification, then Tech Lead confirmation.
+
+### Open items
+
+- [ ] AC-n/a bugs-found — `src/lib/__tests__/supabase.test.ts`: 3 tests fail with `RangeError: Maximum call stack size exceeded` in the async-storage `jest.mock` factory. Test-only; run `npx jest src/lib/__tests__/supabase.test.ts` (2026-10-20)
+- [ ] AC-n/a bugs-found — `AppHeaderContext.test.tsx` suite fails to load: missing `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` in the jest env. It needs a `@/lib/supabase` mock or jest env setup (2026-10-20)
+
+
 ## Engineering Progress — Bugfix — 2026-10-04 (profile tab resets to main view on activation)
 
 ### Root Cause

@@ -2,11 +2,11 @@
 
 ## Last Action
 
-agent: qa-mod-beta-video
+agent: qa-mod-home
 mode: integration-fix-verify
-module: mod-beta-video
+module: mod-home
 result: success
-next: human verifies INT-010 in the running app (user A blocks user B, A opens B's profile and sees no beta videos; also check when B blocks A), then claude --agent tech-lead "INT-010 verified: <what you checked>". Remaining Phase 1 rows awaiting QA: INT-006, INT-012.
+next: human verifies INT-006 (run the seeder once with the key in env and confirm gym photos still download; rotate the Google Places key if the old seeder ran through a logged proxy), then claude --agent tech-lead "INT-006 verified: <what you checked>". Remaining Phase 1 rows awaiting QA: INT-010, INT-012. Two unrelated pre-existing test failures are logged under Open items in modules/mod-home/status.md.
 timestamp: 2026-10-20T14:00:00Z
 
 ## PM Updates
