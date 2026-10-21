@@ -9,7 +9,7 @@ jest.mock('@/lib/AppHeaderContext', () => ({
   useTabBarInset: () => ({ contentBottom: 0, indicatorBottom: 0 }),
 }));
 
-jest.mock('../../mod-moderation/moderation-service', () => ({
+jest.mock('../../mod-moderation', () => ({
   fetchBlockedUserIds: jest.fn(),
 }));
 
@@ -21,7 +21,7 @@ jest.mock('../social-feed-service', () => ({
 import { render, waitFor, screen } from '@testing-library/react-native';
 import React from 'react';
 
-import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
+import { fetchBlockedUserIds } from '../../mod-moderation';
 import { fetchFollowersList, fetchFollowingList } from '../social-feed-service';
 import FollowersListScreen from '../screens/FollowersListScreen';
 import FollowingListScreen from '../screens/FollowingListScreen';

@@ -39,11 +39,11 @@ jest.mock('../social-feed-service', () => ({
   unfollow: jest.fn(),
 }));
 
-jest.mock('../../mod-profile-history/history-service', () => ({
+jest.mock('../../mod-profile-history', () => ({
   fetchProfileStats: jest.fn(),
 }));
 
-jest.mock('../../mod-moderation/moderation-service', () => ({
+jest.mock('../../mod-moderation', () => ({
   fetchBlockedUserIds: jest.fn(),
   blockUser: jest.fn(),
   unblockUser: jest.fn(),
@@ -55,14 +55,14 @@ import type { Session } from '@supabase/supabase-js';
 import React from 'react';
 
 import { supabase } from '../../../lib/supabase';
-import { fetchProfileStats } from '../../mod-profile-history/history-service';
+import { fetchProfileStats } from '../../mod-profile-history';
 import { fetchBetaVideosByUser } from '../../mod-beta-video';
 import {
   fetchBlockedUserIds,
   blockUser,
   unblockUser,
   reportUser,
-} from '../../mod-moderation/moderation-service';
+} from '../../mod-moderation';
 import {
   fetchFollowerCounts,
   fetchIsFollowing,
