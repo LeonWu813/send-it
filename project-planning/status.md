@@ -4622,8 +4622,8 @@ Agent: tech-lead
 
 ## Last Action
 
-agent: qa-mod-route-catalog
-action: integration-fix-verify INT-023
+agent: qa-mod-profile-history
+action: integration-fix-verify INT-009 INT-013
 result: pass
 date: 2026-10-21
-next: claude --agent tech-lead "confirm-fix INT-023"
+next: claude --agent tech-lead "confirm-fix INT-009 INT-013"

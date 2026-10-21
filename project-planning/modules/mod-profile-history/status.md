@@ -7,6 +7,12 @@
 
 **Off-spec design tooling (2026-10-16)**: Added Storybook stories for StatsPanel, FilterBar and AscentHistoryItem in `src/modules/mod-profile-history/stories/` on branch `design/storybook`. Not part of the spec; no component source changed. Pending PR review.
 
+### Integration-fix — 2026-10-21: INT-009 and INT-013 set to FIXED – AWAITING QA
+
+**INT-009**: Verified `supabase/migrations/20261013000006_mod_008_int009_block_filter.sql` (commit `6804dac`). Both `get_profile_history` and `get_profile_stats` contain symmetric NOT EXISTS block predicates guarded by an owner check (`auth.uid() = p_user_id`). No new code written. Row set to `FIXED – AWAITING QA`.
+
+**INT-013**: Verified `supabase/migrations/20261020000001_mod_008_accumulated_days_privacy.sql` (commit `7be5eb2`). `accumulated_days` SELECT includes `AND (v_is_self OR is_private = FALSE)`, matching the privacy predicate on `total_sends` and `sends_by_grade`. No new code written. Row set to `FIXED – AWAITING QA`.
+
 ### Patch — 2026-10-20: M-1 — Apply is_private filter to accumulated_days in get_profile_stats
 
 **Issue**: M-1 (Phase 1 quality review) — `get_profile_stats` counted ALL qualifying ascents (style IN ('flash', 'top')) when computing `accumulated_days`, ignoring `is_private`. Meanwhile `total_sends` and `sends_by_grade` in the same function correctly applied `(v_is_self OR a.is_private = FALSE)`. A non-owner viewer of a profile with many private sends saw `accumulated_days` inflated relative to the visible send count — internally inconsistent stats.
@@ -585,3 +591,117 @@ All 27 tests pass — no regressions.
 i18n regression test: all items verified. No regressions introduced. All pre-existing ACs (AC-060, AC-061, AC-062, AC-064, AC-183) continue to pass.
 
 QA PASS — mod-profile-history i18n fix regression verified.
+
+---
+
+## QA Run 5 — Integration-fix-verify — 2026-10-21
+
+**QA verdict: PASS**
+**Mode**: integration-fix-verify (INT-009 block filter, INT-013 accumulated_days privacy fix)
+**Tester**: qa-mod-profile-history
+
+---
+
+### Automated checks
+
+| Check | Result |
+|---|---|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-profile-history" --passWithNoTests` | PASS — 29/29 tests (was 27 in prior runs; 2 additional tests present, 0 failures) |
+| `npx jest --passWithNoTests` (full suite) | 633/634 pass — 1 failure in `mod-send-logging/AscentList.test.tsx` (pre-existing flaky; passes 12/12 in isolation, consistent with all prior QA run notes). Zero regressions introduced by INT-009 or INT-013 migrations. |
+
+---
+
+### INT-009 — Block filter on get_profile_history and get_profile_stats
+
+**Migration**: `supabase/migrations/20261013000006_mod_008_int009_block_filter.sql` (commit `6804dac`)
+
+**get_profile_history — block predicate verified** (lines 79–86 of migration):
+
+```sql
+AND (
+  auth.uid() = p_user_id
+  OR NOT EXISTS (
+    SELECT 1 FROM public.blocks b
+    WHERE (b.blocker_user_id = auth.uid() AND b.blocked_user_id = p_user_id)
+       OR (b.blocker_user_id = p_user_id AND b.blocked_user_id = auth.uid())
+  )
+)
+```
+
+- Symmetric: covers both block directions (A→B and B→A). PASS.
+- Owner-guarded: `auth.uid() = p_user_id` ensures the profile owner always sees their own history. PASS.
+- Returns zero rows on block — same as the existing followers_only path; blast-radius finding (2026-10-21) confirms callers handle this safely. PASS.
+- All prior WHERE clause predicates (privacy_setting, follows check, gym/grade/date filters) are present and unchanged. PASS.
+
+**get_profile_stats — block check verified** (lines 115–149 of migration):
+
+- `v_is_blocked BOOLEAN` declared in DECLARE block (line 119). PASS.
+- Block check placed after the followers_only early-return (correct ordering): `NOT v_is_self AND EXISTS (SELECT 1 FROM public.blocks ...)` (lines 140–144). Symmetric: covers both directions. PASS.
+- When blocked: `RETURN QUERY SELECT 0::BIGINT, '[]'::JSON, 0::INT, NULL::TEXT` (line 147) — same shape/cardinality as the followers_only gate; blast-radius confirms `.single()` in `fetchProfileStats` succeeds on this one-row return. PASS.
+- Owner-guarded: `NOT v_is_self` ensures the profile owner is never affected by the block check. PASS.
+- All prior logic (send_rows CTE, grade_counts, highest_grade, SECURITY INVOKER, SET search_path, REVOKE/GRANT) preserved exactly. PASS.
+
+**INT-009 REGRESSION PASS**: original failure scenario (blocked user reads blocker's full send history and stats) no longer reproduces at the server RPC layer.
+
+---
+
+### INT-013 — accumulated_days privacy fix
+
+**Migration**: `supabase/migrations/20261020000001_mod_008_accumulated_days_privacy.sql` (commit `7be5eb2`)
+
+This migration supersedes `20261013000006` for `get_profile_stats`. It copies the INT-009 function body and adds the privacy predicate to `accumulated_days`.
+
+**accumulated_days SELECT with privacy filter** (lines 77–82 of migration):
+
+```sql
+SELECT COUNT(DISTINCT DATE(logged_at AT TIME ZONE 'Asia/Taipei'))::int
+INTO v_accumulated_days
+FROM public.ascents
+WHERE user_id = p_user_id
+  AND style IN ('flash', 'top')
+  AND (v_is_self OR is_private = FALSE);
+```
+
+- `AND (v_is_self OR is_private = FALSE)` present — matches the privacy predicate applied to `total_sends` and `sends_by_grade` in the `send_rows` CTE at lines 91–92. PASS.
+- Block check from INT-009 preserved (lines 60–70): `get_profile_stats` block gate is not regressed by this migration. PASS.
+- `send_rows` CTE (lines 86–93) and `highest_grade` subquery (lines 109–115) both apply `(v_is_self OR a.is_private = FALSE)` — unchanged, matching the fix's intent. PASS.
+- SECURITY INVOKER, SET search_path = public, REVOKE/GRANT pattern preserved. PASS.
+
+**INT-013 REGRESSION PASS**: original failure scenario (non-owner seeing `accumulated_days` inflated by private sends, inconsistent with `total_sends` and `sends_by_grade`) resolved at the server RPC layer.
+
+---
+
+### Previously-passing ACs re-verified (no regressions)
+
+Neither migration touches any TypeScript source file. All AC-carrying components and service functions are unchanged.
+
+**AC-060** — PASS. `get_profile_history` WHERE clause filter predicates (gym/grade/date, lines 87–90) are present and unchanged in `20261013000006`. FilterBar and `fetchProfileHistory` call sites unmodified.
+
+**AC-061** — PASS. `StatsPanel` and `fetchProfileStats` service call unmodified. `sends_by_grade` CTE logic unchanged. All 5 StatsPanel tests still pass.
+
+**AC-062** — PASS. `useEffect` refetch chain in `ProfileHistoryScreen` unmodified. `refetchKey` wiring (AppShell → ProfileNavigator → ProfileScreen → SendHistoryProfile → ProfileHistoryScreen) unchanged.
+
+**AC-064** — PASS. Privacy gate in both RPCs unchanged (followers_only early-return still present and fires before the new block check). Client-side `visibility = 'hidden'` logic in `ProfileHistoryScreen` unchanged.
+
+**AC-183** — PASS. `SharedRouteCard` import and `renderItem` composition in `ProfileHistoryScreen` unchanged. No migration touches `get_profile_history` RETURNS TABLE beyond what was already verified in QA Run 3.
+
+**i18n key rename (Rev 41)** — PASS. `locales/en/common.json:475` has `"lastYear": "Last Year"` and `locales/zh-TW/common.json:475` has `"lastYear": "最近 1 年"`. No `thisYear` key found in either locale file. Spec requirement satisfied.
+
+**SECURITY INVOKER** — PASS. Both RPCs in `20261013000006` use `SECURITY INVOKER` (lines 46 and 111). The superseding `20261020000001` also uses `SECURITY INVOKER` (line 33).
+
+**Migration naming convention** — PASS. Both migrations follow `YYYYMMDDNNNNNN_mod_NNN_<slug>.sql`. Both use `SET search_path = public` and the REVOKE/GRANT pattern.
+
+---
+
+### Blast-radius
+
+Blast-radius filed at `project-planning/pstack-findings/2026-10-21-blast-radius-INT-009-INT-011.md`: verdict SAFE. Both RPCs return the same shape/cardinality on the block path as on the existing followers_only path that callers already handle. `fetchProfileHistory` maps empty-array safely; `fetchProfileStats` uses `.single()` which succeeds because the block path always returns exactly one row.
+
+---
+
+### Handoff
+
+INT-009 and INT-013 integration fixes verified. No regressions introduced. All pre-existing ACs (AC-060, AC-061, AC-062, AC-064, AC-183) continue to pass.
+
+QA PASS — integration-fix-verify INT-009 and INT-013.
