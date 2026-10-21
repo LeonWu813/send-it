@@ -2,11 +2,11 @@
 
 ## Last Action
 
-agent: engineer-mod-localization-theme
+agent: engineer-mod-gym-directory
 mode: integration-fix
-module: mod-localization-theme
+module: mod-gym-directory
 result: done
-next: Run `claude --agent qa-mod-localization-theme "regression-test F-2 barrel import fix"` to verify the cross-module import fix (BlockedAccountsScreen.tsx and SettingsScreen.tsx now import from public barrels only).
+next: Run `claude --agent qa-mod-gym-directory "regression-test INT-012 barrel creation"` to verify the new index.ts barrel exports are correct and no regressions exist in any MOD-002 AC.
 timestamp: 2026-10-20T00:00:00Z
 
 ## PM Updates

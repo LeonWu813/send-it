@@ -2,6 +2,50 @@
 
 ## Engineering Progress
 
+### Fix — 2026-10-20 (INT-012 barrel gap — create src/modules/mod-gym-directory/index.ts)
+
+**Files created:**
+- `src/modules/mod-gym-directory/index.ts` — public API barrel re-exporting all externally-consumed symbols: `GymNavigator` (default re-export as named), `listGyms`, `loadGym`, `fetchSavedGymIds`, `saveGym`, `unsaveGym`, `submitGymRequest`, `getGymInitials`, and all public types (`Gym`, `GymSummary`, `GymType`, `GymRequestStatus`, `GymRequestInput`, `GymListFilters`).
+
+**Consumer analysis:**
+- `mod-home/AppShell.tsx:75` — imports `GymNavigator` from `../mod-gym-directory/GymNavigator` (direct internal path; now available via barrel as `GymNavigator` named export)
+- `mod-home/screens/HomeScreen.tsx:55` — imports `getGymInitials` from `../../mod-gym-directory/gym-initials` (direct internal path; now available via barrel)
+
+**Design decisions:**
+- Per production.md Cross-Module Imports convention: only public service functions and navigator entry-point components are exported. Internal `screens/`, `components/`, `hooks/`, and `test-utils.tsx` are not re-exported.
+- `GymNavigator` is exported as a named export (not default) from the barrel, consistent with the pattern in `mod-social-feed/index.ts` (`UserProfileScreen`) — barrels always use named exports.
+- `GymNavigatorProps` is not re-exported because the only external consumer (AppShell) does not import that type, and internal prop types are not part of the public API per the coding-conventions skill.
+- `test-utils.tsx` is module-internal and is not re-exported.
+- No files in other modules were modified — the task scope is barrel creation only; consumer import updates are each other module's responsibility per write scope rules.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Tests: `npx jest --testPathPattern="mod-gym-directory" --watchAll=false` — 46/46 passed, 4 suites, exit code 0
+- Scope: one new file created within `src/modules/mod-gym-directory/`; no other files modified
+- No new dependencies introduced
+- No behavior changes — barrel is a pure re-export layer with no logic
+
+---
+
+### BLOCKED — 2026-10-20 (INT-006: Google Places API key in URL — file owned by another module)
+
+**Blocker type:** Technical — write scope violation (pstack-guard blocked the edit)
+
+**INT-006 diagnosis:** `scripts/seed-gym-photos.ts`, function `downloadPhoto` (lines 143–167), builds the Google Places photo media URL with the API key appended as a query parameter (`&key=${GOOGLE_PLACES_API_KEY}`). The two other API calls in the same file (`resolvePlaceId`, `resolvePhotoReference`) correctly use the `X-Goog-Api-Key` header instead. The fix is to remove the `&key=` suffix from `mediaUrl` and pass `headers: { 'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY as string }` to the `fetch` call — matching the pattern already used by the other two functions.
+
+**Why blocked:** `scripts/seed-gym-photos.ts` is classified by the pstack-guard as belonging to mod-home, not mod-gym-directory. MOD-002's Source Path (`src/modules/mod-gym-directory/`, `supabase/migrations/*_mod_002_*`) does not include `scripts/`. The guard returned: "scripts/seed-gym-photos.ts belongs to mod-home, not mod-gym-directory."
+
+**Routing:** The coordinator must run `claude --agent engineer-mod-home "integration-fix INT-006"` with the following diagnosis:
+
+> In `scripts/seed-gym-photos.ts`, the `downloadPhoto` function (lines 144–150) exposes the Google Places API key in the URL query string (`&key=${GOOGLE_PLACES_API_KEY}`), while the other two API calls in the same file use the `X-Goog-Api-Key` header correctly. Fix:
+>
+> 1. Remove `&key=${GOOGLE_PLACES_API_KEY}` from the `mediaUrl` string (line 148), so the URL ends at `&skipHttpRedirect=true`.
+> 2. Change `await fetch(mediaUrl)` (line 150) to `await fetch(mediaUrl, { headers: { 'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY as string } })`.
+>
+> Commit: `git add scripts/seed-gym-photos.ts && git commit -m "fix(scripts): INT-006 move Places photo API key from URL query string to header"`
+
+---
+
 ### Fix — 2026-10-19 (Tappable address opens Google Maps in GymDetailScreen)
 
 **Files modified:**
