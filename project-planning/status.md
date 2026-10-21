@@ -3,11 +3,11 @@
 ## Last Action
 
 agent: tech-lead
-mode: change-review
+mode: record-decisions
 module: n/a
-result: needs-human
-next: show Leon questions Q1–Q6 in Tech Lead Reviews "Review — 2026-10-21 — change (Rev 47: rename to ProjectDay)" word for word, plus setup.md section 11 (Setup Changed — 2026-10-21); then claude --agent pm "change" (proposal pass revising AC-200: subtitle per Q1, bundle ID/slug per Q2, AC-200(3) command + carve-out per Q3/Q4, ownership table from this review) with Leon's answers quoted; Q6 (INT-028) goes to claude --agent tech-lead "decisions: ..."; after PM applies, claude --agent doc-sync
-timestamp: 2026-10-22T01:30:00Z
+result: success
+next: Rev 47 Q1–Q5 still open — show Leon questions Q1–Q5 in Tech Lead Reviews "Review — 2026-10-21 — change (Rev 47: rename to ProjectDay)" word for word, plus setup.md section 11; then claude --agent pm "change" (proposal pass revising AC-200) with Leon's answers quoted; after PM applies, claude --agent doc-sync. INT-028 is DEFERRED (Leon, 2026-10-21): after the rename ships, re-decide it via claude --agent tech-lead "decisions: INT-028 ..." before Apple Sign-In is re-enabled or the app is submitted.
+timestamp: 2026-10-21T00:00:00Z
 
 ## PM Updates
 
