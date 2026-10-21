@@ -2,13 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-auth-profile
-mode: integration-fix
-module: mod-auth-profile
-int: INT-024
-result: fixed
-timestamp: 2026-10-21T20:00:00Z
-next: claude --agent qa-mod-auth-profile "integration-fix-verify INT-024"
+agent: tech-lead
+mode: confirm-fix
+module: n/a
+next: claude --agent tech-lead "confirm-fix INT-025 — Leon: 'I verified INT-025: <what you checked>'" (also still pending from e48b5f7: claude --agent qa-mod-auth-profile "integration-fix-verify INT-024")
+result: needs-human
+timestamp: 2026-10-21T20:05:00Z
 
 ## PM Updates
 
