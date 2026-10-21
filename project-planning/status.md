@@ -2,11 +2,11 @@
 
 ## Last Action
 
-agent: engineer-mod-gym-directory
-mode: integration-fix
-module: mod-gym-directory
-result: done
-next: Run `claude --agent qa-mod-gym-directory "regression-test INT-012 barrel creation"` to verify the new index.ts barrel exports are correct and no regressions exist in any MOD-002 AC.
+agent: tech-lead
+mode: integration-review
+module: n/a
+next: claude --agent tech-lead "decisions: INT-009 APPROVED, INT-011 APPROVED, INT-013 <decision>, … INT-023 <decision>" — then each owning Engineer marks its already-fixed rows FIXED – AWAITING QA (citing commits), QA verifies per module (incl. the pending `claude --agent qa-mod-gym-directory "regression-test INT-012 barrel creation"`), the human verifies, and Tech Lead runs confirm-fix
+result: issues-found
 timestamp: 2026-10-20T00:00:00Z
 
 ## PM Updates
@@ -289,6 +289,22 @@ timestamp: 2026-10-20T00:00:00Z
   - For Doc-Sync: regenerate every engineer-/qa- agent from ~/.claude/agent-templates/ with the new Source Paths; copy CONV-000 into production.md Shared Conventions; confirm the Phase Plan. No spec content changes.
 
 ## Tech Lead Reviews
+
+### Phase 1 Integration Review — FIX VERIFICATION — 2026-10-20 — SIGN-OFF WITHHELD (process gate)
+
+**pstack input:** `project-planning/pstack-findings/2026-10-20-thermos-phase-1-fixes.md`. Accepted: the CLEARED verdicts for INT-005/006/009/010/011/012, and F-1, F-2, F-3, F-4. I checked each one fixed at HEAD `e6b3cf4` (no private-path `jest.mock` remains; `BlockedAccountsScreen.tsx:32–33` uses the barrel; `beta-video-service.ts:253` delegates to `isBlocked`, which is symmetric through `fetchBlockedUserIds`; `mod-social-feed/index.ts:26` drops `fetchLikeInfoBatch`). The pre-existing barrel-gap note is also resolved (`SettingsScreen.tsx:51`, `OtherUserProfileScreen.tsx:26–27`, new `mod-route-catalog` barrel). Rejected: none.
+
+**Concerns** (must address before proceeding):
+- **No INT-005…INT-023 row has QA or human verification.** Four rows are `FIXED – AWAITING QA`. INT-009, INT-011 and INT-013…INT-023 are still `PROPOSED` with no recorded decision, even though their fixes have landed. I cannot close any row without `HUMAN VERIFIED`, so PM's Phase 1 checkpoint gate stays blocked.
+- **Fixes landed with no recorded approval** (INT-009, INT-011, INT-013…INT-023). The audit trail must be repaired: the human gives decisions → I record them → Engineers mark `FIXED – AWAITING QA` citing their existing commits → QA → human → confirm-fix.
+- **No pstack review has covered the fix commits after `c76bd4e`.** Some touch depended-upon modules (`mod-moderation` `fe249ad`, `mod-beta-video` `1554fde`/`7bcbd28`), so a coordinator `blast-radius` run may be due under the CLAUDE.md trigger table.
+
+**Approved**:
+- At the code level, all six CRITICAL/HIGH blockers and F-1…F-4 are correctly fixed. I found no open defect.
+
+**Sign-off decision:** **PHASE 1 SIGN-OFF WITHHELD.** The cause is the verification gate, not the code. The full row table and the ordered path to sign-off are in `integration-review.md` → "Sign-off — Phase 1 fix verification — 2026-10-20".
+
+**Next:** `claude --agent tech-lead "decisions: INT-009 …, INT-011 …, INT-013 … INT-023 …"`.
 
 ### Phase 1 Integration Review — THERMOS RE-REVIEW — 2026-10-20 — SIGN-OFF WITHHELD
 

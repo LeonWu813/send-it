@@ -130,3 +130,44 @@ Status of every Phase 1 item:
 **Recommended grouping for the human's decisions (to minimize churn):** fix INT-009 + INT-013 together (same MOD-008 file); fix INT-011 + INT-014 together (same `blocks`/MOD-009); fix INT-010 alongside INT-009's block-semantics decision (confirm the block-coverage intent once, apply to both read surfaces); INT-016 + INT-017 touch the same file. INT-012 is a multi-module barrel change — consider SPLIT per owning module if you want to parallelize.
 
 **Next step:** the human reviews these rows and gives decisions, then re-invoke me with `claude --agent tech-lead "decisions: INT-005 APPROVED, …"` to record APPROVED / REJECTED / DEFERRED (and Assigned Module) on each. Phase 1 cannot proceed to the PM checkpoint until every blocking row is `CONFIRMED CLOSED`, `REJECTED`, `DEFERRED`, or `ACCEPTED (KNOWN ISSUE)`.
+
+---
+
+### Sign-off — Phase 1 fix verification — 2026-10-20 (supersedes the REVISED sign-off above)
+
+**pstack input:** `project-planning/pstack-findings/2026-10-20-thermos-phase-1-fixes.md` (scope `60aedc19..c76bd4e`; 6 blockers CLEARED, F-1…F-4 + one pre-existing note). I checked each finding against the code at HEAD (`e6b3cf4`):
+- **Accepted: CLEARED verdicts for INT-005/006/009/010/011/012.** These match my reading of the fix commits. They are evidence of a correct implementation. They do not count as QA or human verification.
+- **Accepted, now fixed in code: F-1** (commits `a4aa2b3`, `db948e9`). `grep` finds no remaining `jest.mock('../../mod-{moderation,notifications,social-feed}/…')` private-path mocks under `src/modules`.
+- **Accepted, now fixed in code: F-2** (`0c85356`). `BlockedAccountsScreen.tsx:32–33` imports from `'../../mod-moderation'`.
+- **Accepted, now fixed in code: F-3** (`1554fde`). `beta-video-service.ts:22,253` delegates to `isBlocked`. `fetchBlockedUserIds` (`moderation-service.ts:152–177`) resolves both block directions, so the symmetric semantics of the removed raw query are kept.
+- **Accepted, now fixed in code: F-4** (`f0d2109`). `mod-social-feed/index.ts:26` no longer re-exports `fetchLikeInfoBatch`. This is consistent with INT-022's "deliberate Rev 36 deferral".
+- **Accepted, now resolved: pre-existing note.** `SettingsScreen.tsx:51` imports from the `'../../mod-auth-profile'` barrel and `OtherUserProfileScreen.tsx:26–27` from the `'../../mod-profile-history'` barrel. `mod-route-catalog/index.ts` now exists (`dd0c771`), and `mod-home`/`mod-send-logging` consume the barrels (`e6b3cf4`, `248a15c`). The only non-test `*-service` path strings left are doc comments inside `mod-route-catalog/index.ts`.
+- **Rejected:** none.
+
+**Coverage gap in the pstack input:** the thermos scope ends at `c76bd4e`. No pstack review has looked at the F-1…F-4 fix commits or the later MEDIUM/LOW fix commits (`7be5eb2`, `572d23d`, `dd0c771`, `fe249ad`/`37417a5`, `1296d25`, `7bcbd28`, `248a15c`, `e6b3cf4`). `mod-moderation` (`fe249ad`) and `mod-beta-video` (`1554fde`) have dependents, so under the CLAUDE.md trigger table a `blast-radius` run may be due on those fixes. That is the coordinator's step. It is flagged here and not run by me.
+
+#### Decision: PHASE 1 SIGN-OFF WITHHELD (process gate, not a code defect)
+
+**Code state:** I found no open defect. All six CRITICAL/HIGH blockers and F-1…F-4 are implemented correctly as far as I can verify from source.
+
+**Tracker state:** this blocks the PM checkpoint. No INT-005…INT-023 row has reached `QA VERIFIED` or `HUMAN VERIFIED`, and none of the module `status.md` QA Results records a verification of any of them. The rules forbid me from closing a row on Engineer's or thermos's word, so no row can move to `CONFIRMED CLOSED` yet.
+
+| Row | Tracker status now | Fixed in code? | What it is waiting for |
+|---|---|---|---|
+| INT-005, INT-006, INT-010, INT-012 | FIXED – AWAITING QA | Yes | QA → human verify → confirm-fix |
+| INT-009, INT-011 | **PROPOSED** (no decision recorded) | Yes (thermos CLEARED) | Human decision recorded → Engineer sets FIXED → QA → human → confirm-fix |
+| INT-013, 014, 015, 016, 017, 018, 019, 020, 021, 023 | **PROPOSED** (no decision recorded) | Yes, per fix commits M-1…M-7, L-1, L-2, L-4 (not yet reviewed by Tech Lead or QA) | Human decision (APPROVED, or DEFERRED/REJECTED) → same loop if APPROVED |
+| INT-022 | PROPOSED | Barrel export removed (F-4); RPC + function kept by design | Human decision. Likely `ACCEPTED (KNOWN ISSUE)` or REJECTED (no further change) |
+| INT-007, INT-008 | NO ISSUES | n/a | Nothing; closed for gating |
+| INT-001…INT-004 | CONFIRMED CLOSED | — | Nothing |
+
+**Process drift to correct:** Engineers fixed INT-009, INT-011 and INT-013…INT-023 although the tracker never recorded an APPROVED decision for them. The code is probably fine. The audit trail is not, and the checkpoint gate reads the trail. To fix it: the human gives decisions on those rows, and I record them. Where a fix already exists, the owning Engineer then sets `FIXED – AWAITING QA` and cites the existing commit. No new code is needed.
+
+**Path to sign-off (in order):**
+1. Human → `claude --agent tech-lead "decisions: INT-009 APPROVED, INT-011 APPROVED, INT-013 …, …, INT-023 …"` for every PROPOSED row.
+2. Each owning Engineer marks its already-fixed rows `FIXED – AWAITING QA`, citing the commit.
+3. QA per owning module verifies each row (`QA VERIFIED`): mod-auth-profile (INT-005, INT-021, F-1), project-files owner/seeder (INT-006), mod-profile-history (INT-009, INT-013), mod-beta-video (INT-010, INT-016, INT-017, INT-020), mod-moderation (INT-011, INT-014, INT-019), each barrel owner + consumer for INT-012 (mod-social-feed, mod-moderation, mod-notifications, mod-route-catalog, mod-gym-directory, mod-home, mod-send-logging, mod-localization-theme), mod-route-catalog (INT-015, INT-023), mod-home (INT-018).
+4. Human verifies → `claude --agent tech-lead "I verified INT-0NN …"`, then I run confirm-fix and close each row.
+5. When every Phase 1 row is CONFIRMED CLOSED / REJECTED / DEFERRED / NO ISSUES / ACCEPTED (KNOWN ISSUE), I record the final Phase 1 sign-off and PM's checkpoint is unblocked.
+
+Human-only checks still outstanding (I cannot run them from source): rotate the Google Places key if the old seeder ran through a logged proxy (INT-006); confirm `Verify JWT = on` for `notify-beta-video-like` and `report-digest` in the Supabase dashboard (INT-007/008 evidence).
