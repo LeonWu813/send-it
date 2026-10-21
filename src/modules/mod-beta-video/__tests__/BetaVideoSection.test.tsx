@@ -50,7 +50,7 @@ jest.mock('../beta-video-service', () => ({
   uploadBetaVideo: jest.fn(),
 }));
 
-jest.mock('../../mod-moderation/moderation-service', () => ({
+jest.mock('../../mod-moderation', () => ({
   fetchBlockedUserIds: jest.fn(),
 }));
 
@@ -79,7 +79,7 @@ import {
   checkExistingBetaVideo,
   uploadBetaVideo,
 } from '../beta-video-service';
-import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
+import { fetchBlockedUserIds } from '../../mod-moderation';
 import BetaVideoSection from '../components/BetaVideoSection';
 import { renderOptions } from '../test-utils';
 import type { BetaVideo } from '../types';

@@ -86,7 +86,7 @@ import { useLayout, useTheme } from '../../../lib/theme';
 import { TapeBadge } from '@/lib/tape';
 import { ACTION_SIZE, ReelAction } from './ReelAction';
 import { ReelScrim } from './ReelScrim';
-import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed/social-feed-service';
+import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed';
 import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import type { BetaVideo } from '../types';
 

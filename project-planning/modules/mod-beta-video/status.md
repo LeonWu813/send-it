@@ -2,6 +2,38 @@
 
 ## Engineering Progress
 
+### Integration fixes: INT-010 block filter + INT-012 barrel imports — 2026-10-20
+
+**INT-010 — fetchBetaVideosByUser block filter (HIGH)**
+
+- **Root cause**: `fetchBetaVideosByUser` applied only the reported-video exclusion predicate; no block check. A viewer who blocked a user (or was blocked by that user) could still see that user's beta videos on their profile grid.
+- **Fix**: Added a symmetric block check at the start of `fetchBetaVideosByUser` using the existing `blocks` table. After the auth guard, if `currentUserId !== userId` (viewing another user's videos), the function queries `blocks` with a symmetric `.or(and(blocker.eq.viewer,blocked.eq.target),and(blocker.eq.target,blocked.eq.viewer))` + `.limit(1).maybeSingle()`. If a block row is found, returns `[]` immediately. Skipped when viewing own videos.
+- **Impact check**: `fetchBetaVideosByUser` is called by MOD-006 (AC-163) and MOD-001 (AC-164) for profile grids. Both callers benefit from the new block fence without any caller-side changes. `fetchBetaVideosForRoute` is unchanged (it uses `fetchBlockedUserIds` via `BetaVideoSection` at the component level for AC-154).
+- **Derives currentUserId from**: `session.user.id` (already obtained from `getSession` auth guard) — no additional auth round-trip.
+- **Tests added** (5 new in `beta-video-service.test.ts`): viewer blocked target returns `[]`; target blocked viewer returns `[]`; self-view skips block check and returns videos; no block relationship proceeds to fetch; empty user array when no videos (updated to account for block-check `from()` call order). Total: 28 tests (was 23), 28/28 pass.
+- **Self-check**: `npm run lint` (tsc --noEmit): 0 errors. `npx jest --testPathPattern="mod-beta-video" --watchAll=false`: 113/113 pass.
+- **Files modified**: `src/modules/mod-beta-video/beta-video-service.ts`, `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`
+- **ACs addressed**: AC-154 (block coverage consistency), INT-010
+
+**INT-012 — Barrel import fixes in mod-beta-video (HIGH)**
+
+- **Root cause**: `BetaVideoSection.tsx` imported `fetchBlockedUserIds` from `'../../mod-moderation/moderation-service'` (private path) and `BetaVideoReelViewer.tsx` imported `fetchLikeInfo/likeBetaVideo/unlikeBetaVideo` from `'../../mod-social-feed/social-feed-service'` (private path). Both `mod-moderation` and `mod-social-feed` have barrel `index.ts` files at their module roots.
+- **Fix**: Repointed both imports to the barrel paths (`'../../mod-moderation'` and `'../../mod-social-feed'`). Also updated the corresponding `jest.mock` calls in test files to match the new barrel paths (required so Jest intercepts the correct module specifier).
+- **Scope note**: Remaining INT-012 violations in other modules (mod-auth-profile, mod-social-feed, mod-moderation, mod-home, mod-localization-theme, mod-route-catalog, mod-send-logging) are outside MOD-005 write scope — each owning engineer must repoint their own files.
+- **Self-check**: `npm run lint` (tsc --noEmit): 0 errors. `npx jest --testPathPattern="mod-beta-video" --watchAll=false`: 113/113 pass.
+- **Files modified**: `src/modules/mod-beta-video/components/BetaVideoSection.tsx`, `src/modules/mod-beta-video/components/BetaVideoReelViewer.tsx`, `src/modules/mod-beta-video/__tests__/BetaVideoSection.test.tsx`, `src/modules/mod-beta-video/__tests__/BetaVideoReelViewer.test.tsx`
+- **ACs addressed**: n/a (integration hygiene / Cross-Module Imports convention), INT-012
+
+**Judgment-based checklist (integration-fix mode)**:
+- No new AC logic added beyond the INT-010 block filter.
+- Block check uses `blocks` table directly (same table as `fetchBlockedUserIds` in MOD-009); no cross-module schema knowledge assumed beyond the confirmed schema.
+- The `blocks` query is only issued when `currentUserId !== userId` — no extra round-trip for self-view callers (MOD-001 profile tab uses own userId).
+- No new native dependencies.
+- No hardcoded values.
+- No PII logged.
+
+---
+
 ### Fix: import TapeBadge from @/lib/tape facade (INT-002) — 2026-10-20
 
 - **Change**: Resolved integration violation INT-002. `BetaVideoReelViewer.tsx` was importing `TapeBadge` directly from the private MOD-003 path (`../../mod-route-catalog/components/TapeBadge`) instead of the shared `@/lib/tape` facade defined in `production.md`.

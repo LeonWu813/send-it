@@ -50,7 +50,7 @@ jest.mock('../beta-video-service', () => ({
   reportBetaVideo: jest.fn(),
 }));
 
-jest.mock('../../mod-social-feed/social-feed-service', () => ({
+jest.mock('../../mod-social-feed', () => ({
   fetchLikeInfo: jest.fn(),
   likeBetaVideo: jest.fn(),
   unlikeBetaVideo: jest.fn(),
@@ -80,7 +80,7 @@ import { getVideoSignedUrl, reportBetaVideo } from '../beta-video-service';
 import BetaVideoReelViewer from '../components/BetaVideoReelViewer';
 import { renderOptions } from '../test-utils';
 import type { BetaVideo } from '../types';
-import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed/social-feed-service';
+import { fetchLikeInfo, likeBetaVideo, unlikeBetaVideo } from '../../mod-social-feed';
 
 const mockGetVideoSignedUrl = getVideoSignedUrl as jest.MockedFunction<typeof getVideoSignedUrl>;
 const mockReportBetaVideo = reportBetaVideo as jest.MockedFunction<typeof reportBetaVideo>;

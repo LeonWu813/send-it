@@ -226,6 +226,8 @@ export async function getThumbnailSignedUrl(storagePath: string): Promise<string
  * AC-162: service function consumed by MOD-006 (AC-163) and MOD-001 (AC-164).
  * Filters out rows where `is_reported = true AND report_dismissed = false`
  * using the canonical AC-142/AC-143 exclusion predicate.
+ * INT-010: filters out all videos when a block relationship exists in either
+ * direction between the viewer and the target user (same semantics as AC-154).
  * Requires an authenticated session; throws if none.
  *
  * @param userId  UUID of the user whose videos to fetch.
@@ -237,6 +239,25 @@ export async function fetchBetaVideosByUser(userId: string): Promise<BetaVideo[]
   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
   if (sessionError || !session) {
     throw new Error('Authentication required.');
+  }
+
+  const currentUserId = session.user.id;
+
+  // INT-010 / AC-154: block filter — if the viewer and the target user have a
+  // block relationship in either direction, return an empty array immediately.
+  // Skipped when the viewer is viewing their own profile (currentUserId === userId)
+  // or when unauthenticated (guarded above).
+  if (currentUserId !== userId) {
+    const { data: block } = await supabase
+      .from('blocks')
+      .select('blocker_user_id')
+      .or(
+        `and(blocker_user_id.eq.${currentUserId},blocked_user_id.eq.${userId}),` +
+        `and(blocker_user_id.eq.${userId},blocked_user_id.eq.${currentUserId})`,
+      )
+      .limit(1)
+      .maybeSingle();
+    if (block) return [];
   }
 
   const { data, error } = await supabase

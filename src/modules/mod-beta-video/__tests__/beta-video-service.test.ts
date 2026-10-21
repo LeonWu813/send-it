@@ -490,13 +490,23 @@ describe('fetchBetaVideosByUser', () => {
   });
 
   it('AC-162: returns empty array when user has no videos', async () => {
-    const selectChain = {
+    // user-999 != user-001 (session), so the block check runs first.
+    // No block relationship → proceed to the beta_videos query.
+    const blocksChain = {
+      select: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    const videosChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       or: jest.fn().mockReturnThis(),
       order: jest.fn().mockResolvedValue({ data: [], error: null }),
     };
-    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+    (mockSupabase.from as jest.Mock)
+      .mockReturnValueOnce(blocksChain)
+      .mockReturnValueOnce(videosChain);
 
     const result = await fetchBetaVideosByUser('user-999');
     expect(result).toHaveLength(0);
@@ -514,6 +524,7 @@ describe('fetchBetaVideosByUser', () => {
   });
 
   it('AC-162: throws a user-facing error on Supabase error', async () => {
+    // No block relationship (viewer === target, skip block check).
     const selectChain = {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
@@ -525,6 +536,111 @@ describe('fetchBetaVideosByUser', () => {
     await expect(fetchBetaVideosByUser('user-001')).rejects.toThrow(
       'Failed to load beta videos',
     );
+  });
+
+  it('INT-010: returns empty array when viewer has blocked the target user', async () => {
+    // Viewer (user-001) blocked target (user-002).
+    // blocks query returns a row → early return [].
+    const blocksChain = {
+      select: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({
+        data: { blocker_user_id: 'user-001' },
+        error: null,
+      }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(blocksChain);
+
+    const result = await fetchBetaVideosByUser('user-002');
+    expect(result).toEqual([]);
+  });
+
+  it('INT-010: returns empty array when target user has blocked the viewer', async () => {
+    // Target (user-002) blocked viewer (user-001).
+    // blocks query returns a row (reverse direction) → early return [].
+    const blocksChain = {
+      select: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({
+        data: { blocker_user_id: 'user-002' },
+        error: null,
+      }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(blocksChain);
+
+    const result = await fetchBetaVideosByUser('user-002');
+    expect(result).toEqual([]);
+  });
+
+  it('INT-010: skips block check and returns videos when viewing own profile', async () => {
+    // When currentUserId === userId, no block query is issued.
+    // Session user is user-001, querying user-001's videos.
+    const rawRow = {
+      id: 'vid-self',
+      route_id: 'route-001',
+      user_id: 'user-001',
+      video_url: 'user-001/vid.mp4',
+      thumbnail_url: 'user-001/vid.mp4',
+      duration_seconds: 15,
+      caption: null,
+      created_at: '2026-09-30T10:00:00Z',
+      is_reported: false,
+      report_dismissed: false,
+      users: { display_name: 'Self', avatar_url: null },
+      routes: null,
+    };
+    const selectChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [rawRow], error: null }),
+    };
+    (mockSupabase.from as jest.Mock).mockReturnValue(selectChain);
+
+    const result = await fetchBetaVideosByUser('user-001');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('vid-self');
+  });
+
+  it('INT-010: proceeds with videos when no block relationship exists', async () => {
+    // Viewing another user (user-002) with no block in either direction.
+    // blocks query returns null → proceed to fetch videos.
+    const rawRow = {
+      id: 'vid-002',
+      route_id: 'route-001',
+      user_id: 'user-002',
+      video_url: 'user-002/vid.mp4',
+      thumbnail_url: 'user-002/vid.mp4',
+      duration_seconds: 20,
+      caption: null,
+      created_at: '2026-09-30T10:00:00Z',
+      is_reported: false,
+      report_dismissed: false,
+      users: { display_name: 'Other Climber', avatar_url: null },
+      routes: null,
+    };
+    const blocksChain = {
+      select: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    const videosChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      or: jest.fn().mockReturnThis(),
+      order: jest.fn().mockResolvedValue({ data: [rawRow], error: null }),
+    };
+    // First call to from() is the blocks table; second is beta_videos.
+    (mockSupabase.from as jest.Mock)
+      .mockReturnValueOnce(blocksChain)
+      .mockReturnValueOnce(videosChain);
+
+    const result = await fetchBetaVideosByUser('user-002');
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('vid-002');
   });
 });
 

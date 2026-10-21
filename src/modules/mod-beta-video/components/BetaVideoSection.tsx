@@ -46,7 +46,7 @@ import { EmptyState } from '../../../components/ui/EmptyState';
 import { InlineError } from '../../../components/ui/InlineError';
 import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
-import { fetchBlockedUserIds } from '../../mod-moderation/moderation-service';
+import { fetchBlockedUserIds } from '../../mod-moderation';
 import { fetchBetaVideosForRoute } from '../beta-video-service';
 import type { BetaVideo } from '../types';
 import BetaVideoGrid from './BetaVideoGrid';
