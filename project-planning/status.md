@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: pm
-mode: checkpoint
+agent: tech-lead
+mode: record-decisions
 module: n/a
-result: needs-human
-next: show project-planning/pm-proposals/2026-10-21-checkpoint-phase-1.md to the human; on approval run claude --agent pm "apply 2026-10-21-checkpoint-phase-1.md" with their exact words quoted
-timestamp: 2026-10-21T17:26:53Z
+result: success
+next: claude --agent engineer-mod-home "integration-fix INT-018" and claude --agent engineer-mod-route-catalog "integration-fix INT-023"; for the 10 already-landed rows, each owning Engineer sets FIXED – AWAITING QA citing the commit (coordinator runs /pstack:blast-radius on INT-009 and INT-011 first), then QA per module. The PM checkpoint proposal (2026-10-21-checkpoint-phase-1.md) is blocked until all 12 rows are CONFIRMED CLOSED
+timestamp: 2026-10-21T18:00:00Z
 
 ## PM Updates
 
