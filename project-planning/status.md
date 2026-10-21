@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: confirm-fix
+agent: doc-sync
+mode: template-refresh
 module: n/a
-next: claude --agent tech-lead "new finding from INT-005 verification: avatar replace uploads but old image still shown (same storage path and public URL, cached); decide whether to add an INT row and fix". INT-006 is CONFIRMED CLOSED. INT-005 is QA VERIFIED for the policy fix and needs human verification. INT-012 still needs QA.
 result: success
-timestamp: 2026-10-21T12:30:00Z
+next: claude --agent tech-lead "new finding from INT-005 verification: avatar replace uploads but old image still shown (same storage path and public URL, cached); decide whether to add an INT row and fix". INT-006 is CONFIRMED CLOSED. INT-005 is QA VERIFIED for the policy fix and needs human verification. INT-012 still needs QA.
+timestamp: 2026-10-21T14:00:00Z
 
 ## PM Updates
 
@@ -4549,6 +4549,46 @@ The seeder is idempotent by AC-195 spec (skips gyms that already have a `google_
 ---
 
 **Next step**: invoke `engineer-mod-gym-directory` to implement the three endpoint changes in `scripts/seed-gym-photos.ts`.
+
+### Sync Report — Template refresh — 2026-10-21
+
+**Mode**: template-refresh
+**Trigger**: Human request — framework agent templates updated (one-conversation run mode + Skill tool for Engineers).
+
+**Files regenerated** (24 total):
+- `.claude/agents/engineer-mod-auth-profile.md`
+- `.claude/agents/engineer-mod-gym-directory.md`
+- `.claude/agents/engineer-mod-route-catalog.md`
+- `.claude/agents/engineer-mod-send-logging.md`
+- `.claude/agents/engineer-mod-beta-video.md`
+- `.claude/agents/engineer-mod-social-feed.md`
+- `.claude/agents/engineer-mod-notifications.md`
+- `.claude/agents/engineer-mod-profile-history.md`
+- `.claude/agents/engineer-mod-moderation.md`
+- `.claude/agents/engineer-mod-localization-theme.md`
+- `.claude/agents/engineer-mod-analytics.md`
+- `.claude/agents/engineer-mod-home.md`
+- `.claude/agents/qa-mod-auth-profile.md`
+- `.claude/agents/qa-mod-gym-directory.md`
+- `.claude/agents/qa-mod-route-catalog.md`
+- `.claude/agents/qa-mod-send-logging.md`
+- `.claude/agents/qa-mod-beta-video.md`
+- `.claude/agents/qa-mod-social-feed.md`
+- `.claude/agents/qa-mod-notifications.md`
+- `.claude/agents/qa-mod-profile-history.md`
+- `.claude/agents/qa-mod-moderation.md`
+- `.claude/agents/qa-mod-localization-theme.md`
+- `.claude/agents/qa-mod-analytics.md`
+- `.claude/agents/qa-mod-home.md`
+
+**Changes applied to each wrapper:**
+- All 12 engineer wrappers: added `Skill` to `tools` frontmatter; added `<run_modes>` section (one-conversation mode support) after `<role>`.
+- All 12 QA wrappers: added `<run_modes>` section (one-conversation mode support) after `<role>`; updated `<write_scope>` to include the new narrow permission for flipping `ESCALATED TO TECH LEAD` markers.
+- All module-specific values preserved: spec paths, Source Paths, project files (mod-home), dependency status.md read paths.
+
+**No spec, production.md, or prd.md changes.** No requirement change.
+
+**verify-sync.sh**: Not run — template refresh per SKILL.md routing rules.
 
 ## Skill Recommendations
 
