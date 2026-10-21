@@ -1,19 +1,19 @@
-# Send It — Product Requirements Document
+# ProjectDay — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 46
-**Date**: 2026-10-20
-**Revision**: 46
+**Status**: [SUBSTANTIVE] — Revision 47
+**Date**: 2026-10-21
+**Revision**: 47
 
 ---
 
 ## 1. Project Overview
 
-**Send It** is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at the gyms they follow, and connect with other climbers in the local scene. The app is organized around a persistent three-tab bottom navigation shell — Home, Gyms, and Profile — with the Home tab as the landing screen after login. Rather than a single fixed home gym, each climber maintains a multi-gym saved list: they bookmark any gyms they care about and see them, alongside the climbers they follow, on the Home screen.
+**ProjectDay** is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at the gyms they follow, and connect with other climbers in the local scene. The app is organized around a persistent three-tab bottom navigation shell — Home, Gyms, and Profile — with the Home tab as the landing screen after login. Rather than a single fixed home gym, each climber maintains a multi-gym saved list: they bookmark any gyms they care about and see them, alongside the climbers they follow, on the Home screen.
 
 Indoor bouldering has grown fast in Taiwan — Taipei and New Taipei have the highest concentration of gyms, with more scattered across Taoyuan, Hsinchu, Taichung, Kaohsiung, Yilan, and Tainan — but climbers currently have no dedicated app that combines send logging, beta video sharing, live gym route lists, and local social features. Today this happens informally through PTT posts, Instagram/Threads stories, or word of mouth, or through global apps (Kaya, Vertical-Life, 27 Crags) that are outdoor-crag-centric, not localized for Taiwan gyms, and don't reflect local color-based tape conventions. One small local app (記石) exists but is log-only — no beta video, no cross-gym route database, no social layer.
 
-Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a filter-first route submission flow with server-enforced duplicate protection that keeps user-submitted data clean without waiting on official gym partnerships.
+ProjectDay's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a filter-first route submission flow with server-enforced duplicate protection that keeps user-submitted data clean without waiting on official gym partnerships.
 
 ---
 
@@ -307,7 +307,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 
 ## 5. Architecture Overview
 
-Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
+ProjectDay is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
 
 - The **client** owns rendering, local UI state, client-generated thumbnails, and localization. In Phase 1 the client performs **no** video compression of its own — it uploads the original native video file as-is after an upfront size gate (≥ 45 MB is rejected; see §8 AC-031/AC-169). It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
 - The client's top-level UI is a **persistent three-tab bottom navigation shell**. **Tab 1 (Home)** hosts the Home surface (MOD-012). **Tab 2 (Gyms)** hosts the existing gym navigation stack (MOD-002 gym directory + detail, with MOD-003 route catalog reachable beneath it). **Tab 3 (Profile)** hosts the current user's profile surface (MOD-001) with their embedded send history and stats (MOD-008). The Home tab is the default tab after login. This tab shell is an app-level architecture concern: the mount point for each tab's navigator and the module boundaries between the shell and the surfaces it hosts require Tech Lead review before implementation.
@@ -798,6 +798,8 @@ There shall be no disabled-button state and no "delete your existing video first
 
 **AC-168** (new): The SettingsScreen shall present a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and the "Blocked Accounts" row, AC-155). The button shall use the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167).
 
+**AC-199** (new, Rev 47, MOD-010): The app's name is "ProjectDay" (one word, capital P and D) in both English and zh-TW; it has no Chinese form. No user-facing text in either locale catalog (English, zh-TW), and no push-notification or email text the system sends, shall contain the phrase "Send It". Where a string used "Send It" as the app's name, it shall say "ProjectDay" instead. The climbing verb "send" (for example "log a send", the Send Logging flow) is not the app name and is unchanged.
+
 ---
 
 ### MOD-011 (Analytics) Acceptance Criteria
@@ -857,6 +859,8 @@ There shall be no disabled-button state and no "delete your existing video first
 **AC-191** (revised, Rev 41, MOD-012 shared route card): The shared route card (AC-183) shall display the route's grade on the tape badge (the colored chip rendered using the shared `TapeBadge` component from `src/lib/tape.ts`). The plain-text grade `<Text>` label (the standalone rendered grade string, separate from the badge) shall NOT be rendered in the card UI. The `grade: string` field remains on the card's `RouteCardRoute` interface (retained for accessibility-label composition and for supplying the tape badge). Grade is conveyed visually through the tape badge only — not through a separate plain-text label. (This reverts the Rev 39 "grade hidden" decision: the grade is now shown via the TapeBadge, not via a plain `<Text>` element.)
 
 **AC-192** (revised, Rev 41, MOD-012 shared route card): The shared route card (AC-183) shall accept a `size?: 'standard' | 'compact'` prop (default `'standard'`). In `'standard'` variant the thumbnail (sourced from the route's `photo_url` per AC-183) shall be **88pt × 88pt**; in `'compact'` variant it shall be **64pt × 64pt**. Callers in tight layouts (e.g. send-history) may use `compact`. The card layout shall be: left side = the tape badge (AC-191, displaying the route grade), the route name, the beta-count subtitle (when present, AC-189), the send badge (when `hasSend`, AC-190), and the bookmark icon (AC-046/AC-047); right side = the thumbnail at the size appropriate to the `size` prop. All icons and metadata are grouped on the left side of the card only, not scattered around the card.
+
+**AC-200** (new, Rev 47, MOD-012 as project files owner; cross-cutting): The app shall be published and identified as "ProjectDay": (1) the App Store listing name shall be "ProjectDay" and the App Store subtitle shall be "Taiwan Climbing Route Tracker and Beta Sharing"; (2) every app-name identifier in the repository (Expo app name and slug, iOS bundle identifier, package name, native project names, and code identifiers, comments and documentation) shall use "ProjectDay", or "projectday" where the identifier format does not allow capital letters; (3) after the change, a case-insensitive search of the repository for "send it", "send-it", "send_it" and "sendit" shall return no matches outside `project-planning/`, `README.md` (renamed at the final checkpoint) and git history. The climbing verb "send" and identifiers built on it (for example `mod-send-logging`, `send-service.ts`) are not the app name and are unchanged. The new bundle identifier means a new App Store Connect app record, which Leon has accepted. **Ownership (pending Tech Lead review)**: MOD-012 owns the project files (app.json and the other root files); identifiers inside another module's Source Path are renamed by that module's owner. Final allocation is assigned by the Tech Lead in change review.
 
 ---
 
@@ -1171,7 +1175,7 @@ Most previously-open questions were resolved during PRD confirmation. Remaining 
 
 ## 14. Competitive Reference Summary
 
-| App | Strength | Gap vs. Send It |
+| App | Strength | Gap vs. ProjectDay |
 |---|---|---|
 | Kaya | Full loop: log, beta, social, gym partnerships, challenges | Global/outdoor-first, not localized for TW gyms or color-grading conventions |
 | 27 Crags / OpenBeta | Open, wiki-style community route data | Outdoor-crag focused, not gym/bouldering-session oriented |
@@ -1180,7 +1184,7 @@ Most previously-open questions were resolved during PRD confirmation. Remaining 
 | MyClimb | Popular for indoor gym social use | No meaningful Taiwan presence |
 | 記石 (Ji Shi) | Only real Taiwan-native app found | Log-only — no beta video, no route database, no social layer |
 
-**Wedge**: Send It is the first app actually built around Taiwan's indoor bouldering scene — local branch-level gym coverage on day one, tape-color-based route matching that reflects how climbers actually talk about routes, and the log + beta + social loop that Kaya proved works — without waiting on official gym buy-in.
+**Wedge**: ProjectDay is the first app actually built around Taiwan's indoor bouldering scene — local branch-level gym coverage on day one, tape-color-based route matching that reflects how climbers actually talk about routes, and the log + beta + social loop that Kaya proved works — without waiting on official gym buy-in.
 
 ---
 

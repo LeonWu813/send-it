@@ -5,9 +5,9 @@
 agent: pm
 mode: change
 module: n/a
-result: needs-human
-next: show project-planning/pm-proposals/2026-10-21-rename-projectday.md to the human (apply only after the pending Phase 1 checkpoint proposal, project-planning/pm-proposals/2026-10-21-checkpoint-phase-1.md, is resolved); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-21-rename-projectday.md" with their exact words quoted
-timestamp: 2026-10-21T23:45:00Z
+result: success
+next: the coordinator runs /pstack:how on the code the rename affects (app.json, ios/, package.json, locales/, and every "Send It" / send-it / sendit occurrence in src/ and supabase/), saves it to project-planning/pstack-findings/2026-10-21-how-rename-projectday.md, then claude --agent tech-lead "change review" (Rev 47: AC-199, AC-200; App Store subtitle is 46 characters vs Apple's 30-character limit), then claude --agent doc-sync
+timestamp: 2026-10-22T00:30:00Z
 
 ## PM Updates
 
@@ -287,6 +287,15 @@ timestamp: 2026-10-21T23:45:00Z
   - status.md: added Decisions (four 2026-10-20 entries) and an empty Checkpoint History; Current Phase set to "Phase 1: iOS MVP — Taipei/New Taipei launch".
   - prd.md: added section 15 Adopted Conventions with CONV-000; Revision 45 → 46, Status line "[SUBSTANTIVE] — Revision 46", Date 2026-10-20. No other PRD change.
   - For Doc-Sync: regenerate every engineer-/qa- agent from ~/.claude/agent-templates/ with the new Source Paths; copy CONV-000 into production.md Shared Conventions; confirm the Phase Plan. No spec content changes.
+- 2026-10-21 [SUBSTANTIVE] [ARCHITECTURAL] Rename app from "Send It" to "ProjectDay" everywhere, including internal identifiers (Rev 47)
+  - prd.md: title, §1 (x2), §5, §14 (x2) now say "ProjectDay". English name only, no Chinese form. Former name not recorded.
+  - prd.md: AC-199 added under MOD-010: no user-facing text (both locale catalogs, push and email text) says "Send It"; the name is "ProjectDay" in English and zh-TW. The climbing verb "send" is unchanged.
+  - prd.md: AC-200 added under MOD-012 (project files owner, cross-cutting): App Store listing name "ProjectDay", subtitle "Taiwan Climbing Route Tracker and Beta Sharing"; Expo name and slug, iOS bundle identifier, package name, native project names, code identifiers, comments and docs renamed to ProjectDay / projectday; repo search for send it / send-it / send_it / sendit returns nothing outside project-planning/, README.md and git history. New App Store Connect record accepted by Leon. Ownership of renames inside other modules' Source Paths is for the Tech Lead to assign.
+  - prd.md: Revision 46 → 47, Status "[SUBSTANTIVE] — Revision 47", Date 2026-10-21.
+  - Supersedes the unapplied "Send Train" proposal (name already in use elsewhere). Applied in Phase 1, before the Phase 1 checkpoint, per Leon.
+  - For Tech Lead: the App Store subtitle limit is 30 characters; the approved subtitle is 46. Also review the bundle-ID change (new App Store Connect record, TestFlight, push/APNs and Supabase auth redirect config) and the ownership split for AC-200.
+  - For Doc-Sync: add AC-199 to the MOD-010 spec and AC-200 to the MOD-012 spec (and to any other module the Tech Lead assigns); update the app name in production.md.
+  - Approved by Leon in the coordinator session: "change all the internal id, comments, documents etc. to ProjectDay include this folder name, and for things that doesn't allowed capitalize use projectday. Q5 Taiwan Climbing Route Tracker and Beta Sharing. Q6 rename to ProjectDay. Substantive / Architectural. Change it right now. ProjectDay is available."
 
 ## Tech Lead Reviews
 
@@ -3345,6 +3354,11 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 - 2026-10-20: mod-home owns the app shell and shared code (src/lib/, src/components/, src/assets/, App.tsx) and the project files; other modules' changes to them go through engineer-mod-home.
 - 2026-10-20: The UX design team agents (design-lead, ui-designer, ux-designer, ux-researcher, motion-designer) are advisory and write outside the repo.
 - 2026-10-20: Older QA history uses "## QA Run" headings; it stays as is. New runs use "###" headings inside QA Results.
+- 2026-10-21: App name "Send Train" dropped before applying — the name is already used by other websites and services, per Leon.
+- 2026-10-21: App name is "ProjectDay" (English only, no Chinese form); Leon confirmed "ProjectDay is available".
+- 2026-10-21: Internal identifiers renamed to ProjectDay / projectday (AC-200); a new App Store Connect record is accepted. Leon renames the repo folder send-it/ himself. The Supabase and PostHog project names live in Leon's accounts, outside the repository, so no AC covers them.
+- 2026-10-21: README.md keeps the old name until the final checkpoint, per Leon.
+- 2026-10-21: The rename ships in Phase 1, before the Phase 1 checkpoint, per Leon.
 
 ## Checkpoint History
 

@@ -1,4 +1,4 @@
-Status: pending
+Status: applied 2026-10-21
 
 # PM proposal: rename "Send It" to "ProjectDay 啃線日" (2026-10-21)
 
