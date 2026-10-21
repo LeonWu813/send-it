@@ -51,17 +51,16 @@
  * - The entire content (all four layers) is wrapped in one `Animated.View`
  *   with `transform: [{ translateY: dragY }]`.
  *
- * Decomposition (M-3, M-4):
+ * Decomposition (M-3, M-4, INT-017):
  * - M-3: currentUserId is derived directly from session.user.id (always available
  *   since the component requires an authenticated session). The former getSession()
  *   async round-trip has been removed.
  * - M-4: MarqueeText and PosterAvatar extracted to their own component files;
  *   like/unlike state machine extracted to the useLikeState hook.
- *   useReelGestures was assessed but left in-file: the PanResponder block depends
- *   on dragY, setIsVideoLoading, setCurrentIndex, and five mutable refs all defined
- *   in this component; extraction would require threading all of them as parameters,
- *   risking stale-closure bugs and making the hook's interface harder to understand
- *   than the inline block.
+ * - INT-017: useReelGestures extracted to hooks/useReelGestures.ts (Leon request
+ *   2026-10-21). The PanResponder and all associated refs live in that hook;
+ *   this component calls useReelGestures and spreads the returned panHandlers
+ *   onto the gesture-capture View (Layer 3).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -77,7 +76,6 @@ import { useTranslation } from 'react-i18next';
 import {
   Animated,
   Modal,
-  PanResponder,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -90,7 +88,8 @@ import { AppText } from '../../../components/ui/AppText';
 import { IconButton } from '../../../components/ui/IconButton';
 import { Spinner } from '../../../components/ui/ProgressBar';
 import { ICON } from '../../../lib/icons';
-import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
+import { useMotion } from '../../../lib/motion';
+import { useReelGestures } from '../hooks/useReelGestures';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { TapeBadge } from '@/lib/tape';
 import { ACTION_SIZE, ReelAction } from './ReelAction';
@@ -184,13 +183,6 @@ export default function BetaVideoReelViewer({
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const { duration, spring, reduceMotion } = useMotion();
   const styles = makeStyles(theme);
-
-  // The PanResponder is created once, so it reads the live window height / motion values
-  // through refs instead of capturing the first render's values.
-  const windowHeightRef = useRef(windowHeight);
-  windowHeightRef.current = windowHeight;
-  const motionRef = useRef({ duration, spring });
-  motionRef.current = { duration, spring };
 
   // ── Index state ───────────────────────────────────────────────────────────
   const [currentIndex, setCurrentIndex] = useState<number>(initialIndex);
@@ -364,123 +356,20 @@ export default function BetaVideoReelViewer({
     onDismiss();
   }, [player, onDismiss]);
 
-  // ── PanResponder (vertical-only swipe, Tech Lead decision 5) ─────────────
-  // Note: useReelGestures extraction was assessed (M-4) but left in-file.
-  // The PanResponder block depends on dragY, setIsVideoLoading, setCurrentIndex,
-  // and five mutable refs all defined in this component; threading them as hook
-  // parameters would risk stale-closure issues and reduce readability.
-
-  const goToNextRef = useRef(goToNext);
-  const goToPrevOrCloseRef = useRef(goToPrevOrClose);
-  const handleDismissRef = useRef(handleDismiss);
-  useEffect(() => { goToNextRef.current = goToNext; }, [goToNext]);
-  useEffect(() => { goToPrevOrCloseRef.current = goToPrevOrClose; }, [goToPrevOrClose]);
-  useEffect(() => { handleDismissRef.current = handleDismiss; }, [handleDismiss]);
-
-  // playerRef keeps a stable, always-current reference to `player` for use inside
-  // the PanResponder closure (created once via useRef — would otherwise see a
-  // stale closure over the initial player value).
-  const playerRef = useRef(player);
-  useEffect(() => { playerRef.current = player; }, [player]);
-
-  // Keep a stable ref to videos.length so the PanResponder closure (created
-  // once via useRef) always sees the latest count without being recreated.
-  const videosLengthRef = useRef(videos.length);
-  useEffect(() => { videosLengthRef.current = videos.length; }, [videos.length]);
-
-  const panRef = useRef(
-    PanResponder.create({
-      // Layer 3 and Layer 4 are siblings inside Animated.View — not parent/child.
-      // React Native's capture phase only travels through the direct ancestor chain
-      // to the target view; siblings do not participate in each other's capture phase.
-      // Therefore onStartShouldSetPanResponderCapture: true on Layer 3 does NOT
-      // steal taps from Pressables in Layer 4 (those touches never pass through
-      // Layer 3 at all). What it DOES do is let Layer 3 beat iOS's native AVFoundation
-      // player, which otherwise claims the gesture at the native layer before the JS
-      // move-phase can run — causing swipes to be swallowed by the video player.
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-
-      // Capture on directional vertical move — this beats native VideoView on swipes.
-      // The 10px threshold prevents accidental capture on taps or horizontal scrolls.
-      // onMoveShouldSetPanResponderCapture fires after the first move event (not on
-      // tap-start), so single taps are never captured.
-      onMoveShouldSetPanResponder: (_evt, gs) =>
-        Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
-      onMoveShouldSetPanResponderCapture: (_evt, gs) =>
-        Math.abs(gs.dy) > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
-      onPanResponderMove: (_evt, gs) => {
-        // Track finger movement for the swipe animation.
-        dragY.setValue(gs.dy);
-      },
-      onPanResponderRelease: (_evt, gs) => {
-        const { dy, dx } = gs;
-
-        // Tap detection: minimal displacement in both axes = tap, not a swipe.
-        // Toggle play/pause on the current video.
-        if (Math.abs(dy) < 10 && Math.abs(dx) < 10) {
-          if (playerRef.current.playing) {
-            try { playerRef.current.pause(); } catch { /* native object may be already deallocated */ }
-          } else {
-            try { playerRef.current.play(); } catch { /* native object may be already deallocated */ }
-          }
-          return; // do not process swipe logic
-        }
-
-        if (dy < -SWIPE_THRESHOLD) {
-          // Swipe up → next video (if one exists).
-          if (currentIndexRef.current < videosLengthRef.current - 1) {
-            // AC-039 / AC-133 fix (Root cause 1): set the overlay immediately on
-            // swipe commit — before the 250 ms slide animation — so the old video
-            // is covered by the black overlay from the moment the user lifts their
-            // finger, not 250 ms later when the index finally changes.
-            setIsVideoLoading(true);
-            Animated.timing(dragY, {
-              toValue: -windowHeightRef.current,
-              duration: motionRef.current.duration.medium,
-              easing: bezierFor('exit'),
-              useNativeDriver: USE_NATIVE_DRIVER,
-            }).start(() => {
-              dragY.setValue(0);
-              setCurrentIndex((prev) => prev + 1);
-            });
-          } else {
-            // Already at last — snap back.
-            Animated.spring(dragY, { toValue: 0, ...motionRef.current.spring.settle, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
-          }
-        } else if (dy > SWIPE_THRESHOLD) {
-          // Swipe down → previous video or dismiss.
-          if (currentIndexRef.current > 0) {
-            // AC-039 / AC-133 fix (Root cause 1): same early overlay for swipe-down.
-            setIsVideoLoading(true);
-            Animated.timing(dragY, {
-              toValue: windowHeightRef.current,
-              duration: motionRef.current.duration.medium,
-              easing: bezierFor('exit'),
-              useNativeDriver: USE_NATIVE_DRIVER,
-            }).start(() => {
-              dragY.setValue(0);
-              setCurrentIndex((prev) => prev - 1);
-            });
-          } else {
-            // At first video — dismiss immediately.
-            // No slide-out animation here: the Modal's own animationType="slide"
-            // provides the visual dismiss transition, and calling onDismiss
-            // synchronously ensures the close gesture is always responsive.
-            dragY.setValue(0);
-            handleDismissRef.current();
-          }
-        } else {
-          // Threshold not crossed — snap back to resting position.
-          Animated.spring(dragY, { toValue: 0, ...motionRef.current.spring.settle, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
-        }
-      },
-      onPanResponderTerminate: () => {
-        // Another responder (e.g. a system gesture) took over — snap back.
-        Animated.spring(dragY, { toValue: 0, ...motionRef.current.spring.settle, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
-      },
-    }),
-  );
+  // ── Swipe gesture handler (useReelGestures hook, Tech Lead decision 5) ────
+  // PanResponder creation and all associated refs live in the hook. The hook
+  // returns panHandlers which are spread onto the gesture-capture View (Layer 3).
+  const { panHandlers } = useReelGestures({
+    dragY,
+    setIsVideoLoading,
+    setCurrentIndex,
+    videosLength: videos.length,
+    currentIndex,
+    handleDismiss,
+    player,
+    windowHeight,
+    motion: { duration, spring },
+  });
 
   // ── Report handler (AC-140) ───────────────────────────────────────────────
   const handleReport = useCallback(async (videoId: string): Promise<void> => {
@@ -642,7 +531,7 @@ export default function BetaVideoReelViewer({
            * Without onStartShouldSetPanResponderCapture, it no longer steals
            * tap events from sibling Pressables in Layer 4.
            */}
-          <View style={StyleSheet.absoluteFill} {...panRef.current.panHandlers} />
+          <View style={StyleSheet.absoluteFill} {...panHandlers} />
 
           {/*
            * Layer 4 — Interactive overlay UI (Bug 1 fix).
