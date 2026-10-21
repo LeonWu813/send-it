@@ -3363,4 +3363,25 @@ Visual only; no flows, data or dependencies. No illustrations, no expo-haptics.
 - `RouteColorBadge` / TapeBadge: `RADIUS.tape` 6, sizes `sm` 20 / `md` 24 / `lg` 34 (`minHeight`), `tapeLabel` type (lg 24/800, md 13/800, sm 12/700), new `grade?: string` prop (prints the grade on the tape, a11y label "V4, red") and `onMedia?: boolean` (1.5pt `onMedia` outline). Existing props/exports unchanged; `tape-exports` still exports `TapeBadge`, `useTapeSwatch`, `TAPE_DISPLAY`, `TAPE_HAIR`, `resolveTape`.
 - RouteDetailScreen: grade tape (`lg`) in the subtitle row, `pageSection` headers, card radius + continuous curve. RouteSubmitScreen: colour picker is now an inverted `Chip` with tape swatch; `pageSection` headers. RouteListScreen: chips/buttons inherit v2.2 Chip (inverted) and capsule Button. SendHistoryDetailScreen: `SendStatus variant="tag"` replaces `SendStyleChip`.
 - Story: `RouteColorBadge.stories.tsx` Controls (color, size, grade, onMedia) + matrix (sm/md/lg + onMedia, light vs dark).
+
+## Engineering Progress — INT-026 integration-fix (2026-10-21)
+
+**INT-026:** `RouteSubmitScreen.test.tsx` AC-187 Layer 2 test was looking for the sheet confirm button by the label "Add Route". Commit `022dd5b` (2026-10-17) renamed the button to "Continue to add, this is a different route" (`routes.duplicateSheet.confirm`), so the test was pressing the form button again (showing the sheet again) and the upload never proceeded.
+
+**Fix (test-only):** Replaced the stale "filter all 'Add Route' buttons, take the last" block with a direct search by the current label:
+
+```
+el.props.accessibilityLabel?.includes('Continue to add') ||
+el.props.accessibilityLabel?.includes('確認新增')
+```
+
+No production code changed. No locale files changed.
+
+**Self-check results:**
+- `scripts/self-check.sh`: not present in this project (no script at that path).
+- Build / tsc: PASS (0 errors).
+- Tests: PASS — 19/19 RouteSubmitScreen tests (including AC-187 Layer 2); 115/115 across the full mod-route-catalog suite.
+- Files changed outside Source Path: none (the `project-planning/modules/mod-auth-profile/status.md` change was pre-existing before this session).
+- Production code / locale files unchanged: PASS.
+- Judgment items: test-only fix; no new logic, no cross-module wiring, no DB queries, no hardcoded values. N/A items skipped (Spring, Docker, LLM, CORS).
 - Verified: tsc, jest (110/110), check:i18n, storybook build.

@@ -666,15 +666,15 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       expect(mockUploadRoutePhoto).not.toHaveBeenCalled();
     });
 
-    // Tap "Add Route" confirm button on the sheet — upload now proceeds.
-    // When the sheet is visible there are two "Add Route" buttons: one on the form
-    // and one in the sheet footer. The sheet confirm button is the last occurrence.
-    const allAddRouteBtns = screen.queryAllByRole('button').filter(
+    // Tap the sheet confirm button — its label is routes.duplicateSheet.confirm
+    // ("Continue to add, this is a different route" / "確認新增，這是不同的路線").
+    // The form button still reads "Add Route", so the confirm button must be
+    // found by its own distinct label (renamed in commit 022dd5b, 2026-10-17).
+    const sheetConfirmBtn = screen.queryAllByRole('button').find(
       (el) =>
-        el.props.accessibilityLabel?.includes('Add Route') ||
-        el.props.accessibilityLabel?.includes('新增路線'),
+        el.props.accessibilityLabel?.includes('Continue to add') ||
+        el.props.accessibilityLabel?.includes('確認新增'),
     );
-    const sheetConfirmBtn = allAddRouteBtns[allAddRouteBtns.length - 1];
     if (sheetConfirmBtn) fireEvent.press(sheetConfirmBtn);
 
     await waitFor(() => {

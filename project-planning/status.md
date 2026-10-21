@@ -4618,3 +4618,11 @@ Agent: tech-lead
 Pattern: A unit test passed on a `fetchBetaVideosByUser` whose PostgREST `.select()` embed string (a nested FK-hinted embed, `routes!..fk(name, gyms(name))` inside a `users!..fk(...)` embed) was rejected by PostgREST at runtime on device. The mocked Supabase client returned canned data without ever parsing the embed string — the untyped query DSL was validated by neither TypeScript nor the test.
 Why: PostgREST embed strings are a recurring un-typed, un-mockable failure surface in this codebase (same class as the device-only mock gap above, but for data access rather than native APIs). A skill codifying "any new/modified `.select()` embed must be exercised against a real/local PostgREST before the AC is marked done; prefer a single embed level or server-side RPC composition over nested FK-hinted embeds; log the raw Supabase error before throwing a user-facing string so the diagnostic survives to Metro" would close the gap structurally. Complements the existing "User-Owned Tables … Reference public.users" and "tests must not mock away a production incompatibility" conventions.
 Agent: tech-lead
+
+## Last Action
+
+agent: engineer-mod-route-catalog
+action: integration-fix INT-026
+result: fixed
+date: 2026-10-21
+next: qa-mod-route-catalog "integration-fix-verify INT-026"
