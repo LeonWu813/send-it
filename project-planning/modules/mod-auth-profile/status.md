@@ -2151,3 +2151,123 @@ Only `signInWithGoogle()` reads the URL params block that was changed. No other 
 ### Integration notes (for Tech Lead)
 - The 4 failing suites in the full run above are outside MOD-001. They may relate to INT-012 barrel changes (mod-home/mod-send-logging/mod-route-catalog) and should be checked before Phase 1 sign-off.
 - `scan-integration.sh` was not run: the dependency list for this fix is SQL-only.
+
+---
+
+## Engineering Investigation — 2026-10-21
+
+**Scope**: Read-only. No code changed. Investigates on-device symptom: Profile → Edit → Change Avatar → pick photo → Save → "nothing happens, no feedback, no error, no visible change."
+
+---
+
+### Upload Call Chain
+
+**Step 1 — photo pick and upload** (`EditProfileScreen.tsx`, `handlePickAvatar`):
+
+1. User taps the "Change Avatar" `<Button>` → `handlePickAvatar()` is called.
+2. `ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1,1], quality: 0.8 })` opens the system photo picker.
+3. If the user picks a photo (not canceled): `setIsUploadingAvatar(true)`, then `uploadAvatar(userId, uri)` is called from `auth-service.ts`.
+4. Inside `uploadAvatar` (`auth-service.ts:265–295`):
+   - File extension extracted from the URI: `imageUri.split('.').pop() ?? 'jpg'`.
+   - Object path constructed: `avatars/${userId}.${fileExtension}` — always the same path for a given user and extension.
+   - `new ExpoFile(imageUri).bytes()` reads the local file as a `Uint8Array` (no fetch/blob).
+   - `supabase.storage.from('avatars').upload(storagePath, uint8Array, { cacheControl: '3600', upsert: true, contentType })` performs the upload.
+   - On `uploadError`: `throw new Error('Failed to upload photo. Please try again.')`.
+   - On success: `supabase.storage.from('avatars').getPublicUrl(storagePath)` → returns `data.publicUrl`.
+5. Back in `handlePickAvatar`: if `uploadAvatar` resolves, `setAvatarUri(publicUrl)` is called; if it throws, the `catch` block calls `setErrorMessage(message)`. Either way, `setIsUploadingAvatar(false)` runs in `finally`.
+
+**The upload runs at photo-pick time, not at Save time.**
+
+**Step 2 — Save** (`EditProfileScreen.tsx`, `handleSave`):
+
+1. User taps the "Save" `<Button>` → `handleSave()` is called.
+2. `displayName.trim()` check; if empty, sets error and returns.
+3. `setIsSaving(true)` (loading indicator on Save button), then `setErrorMessage(null)` (clears any error, including a prior upload error).
+4. `upsertProfile(userId, { display_name, bio, avatar_url: avatarUri })` — writes `avatarUri` state (whatever it is at this moment) to the `users` row.
+5. On success: `onSaved(updated)` is called — `ProfileNavigator` state machine transitions back to `'profile'` state, closing `EditProfileScreen`.
+6. On failure: `setErrorMessage(message)` shows the error; `setIsSaving(false)` via `finally`.
+
+---
+
+### Error Handling — Are Errors Caught and Discarded?
+
+**`uploadAvatar` is not silent** — it throws `new Error('Failed to upload photo. Please try again.')` on any `uploadError`. A 403 from the storage policy would produce a non-null `uploadError` and that throw.
+
+**`handlePickAvatar` does not discard errors** — the `catch` block calls `setErrorMessage(message)`, which renders the error via the `<InlineError>` component in the screen's JSX.
+
+**However, there is one silent-erasure path**: `handleSave()` calls `setErrorMessage(null)` at line 109 before calling `upsertProfile`. If the upload previously failed and the error message is showing, the user tapping Save immediately clears that error message and proceeds with the old `avatarUri`. The Save then silently writes the old `avatar_url` to the profile. `onSaved` fires, the screen closes, the profile shows the old avatar. From the user's perspective: "nothing changed."
+
+**The Save button is not disabled during avatar upload.** The Change Avatar button correctly uses `disabled={isUploadingAvatar || isSaving}`, but the Save button only uses `disabled={isSaving}`. A user who taps Save before the upload completes causes `handleSave` to run with the pre-upload value of `avatarUri`, then `onSaved` fires and the screen closes — possibly before the upload has even resolved. If the upload later resolves or rejects after unmount, `setAvatarUri` and `setErrorMessage` calls are lost (no crash, but no effect).
+
+---
+
+### Assessment of Root Cause for "Nothing Happens"
+
+Three candidate hypotheses, in order of likelihood given the current INT-005 and INT-024 state:
+
+**Hypothesis 1 — INT-024 (stale URL): most likely for the observed symptom.**
+
+As of 2026-10-21, the integration review records: "replace now shows NO error but the old image stays." This matches the user's report exactly. With INT-005's migration applied, the upload itself succeeds (no 403). However, `uploadAvatar` always writes to `avatars/${userId}.${fileExtension}` and calls `getPublicUrl` on that same path — the returned URL is byte-for-byte identical to the one already stored in `avatar_url`. `setAvatarUri(sameUrl)` sets React state to the same value, so the `<Avatar>` component receives no new prop and does not re-render the image. The user sees no change in the EditProfileScreen preview. When Save runs, `upsertProfile` writes the same `avatar_url` string to the database. `onSaved` closes the screen. ProfileScreen fetches the same `avatar_url` and the OS image cache serves the same cached photo (`cacheControl: '3600'`). No visible change anywhere. No error. The loading spinner on the Save button may be the only visible feedback, and if it's brief (fast DB write), the user may not register it.
+
+This hypothesis explains "no feedback, no error, no visible change" as: the avatar image never visually changes at any point in the flow, not even in the EditProfileScreen preview, because the public URL is identical before and after upload.
+
+**Hypothesis 2 — Upload failed (INT-005 still partly active or another 403 cause), then Save erased the error.**
+
+If the upload fails (e.g., 403 from the UPDATE policy in a Supabase region or configuration that did not receive the migration), `handlePickAvatar` would show an error briefly. If the user taps Save before noticing (or quickly after), `setErrorMessage(null)` in `handleSave` clears the error, and `upsertProfile` runs with the old `avatar_url`. The screen closes. No permanent error visible; no avatar change. However, the integration review records that INT-005 "no longer reproduces" as of 2026-10-21, making this the second-most-likely root cause. It cannot be fully excluded if the migration was applied with a delay or the user's session pre-dates it.
+
+**Hypothesis 3 — Race condition: Save tapped before upload completes.**
+
+If the user is fast, they could tap Save while `isUploadingAvatar` is still `true`. `handleSave` is not guarded against this (the Save button is enabled during upload). `upsertProfile` runs with `avatarUri` still at its pre-upload value. `onSaved` fires. Upload later resolves but the component is unmounted. The profile shows the old avatar. Unlike Hypotheses 1 and 2, this requires precise timing that may not match a normal tap flow, and the integration review notes give no evidence of speed-related failures.
+
+---
+
+### Most Likely Root Cause
+
+**The primary cause is INT-024 (stale public URL).** The upload now succeeds (INT-005 migration applied), but `uploadAvatar` returns the same URL it always returns for `avatars/${userId}.${ext}`. No part of the UI — neither the EditProfileScreen Avatar preview nor the ProfileScreen after Save — ever sees a different URL, so no part of the UI visually changes. The user experience is indistinguishable from "nothing happened."
+
+A secondary contributing factor is the absence of any explicit success feedback after the avatar pick step: there is no toast, success banner, or checkmark to confirm that the upload ran and completed. The only signal is `isUploadingAvatar` returning to `false` (loading spinner disappearing on the Change Avatar button). A user who does not notice the spinner toggle has no confirmation that anything ran.
+
+---
+
+### Classification
+
+**This is NOT an INT-005 resurface.** A 403 from the UPDATE policy would produce a non-null `uploadError`, causing `uploadAvatar` to throw, `handlePickAvatar` to call `setErrorMessage`, and the error to be displayed via `<InlineError>`. The reported symptom is "no error," which is inconsistent with a 403.
+
+**This is a silent-success / no-feedback issue driven by INT-024 (stale URL returning identical public URL after upload).** The upload succeeds, but the URL identity means the UI has no new value to display. The INT-024 row in `integration-review.md` is `PROPOSED` and awaiting a human decision. The fix proposal in that row (append `?v=<timestamp>` to the public URL before writing `avatar_url`) would give the URL a new value on each upload, causing the Avatar component to re-fetch the image and the visible change to appear.
+
+**The additional gap of `setErrorMessage(null)` clearing an upload error when Save is tapped** (see above) is a separate, smaller issue: it means a failed upload can go silently unnoticed if the user taps Save quickly. This is not the root cause of the current symptom but is a latent defect that could produce "nothing happens" if INT-005 were to resurface.
+
+---
+
+## Engineering Progress — Integration-Fix — INT-024 — 2026-10-21
+
+### Changes Implemented
+
+**Primary fix (INT-024 root cause):**
+- `src/modules/mod-auth-profile/auth-service.ts` — `uploadAvatar` now appends `?v=${Date.now()}` to the `getPublicUrl` result before returning. Every avatar replace now produces a distinct `avatar_url` value. All consumers (ProfileScreen, EditProfileScreen Avatar preview, feed cards, reel viewer, etc.) receive a URL with a new query string and re-fetch the image; the OS image cache cannot serve the old bytes against a URL it has never seen.
+
+**Secondary fix 1 — `handleSave` error-clear ordering:**
+- `src/modules/mod-auth-profile/screens/EditProfileScreen.tsx` — Moved `setErrorMessage(null)` from before `upsertProfile` to after a successful save (inside the `try` block, after `upsertProfile` resolves). An avatar-upload error that is visible when the user taps Save is no longer silently erased if the profile write also fails.
+
+**Secondary fix 2 — Save button race condition:**
+- `src/modules/mod-auth-profile/screens/EditProfileScreen.tsx` — The Save button's `disabled` prop changed from `disabled={isSaving}` to `disabled={isSaving || isUploadingAvatar}`. The Save button is now inert while an avatar upload is in flight, preventing the user from submitting a profile with a partially-uploaded (or not-yet-resolved) avatar URL.
+
+**Tests added:**
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — `describe('uploadAvatar')` block with two new tests: (1) "returns a URL with a ?v= cache-busting query parameter (INT-024)" — verifies the returned URL matches `/^https:\/\/example\.com\/avatar\.jpg\?v=\d+$/`; (2) "throws a user-friendly error when the storage upload fails".
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest --testPathPattern="mod-auth-profile" --watchAll=false` | PASS — 22 tests, 3 suites, all pass |
+| INT-024 root cause fixed: `uploadAvatar` returns URL with `?v=<timestamp>` | PASS |
+| Secondary fix 1: `setErrorMessage(null)` only called after successful save | PASS |
+| Secondary fix 2: Save button `disabled={isSaving \|\| isUploadingAvatar}` | PASS |
+| No hardcoded values introduced | PASS |
+| No new dependencies | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| No changes outside mod-auth-profile Source Path | PASS |
+| `integration-review.md` INT-024 row updated to `FIXED – AWAITING QA` | PASS |
+
+**Result: READY FOR QA**

@@ -106,13 +106,16 @@ export default function EditProfileScreen({
       return;
     }
     setIsSaving(true);
-    setErrorMessage(null);
     try {
       const updated = await upsertProfile(userId, {
         display_name: displayName.trim(),
         bio: bio.trim() || null,
         avatar_url: avatarUri,
       });
+      // Clear any previous error only after a successful save so that an
+      // avatar-upload error visible when the user tapped Save is not silently
+      // erased before we know whether the profile write will also succeed.
+      setErrorMessage(null);
       onSaved(updated);
     } catch (err) {
       const message =
@@ -195,7 +198,7 @@ export default function EditProfileScreen({
               size="lg"
               fullWidth
               loading={isSaving}
-              disabled={isSaving}
+              disabled={isSaving || isUploadingAvatar}
               accessibilityLabel={t('profile.save')}
             />
           </View>

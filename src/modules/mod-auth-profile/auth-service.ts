@@ -292,7 +292,11 @@ export async function uploadAvatar(
   }
 
   const { data } = supabase.storage.from('avatars').getPublicUrl(storagePath);
-  return data.publicUrl;
+  // Append a version query-param so every replace produces a distinct URL,
+  // bypassing the device image cache and any CDN layer. The stored avatar_url
+  // value changes on each upload, so all consumers (ProfileScreen, reel viewer,
+  // feed cards, etc.) pick up the new image without requiring a cache expiry.
+  return `${data.publicUrl}?v=${Date.now()}`;
 }
 
 /**

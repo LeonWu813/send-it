@@ -59,6 +59,7 @@ import {
   signInWithEmail,
   signOut,
   signUpWithEmail,
+  uploadAvatar,
   upsertProfile,
 } from '../auth-service';
 
@@ -241,5 +242,31 @@ describe('upsertProfile', () => {
     await expect(
       upsertProfile('user-123', { display_name: 'x' }),
     ).rejects.toThrow('Failed to save profile.');
+  });
+});
+
+describe('uploadAvatar', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns a URL with a ?v= cache-busting query parameter (INT-024)', async () => {
+    // The storage mock always returns 'https://example.com/avatar.jpg' from
+    // getPublicUrl; uploadAvatar must append ?v=<timestamp> so every replace
+    // produces a distinct URL, preventing device / CDN cache hits.
+    const url = await uploadAvatar('user-123', 'file:///tmp/photo.jpg');
+    expect(url).toMatch(/^https:\/\/example\.com\/avatar\.jpg\?v=\d+$/);
+  });
+
+  it('throws a user-friendly error when the storage upload fails', async () => {
+    const mockStorage = supabase.storage as jest.Mocked<typeof supabase.storage>;
+    (mockStorage.from as jest.Mock).mockReturnValueOnce({
+      upload: jest.fn().mockResolvedValue({ error: { message: 'Storage error' } }),
+      getPublicUrl: jest.fn().mockReturnValue({ data: { publicUrl: '' } }),
+    });
+
+    await expect(uploadAvatar('user-123', 'file:///tmp/photo.jpg')).rejects.toThrow(
+      'Failed to upload photo. Please try again.',
+    );
   });
 });
