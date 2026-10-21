@@ -26,9 +26,8 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useEffect, useState } from 'react';
 
-import FollowersListScreen from '../mod-social-feed/screens/FollowersListScreen';
-import FollowingListScreen from '../mod-social-feed/screens/FollowingListScreen';
-import NotificationsNavigator from '../mod-notifications/NotificationsNavigator';
+import { FollowersListScreen, FollowingListScreen } from '../mod-social-feed';
+import { NotificationsNavigator } from '../mod-notifications';
 import SettingsScreen from '../mod-localization-theme/screens/SettingsScreen';
 import { useSession } from './hooks/useSession';
 import EditProfileScreen from './screens/EditProfileScreen';

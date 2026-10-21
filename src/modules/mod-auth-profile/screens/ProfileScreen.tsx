@@ -38,7 +38,7 @@ import {
 } from '../../mod-beta-video';
 import type { BetaVideo } from '../../mod-beta-video';
 import { SendHistoryProfile } from '../../mod-profile-history';
-import { fetchFollowerCounts } from '../../mod-social-feed/social-feed-service';
+import { fetchFollowerCounts } from '../../mod-social-feed';
 import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
 import { useSession } from '../hooks/useSession';
 

@@ -38,7 +38,7 @@ import * as Notifications from 'expo-notifications';
 import { PermissionStatus } from 'expo-modules-core';
 import { supabase } from '../../../lib/supabase';
 import { loadProfile } from '../auth-service';
-import { registerDeviceToken } from '../../mod-notifications/notification-service';
+import { registerDeviceToken } from '../../mod-notifications';
 import { useSession } from '../hooks/useSession';
 
 // ── Typed mocks ───────────────────────────────────────────────────────────────

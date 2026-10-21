@@ -15,7 +15,7 @@ import { useEffect, useState } from 'react';
 
 import { supabase } from '../../../lib/supabase';
 import { loadProfile } from '../auth-service';
-import { registerDeviceToken } from '../../mod-notifications/notification-service';
+import { registerDeviceToken } from '../../mod-notifications';
 import type { UserProfile } from '../types';
 
 export interface SessionState {
