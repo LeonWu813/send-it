@@ -128,14 +128,21 @@ export async function submitRoute(input: RouteSubmitInput): Promise<Route> {
  * @throws {Error} with a user-facing message on failure.
  */
 export async function withdrawRoute(routeId: string): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('routes')
     .delete()
-    .eq('id', routeId);
+    .eq('id', routeId)
+    .select('id');
 
   if (error) {
     console.error('[withdrawRoute] error:', error);
     throw new Error('Failed to withdraw route. Please try again.');
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      'Route could not be withdrawn — it may not be pending or may belong to another user.',
+    );
   }
 }
 

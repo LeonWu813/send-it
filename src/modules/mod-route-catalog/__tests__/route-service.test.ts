@@ -328,8 +328,8 @@ describe('withdrawRoute', () => {
     jest.clearAllMocks();
   });
 
-  it('calls delete on routes with the given routeId', async () => {
-    const qb = makeQueryBuilder({ data: null, error: null });
+  it('resolves when the route row is deleted (data contains 1 row)', async () => {
+    const qb = makeQueryBuilder({ data: [{ id: 'route-001' }], error: null });
     mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
 
     await withdrawRoute('route-001');
@@ -337,6 +337,24 @@ describe('withdrawRoute', () => {
     expect(mockFrom).toHaveBeenCalledWith('routes');
     expect(qb.delete).toHaveBeenCalled();
     expect(qb.eq).toHaveBeenCalledWith('id', 'route-001');
+  });
+
+  it('throws when RLS silently blocks the delete (data is empty array)', async () => {
+    const qb = makeQueryBuilder({ data: [], error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(withdrawRoute('route-001')).rejects.toThrow(
+      'Route could not be withdrawn — it may not be pending or may belong to another user.',
+    );
+  });
+
+  it('throws when PostgREST returns null data (treat as 0 rows affected)', async () => {
+    const qb = makeQueryBuilder({ data: null, error: null });
+    mockFrom.mockReturnValueOnce(qb as unknown as ReturnType<typeof supabase.from>);
+
+    await expect(withdrawRoute('route-001')).rejects.toThrow(
+      'Route could not be withdrawn — it may not be pending or may belong to another user.',
+    );
   });
 
   it('throws a user-friendly error when the delete fails', async () => {

@@ -2,6 +2,41 @@
 
 ## Engineering Progress
 
+### Phase 1 quality review fixes: M-7, L-4, barrel index.ts (2026-10-20)
+
+**M-7 — withdrawRoute silently succeeds when 0 rows deleted**
+
+- Added `.select('id')` to the `.delete()` chain so PostgREST returns deleted rows in `data`.
+- After the existing `error` check, added a row-count check: if `!data || data.length === 0`, throw `'Route could not be withdrawn — it may not be pending or may belong to another user.'`
+- Follows the existing `console.error` + throw pattern in the file (CONV per production.md Log Raw Supabase Error Before Throwing convention — the error branch already logs; the 0-rows branch has no Supabase error to log, so no console.error is appropriate).
+- Updated `withdrawRoute` tests: replaced the single "calls delete and resolves with `data: null`" test with three tests covering: (1) resolves when 1 row returned, (2) throws on empty-array response (RLS silent block), (3) throws on null data. Error-path test unchanged.
+
+**L-4 — Non-null assertions in RouteSubmitScreen bypass compiler narrowing**
+
+- Replaced `const grade = selectedGrade!; const colorTag = selectedColor!; const uri = photoUri!;` (lines 253–255) with an explicit narrowing guard `if (!selectedGrade || !selectedColor || !photoUri) return;` followed by plain `const grade = selectedGrade; const colorTag = selectedColor; const uri = photoUri;`.
+- No logic change — the guard is redundant with the `hasError` check above it and is unreachable at runtime. TypeScript now narrows all three variables to non-nullable types from this point on.
+- The `!` assertions in the BottomSheet `onPress` closure (sheet confirm button) are intentionally left in place — they are in a separate closure where the compiler cannot track the narrowed state from `handleAddRoute`, and the comment already documents that the values were validated before the sheet was shown.
+
+**Barrel index.ts created**
+
+- Created `src/modules/mod-route-catalog/index.ts` exporting: `RouteNavigator` (navigator entry-point), all service functions from `route-service.ts`, all types and constants from `types.ts`.
+- Deep-importing consumers in other modules (MOD-004 `RouteSearchScreen`, MOD-002 `GymNavigator`, MOD-012 `HomeScreen`, MOD-012 `HomeScreen.test.tsx`) are documented in the barrel's header comment for the next sweep — those files are outside MOD-003's write scope.
+
+**Self-check (2026-10-20):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npx jest --testPathPattern="mod-route-catalog" --watchAll=false` — 114 tests pass across 5 suites; 1 pre-existing failure in `RouteSubmitScreen.test.tsx` ("proceeds with upload only after tapping confirm on Layer 2 sheet") confirmed pre-existing via `git stash` baseline — unrelated to these fixes.
+- PASS: M-7 fix — `.select('id')` added, 3 new tests cover the row-count paths.
+- PASS: L-4 fix — `!` assertions replaced with compiler-visible narrowing guard; no logic change.
+- PASS: Barrel — `npx tsc --noEmit` confirms no circular imports introduced.
+- PASS: No logic changes beyond M-7 — no new dependencies, no gold-plating.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/route-service.ts` — `withdrawRoute`: added `.select('id')` + row-count check
+- `src/modules/mod-route-catalog/__tests__/route-service.test.ts` — `withdrawRoute` tests updated (3 new, 1 existing retained)
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — lines 253-255: `!` assertions replaced with narrowing guard
+- `src/modules/mod-route-catalog/index.ts` — new public barrel
+
+---
 
 ### INT-012 — Fix deep cross-module imports to use barrels (2026-10-20)
 

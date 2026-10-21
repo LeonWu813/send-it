@@ -249,10 +249,14 @@ export default function RouteSubmitScreen({
 
     if (hasError) return;
 
-    // TypeScript narrowing — all three are now non-null
-    const grade = selectedGrade!;
-    const colorTag = selectedColor!;
-    const uri = photoUri!;
+    // Narrowing guard — redundant with the hasError check above but makes the
+    // compiler aware that all three values are non-null from this point on,
+    // removing the need for non-null assertions on the rest of this function.
+    if (!selectedGrade || !selectedColor || !photoUri) return;
+
+    const grade = selectedGrade;
+    const colorTag = selectedColor;
+    const uri = photoUri;
 
     // AC-187 Layer 2: intercept before any photo upload begins.
     // If duplicate candidates exist, show the non-dismissable confirmation sheet
