@@ -7,6 +7,14 @@
 
 **Off-spec design tooling (2026-10-16)**: Added Storybook stories for StatsPanel, FilterBar and AscentHistoryItem in `src/modules/mod-profile-history/stories/` on branch `design/storybook`. Not part of the spec; no component source changed. Pending PR review.
 
+### Patch — 2026-10-20: M-1 — Apply is_private filter to accumulated_days in get_profile_stats
+
+**Issue**: M-1 (Phase 1 quality review) — `get_profile_stats` counted ALL qualifying ascents (style IN ('flash', 'top')) when computing `accumulated_days`, ignoring `is_private`. Meanwhile `total_sends` and `sends_by_grade` in the same function correctly applied `(v_is_self OR a.is_private = FALSE)`. A non-owner viewer of a profile with many private sends saw `accumulated_days` inflated relative to the visible send count — internally inconsistent stats.
+
+**Migration**: `supabase/migrations/20261020000001_mod_008_accumulated_days_privacy.sql`
+- `get_profile_stats`: Added `AND (v_is_self OR is_private = FALSE)` to the `accumulated_days` SELECT, exactly matching the privacy predicate already applied to `total_sends` and `sends_by_grade`.
+- All other function logic identical to v6 (`20261013000006_mod_008_int009_block_filter.sql`): signature, SECURITY INVOKER, `SET search_path = public`, block check, followers_only early-return, `send_rows` CTE, `highest_grade` subquery, REVOKE/GRANT — all preserved exactly.
+
 ### Patch — 2026-10-20: INT-009 — Block filter on profile RPCs
 
 **Issue**: INT-009 (HIGH) — `get_profile_history` and `get_profile_stats` had no block predicate. A blocked user could navigate to the blocker's profile and read their full send history and stats despite the block relationship.
