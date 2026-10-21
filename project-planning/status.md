@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-social-feed
-mode: integration-fix-verify INT-012
-module: mod-social-feed
-result: QA VERIFIED
-next: claude --agent tech-lead "confirm-fix INT-012". INT-012 is QA VERIFIED: all three barrels (mod-social-feed, mod-moderation, mod-notifications) confirmed present with public API exports; zero non-test source files retain deep service imports; mod-social-feed 63/63 tests pass. Also still pending: avatar-stale-image finding from INT-005 (tech lead to decide on new INT row).
-timestamp: 2026-10-21T15:00:00Z
+agent: tech-lead
+mode: on-demand-review
+module: n/a
+next: Human: (1) give your own words verifying INT-005, then claude --agent tech-lead "I verified INT-005: <your words>"; (2) decide the new rows, then claude --agent tech-lead "decisions: INT-024 …, INT-025 …, INT-026 …, INT-027 …"; (3) INT-012 is QA VERIFIED and waits for your own verification (INT-025 fix recommended first).
+result: needs-human
+timestamp: 2026-10-21T16:00:00Z
 
 ## PM Updates
 
@@ -289,6 +289,25 @@ timestamp: 2026-10-21T15:00:00Z
   - For Doc-Sync: regenerate every engineer-/qa- agent from ~/.claude/agent-templates/ with the new Source Paths; copy CONV-000 into production.md Shared Conventions; confirm the Phase Plan. No spec content changes.
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-21 — on-demand (INT-005 close request; QA Run 3 failing suites)
+
+pstack input: none for this review. The suites were checked by running jest at HEAD and by bisecting in temporary worktrees (since removed).
+
+**Concerns** (must address before proceeding):
+- **INT-005 not closed: no quotable human verification.** The request reached me in the coordinator's wording ("I verified INT-005 …"), not as the human's quoted words. I record `HUMAN VERIFIED` only from the human's own words, so the row stays `QA VERIFIED`. QA's condition ("Human verification of INT-005 should not be recorded as complete until Tech Lead decides how to handle it") is now met: the stale image is split out as **INT-024** (PROPOSED, MEDIUM, mod-auth-profile). Once the human's exact words are relayed, I will record `HUMAN VERIFIED` and close INT-005. The DELETE half of the policy fix has no app caller, so only QA's scratch-Postgres check covers it.
+- **INT-025: INT-012's fix broke `AppHeaderContext.test.tsx`** (bisected to `760e444`). `AppHeader.tsx:34` now imports `useUnreadCount` from the mod-notifications barrel, which loads the navigator → service → `src/lib/supabase.ts` env guard. The test still mocks the old private path. Test-only; no production effect. INT-012 QA ran only mod-social-feed and so missed it. I recommend fixing it (one line, mod-home) before INT-012 is closed.
+
+**Recommendations** (suggested improvements):
+- **INT-026 (`RouteSubmitScreen` AC-187 Layer 2 test)**: test-only, broken since 2026-10-17 (before INT-012). Copy commit `022dd5b` renamed the sheet CTA to "Continue to add, this is a different route", and the test still selects by "Add Route". The product handler is unchanged. Fixing it restores automated coverage of the confirm → upload path.
+- **INT-027 (`src/lib/__tests__/supabase.test.ts`)**: test-only, broken since `735e974` (2026-10-15, global AsyncStorage `moduleNameMapper`). The test's own factory mock now recurses. Fix: delete the redundant per-test mock.
+- **AscentList (mod-send-logging)**: no row. It passes alone (12/12) and in my full run at HEAD, so QA's failure was intermittent, probably timer/`act()`-related under parallel load. Watch it. If it fails again, QA should log it with the failing assertion.
+- **Batch the three test fixes** (INT-025 mod-home, INT-026 mod-route-catalog, INT-027 mod-home). None blocks Phase 1 on correctness, but a red baseline makes every later QA run subtract known failures by hand. That is how INT-025 went unnoticed. Full suite at HEAD: 3 failed suites / 4 failed tests, 613 passed.
+
+**Assessment for Phase 1 sign-off**: none of the four suites shows a production defect. Only INT-025 is linked to an open blocking row (INT-012), so I recommend fixing it before INT-012 closes. INT-026, INT-027 and AscentList can be deferred without risk. INT-024 is MEDIUM and does not block under the gate rule, but users will see it. The human decides each row. Remaining blockers: INT-005 and INT-012, both `QA VERIFIED`, both waiting for the human's own verification.
+
+**Approved**:
+- QA's scope split on INT-005: the replace no longer returns 403, so the policy migration did what it was meant to do.
 
 ### Phase 1 Integration Review — FIX VERIFICATION — 2026-10-20 — SIGN-OFF WITHHELD (process gate)
 
