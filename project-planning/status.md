@@ -3,11 +3,11 @@
 ## Last Action
 
 agent: tech-lead
-mode: on-demand-review
+mode: confirm-fix
 module: n/a
-next: Human: (1) give your own words verifying INT-005, then claude --agent tech-lead "I verified INT-005: <your words>"; (2) decide the new rows, then claude --agent tech-lead "decisions: INT-024 …, INT-025 …, INT-026 …, INT-027 …"; (3) INT-012 is QA VERIFIED and waits for your own verification (INT-025 fix recommended first).
-result: needs-human
-timestamp: 2026-10-21T16:00:00Z
+next: Human: (1) decide the new rows, then claude --agent tech-lead "decisions: INT-024 …, INT-025 …, INT-026 …, INT-027 …"; (2) INT-012 is QA VERIFIED and waits for your own verification (INT-025 fix recommended first), then claude --agent tech-lead "confirm-fix INT-012" with your words.
+result: success
+timestamp: 2026-10-21T17:00:00Z
 
 ## PM Updates
 
