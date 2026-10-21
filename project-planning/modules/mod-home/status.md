@@ -4062,3 +4062,70 @@ No regressions introduced by the fix.
 | Files changed are within mod-home Source Path | PASS |
 
 **Result: FIXED – AWAITING QA**
+
+---
+
+### QA Run 18 — Integration-Fix Verify — INT-018 — 2026-10-21
+
+**Workflow**: regression-test (integration-fix-verify INT-018)
+
+**Finding being re-verified:** INT-018 — `HomeScreen.tsx` held one remaining inline `supabase.rpc('routes_with_new_beta', ...)` call inside `loadProjectingRoutes` after commit 1296d25 extracted most queries to `home-service.ts`. The service-layer boundary was violated in the screen file. Fix required extracting `fetchRoutesWithNewBeta` into `home-service.ts`.
+
+**Engineer fix (commit c5e2f7e):** Added `fetchRoutesWithNewBeta(savedRouteIds: string[]): Promise<Set<string>>` to `home-service.ts`. `HomeScreen.tsx` now imports and calls the service function; the inline `supabase.rpc` call is removed. 7 new tests added to `home-service.test.ts`.
+
+---
+
+#### Verification item 1 — No remaining `supabase.rpc` calls in `HomeScreen.tsx`
+
+`grep -n "supabase\.rpc" src/modules/mod-home/screens/HomeScreen.tsx` — no output (exit 0, zero matches).
+
+PASS — `HomeScreen.tsx` has zero direct `supabase.rpc` calls.
+
+---
+
+#### Verification item 2 — `fetchRoutesWithNewBeta` is exported from `home-service.ts`
+
+`grep -n "fetchRoutesWithNewBeta" src/modules/mod-home/home-service.ts` confirms:
+- Line 247: `export async function fetchRoutesWithNewBeta(savedRouteIds: string[]): Promise<Set<string>>`
+
+PASS — function is exported at the expected signature.
+
+---
+
+#### Verification item 3 — All 7 new `fetchRoutesWithNewBeta` tests pass
+
+`npx jest --testPathPattern="home-service" --watchAll=false --verbose` output for the `fetchRoutesWithNewBeta` describe block:
+- returns an empty Set without calling RPC when given no route IDs — PASS
+- calls the routes_with_new_beta RPC with the given route IDs — PASS
+- returns a Set of route_id values from the RPC response — PASS
+- throws when the RPC returns an error — PASS
+- returns the cached Set on a subsequent call without hitting the RPC — PASS
+- re-fetches when the route-id set differs from the cached key — PASS
+- treats route-id order as irrelevant (cache key is sorted) — PASS
+
+All 7 new tests pass. PASS.
+
+---
+
+#### Verification item 4 — Full mod-home + src/lib suite: 97/97, no regressions
+
+`npx jest --testPathPattern="mod-home|src/lib/__tests__" --watchAll=false --no-coverage`:
+- Test Suites: 9 passed, 9 total
+- Tests: 97 passed, 97 total — exit 0
+
+No regressions introduced by the fix.
+
+---
+
+### Summary — QA Run 18
+
+| Item | Result |
+|---|---|
+| Zero `supabase.rpc` calls in `HomeScreen.tsx` | PASS |
+| `fetchRoutesWithNewBeta` exported from `home-service.ts` | PASS |
+| All 7 new `fetchRoutesWithNewBeta` tests pass | PASS |
+| Full mod-home + src/lib suite: 97/97, 9 suites | PASS — no regressions |
+
+**Result: INTEGRATION FIX VERIFIED — INT-018 PASS**
+
+The original failure scenario (inline `supabase.rpc` in `HomeScreen.tsx`) no longer reproduces. Service-layer boundary is clean. All 97 mod-home + src/lib tests pass. No regressions found.

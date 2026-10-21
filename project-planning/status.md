@@ -2,13 +2,13 @@
 
 ## Last Action
 
-agent: engineer-mod-moderation
-mode: integration-fix
-module: mod-moderation
+agent: qa-mod-home
+mode: integration-fix-verify
+module: mod-home
 result: done
-rows: INT-011, INT-014, INT-019 → FIXED – AWAITING QA
-next: claude --agent qa-mod-moderation "integration-fix-verify INT-011, INT-014, INT-019"
-timestamp: 2026-10-21T19:00:00Z
+rows: INT-018 → QA VERIFIED
+next: tech-lead "confirm-fix INT-018"
+timestamp: 2026-10-21T20:00:00Z
 
 ## PM Updates
 
