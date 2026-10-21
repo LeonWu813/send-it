@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: confirm-fix
+agent: pm
+mode: change
 module: n/a
-next: human verify INT-021, then claude --agent tech-lead "confirm-fix INT-021"
-result: success
-timestamp: 2026-10-21T23:00:00Z
+result: needs-human
+next: show project-planning/pm-proposals/2026-10-21-rename-send-train.md to the human (apply only after the pending Phase 1 checkpoint proposal, project-planning/pm-proposals/2026-10-21-checkpoint-phase-1.md, is resolved); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-21-rename-send-train.md" with their exact words quoted
+timestamp: 2026-10-21T23:30:00Z
 
 ## PM Updates
 
