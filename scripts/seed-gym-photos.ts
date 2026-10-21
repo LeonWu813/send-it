@@ -144,10 +144,11 @@ async function downloadPhoto(photoName: string): Promise<Uint8Array> {
   const mediaUrl =
     `https://places.googleapis.com/v1/${photoName}/media` +
     `?maxWidthPx=800` +
-    `&skipHttpRedirect=true` +
-    `&key=${GOOGLE_PLACES_API_KEY}`;
+    `&skipHttpRedirect=true`;
 
-  const mediaResponse = await fetch(mediaUrl);
+  const mediaResponse = await fetch(mediaUrl, {
+    headers: { 'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY as string },
+  });
   if (!mediaResponse.ok) {
     throw new Error(`Place Photo media HTTP error: ${mediaResponse.status}`);
   }
