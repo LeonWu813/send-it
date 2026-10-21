@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-auth-profile
+agent: qa-mod-beta-video
 mode: integration-fix-verify
-module: mod-auth-profile
+module: mod-beta-video
 result: success
-next: human verifies INT-005 in the running app (replace avatar, then delete it; confirm migration 20261013000005 is applied to the hosted project), then claude --agent tech-lead "INT-005 verified: <what you checked>". Remaining Phase 1 rows awaiting QA: INT-006, INT-010, INT-012.
-timestamp: 2026-10-20T13:00:00Z
+next: human verifies INT-010 in the running app (user A blocks user B, A opens B's profile and sees no beta videos; also check when B blocks A), then claude --agent tech-lead "INT-010 verified: <what you checked>". Remaining Phase 1 rows awaiting QA: INT-006, INT-012.
+timestamp: 2026-10-20T14:00:00Z
 
 ## PM Updates
 

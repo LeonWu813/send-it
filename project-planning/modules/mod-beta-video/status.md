@@ -4473,3 +4473,33 @@ The `ReelAction` like button passes `ICON.like.outline` and `ICON.like.filled` f
 - **mod-beta-video hardcoded heart strings**: PASS — `grep -rn "heart"` returns empty; none remain.
 - **AC-138 (sidebar two icons)**: PASS — structure unchanged; no regression.
 - **Tests**: PASS — 109/109, 0 failures. No regressions.
+
+
+### INT-010 Integration-Fix Verification — 2026-10-20
+
+**QA agent**: qa-mod-beta-video
+**Mode**: integration-fix-verify (INT-010; chosen because the row is `FIXED – AWAITING QA` and the invocation named it)
+**Scenario**: user A blocks B, opens B's profile, and still sees B's beta videos. This came from `fetchBetaVideosByUser` (AC-162) applying only the reported-video predicate.
+
+**Fix as it stands now**: `src/modules/mod-beta-video/beta-video-service.ts` `fetchBetaVideosByUser` returns `[]` early when `currentUserId !== userId && await isBlocked(userId)`. `isBlocked` is imported from the `../mod-moderation` barrel. It uses `fetchBlockedUserIds()`, which is symmetric (blocker or blocked) because the RLS policy `blocks_select_participant` exposes rows where the viewer is either party. This differs from the Engineer note in the row, which described a raw `blocks` query. Commit 1554fde (F-3) replaced the raw query with the delegation. The behavior is the same and the module-boundary import is cleaner.
+
+**INT-010 scenario — REGRESSION PASS**
+- Viewer blocked target: `isBlocked` = true → `[]` (test "returns empty array when viewer has blocked the target user").
+- Target blocked viewer: `isBlocked` = true → `[]` (test "returns empty array when target user has blocked the viewer").
+- Self-view (`currentUserId === userId`): the block check is skipped and videos are returned (test passes).
+- No block: videos are returned with the AC-142 reported-exclusion `.or(...)` and `created_at DESC` order intact (test passes).
+- Both consumers call `fetchBetaVideosByUser` (`ProfileScreen.tsx:112`, `UserProfileScreen.tsx:164`). `UserProfileScreen` wraps the call in `.catch(() => [])`, so an `isBlocked` failure fails closed to an empty grid.
+
+**Regression checks**
+- `npx jest --testPathPattern="mod-beta-video|mod-moderation"`: 8 suites, 137 tests, 0 failures. (`run-qa.sh` reported "no test command configured" because production.md has no `Test:` line, so jest was run directly.)
+- `npx tsc --noEmit`: clean, no output.
+- AC-162 (ordering, poster join, flattening), AC-142 (reported exclusion) and AC-154 (`fetchBlockedUserIds` in the route-detail path) are unchanged and covered by the passing suite.
+- Spec has 0 HTML template comments. `.env` is listed in `.gitignore`.
+- No project `verify` skill exists (`.claude/skills/` absent). No live Supabase session was exercised, because that needs hosted credentials and I did not read `.env`. Verification is by code inspection plus unit tests with mocked `isBlocked`. The human check below covers the live path.
+
+### Integration notes (for Tech Lead)
+- `scan-integration.sh` flagged only path-format leads for mod-beta-video (spec paths written without `src/modules/` or `supabase/migrations/` prefixes). They are not real missing files; the files exist.
+- `fetchBlockedUserIds()` selects all `blocks` rows visible under RLS and filters client-side. This is correct under `blocks_select_participant`, but `isBlocked` does a full list fetch per call. It is only a perf lead, not a failure.
+
+### Verdict
+**QA PASS — INT-010**. The block filter holds in both directions and there are no regressions. Row set to `QA VERIFIED`. It still needs human verification in the running app, then Tech Lead confirmation.
