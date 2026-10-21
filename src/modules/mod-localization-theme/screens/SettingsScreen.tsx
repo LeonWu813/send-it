@@ -48,7 +48,7 @@ import type { SupportedLanguage } from '../../../lib/i18n';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
-import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile/auth-service';
+import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import { Button } from '../../../components/ui/Button';

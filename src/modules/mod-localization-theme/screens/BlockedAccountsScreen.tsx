@@ -29,8 +29,8 @@ import {
 import {
   fetchMyBlockedUsers,
   unblockUser,
-} from '../../mod-moderation/moderation-service';
-import type { BlockedUser } from '../../mod-moderation/moderation-service';
+} from '../../mod-moderation';
+import type { BlockedUser } from '../../mod-moderation';
 import { useTheme } from '../../../lib/theme';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
