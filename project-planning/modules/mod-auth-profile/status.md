@@ -2041,3 +2041,43 @@ Note: pre-existing errors in `src/components/ui/stories/` (storybook: `@storyboo
 **New regressions: 0**
 
 **MOD-001 Rev 43 regression (AC-117/AC-063 privacy toggle removal) — QA PASS.**
+
+---
+
+## Engineering Progress — Integration Fix — 2026-10-20 (INT-005 + INT-012)
+
+### INT-005: Avatar storage UPDATE/DELETE policy extension mismatch — FIXED
+
+**Root cause**: `avatars_update_own` and `avatars_delete_own` policies in `20260920000001_mod_001_user_profile.sql` compared `auth.uid()::text` (UUID, no extension, e.g. `abc-123`) against `storage.filename(name)` (includes extension, e.g. `abc-123.jpg`). The strings never match. Every avatar replacement (`upsert: true` calls the UPDATE policy) and every deletion permanently returned 403. INSERT was unaffected because `avatars_insert_own` uses `foldername`, not `filename`.
+
+**Fix applied**: Created `supabase/migrations/20261013000005_mod_001_int_005_fix_avatar_storage_policies.sql`.
+- `DROP POLICY IF EXISTS "avatars_update_own"` and `DROP POLICY IF EXISTS "avatars_delete_own"` on `storage.objects`.
+- Recreated both policies using `split_part(storage.filename(name), '.', 1) = auth.uid()::text` which strips the file extension before comparing (returns just the UUID portion).
+- `WITH CHECK` clause added to the UPDATE policy matching the USING clause (correct double-guard for UPDATE).
+- `bucket_id = 'avatars'` guard retained on both policies.
+- INSERT policy (`avatars_insert_own`) not touched — it was correct.
+- No client-side code change required.
+
+**Self-check**:
+- No TypeScript or JavaScript changes required — migration only.
+- Policy correctness verified by logic: `split_part('abc-123.jpg', '.', 1)` returns `'abc-123'` which equals a UUID string.
+- DROP uses `IF EXISTS` — idempotent if applied to a DB that has not yet run the original migration.
+- Integration review row INT-005 updated to `FIXED – AWAITING QA`.
+
+### INT-012: Cross-module deep imports in mod-auth-profile — PARTIAL (blocked on barrel creation)
+
+**Violations found inside `src/modules/mod-auth-profile/`** (via `grep -rn "from '.*mod-" src/modules/mod-auth-profile/`):
+
+1. `src/modules/mod-auth-profile/screens/ProfileScreen.tsx:41` — `fetchFollowerCounts` from `'../../mod-social-feed/social-feed-service'` (deep service import)
+2. `src/modules/mod-auth-profile/hooks/useSession.ts:18` — `registerDeviceToken` from `'../../mod-notifications/notification-service'` (deep service import)
+3. `src/modules/mod-auth-profile/__tests__/useSession.test.ts:31,41` — same mock paths for `mod-notifications/notification-service` (test mirrors the production import)
+
+**Non-violations confirmed** (permitted by the Cross-Module Imports convention — navigator entry-point components are allowed):
+- `ProfileNavigator.tsx:29` — `FollowersListScreen` from `'../mod-social-feed/screens/FollowersListScreen'` (navigator entry-point screen component)
+- `ProfileNavigator.tsx:30` — `FollowingListScreen` from `'../mod-social-feed/screens/FollowingListScreen'` (navigator entry-point screen component)
+- `ProfileNavigator.tsx:31` — `NotificationsNavigator` from `'../mod-notifications/NotificationsNavigator'` (navigator entry-point)
+- `ProfileNavigator.tsx:32` — `SettingsScreen` from `'../mod-localization-theme/screens/SettingsScreen'` (navigator entry-point screen component)
+
+**Blocker**: `src/modules/mod-social-feed/index.ts` and `src/modules/mod-notifications/index.ts` do not exist. Repointing the deep imports to barrel paths (`'../../mod-social-feed'`, `'../../mod-notifications'`) would break `npx tsc --noEmit` until the barrel files are created by the owning module engineers (engineer-mod-social-feed and engineer-mod-notifications respectively). Per the engineer-checklist, TypeScript must pass before handoff. The import repoints for violations 1–3 above are deferred pending barrel creation by the owning modules.
+
+**Status**: INT-012 import fixes inside mod-auth-profile are blocked on barrel files from engineer-mod-social-feed (mod-social-feed/index.ts) and engineer-mod-notifications (mod-notifications/index.ts). Once those barrels land, the three violations listed above can be repointed in a follow-on commit.
