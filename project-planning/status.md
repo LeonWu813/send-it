@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: confirm-fix
-module: n/a
-next: claude --agent engineer-mod-auth-profile "integration-fix INT-005" (INT-010 closed; INT-005 is back to APPROVED after the QA fail, so give Engineer the exact error text or tell it the old image is still shown. INT-006 needs human verification, INT-012 needs QA.)
+agent: qa-mod-auth-profile
+mode: integration-fix-verify
+module: mod-auth-profile
 result: success
-timestamp: 2026-10-21T12:00:00Z
+next: claude --agent tech-lead "new finding from INT-005 verification: avatar replace uploads but old image still shown (same storage path and public URL, cached); decide whether to add an INT row and fix". INT-005 itself is QA VERIFIED for the policy fix.
+timestamp: 2026-10-21T10:30:00Z
 
 ## PM Updates
 
