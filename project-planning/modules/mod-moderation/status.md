@@ -620,3 +620,52 @@ No source files for mod-moderation were changed by these three fixes (INT-011 wa
 3. **REGRESSION PASS INT-019**: `moderation-service.test.ts` present (352 lines), covers all 5 service functions with happy paths, error paths, and both new guards. 24/24 tests pass, 3 suites, exit 0.
 4. **AC-080 through AC-155 (all 11 ACs)**: Re-verified. No regressions introduced by the integration fixes.
 5. **TypeScript**: `npx tsc --noEmit` exit 0.
+
+---
+
+## QA Run 6 — spec-update Verify — 2026-10-21
+
+**QA agent**: qa-mod-moderation
+**Mode**: spec-update (AC-200 MOD-009 ownership row — email header rename in commits `7f12823` and `11201e0`)
+**AC being verified**: AC-200 (revised, Rev 48) — email header `supabase/functions/report-digest/index.ts:114` reads `"ProjectDay — Open Report Digest"`
+**Automated test run**: `npx jest src/modules/mod-moderation --watchAll=false` — 24 tests passed, 3 suites, exit 0
+**TypeScript check**: `npx tsc --noEmit` — 0 errors, exit 0
+
+---
+
+### AC-200 MOD-009 Ownership Row — Verification
+
+**PASS AC-200**: `supabase/functions/report-digest/index.ts` line 114 reads:
+```
+`ProjectDay — Open Report Digest`,
+```
+String is exactly `"ProjectDay — Open Report Digest"` as required by spec Rev 48. The prior string `"Send It — Open Report Digest"` is gone.
+
+**Diff scope verified (commit `7f12823`):** The commit diff for `supabase/functions/report-digest/index.ts` shows exactly one line changed: the email header string on line 114. No other lines in the file were modified. No logic, schedule (6-hour cron description), query structure, `SERVICE_ROLE_KEY` handling, fail-safe behavior, or other strings were touched.
+
+**No remaining "Send It" strings:** `grep -rn "Send It" supabase/functions/report-digest/` returned no output. The directory contains only `index.ts`; the rename is complete with no residual occurrences.
+
+**Convention checks (unchanged):**
+- `SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`) — unchanged. PASS.
+- Query covers `reports` table only — unchanged. PASS.
+- Phase 1 fallback (`console.log`) and fail-safe on missing config — unchanged. PASS.
+
+---
+
+### Re-verification of Previously Passing ACs
+
+No source files outside `supabase/functions/report-digest/index.ts` were changed by the spec-update commits. The 24-test run covers all mod-moderation-specific tests and all pass. No regressions.
+
+**PASS AC-085** (re-verified): Edge Function logic, query, and fail-safe unchanged. Only the email header string on line 114 was modified. PASS.
+
+All other ACs (AC-080 through AC-155) are unaffected — no moderation service files, migrations, components, or localization files were modified by these commits.
+
+---
+
+### Summary — QA Run 6
+
+**Result**: PASS — AC-200 MOD-009 ownership row verified; no regressions
+
+1. **PASS AC-200**: `supabase/functions/report-digest/index.ts:114` email header is `"ProjectDay — Open Report Digest"`. No other "Send It" strings remain anywhere in `supabase/functions/report-digest/`. Diff confirmed: exactly one literal changed, no logic or structure altered.
+2. **TypeScript**: `npx tsc --noEmit` exit 0.
+3. **Moderation tests**: `npx jest src/modules/mod-moderation --watchAll=false` — 24/24 passed, 3 suites, exit 0. No regressions.
