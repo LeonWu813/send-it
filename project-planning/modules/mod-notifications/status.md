@@ -2,6 +2,38 @@
 
 ## Engineering Progress
 
+**AC-200 MOD-007 spec-update (push title rename) — complete 2026-10-21**
+
+### What was implemented
+
+- Changed `title: 'Send It'` to `title: 'ProjectDay'` at `supabase/functions/notify-beta-video-like/index.ts:185`. This is the single-line ownership row for AC-200 in the MOD-007 spec (PRD Rev 48). Redeployment is required (Leon's step — setup.md 11.7) for the change to take effect on live push notifications.
+
+### Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npx jest src/modules/mod-notifications --watchAll=false` | PASS | 46/46 tests pass, 0 failures |
+| Files changed outside module Source Path | PASS | Only `supabase/functions/notify-beta-video-like/index.ts` modified |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| AC-200 MOD-007 row implemented | PASS | `title: 'ProjectDay'` at line 185; one string literal changed as specified |
+| No other logic or structure changed | PASS | Diff is exactly one line; all surrounding push logic, service-role key, preference gate, idempotency logic untouched |
+| No hardcoded configurable values introduced | PASS | App name string is a per-AC-200 rename, not a configurable value |
+| Tests unaffected | PASS | All 46 mod-notifications tests pass; the title string is not exercised by existing test mocks |
+| Redeployment note recorded | PASS | Noted above — this is Leon's step (setup.md 11.7); not deployed by Engineer |
+
+### Files Modified
+
+- `supabase/functions/notify-beta-video-like/index.ts` — push notification title changed from `'Send It'` to `'ProjectDay'` (line 185)
+
+---
+
 **INT-012: Create index.ts barrel — complete 2026-10-20**
 
 Created `src/modules/mod-notifications/index.ts` to give other modules a single, stable import surface for the notification domain.

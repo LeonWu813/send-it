@@ -182,7 +182,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const messages: ExpoPushMessage[] = tokens.map((row) => ({
       to: row.expo_push_token as string,
       sound: 'default',
-      title: 'Send It',
+      title: 'ProjectDay',
       body: 'Someone liked your beta video!',
       data: {
         type: 'beta_video_like',
