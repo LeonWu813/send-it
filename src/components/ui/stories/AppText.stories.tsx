@@ -9,7 +9,7 @@ const meta: Meta<AppTextProps> = {
   title: 'UI/AppText',
   component: AppText,
   decorators: [(Story) => <View style={{ padding: 16 }}><Story /></View>],
-  args: { variant: 'body', children: 'Send It 攀岩紀錄 The quick brown fox', numeric: false, color: 'textPrimary' },
+  args: { variant: 'body', children: 'ProjectDay 攀岩紀錄 The quick brown fox', numeric: false, color: 'textPrimary' },
   argTypes: {
     variant: {
       control: 'select',

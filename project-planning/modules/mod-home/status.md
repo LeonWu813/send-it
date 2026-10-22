@@ -452,6 +452,64 @@
 
 ---
 
+### Spec-Update — AC-200 — 2026-10-21
+
+**Task**: Rename "Send It" → "ProjectDay" in all MOD-012-owned project files per AC-200 Rev 48 ownership table.
+
+**Files changed:**
+- `app.json` — `name` → "ProjectDay", `slug` → "projectday", `scheme: "projectday"` (new key), `ios.bundleIdentifier` → "com.projectday.bouldering", `extra.eas.projectId` → real EAS UUID "3d6b4518-e4bb-499d-8680-f08244cef321", `expo-image-picker` `photosPermission` copy updated.
+- `package.json` — `name` → "projectday"
+- `package-lock.json` — regenerated via `npm install`
+- `app.plugin.js` — renamed function to `withRemoveUnprovisionedEntitlements`; added `delete c.modResults['aps-environment']` to strip APS environment entitlement (push capability not yet provisioned — setup.md 11.5 pending).
+- `.env.example` — header comment: "send-it" → "projectday"
+- `src/lib/theme.ts:2` — comment: "Send It" → "ProjectDay" (line 18 `send-it-design` path kept unchanged)
+- `src/components/ui/Stepper.tsx:38` — `ACCESSORY_ID` → `'projectday-stepper-done'`
+- `src/components/ui/ListRow.tsx:21` — comment: "Send It's own row" → "ProjectDay's own row"
+- `src/components/ui/stories/AppText.stories.tsx:12` — sample text: "Send It" → "ProjectDay"
+- `src/components/ui/stories/ListRow.stories.tsx:73` — comment: "Send It" → "ProjectDay"
+- `src/modules/mod-home/components/__tests__/AppHeader.test.tsx:11` — stale comment: "Send It" → "ProjectDay"
+- `ios/` — regenerated via `expo prebuild --clean`; `SendIt*` directories/files replaced by `ProjectDay*`
+  - `ios/ProjectDay/ProjectDay.entitlements` — empty dict (both `com.apple.developer.applesignin` and `aps-environment` stripped by `app.plugin.js`)
+  - `ios/ProjectDay/Info.plist` — `RCTNewArchEnabled: true` preserved
+  - `ios/ProjectDay/PrivacyInfo.xcprivacy` — confirmed present
+  - `ios/Podfile.properties.json` — `mainTarget` renamed to "ProjectDay"; `expo-image.disable-libdav1d: "false"` added (harmless, accepted)
+
+**Notes:**
+- `pod install` NOT run — requires native toolchain. Must be run by Leon before any native build.
+- `.storybook/MIGRATION.md` — no prose "Send It" present; only exempt `send-it-design` path tokens on lines 3 and 16. No change needed.
+- Remaining "send-it" occurrences in `.claude/agents/` (24 generated files): Doc-Sync responsibility after Leon renames the folder (setup.md 11.8) with "template refresh".
+- `src/modules/mod-auth-profile/` (`auth-service.ts:142`, `auth-service.test.ts:46`): MOD-001's scope — engineer-mod-auth-profile runs next.
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` (changed-files scope) | PASS — 69 tests across mod-home, Stepper, ListRow, AppText, AppHeader suites |
+| `npm run check:i18n` | PASS — i18n completeness OK |
+| `app.json` name/slug/scheme/bundleId/projectId/photosPermission — all updated | PASS |
+| `package.json` name → "projectday" | PASS |
+| `app.plugin.js` strips both `com.apple.developer.applesignin` and `aps-environment` | PASS |
+| `.env.example` header → "projectday" | PASS |
+| `src/lib/theme.ts:2` comment → "ProjectDay"; `send-it-design` path unchanged | PASS |
+| `Stepper.tsx:38` ACCESSORY_ID → `'projectday-stepper-done'` | PASS |
+| `ListRow.tsx:21` comment → "ProjectDay's own row" | PASS |
+| `AppText.stories.tsx:12` sample text → "ProjectDay" | PASS |
+| `ListRow.stories.tsx:73` comment → "ProjectDay" | PASS |
+| `AppHeader.test.tsx:11` stale comment → "ProjectDay" | PASS |
+| `ios/` regenerated; `SendIt*` → `ProjectDay*` | PASS |
+| `ios/ProjectDay/ProjectDay.entitlements` — empty (no `aps-environment`, no `applesignin`) | PASS |
+| `ios/ProjectDay/Info.plist` — `RCTNewArchEnabled: true` preserved | PASS |
+| `ios/ProjectDay/PrivacyInfo.xcprivacy` — exists | PASS |
+| `Podfile.properties.json` — `mainTarget: "ProjectDay"`; `expo-image.disable-libdav1d: "false"` accepted | PASS |
+| Native Build Gate — pod install required (noted in commit; not run here) | NOTE |
+| `npm install` ran to regenerate `package-lock.json` | PASS |
+| Pre-existing `AscentList.test.tsx` failure (test-pollution, unrelated module) — not caused by this change | CONFIRMED PRE-EXISTING |
+
+**Result: READY FOR QA (Native Build Gate: pod install + device build required before QA verifies Native Build Gate item)**
+
+---
+
 ## QA Results
 
 ### Verification — 2026-09-24

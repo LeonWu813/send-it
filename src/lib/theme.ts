@@ -1,5 +1,5 @@
 /**
- * Theme tokens and provider for Send It.
+ * Theme tokens and provider for ProjectDay.
  *
  * Rules:
  * - All components must use tokens from this file — no hardcoded hex colors.

@@ -8,7 +8,7 @@
  *   - Unread badge shows "99+" when unreadCount > 99.
  *   - Tapping the bell calls onNavigateToNotifications.
  *   - Tapping the settings icon calls onNavigateToSettings.
- *   - App name "Send It" is rendered in the header.
+ *   - App name "ProjectDay" is rendered in the header.
  */
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────

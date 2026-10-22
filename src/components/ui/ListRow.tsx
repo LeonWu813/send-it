@@ -18,7 +18,7 @@ export interface ListRowProps {
    * navigation: trailing chevron. value: trailing value text + chevron. toggle: system Switch.
    * selectable: trailing primary checkmark when `selected` (sheet options). radio: leading Radio.
    * action: primary (or error when `destructive`) title, no trailing. withButton: trailing Button `sm`.
-   * content (v2.2): Send It's own row (AscentHistoryItem, AscentList, follow feed): optional 56 `thumbnail`,
+   * content (v2.2): ProjectDay's own row (AscentHistoryItem, AscentList, follow feed): optional 56 `thumbnail`,
    * `headline` title, `footnote` subtitle, trailing = `trailing` (a SendStatus disc) or a chevron.
    */
   variant?: ListRowVariant;

@@ -70,7 +70,7 @@ export default meta;
 
 export const Playground: StoryObj<ListRowProps & { withLeadingIcon: boolean; withAvatar: boolean }> = {};
 
-/** Grouped container (card 20) with every variant, including the Send It `content` row (thumbnail 56 + status disc). */
+/** Grouped container (card 20) with every variant, including the ProjectDay `content` row (thumbnail 56 + status disc). */
 export const AllStates: StoryObj<ListRowProps & { withLeadingIcon: boolean; withAvatar: boolean }> = {
   render: () => <AllRows />,
 };

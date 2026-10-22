@@ -1,7 +1,8 @@
 {
   "expo": {
-    "name": "Send It",
-    "slug": "send-it-tw-bouldering-app",
+    "name": "ProjectDay",
+    "slug": "projectday",
+    "scheme": "projectday",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,14 +12,14 @@
     ],
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.sendit.twbouldering"
+      "bundleIdentifier": "com.projectday.bouldering"
     },
     "plugins": [
       "expo-secure-store",
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow Send It to access your photos to set a profile avatar."
+          "photosPermission": "Allow ProjectDay to access your photos to set a profile avatar."
         }
       ],
       "./app.plugin",
@@ -27,7 +28,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "send-it-tw-bouldering-app"
+        "projectId": "3d6b4518-e4bb-499d-8680-f08244cef321"
       }
     }
   }

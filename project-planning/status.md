@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-gym-directory
+agent: engineer-mod-home
 mode: spec-update
-module: mod-gym-directory
+module: mod-home
 result: pass
-next: engineer-mod-home "spec-update" + engineer-mod-auth-profile "spec-update" (atomic scheme-change batch — pending Expo project UUID from Leon)
-timestamp: 2026-10-21T18:00:00Z
+next: engineer-mod-auth-profile "spec-update" (same atomic scheme-change batch — MOD-001 must rename auth-service.ts:142 scheme 'send-it' → 'projectday' before any native build is tested)
+timestamp: 2026-10-21T21:30:00Z
 
 ## PM Updates
 

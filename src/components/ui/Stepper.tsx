@@ -35,7 +35,7 @@ export interface StepperProps {
   style?: StyleProp<ViewStyle>;
 }
 
-const ACCESSORY_ID = 'send-it-stepper-done';
+const ACCESSORY_ID = 'projectday-stepper-done';
 
 /**
  * Number stepper (design system 19.9): 56pt `surfaceAlt` row, 1pt `outline`, radius 12. The VoiceOver
