@@ -41,6 +41,9 @@ web-build/
 build/
 .cache/
 
+# Local one-off scripts and scratch files (never part of the app or framework)
+scratchpad/
+
 # iOS build artifacts (in case native iOS project is generated via `expo prebuild`)
 ios/build/
 ios/Pods/
