@@ -2515,3 +2515,107 @@ No new regressions found.
 
 **Result: READY FOR QA**
 
+
+---
+
+## QA Run 8 — Regression — 2026-10-21 (AC-200 scheme rename)
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (spec-update verification — AC-200 MOD-001 ownership row)
+**Scope**: AC-200 — `makeRedirectUri` scheme renamed from `'send-it'` to `'projectday'` in auth-service.ts and its test mock
+
+---
+
+### Fix Verification
+
+**Check 1: `src/modules/mod-auth-profile/auth-service.ts:142` — scheme literal**
+
+REGRESSION PASS. Line 142 reads:
+```
+const redirectUri = AuthSession.makeRedirectUri({ scheme: 'projectday' });
+```
+The previous `'send-it'` literal is gone. The scheme now matches the `"scheme": "projectday"` value in `app.json` (set by MOD-012 commit `401f3b0`), so `makeRedirectUri` will produce `projectday://auth` — a URL Supabase's OAuth allow-list recognises.
+
+**Check 2: `src/modules/mod-auth-profile/__tests__/auth-service.test.ts:46` — mock return value**
+
+REGRESSION PASS. Line 46 reads:
+```
+makeRedirectUri: jest.fn(() => 'projectday://auth'),
+```
+The `'send-it://auth'` mock return value is gone. The mock is now in sync with the production scheme so the `signInWithGoogle` redirect-URI assertion remains accurate.
+
+**Check 3: No remaining `'send-it'` string literals in mod-auth-profile source path**
+
+PASS. `grep -rn "send-it" src/modules/mod-auth-profile/` returned no output. No orphaned `send-it` scheme literals exist anywhere under the module source path.
+
+---
+
+### Automated Test Suite
+
+Command: `npx jest --testPathPattern="auth-service" --watchAll=false`
+Result: 13 tests, 1 suite — all PASS
+Exit code: 0
+
+All 13 tests passed:
+- signUpWithEmail (2 tests)
+- signInWithEmail (2 tests)
+- signOut (2 tests)
+- loadProfile (3 tests)
+- upsertProfile (2 tests)
+- uploadAvatar (2 tests)
+
+### TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+### Native Build Gate
+
+Google sign-in on a real device requires `pod install` followed by a device build (`npx expo run:ios --device`). The scheme change takes effect at the native layer only when the iOS app is rebuilt — the simulator and unit tests do not exercise the actual `makeRedirectUri` deep-link callback path. Per the production.md Native Build Gate convention, this is Leon's next step. QA cannot declare native sign-in behaviour verified without a device build and a live Supabase test. Recorded here as a known prerequisite; it does not block this regression verification of the source and test changes.
+
+---
+
+### Adjacent Items Regression Check
+
+**AC-001 (revised)** — PASS. `AuthNavigator.tsx` unchanged; session → children directly, no gym selection gate.
+**AC-063** — PASS. `upsertProfile()` and `privacy_setting` handling unchanged.
+**AC-116** — PASS. `ProfileScreen.tsx` avatar/display_name/bio rendering unchanged.
+**AC-117** — PASS. Edit Profile entry point unchanged.
+**AC-118** — PASS. Send history section unchanged.
+**AC-119** — PASS. Logout Pressable and `signOut()` call unchanged.
+**AC-145** — PASS. Follower/following count links and navigation unchanged.
+**Supabase singleton** — PASS. No new `createClient()` call sites.
+**No service_role key in client code** — PASS. No new env var reads.
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0.
+
+No new regressions found.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| auth-service.ts:142 — `scheme: 'projectday'` (not `'send-it'`) | REGRESSION PASS |
+| auth-service.test.ts:46 — mock returns `'projectday://auth'` (not `'send-it://auth'`) | REGRESSION PASS |
+| No remaining `'send-it'` literals in mod-auth-profile source path | PASS |
+| Automated test suite (13 tests, 1 suite) | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS |
+| AC-001 regression | PASS |
+| AC-063 regression | PASS |
+| AC-116 regression | PASS |
+| AC-117 regression | PASS |
+| AC-118 regression | PASS |
+| AC-119 regression | PASS |
+| AC-145 regression | PASS |
+| Native build gate (device build + pod install) | NOTED — Leon's next step per production.md convention |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**AC-200 MOD-001 ownership row verified. Native build gate recorded as Leon's next step.**

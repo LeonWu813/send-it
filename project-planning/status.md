@@ -2,13 +2,13 @@
 
 ## Last Action
 
-agent: qa-mod-home
+agent: qa-mod-auth-profile
 mode: regression
-module: mod-home
+module: mod-auth-profile
 result: pass
 ac: AC-200
-next: qa-mod-auth-profile "spec-update"
-timestamp: 2026-10-21T23:00:00Z
+next: coordinator — AC-200 spec-update QA complete for MOD-001; check integration-review.md for any remaining AC-200 rows; then proceed per flow
+timestamp: 2026-10-21T23:30:00Z
 
 ## PM Updates
 
