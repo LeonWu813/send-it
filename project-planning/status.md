@@ -2,17 +2,17 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: integration-review
+agent: pm
+mode: change
 module: n/a
-next: Leon answers Q1–Q4 in Tech Lead Reviews (2026-10-22), then claude --agent tech-lead "decisions: INT-029 <decision>; setup.md R1/R2 <yes/no>; INT-021 <verification statement>". After INT-029 is decided (DEFERRED clears the gate) and INT-021 is CONFIRMED CLOSED: claude --agent pm "checkpoint"
-result: issues-found
-timestamp: 2026-10-22T16:00:00Z
+result: needs-human
+next: show project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md to Leon (questions Q1-Q9); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md" with Leon's exact words quoted. Still open from Tech Lead (2026-10-22 integration review): Leon's answers on INT-029, setup.md R1/R2 and INT-021 go to claude --agent tech-lead "decisions: ..."; the Phase 1 checkpoint also waits for AC-201/AC-202/AC-203 once applied.
+timestamp: 2026-10-22T17:00:00Z
 summary: |
-  AC-200 delta thermos reviewed. F-1 -> INT-029 PROPOSED (aps-environment strip in app.plugin.js:37;
-  setup.md 11.5 has no step to remove it). F-2 advisory only (dashboard step; setup.md 11.1 wording stale).
-  F-3..F-5 rejected (benign). setup.md not changed yet; needs Leon's approval. The app.plugin.js
-  TODO belongs to engineer-mod-home, not Tech Lead. Checkpoint blocked by INT-029 (PROPOSED) and INT-021 (QA VERIFIED).
+  Proposal pass only. Proposes AC-201 (MOD-001 Google name/photo prefill, fill-empty-only),
+  AC-090 revised + AC-202/AC-203 (MOD-010 signed-out language and theme defaults), Phase 1, Rev 49.
+  Flags: AC-090 currently falls back to zh-TW, opposite of Leon's rule; table is users, not profiles;
+  i18n.ts sits in MOD-012's Source Path. prd.md not changed.
 
 ## PM Updates
 
