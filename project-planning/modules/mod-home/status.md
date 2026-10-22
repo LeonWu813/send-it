@@ -4368,3 +4368,84 @@ NOTE — `pod install` was NOT run by the Engineer (documented in the Engineerin
 **Result: BUGS FOUND — 1 failure (Check 11)**
 
 `ios/SendIt.xcworkspace/` is a stale directory left over from before `expo prebuild --clean`. Its `contents.xcworkspacedata` references `SendIt.xcodeproj` which no longer exists. This violates the AC-200 compliance check requirement of zero `SendIt` matches outside Pods in `ios/`. Route to Engineer: remove `ios/SendIt.xcworkspace/` and re-run `pod install` (or at minimum confirm the stale workspace deletion). Native Build Gate remains blocked pending both the stale workspace fix and `pod install` + device build confirmation.
+
+### QA Run 20 — Regression — AC-200 Check 11 — 2026-10-21
+
+**Workflow**: regression-test (re-verification after Engineer commit `24a037a` removed `ios/SendIt.xcworkspace/contents.xcworkspacedata`)
+
+**Bug being re-verified**: QA Run 19 Check 11 FAIL — `grep -r "SendIt" ios/ | grep -v "/Pods/" | grep -v "/build/"` returned a match in `ios/SendIt.xcworkspace/contents.xcworkspacedata` (referenced `SendIt.xcodeproj`). Engineer removed the file via `git rm -r`.
+
+---
+
+#### Check 11 — No remaining `SendIt` references in `ios/` outside Pods (re-verification)
+
+REGRESSION PASS — `grep -r "SendIt" ios/ --exclude-dir=Pods` returns zero matches.
+
+After the fix, `ios/SendIt.xcworkspace/contents.xcworkspacedata` is gone. The `ios/SendIt.xcworkspace/` directory itself is still physically present on disk but contains only `xcuserdata/tsan.xcuserdatad/UserInterfaceState.xcuserstate` — a binary Apple plist, gitignored via `.gitignore` line 50 (`ios/*.xcworkspace/xcuserdata/`), not tracked by git, and not matched by the grep command. The spec AC-200(3) compliance check uses `git grep` which explicitly excludes untracked files; the remaining xcuserdata is outside the check scope. The `ios/SendIt.xcworkspace/` directory has no `contents.xcworkspacedata` and is not a functional Xcode workspace.
+
+Original Check 11 command (`grep -r "SendIt" ios/ | grep -v "/Pods/" | grep -v "/build/"`): zero matches.
+Spec AC-200(3) compliance command (`git grep -n -i -E "send it|send-it|send_it|sendit" -- . ':!project-planning' ':!README.md'`): matches are only in `.claude/agents/` design-team files (exempt (d)) and qa-mod-* files (exempt (c)). No ios/ matches.
+
+---
+
+#### Re-verification of all 17 previously passing checks
+
+All 17 checks from QA Run 19 that passed are unaffected by the single-file deletion in commit `24a037a`. The following were confirmed:
+
+- **Check 1** (`app.json` name: "ProjectDay") — PASS. File unchanged by `24a037a`.
+- **Check 2** (`app.json` slug: "projectday") — PASS. File unchanged.
+- **Check 3** (`app.json` scheme: "projectday") — PASS. File unchanged.
+- **Check 4** (`app.json` ios.bundleIdentifier) — PASS. File unchanged.
+- **Check 5** (`app.json` extra.eas.projectId UUID) — PASS. File unchanged.
+- **Check 6** (`app.json` photosPermission says "ProjectDay") — PASS. File unchanged.
+- **Check 7** (`package.json` name: "projectday") — PASS. File unchanged.
+- **Check 8** (`app.plugin.js` strips `aps-environment`) — PASS. File unchanged.
+- **Check 9** (`ios/ProjectDay/` directory exists) — PASS. Directory present; contains `AppDelegate.swift`, `Images.xcassets`, `Info.plist`, `PrivacyInfo.xcprivacy`, `ProjectDay-Bridging-Header.h`, `ProjectDay.entitlements`, `SplashScreen.storyboard`, `Supporting`.
+- **Check 10** (`ios/ProjectDay/ProjectDay.entitlements` is empty `<dict/>`) — PASS. File unchanged.
+- **Check 12** (`ios/ProjectDay/Info.plist` RCTNewArchEnabled: true) — PASS. File unchanged.
+- **Check 13** (`ios/ProjectDay/PrivacyInfo.xcprivacy` exists) — PASS. File unchanged.
+- **Check 14** (`src/components/ui/Stepper.tsx:38` ACCESSORY_ID: 'projectday-stepper-done') — PASS. File unchanged.
+- **Check 15** (`src/lib/theme.ts` send-it-design token preserved) — PASS. File unchanged.
+- **Check 16** (`.storybook/MIGRATION.md` send-it-design token preserved) — PASS. File unchanged.
+- **Check 17** (`npx tsc --noEmit` passes) — PASS. Executed: exit 0, zero errors, no output.
+- **Check 18** (Jest mod-home/Stepper/ListRow/AppText/AppHeader) — PASS. Executed: 5 suites, 69 tests, 0 failures.
+
+No new regressions introduced.
+
+---
+
+#### Native Build Gate
+
+NOTE — `pod install` has not been run (unchanged from QA Run 19). This is an expected human step documented in both the Engineering Progress entry and QA Run 19. The stale `ios/SendIt.xcworkspace/contents.xcworkspacedata` that was blocking the gate is now removed. The gate remains pending `pod install` + device build confirmation by Leon.
+
+---
+
+### Summary — QA Run 20
+
+| Check | QA Run 19 | QA Run 20 |
+|---|---|---|
+| 1 — `app.json` name: "ProjectDay" | PASS | PASS |
+| 2 — `app.json` slug: "projectday" | PASS | PASS |
+| 3 — `app.json` scheme: "projectday" | PASS | PASS |
+| 4 — `app.json` ios.bundleIdentifier | PASS | PASS |
+| 5 — `app.json` extra.eas.projectId: UUID | PASS | PASS |
+| 6 — `app.json` photosPermission: "ProjectDay" | PASS | PASS |
+| 7 — `package.json` name: "projectday" | PASS | PASS |
+| 8 — `app.plugin.js` strips `aps-environment` | PASS | PASS |
+| 9 — `ios/ProjectDay/` directory exists | PASS | PASS |
+| 10 — `ios/ProjectDay/ProjectDay.entitlements` empty | PASS | PASS |
+| 11 — No `SendIt` in `ios/` outside Pods | FAIL | REGRESSION PASS |
+| 12 — `ios/ProjectDay/Info.plist` RCTNewArchEnabled: true | PASS | PASS |
+| 13 — `ios/ProjectDay/PrivacyInfo.xcprivacy` exists | PASS | PASS |
+| 14 — `Stepper.tsx:38` ACCESSORY_ID: 'projectday-stepper-done' | PASS | PASS |
+| 15 — `src/lib/theme.ts` send-it-design token preserved | PASS | PASS |
+| 16 — `.storybook/MIGRATION.md` send-it-design token preserved | PASS | PASS |
+| 17 — `npx tsc --noEmit` passes | PASS | PASS |
+| 18 — Jest mod-home/Stepper/ListRow/AppText/AppHeader | PASS | PASS |
+| Native Build Gate | BLOCKED | PENDING — pod install required (Leon step after this QA) |
+
+**Result: ALL PASS — MOD-012 spec-update AC-200 QA Run 20 PASS**
+
+All 18 checks pass. The original QA Run 19 Check 11 failure (stale `ios/SendIt.xcworkspace/contents.xcworkspacedata`) is resolved. Zero `SendIt` matches in `ios/` outside Pods. TypeScript clean (0 errors). Jest suite passes (69/69 tests). No regressions introduced.
+
+Native Build Gate: `pod install` required before any device build — Leon runs it after this QA.
