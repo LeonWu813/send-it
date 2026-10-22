@@ -111,7 +111,7 @@ Deno.serve(async (_req: Request): Promise<Response> => {
   );
 
   const emailBody = [
-    `Send It — Open Report Digest`,
+    `ProjectDay — Open Report Digest`,
     ``,
     `${openReports.length} open report(s) older than ${DIGEST_INTERVAL_HOURS} hours require admin review.`,
     `Review and action in Supabase Studio: ${SUPABASE_URL}/project/default/editor`,

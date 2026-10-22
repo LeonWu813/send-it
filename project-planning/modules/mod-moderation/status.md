@@ -2,6 +2,13 @@
 
 ## Engineering Progress
 
+### AC-199 / AC-200 spec-update: rename email header "Send It" → "ProjectDay" (2026-10-21)
+
+Changed `supabase/functions/report-digest/index.ts:114` email header from `Send It — Open Report Digest` to `ProjectDay — Open Report Digest` per AC-200 MOD-009 ownership row (spec Rev 48). Only this one string literal was changed; no other logic, schedule, or file was modified. Redeployment is Leon's step (setup.md 11.7).
+
+- [pass] No TypeScript errors (Deno file, `@ts-nocheck`; no tsc impact)
+- [pass] String literal change only; existing schedule, query logic, and fallback behavior unchanged
+
 ### Integration-fix: INT-011, INT-014, INT-019 set to FIXED – AWAITING QA (2026-10-21)
 
 Verified all three already-landed fixes are in place and set each row to `FIXED – AWAITING QA` in `integration-review.md`.
