@@ -1,9 +1,9 @@
 # ProjectDay — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 48
-**Date**: 2026-10-21
-**Revision**: 48
+**Status**: [SUBSTANTIVE] — Revision 49
+**Date**: 2026-10-22
+**Revision**: 49
 
 ---
 
@@ -53,6 +53,8 @@ ProjectDay's wedge is a lightweight, Taiwan-first version of Kaya's core loop �
 - In-app admin tooling is out of scope for Phase 1 — Supabase Studio is the sole admin surface.
 - In-app admin UI for route status management (approve / reject / retire) is out of scope for Phase 1 (planned for Phase 1.5); Supabase Studio is the admin surface for Phase 1.
 - Languages other than English and Traditional Chinese (zh-TW) are out of scope for Phase 1.
+- A language or theme control on the signed-out screens is out of scope for Phase 1 — before sign-in the app uses the language and theme last stored on this device, or the device language and appearance when none is stored (AC-202/AC-203).
+- Copying later changes to a user's Google or Apple name or photo into their profile is out of scope — provider values only fill empty fields on the sign-in that creates the account (AC-201).
 - Payments, subscriptions, and any monetization are out of scope for Phase 1 and Phase 2.
 
 ---
@@ -65,7 +67,7 @@ ProjectDay's wedge is a lightweight, Taiwan-first version of Kaya's core loop �
 **I want** to sign up (via email, Apple, or Google) and land directly on the Home screen,
 **so that** I can start exploring gyms and logging sends without a mandatory setup step.
 
-**Acceptance Criteria**: AC-001
+**Acceptance Criteria**: AC-001, AC-201
 
 ---
 
@@ -225,7 +227,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** the app to default to my device locale (with zh-TW fallback) and let me manually toggle language in Settings,
 **so that** I can read the UI in the language I prefer.
 
-**Acceptance Criteria**: AC-090, AC-091
+**Acceptance Criteria**: AC-090, AC-091, AC-202
 
 ---
 
@@ -235,7 +237,7 @@ For a **user profile** report, I choose a category and add an optional note (AC-
 **I want** the app to follow my OS Light/Dark preference by default and let me manually override in Settings,
 **so that** the app matches my visual preference.
 
-**Acceptance Criteria**: AC-092
+**Acceptance Criteria**: AC-092, AC-203
 
 ---
 
@@ -501,6 +503,8 @@ The data flow for the two most important loops:
 **AC-164** (new, MOD-001 + MOD-005): The `ProfileScreen` shall display a 3-column `BetaVideoGrid` (AC-160) as a separate section below the full send history, showing the current user's own beta videos fetched via `fetchBetaVideosByUser(currentUserId)` (AC-162). Tapping a cell shall open `BetaVideoReelViewer` cycling through the current user's own videos, starting at the tapped index. In this context the viewer is passed `reelContext = 'profile'`: the poster-identity row is visible but NOT tappable (no navigation on tap). MOD-005 shall add a `reelContext: 'route' | 'profile'` prop to `BetaVideoReelViewer` — `'route'` keeps the existing behavior (poster row tappable, navigates to the poster's profile per AC-135); `'profile'` renders the poster row visible but not tappable. MOD-001 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer` for this section.
 
 **AC-167** (new): The Logout control shall be removed from the `ProfileScreen` `listFooterComponent`. Logout moves to the SettingsScreen (AC-168). This supersedes AC-119's placement of the Logout control on the Profile screen; the session-ending behavior (ends the session and returns the user to the signed-out state) is unchanged — only its location moves.
+
+**AC-201** (new, Rev 49, MOD-001): When a user signs in with Google Sign-In or Apple Sign-In, the system shall fill the user's profile `display_name` and `avatar_url` from the values the provider supplies at sign-in, but only for a field that is currently null or empty (blank after trimming). A field that already holds a value is never overwritten. Google supplies the user's full name (for `display_name`) and profile photo (for `avatar_url`). Apple supplies the user's name only on the very first Apple sign-in and never supplies a photo, so for an Apple account only `display_name` is filled and `avatar_url` stays empty. When the provider supplies no value for a field, that field is left unchanged. This applies only to the sign-in that creates the account; existing accounts are not changed. The user can change both values afterwards through Edit Profile (AC-117). Later changes to the user's Google or Apple name or photo are not copied into the profile.
 
 ---
 
@@ -799,6 +803,10 @@ There shall be no disabled-button state and no "delete your existing video first
 **AC-168** (new): The SettingsScreen shall present a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and the "Blocked Accounts" row, AC-155). The button shall use the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167).
 
 **AC-199** (new, Rev 47, MOD-010): The app's name is "ProjectDay" (one word, capital P and D) in both English and zh-TW; it has no Chinese form. No user-facing text in either locale catalog (English, zh-TW), and no push-notification or email text the system sends, shall contain the phrase "Send It". Where a string used "Send It" as the app's name, it shall say "ProjectDay" instead. The climbing verb "send" (for example "log a send", the Send Logging flow) is not the app name and is unchanged.
+
+**AC-202** (new, Rev 49, MOD-010): When no user is signed in (before the first sign-in, and after sign-out), the app shall display in the last language setting stored on this device, if one has been stored. If no language setting has ever been stored on this device (for example, a new install before any sign-in), the app shall use the language AC-090 picks from the device language. While a user is signed in, that user's Settings language (AC-091) remains the active setting; when the user signs out, it is stored on this device as the device's language setting.
+
+**AC-203** (new, Rev 49, MOD-010): When no user is signed in (before the first sign-in, and after sign-out), the app shall use the last theme setting (System, Light or Dark) stored on this device, if one has been stored. If no theme setting has ever been stored on this device, or the stored setting is System, the app shall follow the device's Light/Dark appearance and shall switch immediately when the device appearance changes while the app is open. While a user is signed in, that user's Settings override (AC-092) remains the active setting; when the user signs out, it is stored on this device as the device's theme setting.
 
 ---
 

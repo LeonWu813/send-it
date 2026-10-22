@@ -2,16 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: record-decisions
+agent: pm
+mode: change
 module: n/a
-next: PM proposal for Rev 49 is pending Leon's answers to PM Q1–Q9 — show project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md to Leon. Once answered, run claude --agent pm "apply project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md" with Leon's exact words quoted, then claude --agent doc-sync, then the affected engineers (engineer-mod-<name> per the synced specs). The Phase 1 integration-review gate is now clear; PM checkpoint still waits for AC-201/AC-202/AC-203 once applied.
-result: setup-changed
-timestamp: 2026-10-22T18:00:00Z
-summary: |
-  Recorded Leon's decisions from the 2026-10-22 AC-200 thermos review. INT-029 DEFERRED (with INT-028) until
-  TestFlight setup begins. setup.md R1 (11.5 step 0) and R2 (11.1 / 11.1b reworded) applied. INT-021 HUMAN
-  VERIFIED -> CONFIRMED CLOSED. No Phase 1 integration-review row is open any more.
+result: success
+next: claude --agent doc-sync (Rev 49 [SUBSTANTIVE], not architectural: AC-201 into the MOD-001 spec; AC-202 and AC-203 into the MOD-010 spec). Then engineer-mod-auth-profile "implement" for AC-201 and engineer-mod-localization-theme "implement" for AC-202/AC-203, then their QA runs, before the Phase 1 checkpoint.
+timestamp: 2026-10-22T19:00:00Z
 
 ## PM Updates
 
@@ -313,6 +309,20 @@ summary: |
   - For Tech Lead: add scratchpad/ to .gitignore (Q3).
   - Approved by Leon in the coordinator session: P1 "Accept"; P2 no answer (kept as proposed, not objected to); P3 "yes"; P4 "yes"; P5 "add the exception on the fice design-agent 'Send it design team'"; P6 "Yes"; P7 "[SUBSTANTIVE]".
   - Leon's answers to Tech Lead questions: Q1 "Route Tracker & Beta Sharing"; Q2 "can the id go with com.projectday.bouldering, slug approve"; Q3 "(i)"; Q4 "yes accept"; Q5 "not yet testflight first"; Q6 "change the name then we will deal with the signin bug" (recorded by Tech Lead).
+- 2026-10-22 [SUBSTANTIVE] AC-201 Google/Apple profile prefill on account creation (MOD-001); AC-202/AC-203 signed-out language and theme use the setting stored on the device (MOD-010) (Rev 49)
+  - Source: Leon's first live Google sign-in test. display_name and avatar_url stayed NULL after Google sign-in; signed-out screens need a defined language and theme. Proposal: project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md.
+  - prd.md AC-201 (new, MOD-001, after AC-167): on the Google or Apple sign-in that creates the account, fill users.display_name and users.avatar_url from the provider, only for a field that is null or empty; never overwrite. Google gives full name and photo; Apple gives the name only on the very first Apple sign-in and never a photo, so avatar_url stays empty for Apple. Existing accounts are not changed. Added to US-001.
+  - prd.md AC-202 (new, MOD-010, after AC-199): signed-out language is the last language setting stored on this device; when none was ever stored, AC-090 device detection applies. A signed-in user's Settings language (AC-091) stays active while signed in and is stored on the device on sign-out. Added to US-017.
+  - prd.md AC-203 (new, MOD-010, after AC-202): signed-out theme is the last theme setting stored on this device; when none was ever stored, or the stored setting is System, the app follows the device Light/Dark appearance live. A signed-in user's Settings override (AC-092) stays active while signed in and is stored on the device on sign-out. Added to US-018.
+  - prd.md AC-090: unchanged (Leon, Q4: any non-English device → zh-TW, English → en). The proposal's AC-090 revision (1c) and five passage updates (1f) were dropped.
+  - prd.md §2 Non-Goals: no language/theme control on signed-out screens; later Google or Apple name/photo changes are not copied. Wording adjusted from the proposal to match Q1, Q2 and Q6: the first now says the app uses the setting last stored on the device, or the device language and appearance when none is stored; the second names Apple and says values fill empty fields only on the sign-in that creates the account.
+  - prd.md: Revision 48 → 49, Status "[SUBSTANTIVE] — Revision 49", Date 2026-10-22.
+  - Phase 1. No new module, table, column or dependency. MOD-001 and MOD-010 reopen for Engineer and QA. Not architectural, per Leon (Q8): no /pstack:how run and no Tech Lead change review; Doc-Sync runs next.
+  - No bug reported for the current signed-out theme (Leon, Q7: "No just making sure"); AC-202/AC-203 add spec coverage.
+  - For Tech Lead: where the AC-201 fill runs (app vs database at sign-in; Supabase keeps provider values in auth.users.raw_user_meta_data full_name/avatar_url); Google photo URL vs copy into the avatars bucket; which module changes src/lib/i18n.ts (MOD-012's Source Path) and the theme provider, if outside mod-localization-theme/, for AC-202/AC-203.
+  - For Doc-Sync: AC-201 into the MOD-001 spec; AC-202 and AC-203 into the MOD-010 spec (and into the MOD-012 spec if Tech Lead assigns it the i18n.ts change).
+  - Approved by Leon in the coordinator session: "First sign-in only. I'll manually delete the account I create with Google without name and avatar and test again after fix"
+  - Leon's answers: Q1 "First sign-in only. I'll manually delete the account I create with Google without name and avatar and test again after fix"; Q2 "Apple also"; Q3 "Yes"; Q4 "no, language stay as any non-English device → zh-TW, English -> en"; Q5 "applied above"; Q6 "(a)"; Q7 "No just making sure"; Q8 "no"; Q9 "okay".
 
 ## Tech Lead Reviews
 
@@ -3581,6 +3591,10 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 - 2026-10-21: Apple Developer account not active yet; TestFlight comes first (Leon: "not yet testflight first"). MOD-012 strips aps-environment through app.plugin.js; setup.md 11.5 waits.
 - 2026-10-21: Leon will activate the Apple Developer Program for TestFlight before the App Store submission (P6, Leon: "Yes").
 - 2026-10-21: The five design-team agent files keep the phrase "Send It design team"; AC-200(3) exempts it and the coordinator does not rename them (P5, Leon: "add the exception on the fice design-agent 'Send it design team'").
+- 2026-10-22: Google and Apple sign-in fill an empty display name and avatar only on the sign-in that creates the account; existing accounts are not changed (AC-201), per Leon (Q1, Q2: "Apple also").
+- 2026-10-22: Default language rule AC-090 stays as is: any non-English device → zh-TW, English → en (Leon, Q4).
+- 2026-10-22: After sign-out, the language and theme last set on the device stay on the device; AC-090 detection and the device appearance apply only when nothing is stored (AC-202/AC-203), per Leon (Q6: "(a)").
+- 2026-10-22: AC-201, AC-202 and AC-203 ship in Phase 1, before the Phase 1 checkpoint, per Leon.
 
 ## Checkpoint History
 

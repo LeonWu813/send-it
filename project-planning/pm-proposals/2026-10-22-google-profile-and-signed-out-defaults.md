@@ -1,4 +1,4 @@
-Status: pending
+Status: applied 2026-10-22 (with Leon's answers: AC-090 unchanged, sections 1c and 1f dropped; AC-201 first sign-in only, Google and Apple; AC-202/AC-203 use the setting stored on the device; not architectural)
 
 # PM proposal: Google profile prefill (MOD-001) and signed-out language/theme defaults (MOD-010), Rev 49, 2026-10-22
 
