@@ -2,12 +2,13 @@
 
 ## Last Action
 
-agent: engineer-mod-auth-profile
+agent: qa-mod-home
 mode: spec-update
-module: mod-auth-profile
-result: pass
-next: qa-mod-home "spec-update" and qa-mod-auth-profile "spec-update" — coordinator runs both after this commit
-timestamp: 2026-10-21T22:00:00Z
+module: mod-home
+result: bugs-found
+ac: AC-200
+next: engineer-mod-home "fix stale ios/SendIt.xcworkspace/ from AC-200 prebuild — remove the directory and re-run pod install; then return for QA re-verification"
+timestamp: 2026-10-21T22:30:00Z
 
 ## PM Updates
 

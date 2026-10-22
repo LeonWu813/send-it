@@ -4187,3 +4187,167 @@ No regressions introduced by the fix.
 **Result: INTEGRATION FIX VERIFIED — INT-018 PASS**
 
 The original failure scenario (inline `supabase.rpc` in `HomeScreen.tsx`) no longer reproduces. Service-layer boundary is clean. All 97 mod-home + src/lib tests pass. No regressions found.
+
+---
+
+### QA Run 19 — Spec-Update — AC-200 — 2026-10-21
+
+**Workflow**: spec-update verification (commit `401f3b0`)
+
+**Scope**: Verify the AC-200 MOD-012 ownership row implemented in commit `401f3b0` — rename "Send It" → "ProjectDay" in all MOD-012-owned project files.
+
+---
+
+#### Check 1 — `app.json` `name` is `"ProjectDay"`
+
+PASS — `app.json` line 3: `"name": "ProjectDay"`.
+
+---
+
+#### Check 2 — `app.json` `slug` is `"projectday"`
+
+PASS — `app.json` line 4: `"slug": "projectday"`.
+
+---
+
+#### Check 3 — `app.json` `scheme` is `"projectday"` (new key, present)
+
+PASS — `app.json` line 5: `"scheme": "projectday"` is present as a new key.
+
+---
+
+#### Check 4 — `app.json` `ios.bundleIdentifier` is `"com.projectday.bouldering"`
+
+PASS — `app.json` line 15: `"bundleIdentifier": "com.projectday.bouldering"`.
+
+---
+
+#### Check 5 — `app.json` `extra.eas.projectId` is real UUID `"3d6b4518-e4bb-499d-8680-f08244cef321"`
+
+PASS — `app.json` line 31: `"projectId": "3d6b4518-e4bb-499d-8680-f08244cef321"`. This is a valid UUID (not the old slug value `send-it-tw-bouldering-app`).
+
+---
+
+#### Check 6 — `app.json` `photosPermission` says "ProjectDay"
+
+PASS — `app.json` line 22: `"photosPermission": "Allow ProjectDay to access your photos to set a profile avatar."` — "ProjectDay" present, "Send It" absent.
+
+---
+
+#### Check 7 — `package.json` `name` is `"projectday"`
+
+PASS — `package.json` line 2: `"name": "projectday"`.
+
+---
+
+#### Check 8 — `app.plugin.js`: `aps-environment` is in the strip list
+
+PASS — `app.plugin.js` line 37: `delete c.modResults['aps-environment']`. Both `com.apple.developer.applesignin` (line 34) and `aps-environment` (line 37) are in the strip list, consistent with Apple Developer account active but setup.md 11.5 not yet done.
+
+---
+
+#### Check 9 — `ios/ProjectDay/` exists
+
+PASS — `ios/ProjectDay/` directory is present: contains `AppDelegate.swift`, `Images.xcassets`, `Info.plist`, `PrivacyInfo.xcprivacy`, `ProjectDay-Bridging-Header.h`, `ProjectDay.entitlements`, `SplashScreen.storyboard`, `Supporting`.
+
+---
+
+#### Check 10 — `ios/ProjectDay/ProjectDay.entitlements` is empty
+
+PASS — File content is `<dict/>` (empty dict). Neither `com.apple.developer.applesignin` nor `aps-environment` is present.
+
+---
+
+#### Check 11 — No remaining `SendIt` references in `ios/` outside Pods
+
+FAIL — `grep -r "SendIt" ios/ | grep -v "/Pods/" | grep -v "/build/"` returns:
+
+```
+ios/SendIt.xcworkspace/contents.xcworkspacedata:      location = "group:SendIt.xcodeproj">
+```
+
+`ios/SendIt.xcworkspace/` is a stale directory that was not removed by `expo prebuild --clean`. Its `contents.xcworkspacedata` file references `SendIt.xcodeproj` (which no longer exists — only `ProjectDay.xcodeproj` is present). The active workspace is `ios/ProjectDay.xcworkspace/`; `ios/SendIt.xcworkspace/` is an unreferenced leftover.
+
+Input: `grep -r "SendIt" ios/ | grep -v "/Pods/" | grep -v "/build/"`
+Actual: 1 match — `ios/SendIt.xcworkspace/contents.xcworkspacedata` references `SendIt.xcodeproj`
+Expected per spec AC-200 (compliance check): zero `SendIt` matches outside Pods
+
+Route to: Engineer (remove `ios/SendIt.xcworkspace/` directory and re-run `pod install`).
+
+---
+
+#### Check 12 — `ios/ProjectDay/Info.plist` has `RCTNewArchEnabled: true`
+
+PASS — `ios/ProjectDay/Info.plist` line 60: `<key>RCTNewArchEnabled</key>` followed by `<true/>` on line 61.
+
+---
+
+#### Check 13 — `ios/ProjectDay/PrivacyInfo.xcprivacy` exists
+
+PASS — File present at `ios/ProjectDay/PrivacyInfo.xcprivacy`.
+
+---
+
+#### Check 14 — `src/components/ui/Stepper.tsx:38` `ACCESSORY_ID` is `'projectday-stepper-done'`
+
+PASS — Line 38: `const ACCESSORY_ID = 'projectday-stepper-done';`.
+
+---
+
+#### Check 15 — `src/lib/theme.ts` `send-it-design` path token preserved (not renamed)
+
+PASS — `src/lib/theme.ts` line 18 contains the path token `send-it-design/ux-team/design-system/send-it-design-system.md`. The surrounding prose comment on line 2 was correctly renamed to "ProjectDay". The path token itself is correctly preserved per AC-200 exempt (b).
+
+---
+
+#### Check 16 — `.storybook/MIGRATION.md` `send-it-design` path token preserved
+
+PASS — `.storybook/MIGRATION.md` lines 3 and 16 contain `send-it-design` path tokens; no prose "Send It" present. Correctly preserved per AC-200 exempt (b).
+
+---
+
+#### Check 17 — `npx tsc --noEmit` passes
+
+PASS — `npx tsc --noEmit` produces no output (exit 0, 0 errors).
+
+---
+
+#### Check 18 — Jest: `npx jest --testPathPattern="mod-home|Stepper|ListRow|AppText|AppHeader" --watchAll=false` passes
+
+PASS — 5 test suites, 69 tests, 0 failures. No regressions in the AC-200 scope. (Pre-existing `AscentList.test.tsx` intermittent failure confirmed not in this test pattern scope.)
+
+---
+
+#### Native Build Gate
+
+NOTE — `pod install` was NOT run by the Engineer (documented in the Engineering Progress entry for this commit: "pod install NOT run — requires native toolchain. Must be run by Leon before any native build."). A full iOS device build is required before AC-200 can be marked fully verified for MOD-012. The stale `ios/SendIt.xcworkspace/` failure (Check 11) must also be resolved before the native build gate can be attempted.
+
+---
+
+### Summary — QA Run 19
+
+| Check | Result |
+|---|---|
+| 1 — `app.json` name: "ProjectDay" | PASS |
+| 2 — `app.json` slug: "projectday" | PASS |
+| 3 — `app.json` scheme: "projectday" (new key) | PASS |
+| 4 — `app.json` ios.bundleIdentifier: "com.projectday.bouldering" | PASS |
+| 5 — `app.json` extra.eas.projectId: real UUID | PASS |
+| 6 — `app.json` photosPermission says "ProjectDay" | PASS |
+| 7 — `package.json` name: "projectday" | PASS |
+| 8 — `app.plugin.js` strips `aps-environment` | PASS |
+| 9 — `ios/ProjectDay/` directory exists | PASS |
+| 10 — `ios/ProjectDay/ProjectDay.entitlements` empty | PASS |
+| 11 — No `SendIt` in `ios/` outside Pods | FAIL — stale `ios/SendIt.xcworkspace/` not removed |
+| 12 — `ios/ProjectDay/Info.plist` RCTNewArchEnabled: true | PASS |
+| 13 — `ios/ProjectDay/PrivacyInfo.xcprivacy` exists | PASS |
+| 14 — `Stepper.tsx:38` ACCESSORY_ID: 'projectday-stepper-done' | PASS |
+| 15 — `src/lib/theme.ts` send-it-design token preserved | PASS |
+| 16 — `.storybook/MIGRATION.md` send-it-design token preserved | PASS |
+| 17 — `npx tsc --noEmit` passes | PASS |
+| 18 — Jest mod-home/Stepper/ListRow/AppText/AppHeader passes | PASS |
+| Native Build Gate | BLOCKED — pod install not run; stale workspace must be removed first |
+
+**Result: BUGS FOUND — 1 failure (Check 11)**
+
+`ios/SendIt.xcworkspace/` is a stale directory left over from before `expo prebuild --clean`. Its `contents.xcworkspacedata` references `SendIt.xcodeproj` which no longer exists. This violates the AC-200 compliance check requirement of zero `SendIt` matches outside Pods in `ios/`. Route to Engineer: remove `ios/SendIt.xcworkspace/` and re-run `pod install` (or at minimum confirm the stale workspace deletion). Native Build Gate remains blocked pending both the stale workspace fix and `pod install` + device build confirmation.
