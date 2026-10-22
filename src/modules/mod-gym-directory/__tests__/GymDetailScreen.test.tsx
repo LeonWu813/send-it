@@ -74,7 +74,7 @@ const MIXED_GYM: Gym = {
   google_place_id: null,
   official_grading_system: 'V',
   bouldering_only_note:
-    'Only the bouldering area is represented in Send It. Top-rope routes are excluded.',
+    'Only the bouldering area is represented in ProjectDay. Top-rope routes are excluded.',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -115,7 +115,7 @@ describe('GymDetailScreen', () => {
 
     expect(
       screen.getByText(
-        'Only the bouldering area is represented in Send It. Top-rope routes are excluded.',
+        'Only the bouldering area is represented in ProjectDay. Top-rope routes are excluded.',
       ),
     ).toBeTruthy();
   });

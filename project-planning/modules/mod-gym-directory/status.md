@@ -2,6 +2,26 @@
 
 ## Engineering Progress
 
+### Spec-update — 2026-10-21 (AC-200 MOD-002: rename "Send It" → "ProjectDay" in gym notes)
+
+**Files created:**
+- `supabase/migrations/20261021175314_mod_002_rename_projectday_gym_notes.sql` — idempotent UPDATE on `gyms.bouldering_only_note`, replacing "Send It" with "ProjectDay" for any rows that contain the old name.
+
+**Files modified:**
+- `src/modules/mod-gym-directory/__tests__/GymDetailScreen.test.tsx` — updated lines 77 and 118: changed `bouldering_only_note` fixture value and `screen.getByText(...)` assertion from "Send It" to "ProjectDay" so tests match the post-migration live data.
+
+**Column name note:** AC-200 in the spec references the column as `notes`. The actual column in the `gyms` table is `bouldering_only_note` (confirmed in `20260920000002_mod_002_gym_directory.sql` line 33). Using the actual column name so the migration executes without a "column does not exist" error at `supabase db push` time.
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Tests: `npx jest --testPathPattern="mod-gym-directory" --watchAll=false` — 46/46 passed, 4 suites, exit code 0
+- Scope: one new migration file in `supabase/migrations/` (matches `*_mod_002_*`); one test file modified in `src/modules/mod-gym-directory/`; no other files changed
+- No existing migration edited; `20260920000002_mod_002_gym_directory.sql` is untouched
+- Migration is idempotent: `WHERE bouldering_only_note LIKE '%Send It%'` means a second run updates zero rows
+- No new dependencies introduced
+
+---
+
 ### Fix — 2026-10-20 (INT-012 barrel gap — create src/modules/mod-gym-directory/index.ts)
 
 **Files created:**
