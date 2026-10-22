@@ -5,9 +5,9 @@
 agent: tech-lead
 mode: on-demand-review
 module: n/a
-next: Leon — decide V3 (design-team agent prose: coordinator renames it on your instruction, or PM widens exemption (d)) if not yet decided; then claude --agent tech-lead "re-run AC-200(3) check" (V1/V2 cleanup is in 6ff6d70)
-result: setup-changed
-timestamp: 2026-10-21T23:59:30Z
+next: claude --agent qa-mod-home "verify" (AC-200(3) passes at 6cdebe5; only the four exemptions remain)
+result: success
+timestamp: 2026-10-22T12:00:00Z
 
 ## PM Updates
 
@@ -319,6 +319,28 @@ Approved by Leon: "Sure, good catch agents shouldn't check .env directly"
 Changed: the "What Tech Lead will verify at confirmation" list at the end of `project-planning/setup.md`. Two lines asked an agent to check `.env` values directly (non-placeholder check) and to `curl` the live Supabase URL. They now say Tech Lead only checks that `.env` exists and is gitignored. Leon confirms the values are filled in and that the app reaches Supabase.
 
 What Leon must redo: nothing. No step, command, or infrastructure changed, only the wording of the confirmation checklist. Earlier setup confirmations already followed the indirect method.
+
+### Review — 2026-10-22 — on-demand (AC-200(3) re-check after V1–V3)
+
+**AC-200(3) check** — `git grep -n -i -E "send it|send-it|send_it|sendit" -- . ':!project-planning' ':!README.md'` at HEAD `6cdebe5` (working tree also checked; same result: 31 matching lines).
+
+Previous violations:
+- V1 resolved: `PRD_TW_Bouldering_App.md` deleted in `6ff6d70`; `git ls-files` returns nothing.
+- V2 resolved: `scratchpad/` untracked in `6ff6d70`; `git ls-files scratchpad` returns nothing; `.gitignore:45` still ignores it.
+- V3 resolved: commit `6cdebe5` removed the "Send It's design team", "Send It is an iOS-only…" and "send-it repo" prose from the five design-team agent files. The `/Users/fang/...` paths are gone too (0 matches).
+
+All 31 matches fall under the four exemptions:
+- (a) `supabase/migrations/20260920000002_mod_002_gym_directory.sql:246,306` (pre-Rev-47) and the MOD-002 rename migration `20261021175314_mod_002_rename_projectday_gym_notes.sql:1,3,8,9`. The PRD's exemption (a) covers this migration explicitly.
+- (b) `send-it-design` path tokens: `src/lib/theme.ts:18`, `.storybook/MIGRATION.md:3,16`. None remain in the design-team agent files.
+- (c) "send it back" at line 33 of all 12 `qa-mod-*` agent files (analytics, auth-profile, beta-video, gym-directory, home, localization-theme, moderation, notifications, profile-history, route-catalog, send-logging, social-feed).
+- (d) "Send It design team" in `design-lead.md`, `motion-designer.md`, `ui-designer.md`, `ux-designer.md`, `ux-researcher.md`: `description:` line 3 and the h1 at line 14 of each file. Nothing else.
+
+Unexpected hits: none.
+
+Result: AC-200(3) **passes**. QA for MOD-012 (`qa-mod-home`) verifies the AC.
+
+Other observations (advisory, unchanged from 2026-10-21):
+- `ios/ProjectDay.xcodeproj/project.pbxproj` is still modified and uncommitted. It does not affect this check (no matches), but it belongs to `engineer-mod-home` (owner of `ios/`) and will show up in the next Engineer's scope check until the owner commits or discards it.
 
 ### Setup Confirmation — 2026-10-21 (after setup.md 11.8 folder rename) + AC-200(3) compliance check
 
