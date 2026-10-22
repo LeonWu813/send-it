@@ -2,12 +2,13 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: on-demand-review
-module: n/a
+agent: engineer-mod-home
+mode: setup-commit
+module: mod-home
 next: claude --agent qa-mod-home "verify" (AC-200(3) passes at 6cdebe5; only the four exemptions remain)
 result: success
-timestamp: 2026-10-22T12:00:00Z
+timestamp: 2026-10-22T13:00:00Z
+commit: d90a309 — ios/ProjectDay.xcodeproj/project.pbxproj committed after pod install (setup.md step 11.8)
 
 ## PM Updates
 
