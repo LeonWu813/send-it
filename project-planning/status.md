@@ -2,18 +2,17 @@
 
 ## Last Action
 
-agent: qa-mod-home
-mode: verify
-module: mod-home
-result: pass
-timestamp: 2026-10-22T15:00:00Z
-next: Phase 1 checkpoint — run PM with `checkpoint` to record Phase 1 complete and prepare the retrospective / phase 2 plan.
+agent: tech-lead
+mode: integration-review
+module: n/a
+next: Leon answers Q1–Q4 in Tech Lead Reviews (2026-10-22), then claude --agent tech-lead "decisions: INT-029 <decision>; setup.md R1/R2 <yes/no>; INT-021 <verification statement>". After INT-029 is decided (DEFERRED clears the gate) and INT-021 is CONFIRMED CLOSED: claude --agent pm "checkpoint"
+result: issues-found
+timestamp: 2026-10-22T16:00:00Z
 summary: |
-  AC-200 fully verified. All four sub-criteria pass.
-  AC-200(4) Native Build Gate confirmed by Leon: "yes it shows ProjectDay".
-  Static checks (QA Run 21): git grep 31 hits all exempt, app.json/package.json identifiers
-  correct, ios/ structure clean, TypeScript 0 errors, Jest 97/97 (9 suites).
-  MOD-012 (mod-home) QA PASS — all ACs verified. Ready for Phase 1 checkpoint.
+  AC-200 delta thermos reviewed. F-1 -> INT-029 PROPOSED (aps-environment strip in app.plugin.js:37;
+  setup.md 11.5 has no step to remove it). F-2 advisory only (dashboard step; setup.md 11.1 wording stale).
+  F-3..F-5 rejected (benign). setup.md not changed yet; needs Leon's approval. The app.plugin.js
+  TODO belongs to engineer-mod-home, not Tech Lead. Checkpoint blocked by INT-029 (PROPOSED) and INT-021 (QA VERIFIED).
 
 ## PM Updates
 
@@ -317,6 +316,32 @@ summary: |
   - Leon's answers to Tech Lead questions: Q1 "Route Tracker & Beta Sharing"; Q2 "can the id go with com.projectday.bouldering, slug approve"; Q3 "(i)"; Q4 "yes accept"; Q5 "not yet testflight first"; Q6 "change the name then we will deal with the signin bug" (recorded by Tech Lead).
 
 ## Tech Lead Reviews
+
+### Integration Review — 2026-10-22 — Phase 1 AC-200 rename delta (thermos)
+
+pstack input: `project-planning/pstack-findings/2026-10-22-thermos-phase-1-AC200.md`
+- Accepted F-1 as **INT-029** (PROPOSED). Location: `app.plugin.js:37`, with the silent catch at `useSession.ts:96–101`. Failure: after setup.md 11.5, a prebuild that still has this line produces TestFlight/App Store builds with no push, and nothing reports it.
+- Accepted F-2 as an advisory note, not a row. The code is correct; what remains is a dashboard step plus stale setup.md wording.
+- Rejected F-3, F-4, F-5: normal prebuild output and explicit defaults, with no build or runtime effect (reasons are in integration-review.md).
+
+**Concerns** (must address before proceeding):
+- **INT-029 needs Leon's decision before the Phase 1 checkpoint.** A PROPOSED row blocks the checkpoint gate. Recommendation: DEFER the code-comment part until 11.5 is scheduled, so the TODO, the removal of the `aps-environment` line and INT-028 land together in one `engineer-mod-home` / `engineer-mod-auth-profile` pass.
+- **INT-021 is still `QA VERIFIED`.** It is waiting for Leon's own verification statement and also blocks the checkpoint. The previous Last Action pointed to PM `checkpoint` without accounting for this.
+
+**Recommendations** (setup.md changes: Tech Lead owns setup.md, but after `[INIT]` I need Leon's approval in my session, so none of this is applied yet):
+- **R1 (F-1): add step 0 to setup.md 11.5**, before step 1:
+  > 0. **Before any `expo prebuild` after this step:** have `engineer-mod-home` remove `delete c.modResults['aps-environment'];` from `app.plugin.js` (and, once INT-028 is closed, the `com.apple.developer.applesignin` line plus `"usesAppleSignIn": true` in `app.json`; see the restore steps in that file's header). Then run `expo prebuild --clean` and `pod install`. After the next TestFlight build, confirm that a row appears in the device-token table for your account. If none appears, push is not registering, because `useSession` hides the error.
+- **R2 (F-2): reword setup.md 11.1.** Step 2: "`send-it://**` is no longer used by any code (AC-200). You may remove it now; only old Send It installs depend on it (delete those per 11.6)." Step 3 / 11.1b: change to "Confirm `projectday://**` is present (Leon, dashboard)." Change the 11.1b row in the order table to match.
+- The `app.plugin.js:37` TODO marker is code/config and belongs to `engineer-mod-home` (Project files owner). Tech Lead does not apply it.
+
+**Approved**:
+- The AC-200 rename delta adds no CRITICAL or HIGH code bug. The `aps-environment` strip was the correct way to unblock builds before 11.5. The risk is only in when it gets removed.
+
+**Questions for Leon** (needs-human):
+- Q1. INT-029: APPROVED, REJECTED or DEFERRED? (Tech Lead recommends DEFERRED until 11.5 is scheduled.)
+- Q2. May I apply R1 and R2 to setup.md? (yes / no / changes)
+- Q3. Is `projectday://**` in Supabase → Authentication → URL Configuration → Redirect URLs, and has a ProjectDay build completed Google sign-in? (Answer for the record; removing `send-it://**` is your dashboard step whenever you choose.)
+- Q4. INT-021: have you verified it yourself? If so, give your verification statement so I can close it.
 
 ### Setup Changed — 2026-10-21 (setup.md confirmation checklist: no `.env` reads)
 
