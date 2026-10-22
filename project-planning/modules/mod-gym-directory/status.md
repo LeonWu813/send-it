@@ -1557,3 +1557,84 @@ Neither `GymDetailScreen.tsx` nor `GymListScreen.tsx` contains `import { Image }
 | TypeScript compilation clean (exit 0, 0 errors) | PASS |
 | 46/46 automated tests pass, 4 suites | PASS |
 | All previously-passing ACs (AC-004 through AC-198) — no regressions | PASS |
+
+---
+
+## QA Results — Regression (AC-200 MOD-002: rename "Send It" → "ProjectDay" in gym notes)
+
+**Workflow**: regression (spec-update pass)
+**QA Agent**: qa-mod-gym-directory
+**Date**: 2026-10-21
+**Scope**: Commit `222520e` — new migration `20261021175314_mod_002_rename_projectday_gym_notes.sql` and updated `GymDetailScreen.test.tsx` lines 77 and 118.
+
+### Check 1 — Migration file exists and contains the correct statement
+
+File: `supabase/migrations/20261021175314_mod_002_rename_projectday_gym_notes.sql`
+
+Exists: YES.
+
+SQL statement:
+```sql
+UPDATE gyms
+SET bouldering_only_note = replace(bouldering_only_note, 'Send It', 'ProjectDay')
+WHERE bouldering_only_note LIKE '%Send It%';
+```
+
+Column name used: `bouldering_only_note`. Confirmed in `20260920000002_mod_002_gym_directory.sql` line 33: `bouldering_only_note TEXT`. Matches the actual schema column.
+
+**PASS**
+
+### Check 2 — Migration is idempotent
+
+The `WHERE bouldering_only_note LIKE '%Send It%'` clause ensures a second run updates only rows that still contain "Send It". After the first run (which replaces all "Send It" with "ProjectDay"), no rows match the WHERE clause, so a second run updates zero rows.
+
+**PASS**
+
+### Check 3 — Original migration not edited
+
+`supabase/migrations/20260920000002_mod_002_gym_directory.sql` lines 246 and 306 still contain the original seed value `'Only the bouldering area is represented in Send It. Top-rope routes are excluded.'`. The file was not modified.
+
+**PASS**
+
+### Check 4 — Test assertions updated to "ProjectDay"
+
+`src/modules/mod-gym-directory/__tests__/GymDetailScreen.test.tsx`:
+- Line 77: `bouldering_only_note: 'Only the bouldering area is represented in ProjectDay. Top-rope routes are excluded.'` — fixture value updated. **PASS**
+- Line 118: `screen.getByText('Only the bouldering area is represented in ProjectDay. Top-rope routes are excluded.')` — assertion updated. **PASS**
+
+### Check 5 — TypeScript compilation
+
+Command: `npx tsc --noEmit`
+Result: **EXIT 0 — 0 errors**
+
+**PASS**
+
+### Check 6 — Automated test suite
+
+Command: `npx jest --testPathPattern="mod-gym-directory" --watchAll=false`
+Result: **46 passed, 46 total — 4 suites — exit code 0**
+
+**PASS**
+
+### Check 7 — No "Send It" strings remain in MOD-002 source path
+
+`grep -rn "Send It" src/modules/mod-gym-directory/` — no matches (exit code 1).
+
+The new migration file (`supabase/migrations/20261021175314_mod_002_rename_projectday_gym_notes.sql`) contains "Send It" only inside the SQL string literals for the `replace()` function and the `LIKE` clause, and in the comment header. These occurrences are the mechanism of the rename, not a product-facing string. The original migration at lines 246 and 306 still holds the pre-migration seed string (by design — the migration renames live data rows, not the seed file), and that file was not edited by this change.
+
+**PASS**
+
+### Overall Verdict
+
+**QA PASS** — All 7 checks pass for commit `222520e`.
+
+| Check | Result |
+|-------|--------|
+| Migration file exists with correct `bouldering_only_note` UPDATE statement | PASS |
+| Migration is idempotent (second run updates zero rows) | PASS |
+| Original migration `20260920000002` not edited | PASS |
+| `GymDetailScreen.test.tsx:77` fixture updated to "ProjectDay" | PASS |
+| `GymDetailScreen.test.tsx:118` assertion updated to "ProjectDay" | PASS |
+| `npx tsc --noEmit` exit 0, 0 errors | PASS |
+| `npx jest --testPathPattern="mod-gym-directory"` 46/46 passed, 4 suites | PASS |
+| No "Send It" in MOD-002 source path (`src/modules/mod-gym-directory/`) | PASS |

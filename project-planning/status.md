@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-gym-directory
+agent: qa-mod-gym-directory
 mode: spec-update
 module: mod-gym-directory
-result: done
-next: qa-mod-gym-directory "spec-update"
-timestamp: 2026-10-21T17:53:14Z
+result: pass
+next: engineer-mod-home "spec-update" + engineer-mod-auth-profile "spec-update" (atomic scheme-change batch — pending Expo project UUID from Leon)
+timestamp: 2026-10-21T18:00:00Z
 
 ## PM Updates
 
