@@ -139,7 +139,7 @@ export async function signInWithGoogle(): Promise<void> {
     rawNonce,
   );
 
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'send-it' });
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: 'projectday' });
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'google',

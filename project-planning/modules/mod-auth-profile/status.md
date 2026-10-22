@@ -2493,3 +2493,25 @@ No new regressions found.
 
 **INT-021 fix verified. No new regressions introduced.**
 
+---
+
+## Engineering Progress — spec-update — 2026-10-21 (AC-200 scheme rename)
+
+### Changes Implemented
+
+**AC-200: Rename scheme literal `send-it` → `projectday` in MOD-001**
+
+- `src/modules/mod-auth-profile/auth-service.ts` line 142 — `makeRedirectUri({ scheme: 'send-it' })` → `makeRedirectUri({ scheme: 'projectday' })`. Matches the `"scheme": "projectday"` now in `app.json` (set by MOD-012 commit `401f3b0`). Without this change, `makeRedirectUri` produces `send-it://auth`, which Supabase's OAuth allow-list does not recognise, and Google sign-in silently fails.
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` line 46 — `makeRedirectUri` mock return value `'send-it://auth'` → `'projectday://auth'`. Keeps the test mock in sync with the production value so the `signInWithGoogle` redirect-URI assertion remains accurate.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npx jest auth-service.test.ts` | PASS — 13 tests, 1 suite, all pass |
+| Git scope — only two files changed, both within `src/modules/mod-auth-profile/` | PASS |
+| No other files touched | PASS |
+
+**Result: READY FOR QA**
+

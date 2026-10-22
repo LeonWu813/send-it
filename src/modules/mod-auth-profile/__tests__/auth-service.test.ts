@@ -43,7 +43,7 @@ jest.mock('expo-web-browser', () => ({
 }));
 
 jest.mock('expo-auth-session', () => ({
-  makeRedirectUri: jest.fn(() => 'send-it://auth'),
+  makeRedirectUri: jest.fn(() => 'projectday://auth'),
 }));
 
 jest.mock('expo-crypto', () => ({

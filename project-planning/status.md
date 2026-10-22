@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-home
+agent: engineer-mod-auth-profile
 mode: spec-update
-module: mod-home
+module: mod-auth-profile
 result: pass
-next: engineer-mod-auth-profile "spec-update" (same atomic scheme-change batch — MOD-001 must rename auth-service.ts:142 scheme 'send-it' → 'projectday' before any native build is tested)
-timestamp: 2026-10-21T21:30:00Z
+next: qa-mod-home "spec-update" and qa-mod-auth-profile "spec-update" — coordinator runs both after this commit
+timestamp: 2026-10-21T22:00:00Z
 
 ## PM Updates
 
