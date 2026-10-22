@@ -1164,3 +1164,128 @@ Both lines now correctly document the per-user scoped key format established by 
 **Overall verdict: QA PASS**
 
 JSDoc-only change (Rev 43) introduces no regression. The per-user AsyncStorage key format (`app_language_<userId>`, `app_theme_override_<userId>`) is correctly documented and matches the implementation. The Privacy section contains exactly one user-facing privacy control (the `beta_video_privacy` toggle) with no `privacy_setting` reference, fully satisfying AC-157's "only user-facing privacy control" requirement. All ACs (AC-090, AC-091, AC-092, AC-155, AC-157, AC-168, REQ-CI) continue to pass. No regressions introduced.
+
+---
+
+### QA Run 5 — Spec-Update Regression — 2026-10-21
+
+**Workflow**: regression-test (re-verification after engineer spec-update — commit 3472786 — AC-199 + AC-200 MOD-010 ownership row: app name rename "Send It" → "ProjectDay")
+
+**Changes being re-verified**:
+1. `locales/en/common.json` line 3: `app.name` → `"ProjectDay"`
+2. `locales/zh-TW/common.json` line 3: `app.name` → `"ProjectDay"`
+3. `src/modules/mod-localization-theme/stories/Tokens.stories.tsx` line 87: sample text → `"ProjectDay 攀岩紀錄 V4 Quick fox"`
+
+**Automated test run**
+- `npm run check:i18n` — "i18n completeness OK". Exit 0. EN and zh-TW catalogs remain symmetric; no keys added or removed by this change.
+- `npx tsc --noEmit` — exit 0. 0 TypeScript errors. (No TypeScript changes in this commit.)
+
+---
+
+**AC-199 / AC-200 MOD-010 row: Check 1 — `locales/en/common.json:3` app.name**
+
+PASS
+
+Input=read `locales/en/common.json` lines 1–4; Expected per spec (AC-200)=`"app.name": "ProjectDay"`; Actual=`"name": "ProjectDay"` inside `"app": { ... }` at line 3. Value is "ProjectDay", not "Send It". PASS.
+
+---
+
+**AC-199 / AC-200 MOD-010 row: Check 2 — `locales/zh-TW/common.json:3` app.name**
+
+PASS
+
+Input=read `locales/zh-TW/common.json` lines 1–4; Expected per spec (AC-200)=`"app.name": "ProjectDay"`; Actual=`"name": "ProjectDay"` inside `"app": { ... }` at line 3. Value is "ProjectDay", not "Send It". PASS.
+
+---
+
+**AC-199 / AC-200 MOD-010 row: Check 3 — `Tokens.stories.tsx:87` sample text**
+
+PASS
+
+Input=read `src/modules/mod-localization-theme/stories/Tokens.stories.tsx` line 87; Expected per spec (AC-200)=sample text contains "ProjectDay"; Actual=`<AppText variant={name as keyof typeof TYPE_SCALE}>ProjectDay 攀岩紀錄 V4 Quick fox</AppText>`. "ProjectDay" present; "Send It" absent. PASS.
+
+---
+
+**AC-199: No remaining "Send It" strings in locale files or MOD-010 source path**
+
+PASS
+
+`grep -rn '"Send It"' locales/` — exit 1, zero matches. No remaining "Send It" string values in either `locales/en/common.json` or `locales/zh-TW/common.json`.
+
+`grep -rn '"Send It"' src/modules/mod-localization-theme/stories/` — exit 1, zero matches. No remaining "Send It" strings in the MOD-010 stories directory.
+
+PASS.
+
+---
+
+**Catalog symmetry — EN and zh-TW remain symmetric**
+
+PASS
+
+`npm run check:i18n` exits 0 — "i18n completeness OK". Both catalogs have identical key sets. The spec-update changed only a value (`app.name`), not any key — symmetry is preserved. PASS.
+
+---
+
+**Climbing-verb identifiers unchanged**
+
+PASS
+
+`ls src/modules/` confirms `mod-send-logging` still exists as a module directory. Grep for `mod-send-logging` and `send-service` in `src/modules/mod-localization-theme/` returns no matches (identifier references are not in MOD-010's own source path — correct; the identifiers live in their owning modules and were not touched). Commit message for 3472786 explicitly states "The climbing verb 'send' and identifiers (mod-send-logging, send-service.ts) are unchanged." Git show --name-only confirms only the three expected files were changed by the commit. PASS.
+
+---
+
+**Scope check — commit touches only 3 files, all within scope**
+
+PASS
+
+`git show --name-only 3472786` lists:
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+- `src/modules/mod-localization-theme/stories/Tokens.stories.tsx`
+
+All three files are explicitly named in AC-200 MOD-010 ownership row. No files outside this scope were modified. PASS.
+
+---
+
+**Regression — all previously passing ACs**
+
+All ACs verified in QA Run 4 (2026-10-18) are unaffected by this change. The spec-update modifies only locale values and a Storybook sample text string — no runtime logic, no UI behavior, no AsyncStorage keys, no theme code, no import paths changed. All regressions carry forward as PASS:
+
+- AC-090: PASS (i18n.ts unchanged)
+- AC-091: PASS (SettingsScreen language toggle unchanged)
+- AC-092: PASS (ThemeProvider and SettingsScreen appearance override unchanged)
+- AC-155: PASS (BlockedAccountsScreen unchanged)
+- AC-157: PASS (beta_video_privacy toggle unchanged)
+- AC-168: PASS (Logout button unchanged)
+- REQ-CI: PASS (.github/workflows/i18n-check.yml unchanged; catalog still symmetric, check exits 0)
+- All strings via i18n hook: PASS (no new inline literals)
+- No hardcoded hex colors: PASS
+- Safe area insets: PASS
+- TypeScript: PASS (exit 0)
+
+---
+
+**Summary**
+
+| AC / Requirement | Result | Notes |
+|---|---|---|
+| AC-199 / AC-200 MOD-010: `locales/en/common.json:3` app.name = "ProjectDay" | PASS | Confirmed "ProjectDay" at line 3 |
+| AC-199 / AC-200 MOD-010: `locales/zh-TW/common.json:3` app.name = "ProjectDay" | PASS | Confirmed "ProjectDay" at line 3 |
+| AC-200 MOD-010: `Tokens.stories.tsx:87` sample text contains "ProjectDay" | PASS | "ProjectDay 攀岩紀錄 V4 Quick fox" at line 87 |
+| AC-199: No "Send It" strings in locale files | PASS | grep exits 1; zero matches |
+| AC-199: No "Send It" strings in MOD-010 stories | PASS | grep exits 1; zero matches |
+| Catalog symmetry (EN / zh-TW) | PASS | npm run check:i18n exits 0 |
+| Climbing-verb identifiers unchanged | PASS | mod-send-logging exists; commit scope confirmed |
+| npm run check:i18n | PASS | Exit 0; "i18n completeness OK" |
+| npx tsc --noEmit | PASS | Exit 0; 0 TypeScript errors |
+| AC-090 regression | PASS | No regression |
+| AC-091 regression | PASS | No regression |
+| AC-092 regression | PASS | No regression |
+| AC-155 regression | PASS | No regression |
+| AC-157 regression | PASS | No regression |
+| AC-168 regression | PASS | No regression |
+| REQ-CI regression | PASS | No regression |
+
+**Overall verdict: QA PASS**
+
+All six specific items assigned for verification pass. Commit 3472786 correctly renames "Send It" to "ProjectDay" in exactly the three MOD-010-owned files specified by AC-200. No climbing-verb identifiers were changed. Catalogs remain symmetric. No regressions introduced. Module is ready for handoff.
