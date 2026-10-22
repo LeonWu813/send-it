@@ -4563,3 +4563,48 @@ The previous failed build attempt ran from `ios/` instead of the project root (C
 **Result: STATIC CHECKS PASS — Native Build Gate PENDING HUMAN VERIFICATION**
 
 All static AC-200 checks pass at commit `d90a309`. The only remaining open item is the Native Build Gate: Leon must successfully build and launch from the project root (`npx expo run:ios`, not from `ios/`). AC-200 cannot be marked fully verified until Leon confirms the build and first launch succeed.
+
+---
+
+### QA Run 22 — AC-200 Native Build Gate Confirmed — 2026-10-22
+
+**Workflow**: device-verification close-out
+
+**Scope**: Record Leon's human confirmation of the Native Build Gate (AC-200(4)) and mark AC-200 fully verified.
+
+---
+
+#### Native Build Gate — AC-200(4) — CONFIRMED
+
+Leon confirmed via ui-results: "yes it shows ProjectDay".
+
+The app compiled successfully and launched on device (or simulator) displaying the name "ProjectDay". The Native Build Gate is satisfied.
+
+All prior static checks (QA Run 21) also passed:
+
+- A — AC-200(3) git grep: 31 hits, all exempt — PASS
+- B — app.json identifiers (name/slug/scheme/bundle/uuid/permission) — PASS
+- C — package.json name: "projectday" — PASS
+- D — ios/ structure: ProjectDay.* only, no tracked SendIt.* — PASS
+- E — ProjectDay.entitlements: empty `<dict/>` — PASS
+- F — `npx tsc --noEmit`: 0 errors — PASS
+- G — Jest mod-home + src/lib: 97/97, 9 suites — PASS
+- Native Build Gate — AC-200(4) — **PASS** (Leon: "yes it shows ProjectDay")
+
+---
+
+### Summary — QA Run 22
+
+| Check | Result |
+|---|---|
+| All QA Run 21 static checks (A–G) | PASS (carried forward) |
+| Native Build Gate — AC-200(4) — device launch shows "ProjectDay" | **PASS — CONFIRMED by Leon 2026-10-22** |
+
+**Result: AC-200 FULLY VERIFIED — all four sub-criteria pass.**
+
+AC-200(1) — app.json/package.json identifiers correct: PASS
+AC-200(2) — ios/ native project renamed to ProjectDay: PASS
+AC-200(3) — no "Send It" brand strings in source: PASS
+AC-200(4) — native build compiles and launches as "ProjectDay": PASS
+
+**MOD-012 (mod-home) QA: PASS — all ACs verified. Ready for Phase 1 checkpoint (PM).**

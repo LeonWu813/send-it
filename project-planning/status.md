@@ -5,19 +5,15 @@
 agent: qa-mod-home
 mode: verify
 module: mod-home
-result: needs-human
-timestamp: 2026-10-22T14:00:00Z
-next: Device verification — Leon must run `npx expo run:ios` from project root (/Users/tsan/Desktop/MacBookPro/projectday) and confirm successful compile + first launch. AC-200(4) Native Build Gate is the only remaining open item for AC-200.
-question: |
-  QA Run 21 static checks all pass (AC-200(3) git grep clean at 31 hits all exempt,
-  app.json/package.json identifiers correct, ios/ structure correct, TypeScript 0 errors,
-  Jest 97/97). The Native Build Gate (AC-200(4)) requires a device build and first launch.
-
-  Please run from the project root (not from ios/):
-    npx expo run:ios
-
-  Confirm: did the build compile and the app launch showing the name "ProjectDay"?
-  Reply with what happened (success/failure and any error output).
+result: pass
+timestamp: 2026-10-22T15:00:00Z
+next: Phase 1 checkpoint — run PM with `checkpoint` to record Phase 1 complete and prepare the retrospective / phase 2 plan.
+summary: |
+  AC-200 fully verified. All four sub-criteria pass.
+  AC-200(4) Native Build Gate confirmed by Leon: "yes it shows ProjectDay".
+  Static checks (QA Run 21): git grep 31 hits all exempt, app.json/package.json identifiers
+  correct, ios/ structure clean, TypeScript 0 errors, Jest 97/97 (9 suites).
+  MOD-012 (mod-home) QA PASS — all ACs verified. Ready for Phase 1 checkpoint.
 
 ## PM Updates
 
