@@ -2,13 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-auth-profile
-mode: regression
-module: mod-auth-profile
-result: pass
-ac: AC-200
+agent: doc-sync
+mode: template-refresh
+module: n/a
+result: success
 next: coordinator — AC-200 spec-update QA complete for MOD-001; check integration-review.md for any remaining AC-200 rows; then proceed per flow
-timestamp: 2026-10-21T23:30:00Z
+timestamp: 2026-10-21T23:45:00Z
 
 ## PM Updates
 
@@ -4760,6 +4759,45 @@ The seeder is idempotent by AC-195 spec (skips gyms that already have a `google_
 - All 12 engineer wrappers: added `Skill` to `tools` frontmatter; added `<run_modes>` section (one-conversation mode support) after `<role>`.
 - All 12 QA wrappers: added `<run_modes>` section (one-conversation mode support) after `<role>`; updated `<write_scope>` to include the new narrow permission for flipping `ESCALATED TO TECH LEAD` markers.
 - All module-specific values preserved: spec paths, Source Paths, project files (mod-home), dependency status.md read paths.
+
+**No spec, production.md, or prd.md changes.** No requirement change.
+
+**verify-sync.sh**: Not run — template refresh per SKILL.md routing rules.
+
+### Sync Report — Template refresh — 2026-10-21 (path update)
+
+**Mode**: template-refresh
+**Trigger**: Human request — repository folder renamed from `send-it` to `projectday`; all 24 per-module agent wrappers embedded the old absolute path.
+
+**Files regenerated** (24 total):
+- `.claude/agents/engineer-mod-auth-profile.md`
+- `.claude/agents/engineer-mod-gym-directory.md`
+- `.claude/agents/engineer-mod-route-catalog.md`
+- `.claude/agents/engineer-mod-send-logging.md`
+- `.claude/agents/engineer-mod-beta-video.md`
+- `.claude/agents/engineer-mod-social-feed.md`
+- `.claude/agents/engineer-mod-notifications.md`
+- `.claude/agents/engineer-mod-profile-history.md`
+- `.claude/agents/engineer-mod-moderation.md`
+- `.claude/agents/engineer-mod-localization-theme.md`
+- `.claude/agents/engineer-mod-analytics.md`
+- `.claude/agents/engineer-mod-home.md`
+- `.claude/agents/qa-mod-auth-profile.md`
+- `.claude/agents/qa-mod-gym-directory.md`
+- `.claude/agents/qa-mod-route-catalog.md`
+- `.claude/agents/qa-mod-send-logging.md`
+- `.claude/agents/qa-mod-beta-video.md`
+- `.claude/agents/qa-mod-social-feed.md`
+- `.claude/agents/qa-mod-notifications.md`
+- `.claude/agents/qa-mod-profile-history.md`
+- `.claude/agents/qa-mod-moderation.md`
+- `.claude/agents/qa-mod-localization-theme.md`
+- `.claude/agents/qa-mod-analytics.md`
+- `.claude/agents/qa-mod-home.md`
+
+**Change applied to each wrapper:** `Project root:` updated from `/Users/tsan/Desktop/MacBookPro/send-it` to `/Users/tsan/Desktop/MacBookPro/projectday`. All other content unchanged — spec paths, source paths, dependency status files, template body, frontmatter.
+
+**Exempt files:** The five design-team agent files (`design-lead.md`, `ui-designer.md`, `ux-designer.md`, `ux-researcher.md`, `motion-designer.md`) were not touched per AC-200 exemption (d).
 
 **No spec, production.md, or prd.md changes.** No requirement change.
 

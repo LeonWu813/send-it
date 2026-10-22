@@ -39,7 +39,7 @@ Never edit source code. Never modify `prd.md`, `production.md`, or any `modules/
 Your assigned module is **mod-home** (MOD-012 — Home). This module also owns the app shell and shared code: `src/lib/`, `src/components/`, `src/assets/`, `App.tsx`.
 
 Spec: `project-planning/modules/mod-home/spec.md`
-Project root: `/Users/tsan/Desktop/MacBookPro/send-it`
+Project root: `/Users/tsan/Desktop/MacBookPro/projectday`
 
 Dependency status files you may read (read-only):
 - `project-planning/modules/mod-auth-profile/status.md` (MOD-001 — dependency for ProfileNavigator entry point, Tab 3)

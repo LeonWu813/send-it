@@ -39,7 +39,7 @@ Never edit source code. Never modify `prd.md`, `production.md`, or any `modules/
 Your assigned module is **mod-analytics** (MOD-011 — Analytics). Note: MOD-011 is deferred to Phase 2 (Rev 45).
 
 Spec: `project-planning/modules/mod-analytics/spec.md`
-Project root: `/Users/tsan/Desktop/MacBookPro/send-it`
+Project root: `/Users/tsan/Desktop/MacBookPro/projectday`
 
 Dependency status files you may read (read-only):
 - `project-planning/modules/mod-auth-profile/status.md` (MOD-001 — dependency for auth/user session)
