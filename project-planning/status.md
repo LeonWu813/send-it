@@ -5,9 +5,9 @@
 agent: pm
 mode: change
 module: n/a
-result: needs-human
-next: show project-planning/pm-proposals/2026-10-21-ac-200-revision.md to Leon (proposed AC-200 Rev 48 text and Questions 1-7); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-21-ac-200-revision.md" with Leon's exact words quoted. INT-028 stays DEFERRED (Leon, 2026-10-21): re-decide it via claude --agent tech-lead "decisions: INT-028 ..." after the rename ships, before Apple Sign-In is re-enabled or the app is submitted.
-timestamp: 2026-10-21T23:30:00Z
+result: success
+next: claude --agent doc-sync (Rev 48, AC-200 [SUBSTANTIVE], not architectural: no /pstack:how, no second Tech Lead review). INT-028 stays DEFERRED (Leon, 2026-10-21): re-decide it via claude --agent tech-lead "decisions: INT-028 ..." after the rename ships, before Apple Sign-In is re-enabled or the app is submitted.
+timestamp: 2026-10-21T23:55:00Z
 
 ## PM Updates
 
@@ -296,6 +296,19 @@ timestamp: 2026-10-21T23:30:00Z
   - For Tech Lead: the App Store subtitle limit is 30 characters; the approved subtitle is 46. Also review the bundle-ID change (new App Store Connect record, TestFlight, push/APNs and Supabase auth redirect config) and the ownership split for AC-200.
   - For Doc-Sync: add AC-199 to the MOD-010 spec and AC-200 to the MOD-012 spec (and to any other module the Tech Lead assigns); update the app name in production.md.
   - Approved by Leon in the coordinator session: "change all the internal id, comments, documents etc. to ProjectDay include this folder name, and for things that doesn't allowed capitalize use projectday. Q5 Taiwan Climbing Route Tracker and Beta Sharing. Q6 rename to ProjectDay. Substantive / Architectural. Change it right now. ProjectDay is available."
+- 2026-10-21 [SUBSTANTIVE] AC-200 revised with Leon's answers to Tech Lead Q1–Q5 and PM P1–P7: subtitle, identifiers, exact compliance check, ownership table (Rev 48)
+  - Answers Tech Lead Reviews "Review — 2026-10-21 — change (Rev 47: rename to ProjectDay — AC-199, AC-200)", Concerns C1, C3, C4, C5, C6, C7 and Q1–Q5. Q6 (INT-028) was recorded separately by Tech Lead and is not part of this change.
+  - prd.md AC-200(1): App Store Connect subtitle "Taiwan Climbing Route Tracker and Beta Sharing" (46 characters, over the 30 limit) replaced by "Route Tracker & Beta Sharing" (28). Name "ProjectDay" unchanged. Name and subtitle stated once, in (1) only (P1). Leon checks (1) in App Store Connect; QA does not test it.
+  - prd.md AC-200(2): exact values added: Expo name ProjectDay, slug projectday, scheme projectday (P2), ios.bundleIdentifier com.projectday.bouldering (Leon's choice, not com.projectday.twbouldering), package name projectday, extra.eas.projectId the real EAS UUID from setup.md 11.4.
+  - prd.md AC-200(3): the search is now the exact git grep command, with four exemptions: (a) pre-Rev-47 migrations and the MOD-002 rename migration, (b) the send-it-design path token, (c) "send it back" in the 12 qa-mod-* agents, (d) the phrase "Send It design team" in the five design-team agent files (design-lead.md, ui-designer.md, ux-designer.md, ux-researcher.md, motion-designer.md) (P5). Runs only after the folder rename (setup.md 11.8) and Doc-Sync's template refresh.
+  - prd.md AC-200: "Ownership (pending Tech Lead review)" replaced by the Tech Lead's ownership table, without the Coordinator row: the five design-team agent files are not renamed; exemption (d) covers them (P5). Tech Lead row cites commit 9c2da95 for the .gitignore header rename (P3). MOD-012 app.plugin.js must strip aps-environment (Apple Developer account not active; P6 leaves this text unchanged).
+  - prd.md: AC-199 unchanged. Revision 47 → 48, Status "[SUBSTANTIVE] — Revision 48".
+  - status.md: the stale second Last Action block at the bottom (agent: qa-mod-route-catalog … next: claude --agent tech-lead "confirm-fix INT-015") deleted (P4).
+  - Not architectural, per Leon (P7): no /pstack:how run and no second Tech Lead review; Doc-Sync runs next.
+  - For Doc-Sync: copy AC-200 into the MOD-012 spec, and copy each module's ownership row into that module's spec: MOD-001, MOD-002, MOD-007, MOD-009, MOD-010 (MOD-010 also carries AC-199; MOD-002, MOD-007 and MOD-009 rows are part of AC-199). A module whose spec lacks its row cannot build or test its part. Update the app name in production.md.
+  - For Tech Lead: add scratchpad/ to .gitignore (Q3).
+  - Approved by Leon in the coordinator session: P1 "Accept"; P2 no answer (kept as proposed, not objected to); P3 "yes"; P4 "yes"; P5 "add the exception on the fice design-agent 'Send it design team'"; P6 "Yes"; P7 "[SUBSTANTIVE]".
+  - Leon's answers to Tech Lead questions: Q1 "Route Tracker & Beta Sharing"; Q2 "can the id go with com.projectday.bouldering, slug approve"; Q3 "(i)"; Q4 "yes accept"; Q5 "not yet testflight first"; Q6 "change the name then we will deal with the signin bug" (recorded by Tech Lead).
 
 ## Tech Lead Reviews
 
@@ -3454,6 +3467,11 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 - 2026-10-21: Internal identifiers renamed to ProjectDay / projectday (AC-200); a new App Store Connect record is accepted. Leon renames the repo folder send-it/ himself. The Supabase and PostHog project names live in Leon's accounts, outside the repository, so no AC covers them.
 - 2026-10-21: README.md keeps the old name until the final checkpoint, per Leon.
 - 2026-10-21: The rename ships in Phase 1, before the Phase 1 checkpoint, per Leon.
+- 2026-10-21: Bundle ID is com.projectday.bouldering and the Expo slug is projectday, per Leon ("can the id go with com.projectday.bouldering, slug approve"). The bundle ID is permanent once the App Store Connect record exists.
+- 2026-10-21: Leon deletes PRD_TW_Bouldering_App.md and scratchpad/ himself in a human: commit; Tech Lead adds scratchpad/ to .gitignore (Q3, Leon: "(i)").
+- 2026-10-21: Apple Developer account not active yet; TestFlight comes first (Leon: "not yet testflight first"). MOD-012 strips aps-environment through app.plugin.js; setup.md 11.5 waits.
+- 2026-10-21: Leon will activate the Apple Developer Program for TestFlight before the App Store submission (P6, Leon: "Yes").
+- 2026-10-21: The five design-team agent files keep the phrase "Send It design team"; AC-200(3) exempts it and the coordinator does not rename them (P5, Leon: "add the exception on the fice design-agent 'Send it design team'").
 
 ## Checkpoint History
 
@@ -4727,11 +4745,3 @@ Agent: tech-lead
 Pattern: A unit test passed on a `fetchBetaVideosByUser` whose PostgREST `.select()` embed string (a nested FK-hinted embed, `routes!..fk(name, gyms(name))` inside a `users!..fk(...)` embed) was rejected by PostgREST at runtime on device. The mocked Supabase client returned canned data without ever parsing the embed string — the untyped query DSL was validated by neither TypeScript nor the test.
 Why: PostgREST embed strings are a recurring un-typed, un-mockable failure surface in this codebase (same class as the device-only mock gap above, but for data access rather than native APIs). A skill codifying "any new/modified `.select()` embed must be exercised against a real/local PostgREST before the AC is marked done; prefer a single embed level or server-side RPC composition over nested FK-hinted embeds; log the raw Supabase error before throwing a user-facing string so the diagnostic survives to Metro" would close the gap structurally. Complements the existing "User-Owned Tables … Reference public.users" and "tests must not mock away a production incompatibility" conventions.
 Agent: tech-lead
-
-## Last Action
-
-agent: qa-mod-route-catalog
-action: integration-fix-verify INT-015
-result: pass
-date: 2026-10-21
-next: claude --agent tech-lead "confirm-fix INT-015"
