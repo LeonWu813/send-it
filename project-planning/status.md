@@ -2,11 +2,11 @@
 
 ## Last Action
 
-agent: qa-mod-notifications
+agent: engineer-mod-moderation
 mode: spec-update
-module: mod-notifications
-result: pass
-next: engineer-mod-moderation "spec-update"
+module: mod-moderation
+result: done
+next: qa-mod-moderation "spec-update"
 timestamp: 2026-10-21T00:00:00Z
 
 ## PM Updates
