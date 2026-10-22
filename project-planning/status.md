@@ -2,17 +2,16 @@
 
 ## Last Action
 
-agent: pm
-mode: change
+agent: tech-lead
+mode: record-decisions
 module: n/a
-result: needs-human
-next: show project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md to Leon (questions Q1-Q9); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md" with Leon's exact words quoted. Still open from Tech Lead (2026-10-22 integration review): Leon's answers on INT-029, setup.md R1/R2 and INT-021 go to claude --agent tech-lead "decisions: ..."; the Phase 1 checkpoint also waits for AC-201/AC-202/AC-203 once applied.
-timestamp: 2026-10-22T17:00:00Z
+next: PM proposal for Rev 49 is pending Leon's answers to PM Q1–Q9 — show project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md to Leon. Once answered, run claude --agent pm "apply project-planning/pm-proposals/2026-10-22-google-profile-and-signed-out-defaults.md" with Leon's exact words quoted, then claude --agent doc-sync, then the affected engineers (engineer-mod-<name> per the synced specs). The Phase 1 integration-review gate is now clear; PM checkpoint still waits for AC-201/AC-202/AC-203 once applied.
+result: setup-changed
+timestamp: 2026-10-22T18:00:00Z
 summary: |
-  Proposal pass only. Proposes AC-201 (MOD-001 Google name/photo prefill, fill-empty-only),
-  AC-090 revised + AC-202/AC-203 (MOD-010 signed-out language and theme defaults), Phase 1, Rev 49.
-  Flags: AC-090 currently falls back to zh-TW, opposite of Leon's rule; table is users, not profiles;
-  i18n.ts sits in MOD-012's Source Path. prd.md not changed.
+  Recorded Leon's decisions from the 2026-10-22 AC-200 thermos review. INT-029 DEFERRED (with INT-028) until
+  TestFlight setup begins. setup.md R1 (11.5 step 0) and R2 (11.1 / 11.1b reworded) applied. INT-021 HUMAN
+  VERIFIED -> CONFIRMED CLOSED. No Phase 1 integration-review row is open any more.
 
 ## PM Updates
 
@@ -316,6 +315,22 @@ summary: |
   - Leon's answers to Tech Lead questions: Q1 "Route Tracker & Beta Sharing"; Q2 "can the id go with com.projectday.bouldering, slug approve"; Q3 "(i)"; Q4 "yes accept"; Q5 "not yet testflight first"; Q6 "change the name then we will deal with the signin bug" (recorded by Tech Lead).
 
 ## Tech Lead Reviews
+
+### Setup Changed — 2026-10-22 (setup.md 11.5 step 0 and 11.1 rewording; R1 / R2)
+
+Approved by Leon (Q2, R1 and R2): "Yes"
+
+Changed in `project-planning/setup.md`:
+- **R1 — 11.5 step 0 (new checklist item):** before any `expo prebuild --clean` after 11.5, have `engineer-mod-home` remove the `aps-environment` delete line at `app.plugin.js:37` (INT-029), and with INT-028 closed, the `com.apple.developer.applesignin` strip plus re-adding `"usesAppleSignIn": true`; then prebuild, `pod install`, and confirm a device-token row after the next TestFlight build.
+- **R2 — 11.1 step 2 / 11.1b and the order table:** removed the stale note that debug builds still redirect to `send-it://`. Verified at `auth-service.ts:142` (`makeRedirectUri({ scheme: 'projectday' })`) and `app.json` `"scheme": "projectday"`; no code builds `send-it://`. `send-it://**` may now be removed from Supabase at any time. 11.1b marked done: Leon's INT-021 statement ("Google sign-in worked, deep link returned to the app correctly") shows `projectday://**` is in the allow-list (answers Q3).
+
+What Leon must redo: nothing now. Optional dashboard step: remove `send-it://**` from Supabase Redirect URLs. 11.5 step 0 applies only when TestFlight setup begins.
+
+### Record-decisions — 2026-10-22 (INT-029, INT-021)
+
+- **INT-029 → DEFERRED.** Leon: "DEFERRED when we start the testflight after Apple developer account resolved". Deferred until TestFlight setup begins (after the Apple Developer account activates). INT-028 (Apple nonce) is DEFERRED under the same condition; address both together then.
+- **INT-021 → HUMAN VERIFIED → CONFIRMED CLOSED.** Leon: "Google sign-in worked, deep link returned to the app correctly". Residual advisory (not reopened): `auth-service.ts:194` still passes `refresh_token: refreshToken ?? ''` if Supabase ever omits the refresh token.
+- Phase 1 integration-review gate: clear (no PROPOSED / APPROVED / in-flight rows).
 
 ### Integration Review — 2026-10-22 — Phase 1 AC-200 rename delta (thermos)
 

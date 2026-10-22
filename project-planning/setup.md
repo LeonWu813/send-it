@@ -204,7 +204,7 @@ Added 2026-10-21 by Tech Lead (change review). These steps happen in your own ac
 | 11.5 Apple Developer + App Store Connect | When the Apple Developer account is active (step 4) |
 | 11.6 Devices | After the first ProjectDay build installs |
 | 11.7 Deploy migration + Edge Functions | After the MOD-002 / MOD-007 / MOD-009 Engineers finish |
-| 11.1b Supabase redirect URL: remove old | After a ProjectDay build signs in with Google |
+| 11.1b Supabase redirect URL: confirm `projectday://**` (removing `send-it://**` is optional, any time) | Done 2026-10-22 (ProjectDay build signed in with Google) |
 | 11.8 Rename the repo folder | **Last**, after every Engineer change for AC-200 is committed and no agent is running |
 
 ### 11.1 Supabase Auth: redirect URL allow-list
@@ -212,8 +212,8 @@ Added 2026-10-21 by Tech Lead (change review). These steps happen in your own ac
 Supabase dashboard → **Authentication → URL Configuration → Redirect URLs**:
 
 1. **Add** `projectday://**`.
-2. **Keep** `send-it://**` for now. Debug builds of the current code still redirect to `send-it://`, so removing it first breaks Google sign-in in development before the code change lands.
-3. **11.1b (later):** once a ProjectDay build completes Google sign-in, **remove** `send-it://**`.
+2. `send-it://**` is no longer used by any code (AC-200: the app now generates only `projectday://` redirects). You may remove it now; only old Send It installs depend on it (delete those per 11.6).
+3. **11.1b:** confirm `projectday://**` is present (Leon, dashboard). ✅ Leon confirmed 2026-10-22 that Google sign-in on a ProjectDay build returned to the app correctly, so `projectday://**` is in place.
 
 If `projectday://**` is missing, Supabase silently redirects to the Site URL instead and Google sign-in never returns to the app.
 
@@ -235,6 +235,7 @@ Google Cloud Console → **APIs & Services → OAuth consent screen** (Branding)
 
 ### 11.5 Apple Developer + App Store Connect (when the account is active)
 
+0. - [ ] **Before any `expo prebuild --clean` after this step:** have `engineer-mod-home` remove the `aps-environment` delete line (`delete c.modResults['aps-environment'];`) from `app.plugin.js:37` (INT-029). Once INT-028 (Apple nonce) is closed, also have it remove the `com.apple.developer.applesignin` line and restore `"usesAppleSignIn": true` in `app.json` (see the restore steps in that file's header). INT-028 and INT-029 are both DEFERRED to this point and should be done together. Only then run `expo prebuild --clean` and `pod install`. After the next TestFlight build, confirm a row appears in the device-token table for your account. If none appears, push is not registering, because `useSession` hides the error.
 1. developer.apple.com → **Identifiers → +** → App ID with bundle ID `<BUNDLE_ID>`. Enable the **Sign in with Apple** and **Push Notifications** capabilities.
 2. The APNs `.p8` key (step 4) works for every app in your team. Run `eas credentials` (iOS → production → Push Notifications) for `<BUNDLE_ID>`.
 3. App Store Connect → **Apps → + → New App**: platform iOS, name **ProjectDay**, bundle ID `<BUNDLE_ID>`, SKU of your choice. Set the **subtitle** to the 30-character-or-shorter text you choose in the Tech Lead's question Q1. The 46-character "Taiwan Climbing Route Tracker and Beta Sharing" will be rejected by App Store Connect.
