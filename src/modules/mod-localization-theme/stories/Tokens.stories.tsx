@@ -84,7 +84,7 @@ function Tokens(): React.JSX.Element {
       <Section title="TYPE_SCALE">
         {(Object.entries(TYPE_SCALE) as [string, (typeof TYPE_SCALE)[keyof typeof TYPE_SCALE]][]).map(([name, s]) => (
           <Row key={name} label={`${name} ${s.fontSize}/${s.lineHeight} ${s.fontWeight} x${s.maxFontSizeMultiplier}`}>
-            <AppText variant={name as keyof typeof TYPE_SCALE}>Send It 攀岩紀錄 V4 Quick fox</AppText>
+            <AppText variant={name as keyof typeof TYPE_SCALE}>ProjectDay 攀岩紀錄 V4 Quick fox</AppText>
           </Row>
         ))}
       </Section>

@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: doc-sync
-mode: delta
-module: n/a
+agent: engineer-mod-localization-theme
+mode: spec-update
+module: mod-localization-theme
 result: success
-next: engineer-mod-home "spec-update" + engineer-mod-auth-profile "spec-update" together first (Native Build Gate required; same commit batch — scheme change spans both). Then independently: engineer-mod-localization-theme "spec-update", engineer-mod-notifications "spec-update", engineer-mod-moderation "spec-update", engineer-mod-gym-directory "spec-update". AC-200(3) compliance check runs only after Leon renames the repo folder (setup.md 11.8) and doc-sync runs "template refresh". INT-028 stays DEFERRED: re-decide via claude --agent tech-lead "decisions: INT-028 ..." after the rename ships.
-timestamp: 2026-10-21T23:59:00Z
+next: qa-mod-localization-theme "spec-update" — verify AC-199 + AC-200 MOD-010 row (app.name "ProjectDay" in both locale files; Tokens.stories.tsx sample text updated).
+timestamp: 2026-10-21T23:59:30Z
 
 ## PM Updates
 

@@ -2,6 +2,39 @@
 
 ## Engineering Progress
 
+### Spec-update — 2026-10-21 (AC-199 + AC-200 MOD-010 row — app name rename to ProjectDay)
+
+**Scope**: Rev 48 spec-update: rename app name from "Send It" to "ProjectDay" in all MOD-010-owned locale and story files.
+
+**Changes**:
+
+1. `locales/en/common.json` line 3: `"app.name": "Send It"` → `"app.name": "ProjectDay"` (AC-199, AC-200)
+2. `locales/zh-TW/common.json` line 3: `"app.name": "Send It"` → `"app.name": "ProjectDay"` (AC-199, AC-200)
+3. `src/modules/mod-localization-theme/stories/Tokens.stories.tsx` line 87: sample text `Send It 攀岩紀錄 V4 Quick fox` → `ProjectDay 攀岩紀錄 V4 Quick fox` (AC-200)
+
+**Note**: The climbing verb "send" (and identifiers like `mod-send-logging`, `send-service.ts`) was not changed — spec explicitly excludes these. Only the `app.name` key value and the story sample text were changed.
+
+**Self-check**:
+- [pass] `npx tsc --noEmit` — exit 0, 0 TypeScript errors
+- [pass] `npm run check:i18n` — "i18n completeness OK" (exit 0); EN and zh-TW catalogs remain symmetric
+- [pass] `npx jest --testPathPattern="mod-localization-theme" --watchAll=false --passWithNoTests` — exit 0 (no test files in this module)
+- [pass] `git diff --name-only` — only 3 files changed, all within scope: `locales/en/common.json`, `locales/zh-TW/common.json`, `src/modules/mod-localization-theme/stories/Tokens.stories.tsx`
+- [pass] `grep -rn '"Send It"' locales/` — no matches (all app name instances removed)
+- [pass] `grep -rn '"Send It"' src/modules/mod-localization-theme/stories/` — no matches
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+- [pass] No new dependencies introduced
+- [skip] Integration tests — no integration test command configured in production.md
+- [skip] DB/PostgREST embed verification — no database queries in these changes
+- [skip] Native dependency gate — no native dependency added or changed
+
+**Files modified**:
+- `locales/en/common.json`
+- `locales/zh-TW/common.json`
+- `src/modules/mod-localization-theme/stories/Tokens.stories.tsx`
+
+---
+
 ### Integration fix — 2026-10-20 (F-2: cross-module barrel import fix)
 
 **Fix F-2 — BlockedAccountsScreen.tsx and SettingsScreen.tsx barrel imports**
