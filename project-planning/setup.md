@@ -2,7 +2,7 @@
 
 This runbook walks Leon through provisioning everything needed to run and build the ProjectDay iOS app (formerly "Send It"; renamed in PRD Rev 47) in development. Do these steps in order. When done, run the Setup Confirmation step at the bottom.
 
-> **Rename in progress (Rev 47).** Steps 1–10 record the original setup and still show the old folder path `/Users/tsan/Desktop/MacBookPro/send-it` and the old Expo project name. Section 11 lists what you must do again or newly for ProjectDay. Paths in this file are updated after you rename the folder (step 11.8).
+> **Rename (Rev 47).** The repository folder was renamed to `/Users/tsan/Desktop/MacBookPro/projectday` (step 11.8, confirmed 2026-10-21); the paths in steps 1–10 now use it. Steps 1–10 still mention the old Expo and PostHog project names where they record the original setup. Section 11 lists what you had to do again or newly for ProjectDay.
 
 **Project shape**: React Native + Expo (TypeScript), iOS-only, Supabase hosted BaaS, PostHog analytics. There is **no self-hosted backend** and **no Docker** in this project — Supabase is a hosted service.
 
@@ -31,7 +31,7 @@ Node 20 LTS (v20.20.2) is installed via nvm and set as the project default. `.nv
 
 To confirm in any new shell:
 ```bash
-cd /Users/tsan/Desktop/MacBookPro/send-it
+cd /Users/tsan/Desktop/MacBookPro/projectday
 nvm use   # picks up .nvmrc automatically
 node --version   # v20.20.2
 ```
@@ -90,7 +90,7 @@ When you do join:
 The Engineer will run this during MOD-001 scaffolding. Do **not** run it now unless you want a placeholder to verify tooling. If you do want to verify:
 
 ```bash
-cd /Users/tsan/Desktop/MacBookPro/send-it
+cd /Users/tsan/Desktop/MacBookPro/projectday
 npx create-expo-app@latest . --template blank-typescript
 ```
 
@@ -112,7 +112,7 @@ npx create-expo-app@latest . --template blank-typescript
 6. Link your local project to the Supabase project:
 
    ```bash
-   cd /Users/tsan/Desktop/MacBookPro/send-it
+   cd /Users/tsan/Desktop/MacBookPro/projectday
    supabase login
    supabase link --project-ref YOUR-PROJECT-REF
    ```
@@ -150,7 +150,7 @@ APNs credential upload requires the Apple Developer account (step 4, deferred). 
 ## 9. Copy .env.example → .env and fill in real values
 
 ```bash
-cd /Users/tsan/Desktop/MacBookPro/send-it
+cd /Users/tsan/Desktop/MacBookPro/projectday
 cp .env.example .env
 # open .env in your editor and paste the real values from steps 6 and 7.
 ```
@@ -261,8 +261,8 @@ supabase migration list                            # confirm the new migration s
 
 Do this only after every AC-200 Engineer change is committed and no Claude Code session or agent is running in this folder.
 
-1. Quit Claude Code. `mv /Users/tsan/Desktop/MacBookPro/send-it /Users/tsan/Desktop/MacBookPro/<new-folder-name>`
-2. Move Claude Code's project memory so it carries over: `mv ~/.claude/projects/-Users-tsan-Desktop-MacBookPro-send-it ~/.claude/projects/-Users-tsan-Desktop-MacBookPro-<new-folder-name>` (the key is the absolute path with `/` replaced by `-`).
+1. Quit Claude Code. `mv /Users/tsan/Desktop/MacBookPro/send-it /Users/tsan/Desktop/MacBookPro/projectday` *(done 2026-10-21; the old path is kept here only as the record of the move)*
+2. Move Claude Code's project memory so it carries over: `mv ~/.claude/projects/-Users-tsan-Desktop-MacBookPro-send-it ~/.claude/projects/-Users-tsan-Desktop-MacBookPro-projectday` (the key is the absolute path with `/` replaced by `-`).
 3. Reopen Claude Code in the new folder and run `claude --agent doc-sync "template refresh"`. This regenerates the 24 engineer/QA agents, which embed the old absolute path.
 4. Run `cd ios && pod install`, then do one clean Xcode build (Product → Clean Build Folder). Pods and DerivedData cache absolute paths.
 5. Run `claude --agent tech-lead "Setup is complete"` so the Tech Lead can update the paths in this file and run the AC-200(3) check.

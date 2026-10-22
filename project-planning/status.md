@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: doc-sync
-mode: template-refresh
+agent: tech-lead
+mode: setup-confirmation
 module: n/a
-result: success
-next: coordinator — AC-200 spec-update QA complete for MOD-001; check integration-review.md for any remaining AC-200 rows; then proceed per flow
-timestamp: 2026-10-21T23:45:00Z
+next: Leon — (1) delete `PRD_TW_Bouldering_App.md` and untrack `scratchpad/` in a `human:` commit (V1, V2); (2) decide V3 (design-team agent prose: coordinator renames it on your instruction, or PM widens exemption (d)); then claude --agent tech-lead "re-run AC-200(3) check"
+result: needs-human
+timestamp: 2026-10-21T23:59:00Z
 
 ## PM Updates
 
@@ -311,6 +311,39 @@ timestamp: 2026-10-21T23:45:00Z
   - Leon's answers to Tech Lead questions: Q1 "Route Tracker & Beta Sharing"; Q2 "can the id go with com.projectday.bouldering, slug approve"; Q3 "(i)"; Q4 "yes accept"; Q5 "not yet testflight first"; Q6 "change the name then we will deal with the signin bug" (recorded by Tech Lead).
 
 ## Tech Lead Reviews
+
+### Setup Confirmation — 2026-10-21 (after setup.md 11.8 folder rename) + AC-200(3) compliance check
+
+Infrastructure verified (frontend + hosted Supabase; no Docker): working directory is `/Users/tsan/Desktop/MacBookPro/projectday`; `node --version` v20.20.2; `xcodebuild -version` Xcode 26.6; `eas --version` eas-cli/24.7.0; `supabase --version` 2.117.0; `pod --version` 1.17.0. Claude Code memory key `-Users-tsan-Desktop-MacBookPro-projectday` exists (11.8 step 2). Doc-Sync template refresh is in `459deb7` (11.8 step 3). Dashboard steps 11.1–11.7 and the 11.8 step 4 `pod install` + clean build were done by Leon; I take that on his word (nothing I can check without secrets or his accounts).
+.env: present and gitignored (`git check-ignore .env` → `.env`; not tracked). Contents not inspected; filled in per human attestation.
+setup.md: the old folder path `/Users/tsan/Desktop/MacBookPro/send-it` is replaced with `/Users/tsan/Desktop/MacBookPro/projectday` in steps 1, 5, 6 and 9 and in the rename banner. Step 11.8 keeps the old path once, as the source of the recorded `mv`. The other `send-it` tokens in setup.md (the old Expo project name, `send-it://**` redirect URL, old `projectId` value) are history of the external accounts, and `project-planning/` is outside the check.
+Setup re-confirmed after the change listed in Setup Changed — 2026-10-21.
+
+**AC-200(3) check** — `git grep -n -i -E "send it|send-it|send_it|sendit" -- . ':!project-planning' ':!README.md'` at HEAD `459deb7`:
+
+Covered by the exemptions (no action):
+- (a) `supabase/migrations/20260920000002_mod_002_gym_directory.sql:246,306` (added in `f6ece35`, an ancestor of `1e7f073`), and the rename migration `20261021175314_mod_002_rename_projectday_gym_notes.sql:1,3,8,9`.
+- (b) `send-it-design` path tokens in `src/lib/theme.ts:18`, `.storybook/MIGRATION.md:3,16`, and the five design-team agent files.
+- (c) "send it back" in all 12 `qa-mod-*` agent files, line 33.
+- (d) "Send It design team" in the five design-team agent files (`description:` line 3 and the `# … — Send It design team` heading, line 14).
+
+**Violations** (not covered by any exemption):
+- V1. `PRD_TW_Bouldering_App.md:1` (`# PRD: Send It — …`). Owner per AC-200 table: Leon, who deletes it in a `human:` commit.
+- V2. `scratchpad/edit_prd.py:3`, `scratchpad/edit_status.py:3` (old absolute path). `scratchpad/` is already in `.gitignore` (line 45), but these four files (`edit1.py`, `edit_prd.py`, `edit_status.py`, `header.txt`) are still tracked, so the ignore does not remove them from the check. Owner: Leon, `git rm -r scratchpad/` (or `git rm -r --cached scratchpad/` to keep local copies) in the same `human:` commit.
+- V3. Prose in the five design-team agent files that exemption (d) does not cover. Exemption (b) says "The prose around these paths is still renamed", and (d) covers only the exact phrase "Send It design team":
+  - `design-lead.md:16` "on Send It's design team. Send It is an iOS-only…"; `:40` "Never edit the send-it repo"
+  - `motion-designer.md:16` "on Send It's design team. Send It is an iOS-only…"; `:51` "the send-it repo"
+  - `ui-designer.md:16` same opening; `:36` "the send-it repo"
+  - `ux-designer.md:16` same opening; `:31` "the send-it repo"
+  - `ux-researcher.md:16` same opening; `:25` "the send-it repo"
+  **Ownership gap:** the AC-200 ownership table assigns no owner for these files. Under the project CLAUDE.md they are "other `.claude/agents/*.md`", changed by the coordinator only on Leon's explicit instruction. Options for Leon: (i) tell the coordinator to rename that prose ("Send It's design team" → "ProjectDay's design team", "Send It is" → "ProjectDay is", "the send-it repo" → "the projectday repo"), keeping the `send-it-design` paths and the exempt heading phrase; or (ii) have PM widen exemption (d) to the whole of these five files (a PRD change).
+  Note: the `/Users/fang/Documents/Project/send-it-design/...` paths in these files point at another user's home directory. That is not an AC-200 matter, but those paths will not resolve on this machine.
+
+Result: AC-200(3) **not yet passing** — 3 violations (V1–V3). Re-run the check after V1–V3 are resolved: `claude --agent tech-lead "re-run AC-200(3) check"`.
+
+Other observations (advisory):
+- The working tree has an uncommitted change to `ios/ProjectDay.xcodeproj/project.pbxproj`, probably from the 11.8 step 4 `pod install` / clean build. It belongs to `engineer-mod-home` (owner of `ios/`). If it is only the regenerated path data, the owner should commit it; leaving it uncommitted shows up in the next Engineer's scope check.
+- setup.md "What Tech Lead will verify at confirmation" still lists checking `.env` for non-placeholder values and a `curl` to the Supabase URL. Both conflict with the rule that agents never read or use `.env` values, and I did not do them. I recommend rewording that list to existence/gitignore checks only; I will do it if Leon approves.
 
 ### Review — 2026-10-21 — change (Rev 47: rename to ProjectDay — AC-199, AC-200)
 
