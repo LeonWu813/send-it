@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: doc-sync
-mode: delta
+agent: tech-lead
+mode: on-demand-review
 module: n/a
-result: success
-next: Open Tech Lead decisions must be resolved before engineering starts on the new ACs (see Engineering Notes in both specs). After Tech Lead answers the AC-201 questions (where the fill runs; avatar_url direct link vs. copy to bucket) and the AC-202/AC-203 ownership question (which module's engineer touches src/lib/i18n.ts and the theme provider): engineer-mod-auth-profile "spec-update" for AC-201; engineer-mod-localization-theme "spec-update" for AC-202/AC-203. Then their QA runs, before the Phase 1 checkpoint.
-timestamp: 2026-10-22T20:00:00Z
+result: needs-human
+next: Leon decides Q-A, Q-B and Q-C in Tech Lead Reviews "Review — 2026-10-22 — on-demand (Rev 49 ...)". Then: claude --agent engineer-mod-auth-profile "implement AC-201 per Leon's Q-A/Q-B decisions, and fix the ProfileScreen fallback-branch inset bug (Tech Lead Review 2026-10-22)". The layout bug can start now, since it does not depend on the decisions. For AC-202/AC-203: if Leon picks Q-C (B), first claude --agent pm "change" (a [TRIVIAL] change adding the MOD-012 src/lib read-side requirement), then doc-sync, then claude --agent engineer-mod-home, then claude --agent engineer-mod-localization-theme "spec-update". Then QA for each module.
+timestamp: 2026-10-22T21:00:00Z
 
 ## PM Updates
 
@@ -325,6 +325,49 @@ timestamp: 2026-10-22T20:00:00Z
   - Leon's answers: Q1 "First sign-in only. I'll manually delete the account I create with Google without name and avatar and test again after fix"; Q2 "Apple also"; Q3 "Yes"; Q4 "no, language stay as any non-English device → zh-TW, English -> en"; Q5 "applied above"; Q6 "(a)"; Q7 "No just making sure"; Q8 "no"; Q9 "okay".
 
 ## Tech Lead Reviews
+
+### Review — 2026-10-22 — on-demand (Rev 49 open engineering questions: AC-201, AC-202/AC-203; ProfileScreen layout bug)
+
+These are recommendations. The three questions need Leon's decision before any Engineer starts. Nothing below is a decision yet.
+
+**Corrections to the premises in the request** (checked against the code):
+- There is no `create_user_profile` RPC. The profile row is already created by a database trigger: `public.handle_new_auth_user()` (`SECURITY DEFINER`, `search_path = public`), fired by `on_auth_user_created AFTER INSERT ON auth.users`, in `supabase/migrations/20260920000001_mod_001_user_profile.sql:57-76`. It inserts `(id, display_name = COALESCE(raw_user_meta_data->>'display_name',''))` with `ON CONFLICT DO NOTHING`. It does not set `avatar_url`.
+- There is no `avatar-upload` Edge Function. `supabase/functions/` holds only `notify-beta-video-like` (MOD-007) and `report-digest` (MOD-009). Avatar upload happens in the app: `uploadAvatar()` in `src/modules/mod-auth-profile/auth-service.ts:265-300` reads a local file and uploads it to `avatars/avatars/<userId>.<ext>`. MOD-001's Source Path does not include `supabase/functions/`.
+- Native Apple sign-in (`signInWithApple`, `auth-service.ts:78-120`) uses `signInWithIdToken`. Apple's identity token does not carry the user's name. The name comes only in `credential.fullName` on the device, and the code currently drops it. This is documented Supabase and Apple behavior, but not yet observed in this project; the Engineer should confirm it on one new Apple test account (check `raw_user_meta_data` in Supabase Studio).
+
+**Q-A. AC-201: where does the fill run?**
+Recommendation: both places, split by provider. Neither option on its own covers both providers.
+- **Google, in the database.** Add a new MOD-001 migration (`*_mod_001_*`, in MOD-001's Source Path) that runs `CREATE OR REPLACE` on `handle_new_auth_user()`. It should set `display_name = COALESCE(NULLIF(trim(meta->>'display_name'),''), NULLIF(trim(meta->>'full_name'),''), NULLIF(trim(meta->>'name'),''), '')` and `avatar_url = COALESCE(NULLIF(trim(meta->>'avatar_url'),''), NULLIF(trim(meta->>'picture'),''))`. This extends the project's existing pattern instead of adding a new one, and it runs in the same transaction that creates the account, so it cannot be missed. "Only the sign-in that creates the account" holds by construction: the trigger fires only on insert, so existing accounts are untouched. No SERVICE_ROLE is needed, the migration runs the same way as every other one, and the trigger stays in `public` with the same `SECURITY DEFINER` / `search_path` settings it already has.
+- **Apple, in the app.** After `signInWithIdToken` succeeds, if `credential.fullName` has a given or family name, join the parts and update `users.display_name` for `id = auth.uid()` only where `display_name = ''` (the column is `NOT NULL DEFAULT ''`, so a filter on `''` is enough, and the existing `users_update_own` RLS policy covers it). The trigger has already created the row by the time `signInWithIdToken` returns. Remaining risk: if the app is killed in that short window, Apple will not send the name again, and the user sets it through Edit Profile (AC-117). Testing note: deleting an Apple test account and signing in again will not bring the name back unless the app is also removed under Apple ID settings, "Sign in with Apple".
+- Option (A) alone (app-side for both) would also need its own "is this a new account?" check, which the trigger gets for free. Option (B) alone cannot fill Apple names.
+
+**Q-B. AC-201: `avatar_url`, direct Google URL or a copy in the `avatars` bucket?**
+Recommendation: (A), store Google's URL directly, for Phase 1.
+- `Avatar` (`src/components/ui/Avatar.tsx:87-94`) already shows the initial when an image fails to load (`onError → setFailed`), so an expired or rotated Google URL degrades to the default avatar rather than a broken image.
+- Google photo URLs are per photo. A later change to the Google photo produces a new URL and is not copied into the profile, which matches AC-201's "later changes ... are not copied". The old URL may eventually stop loading, and then the initial shows.
+- (B) would need either a new Edge Function, which has no owning Source Path (a Module Map change through PM), or a download-and-reupload in the app after sign-in. The app route brings back the "app closed before it finished" gap that Q-A's trigger avoids, and it adds latency and redirect handling to sign-in. Also, the bucket accepts only jpeg/png/webp.
+- Trade-offs Leon should weigh: every viewer's device loads the photo from Google's CDN (Google sees those requests), and the avatar can drop to the initial without warning if Google retires the URL. If either is unacceptable, (B) can be added later as its own change.
+- Check for the Engineer: `EditProfileScreen.tsx:61-113` must not try to upload a remote `https://` `avatar_url` as a local file when the user saves without changing the photo.
+
+**Q-C. AC-202/AC-203: who changes `src/lib/i18n.ts` and the theme provider?**
+Findings: the theme provider is `ThemeProvider` in `src/lib/theme.ts:578-628`, which is MOD-012's. The change splits cleanly along Source Paths:
+- **Write side (MOD-010, small).** Sign-out is started from `src/modules/mod-localization-theme/screens/SettingsScreen.tsx:187` (`await signOut()`). Storing the current language and override in device-level keys before that call belongs in MOD-010's `SettingsScreen.tsx` / `settings-storage.ts`.
+- **Read side (MOD-012, small but required).** `i18n.ts:58` initializes from `detectDeviceLanguage()` synchronously and never reads a device-level key. `ThemeProvider` forces `'system'` whenever `userId` is null (`theme.ts:590-594`), and `setThemeUserId` takes only a string, so it cannot go back to signed-out. Signed-out screens can only use the stored values if these two files change.
+- Recommendation: (B), with one adjustment. MOD-012's Engineer adds the device-level key constants plus load/save helpers in `src/lib/` and makes the signed-out path read them: i18n at startup and on sign-out, ThemeProvider when `userId` becomes null. MOD-010's Engineer then calls those helpers at sign-out. Order: MOD-012 first, then MOD-010. One owner for the keys avoids a `src/lib → src/modules` import.
+- (A) as described is not available. `pstack-guard.sh` blocks an Engineer writing outside its module's Source Path, and the framework has no "temporary exception" mechanism. The only way to make (A) legal is a PM Module Map change, which I do not recommend for two small edits.
+- **Condition for (B):** MOD-012's `spec.md` has no AC or Engineering Note for this work, and Engineers build from `spec.md`. Before `engineer-mod-home` runs, PM needs a `[TRIVIAL]` change that states the MOD-012 part of AC-202/AC-203 as an integration requirement, and Doc-Sync needs to sync it. A bare dependency is not enough; this is the prd-format "Implicit Dependencies" case.
+
+**Open bug: ProfileScreen fallback branch has no nav-header inset (MOD-001, for `engineer-mod-auth-profile`)**
+- Reported by Leon during Google sign-in testing; location confirmed by reading the code. `src/modules/mod-auth-profile/screens/ProfileScreen.tsx:238-260`: when `profile?.id` is falsy, the `<>{profileHeader}{profileFooter}</>` branch (lines ~256-259) renders without `paddingTop: h.contentTopInset`. The loaded branch applies it at line 251.
+- Fix direction: apply `h.contentTopInset` (and the bottom inset, to match line 251) to the fallback branch, for example a wrapping `View` with that `paddingTop`. Bug fix only, no PRD change.
+- Not confirmed: the explanation that "Google OAuth takes longer to populate the users row". The row is created synchronously by the trigger above, so the fallback more likely shows during the normal `loadProfile` fetch on every provider. The fix is the same either way. QA should check the fallback state on email, Google and Apple sign-in.
+- This is recorded here because Tech Lead may not write to a module's Engineering Progress. The Engineer should log it there when it picks the work up.
+
+**Approved**:
+- The AC-201 wording (fill only null or empty fields, only at account creation) maps cleanly onto the existing insert trigger.
+- The AC-202/AC-203 storage choice (on-device AsyncStorage, the same store as the per-user keys) needs no new dependency.
+
+**Proposed Shared Conventions**: none.
 
 ### Setup Changed — 2026-10-22 (setup.md 11.5 step 0 and 11.1 rewording; R1 / R2)
 
