@@ -3,11 +3,11 @@
 ## Last Action
 
 agent: tech-lead
-mode: setup-confirmation
+mode: on-demand-review
 module: n/a
-next: Leon — (1) delete `PRD_TW_Bouldering_App.md` and untrack `scratchpad/` in a `human:` commit (V1, V2); (2) decide V3 (design-team agent prose: coordinator renames it on your instruction, or PM widens exemption (d)); then claude --agent tech-lead "re-run AC-200(3) check"
-result: needs-human
-timestamp: 2026-10-21T23:59:00Z
+next: Leon — decide V3 (design-team agent prose: coordinator renames it on your instruction, or PM widens exemption (d)) if not yet decided; then claude --agent tech-lead "re-run AC-200(3) check" (V1/V2 cleanup is in 6ff6d70)
+result: setup-changed
+timestamp: 2026-10-21T23:59:30Z
 
 ## PM Updates
 
@@ -311,6 +311,14 @@ timestamp: 2026-10-21T23:59:00Z
   - Leon's answers to Tech Lead questions: Q1 "Route Tracker & Beta Sharing"; Q2 "can the id go with com.projectday.bouldering, slug approve"; Q3 "(i)"; Q4 "yes accept"; Q5 "not yet testflight first"; Q6 "change the name then we will deal with the signin bug" (recorded by Tech Lead).
 
 ## Tech Lead Reviews
+
+### Setup Changed — 2026-10-21 (setup.md confirmation checklist: no `.env` reads)
+
+Approved by Leon: "Sure, good catch agents shouldn't check .env directly"
+
+Changed: the "What Tech Lead will verify at confirmation" list at the end of `project-planning/setup.md`. Two lines asked an agent to check `.env` values directly (non-placeholder check) and to `curl` the live Supabase URL. They now say Tech Lead only checks that `.env` exists and is gitignored. Leon confirms the values are filled in and that the app reaches Supabase.
+
+What Leon must redo: nothing. No step, command, or infrastructure changed, only the wording of the confirmation checklist. Earlier setup confirmations already followed the indirect method.
 
 ### Setup Confirmation — 2026-10-21 (after setup.md 11.8 folder rename) + AC-200(3) compliance check
 

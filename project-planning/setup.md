@@ -283,6 +283,6 @@ Once all steps above complete successfully:
 - `node --version` returns v20.x (or v18.x LTS).
 - `xcodebuild -version` returns a valid Xcode version.
 - `eas --version` and `supabase --version` both succeed.
-- `.env` exists and is not tracked by git.
-- `.env` contains non-placeholder values for the required keys.
-- Supabase project is reachable (a lightweight `curl` to the Supabase URL returns HTTP 200/401).
+- `.env` exists (`[ -f .env ]`) and is gitignored (`git check-ignore .env`). Tech Lead never opens, prints, greps, or otherwise reads `.env`.
+- That `.env` holds real values for the required keys (not the `.env.example` placeholders) is **your** check. Tech Lead takes your word for it and does not inspect it.
+- That the Supabase project is reachable is also **your** check: start the app with `npx expo start --ios` and confirm it loads data from Supabase. Tech Lead does not `curl` the Supabase URL or run any command that uses a value from `.env`.
