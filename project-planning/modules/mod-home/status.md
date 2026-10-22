@@ -2,6 +2,23 @@
 
 ## Engineering Progress
 
+### Bugfix — AC-200 stale xcworkspace — 2026-10-21
+
+**Problem:** `expo prebuild --clean` created `ios/ProjectDay.xcworkspace/` but left `ios/SendIt.xcworkspace/` behind, causing AC-200(3) to fail (zero SendIt matches in `ios/` outside Pods).
+
+**Fix:** Removed `ios/SendIt.xcworkspace/contents.xcworkspacedata` via `git rm -r`.
+
+**Note:** `pod install` is required before any device build.
+
+**Files changed:**
+- `ios/SendIt.xcworkspace/` — deleted (stale workspace from pre-rename prebuild)
+
+**Self-check:**
+- Only deletion of the stale directory; no source code changed.
+- AC-200(3): zero SendIt references remain in `ios/` outside Pods after this removal.
+
+**Result: READY FOR QA RE-VERIFICATION (check 11)**
+
 ### Implementation — 2026-09-24
 
 **Files created:**
