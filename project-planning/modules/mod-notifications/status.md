@@ -1246,3 +1246,65 @@ No changes to `handleNotificationPress` or `actor_user_id` path. `onNavigateToUs
 | AC-173 (Rev 35) | REGRESSION PASS — badge sourced from `useUnreadCount()` hook (UnreadCountProvider); refresh() called after AC-172 mark-read to clear badge; SIGNED_OUT resets to 0 |
 
 511 of 512 tests pass (1 pre-existing failure in mod-beta-video unrelated to MOD-007). TypeScript 0 errors. All Rev 35 items verified: `UnreadCountProvider` file and exports correct, SIGNED_OUT clear confirmed, 30-second polling confirmed, `NotificationInboxScreen` refresh wiring confirmed, AC-171 bell relocated to global header, AC-173 badge sourced from provider hook. No regressions in any previously-passing AC.
+
+---
+
+**QA Run 7 — Regression (AC-200 MOD-007: push title rename) — 2026-10-21 — workflow: regression-test**
+
+Re-verifying commit `60e2bab`: AC-200 MOD-007 ownership row — push notification title renamed from `'Send It'` to `'ProjectDay'` at `supabase/functions/notify-beta-video-like/index.ts:185`.
+
+### Automated Test Results
+
+| Check | Result | Detail |
+|-------|--------|--------|
+| `npx tsc --noEmit` | PASS | 0 errors. Exit code 0. |
+| `npx jest src/modules/mod-notifications --watchAll=false` | PASS | 46 tests passed, 0 failed across 3 test suites. Exit code 0. |
+
+### AC-200 MOD-007 Regression Verification
+
+**REGRESSION PASS AC-200 (MOD-007 row).**
+
+1. **Title literal is `'ProjectDay'` at line 185.** File: `supabase/functions/notify-beta-video-like/index.ts`, line 185: `title: 'ProjectDay'`. Confirmed by direct read of the file and by inspecting the commit diff.
+
+2. **No "Send It" strings remain anywhere in `supabase/functions/notify-beta-video-like/`.** `grep -rn "Send It" supabase/functions/notify-beta-video-like/` returned no output. PASS.
+
+3. **Diff is exactly one line in `index.ts`.** Commit `60e2bab` diff for `supabase/functions/notify-beta-video-like/index.ts`: `-      title: 'Send It',` → `+      title: 'ProjectDay',`. No other lines in the file changed. All surrounding logic (push payload shape, preference gate, idempotency, service-role key, device-token fan-out) is untouched. PASS.
+
+4. **No other files in `supabase/functions/notify-beta-video-like/` modified.** The commit's `--stat` output shows 3 files changed: `supabase/functions/notify-beta-video-like/index.ts`, `project-planning/modules/mod-notifications/status.md`, and `project-planning/status.md`. Only the planning files and the one-line rename — no other source files touched. PASS.
+
+### Spec Citation
+
+AC-200 (revised, Rev 48): "MOD-007's scope for this AC: `supabase/functions/notify-beta-video-like/index.ts:185` (push title "ProjectDay")."
+
+Implementation matches spec exactly.
+
+### Previously Passing ACs — Re-verification
+
+| AC | Result | Notes |
+|----|--------|-------|
+| AC-054 | PASS | No changes to device token registration path. All useSession tests pass. |
+| AC-055 | PASS | No changes to Edge Function fan-out logic, trigger, or notifications table insert. |
+| AC-056 | PASS | No changes to push fan-out path. Deferred per spec. |
+| AC-057 | PASS | No changes to `NotificationPreferenceScreen` or preference RPC. |
+| AC-058 (Rev 32) | PASS | No changes to inbox tap handler or `actor_user_id` path. |
+| AC-171 (Rev 35) | PASS | No changes to global header bell or AppShell wiring. |
+| AC-172 | PASS | No changes to batch mark-read path. |
+| AC-173 (Rev 35) | PASS | No changes to `UnreadCountProvider` or badge logic. |
+
+### Overall Result
+
+**QA PASS — regression test.**
+
+| AC | QA Verdict |
+|----|-----------|
+| AC-200 (MOD-007 row) | REGRESSION PASS — push title `'ProjectDay'` confirmed at line 185; no "Send It" strings remain in directory; diff is exactly one line; no other logic changed |
+| AC-054 | PASS (no regression) |
+| AC-055 | PASS (no regression) |
+| AC-056 | PASS (no regression; measurement deferred per spec) |
+| AC-057 | PASS (no regression) |
+| AC-058 (Rev 32) | PASS (no regression) |
+| AC-171 (Rev 35) | PASS (no regression) |
+| AC-172 | PASS (no regression) |
+| AC-173 (Rev 35) | PASS (no regression) |
+
+46 of 46 mod-notifications tests pass. TypeScript 0 errors. Single-line rename verified against spec. No regressions in any previously-passing AC.
