@@ -2,13 +2,22 @@
 
 ## Last Action
 
-agent: engineer-mod-home
-mode: setup-commit
+agent: qa-mod-home
+mode: verify
 module: mod-home
-next: claude --agent qa-mod-home "verify" (AC-200(3) passes at 6cdebe5; only the four exemptions remain)
-result: success
-timestamp: 2026-10-22T13:00:00Z
-commit: d90a309 — ios/ProjectDay.xcodeproj/project.pbxproj committed after pod install (setup.md step 11.8)
+result: needs-human
+timestamp: 2026-10-22T14:00:00Z
+next: Device verification — Leon must run `npx expo run:ios` from project root (/Users/tsan/Desktop/MacBookPro/projectday) and confirm successful compile + first launch. AC-200(4) Native Build Gate is the only remaining open item for AC-200.
+question: |
+  QA Run 21 static checks all pass (AC-200(3) git grep clean at 31 hits all exempt,
+  app.json/package.json identifiers correct, ios/ structure correct, TypeScript 0 errors,
+  Jest 97/97). The Native Build Gate (AC-200(4)) requires a device build and first launch.
+
+  Please run from the project root (not from ios/):
+    npx expo run:ios
+
+  Confirm: did the build compile and the app launch showing the name "ProjectDay"?
+  Reply with what happened (success/failure and any error output).
 
 ## PM Updates
 

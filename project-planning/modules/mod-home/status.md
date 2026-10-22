@@ -4462,3 +4462,104 @@ NOTE — `pod install` has not been run (unchanged from QA Run 19). This is an e
 All 18 checks pass. The original QA Run 19 Check 11 failure (stale `ios/SendIt.xcworkspace/contents.xcworkspacedata`) is resolved. Zero `SendIt` matches in `ios/` outside Pods. TypeScript clean (0 errors). Jest suite passes (69/69 tests). No regressions introduced.
 
 Native Build Gate: `pod install` required before any device build — Leon runs it after this QA.
+
+---
+
+### QA Run 21 — AC-200 Native Build Gate Status — 2026-10-22
+
+**Workflow**: regression-test (post-pod-install state verification — commit `d90a309`)
+
+**Scope**: Verify static AC-200 checks hold at the post-pod-install commit (`d90a309`); confirm Native Build Gate status after Leon ran `pod install` and committed the xcodeproj.
+
+---
+
+#### Check A — git grep AC-200(3) compliance (31 hits, all exempt)
+
+`git grep -n -i -E "send it|send-it|send_it|sendit" -- . ':!project-planning' ':!README.md'` returns 31 hits. Verified against all four exemptions:
+
+- Exempt (a): `supabase/migrations/20260920000002_mod_002_gym_directory.sql` lines 246, 306 (pre-Rev-47 migration), and `supabase/migrations/20261021175314_mod_002_rename_projectday_gym_notes.sql` lines 1, 3, 8, 9 (the rename migration that must reference the old text). 6 hits.
+- Exempt (b): `.storybook/MIGRATION.md` lines 3, 16 and `src/lib/theme.ts` line 18 — `send-it-design` path token for an external design repository. 3 hits.
+- Exempt (c): 12 `qa-mod-*` agent files — English verb phrase "send it back" in the integration-review write-scope line. 12 hits.
+- Exempt (d): 5 design-team agent files (`design-lead.md`, `motion-designer.md`, `ui-designer.md`, `ux-designer.md`, `ux-researcher.md`) × 2 lines each — "Send It design team" phrase. 10 hits.
+
+Total covered: 6 + 3 + 12 + 10 = 31. Zero uncovered hits. Tech Lead confirmed at commit `429adb6`.
+
+PASS.
+
+---
+
+#### Check B — App.json identifiers
+
+- `name`: `"ProjectDay"` — PASS
+- `slug`: `"projectday"` — PASS
+- `scheme`: `"projectday"` — PASS
+- `ios.bundleIdentifier`: `"com.projectday.bouldering"` — PASS
+- `extra.eas.projectId`: `"3d6b4518-e4bb-499d-8680-f08244cef321"` (valid UUID, not the old slug) — PASS
+- `photosPermission`: `"Allow ProjectDay to access your photos to set a profile avatar."` — PASS
+
+---
+
+#### Check C — package.json name
+
+`package.json` `name`: `"projectday"` — PASS.
+
+---
+
+#### Check D — ios/ structure post-pod-install
+
+`ls ios/` shows: `Podfile`, `Podfile.lock`, `Podfile.properties.json`, `Pods`, `Pods 2`, `ProjectDay` (directory), `ProjectDay.xcodeproj`, `ProjectDay.xcworkspace`, `build`, `build 2`.
+
+No `SendIt.xcodeproj` or `SendIt.xcworkspace/contents.xcworkspacedata` in tracked files. The `ios/SendIt.xcworkspace/` directory contains only gitignored `xcuserdata/` (untracked, outside `git grep` scope). PASS.
+
+`ios/ProjectDay.xcodeproj/project.pbxproj` committed at `d90a309` — post-pod-install state locked in git. PASS.
+
+---
+
+#### Check E — ios/ProjectDay.entitlements empty
+
+`ios/ProjectDay/ProjectDay.entitlements` content: `<dict/>` — empty. Neither `com.apple.developer.applesignin` nor `aps-environment` is present. Consistent with `app.plugin.js` `withRemoveUnprovisionedEntitlements` behavior. PASS.
+
+---
+
+#### Check F — TypeScript
+
+`npx tsc --noEmit`: exit 0, zero errors, no output. PASS.
+
+---
+
+#### Check G — Jest mod-home + src/lib
+
+`npm test -- --watchAll=false --testPathPattern="src/modules/mod-home|src/lib/__tests__" --no-coverage`:
+- Test Suites: 9 passed, 9 total
+- Tests: 97 passed, 97 total — exit 0
+
+No regressions from the xcodeproj commit (native file only; no JS/TS source changed). PASS.
+
+---
+
+#### Native Build Gate — AC-200(4) — PENDING DEVICE VERIFICATION
+
+`pod install` has been run by Leon and the post-pod-install xcodeproj is committed at `d90a309`. The Podfile.lock is in sync. The `ios/SendIt.xcworkspace/contents.xcworkspacedata` blocker is resolved (removed in prior commit).
+
+The previous failed build attempt ran from `ios/` instead of the project root (ConfigError). The correct command is `npx expo run:ios` from the project root (`/Users/tsan/Desktop/MacBookPro/projectday`), not from `ios/`.
+
+**Device verification required from Leon**: run `npx expo run:ios` from the project root and confirm a successful compile + first launch on device or simulator showing the "ProjectDay" app name. Until Leon confirms this, AC-200(4) remains open and AC-200 cannot be marked fully verified.
+
+---
+
+### Summary — QA Run 21
+
+| Check | Result |
+|---|---|
+| A — AC-200(3) git grep: 31 hits, all exempt | PASS |
+| B — app.json identifiers (name/slug/scheme/bundle/uuid/permission) | PASS |
+| C — package.json name: "projectday" | PASS |
+| D — ios/ structure: ProjectDay.* only, no tracked SendIt.* | PASS |
+| E — ProjectDay.entitlements: empty `<dict/>` | PASS |
+| F — `npx tsc --noEmit`: 0 errors | PASS |
+| G — Jest mod-home + src/lib: 97/97, 9 suites | PASS |
+| Native Build Gate — AC-200(4) | PENDING — Leon must run `npx expo run:ios` from project root and confirm successful launch |
+
+**Result: STATIC CHECKS PASS — Native Build Gate PENDING HUMAN VERIFICATION**
+
+All static AC-200 checks pass at commit `d90a309`. The only remaining open item is the Native Build Gate: Leon must successfully build and launch from the project root (`npx expo run:ios`, not from `ios/`). AC-200 cannot be marked fully verified until Leon confirms the build and first launch succeed.
