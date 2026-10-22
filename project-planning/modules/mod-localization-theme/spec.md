@@ -4,14 +4,14 @@
 **Module Name**: Localization & Theming
 **Phase**: 1
 **Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
-**Last Synced from PRD Revision**: 48
-**Last Updated**: 2026-09-30
+**Last Synced from PRD Revision**: 49
+**Last Updated**: 2026-10-22
 
 ---
 
 ## Purpose
 
-Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override. Own the Settings screen "Blocked Accounts" row and the Blocked Accounts screen (AC-155), which lists the current user's blocked users and offers per-row unblock via MOD-009's public services (`fetchMyBlockedUsers` / `unblockUser`). Own the Settings screen "Beta Video Privacy" toggle row (AC-157), which reads and updates the current user's `beta_video_privacy` setting by calling MOD-001's public service (MOD-001 owns the profile write). Own the SettingsScreen Logout button (AC-168), relocated from the Profile screen (AC-167, MOD-001).
+Provide i18n message catalog loading (English, zh-TW), device-locale detection with zh-TW fallback, in-app language toggle, and Light/Dark theming that follows OS preference with a manual Settings override. Own the Settings screen "Blocked Accounts" row and the Blocked Accounts screen (AC-155), which lists the current user's blocked users and offers per-row unblock via MOD-009's public services (`fetchMyBlockedUsers` / `unblockUser`). Own the Settings screen "Beta Video Privacy" toggle row (AC-157), which reads and updates the current user's `beta_video_privacy` setting by calling MOD-001's public service (MOD-001 owns the profile write). Own the SettingsScreen Logout button (AC-168), relocated from the Profile screen (AC-167, MOD-001). Store the active language and theme settings on the device at sign-out so that signed-out screens use those stored values (AC-202, AC-203).
 
 ---
 
@@ -25,10 +25,15 @@ For US-012, the SettingsScreen presents a "Beta Video Privacy" toggle row (`publ
 
 For AC-168, the SettingsScreen presents a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and "Blocked Accounts" row, AC-155). The button uses the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167, MOD-001).
 
+For US-017 (AC-202), when no user is signed in (before the first sign-in, and after sign-out), the app uses the last language setting stored on this device, if one has been stored. If no language setting has ever been stored on this device, the app uses the language AC-090 picks from the device language. When the user signs out, the current Settings language (AC-091) is stored on the device as the device's language setting. While a user is signed in, that user's Settings language (AC-091) remains the active setting.
+
+For US-018 (AC-203), when no user is signed in (before the first sign-in, and after sign-out), the app uses the last theme setting (System, Light or Dark) stored on this device, if one has been stored. If no theme setting has ever been stored on this device, or the stored setting is System, the app follows the device's Light/Dark appearance and switches immediately when the device appearance changes while the app is open. When the user signs out, the current Settings theme override (AC-092) is stored on the device as the device's theme setting. While a user is signed in, that user's Settings override (AC-092) remains the active setting.
+
 **Non-goals for this module:**
 - Languages other than English and zh-TW (out of scope for Phase 1; Phase 2+ backlog for other languages).
 - Right-to-left layout support (zh-TW and English are both LTR).
 - Per-locale date/number formatting beyond what the i18n library provides (not specified as a requirement).
+- A language or theme control on the signed-out screens (out of scope for Phase 1 — before sign-in the app uses the language and theme last stored on this device, or the device language and appearance when none is stored, per AC-202/AC-203).
 
 ---
 
@@ -43,9 +48,9 @@ For AC-168, the SettingsScreen presents a Logout button at the very bottom, belo
 
 **US-016 Acceptance Criteria**: AC-082, AC-083, AC-151, AC-152, AC-155
 
-**US-017 Acceptance Criteria**: AC-090, AC-091
+**US-017 Acceptance Criteria**: AC-090, AC-091, AC-202
 
-**US-018 Acceptance Criteria**: AC-092
+**US-018 Acceptance Criteria**: AC-092, AC-203
 
 ---
 
@@ -69,6 +74,10 @@ For AC-168, the SettingsScreen presents a Logout button at the very bottom, belo
 
 **AC-200** (revised, Rev 48, cross-cutting — MOD-010 ownership row, carries AC-199): The app shall be published and identified as "ProjectDay". MOD-010's scope for this AC: `locales/en/common.json:3` and `locales/zh-TW/common.json:3` (`app.name` becomes "ProjectDay" in both). `src/modules/mod-localization-theme/stories/Tokens.stories.tsx:87`. Independent of the other owners.
 
+**AC-202** (new, Rev 49, MOD-010): When no user is signed in (before the first sign-in, and after sign-out), the app shall display in the last language setting stored on this device, if one has been stored. If no language setting has ever been stored on this device (for example, a new install before any sign-in), the app shall use the language AC-090 picks from the device language. While a user is signed in, that user's Settings language (AC-091) remains the active setting; when the user signs out, it is stored on this device as the device's language setting.
+
+**AC-203** (new, Rev 49, MOD-010): When no user is signed in (before the first sign-in, and after sign-out), the app shall use the last theme setting (System, Light or Dark) stored on this device, if one has been stored. If no theme setting has ever been stored on this device, or the stored setting is System, the app shall follow the device's Light/Dark appearance and shall switch immediately when the device appearance changes while the app is open. While a user is signed in, that user's Settings override (AC-092) remains the active setting; when the user signs out, it is stored on this device as the device's theme setting.
+
 ---
 
 ## Integration Points
@@ -82,6 +91,8 @@ For AC-168, the SettingsScreen presents a Logout button at the very bottom, belo
 ## Data Model
 
 No dedicated Supabase tables for this module. Language preference and theme preference may be persisted locally (e.g., via `AsyncStorage` or Expo SecureStore) or on the `User` profile row if persistence across devices is desired. The PRD does not specify cross-device sync of language/theme preference — the minimal approach is local persistence.
+
+AC-202 and AC-203 require that the active language and active theme override are stored on the device at sign-out, so that signed-out screens can read and apply those stored values. The storage mechanism is local (on-device) — the same store used for the signed-in language/theme preference.
 
 The "Beta Video Privacy" toggle (AC-157) reads from and writes to `users.beta_video_privacy` (owned by MOD-001) via MOD-001's public service — no direct table access by MOD-010.
 
@@ -103,6 +114,14 @@ The "Beta Video Privacy" toggle (AC-157) reads from and writes to `users.beta_vi
 - Active language updated immediately — no app restart
 - All rendered strings switch to the selected catalog
 
+**Inputs (signed-out language — AC-202):**
+- Stored on-device language setting (written at sign-out, read at signed-out app start)
+- Device locale from `expo-localization` (fallback when no stored setting exists)
+
+**Outputs (signed-out language — AC-202):**
+- Active language set to the stored on-device language setting when no user is signed in; falls back to AC-090 device-locale detection when no setting has ever been stored
+- At sign-out: current Settings language (AC-091) is persisted to on-device storage
+
 **Inputs (theme detection on launch):**
 - OS appearance value from React Native `Appearance` API
 
@@ -115,6 +134,14 @@ The "Beta Video Privacy" toggle (AC-157) reads from and writes to `users.beta_vi
 **Outputs (theme override):**
 - Active theme updated immediately — no app restart
 - All theme tokens update across the app
+
+**Inputs (signed-out theme — AC-203):**
+- Stored on-device theme setting (written at sign-out, read at signed-out app start)
+- OS appearance value from React Native `Appearance` API (fallback when no stored setting, or stored setting is System)
+
+**Outputs (signed-out theme — AC-203):**
+- Active theme set to the stored on-device theme setting (Light or Dark) when no user is signed in and the stored setting is not System; if no setting is stored or the stored setting is System, the app follows the device's live Light/Dark appearance and switches immediately when the device appearance changes
+- At sign-out: current Settings theme override (AC-092) is persisted to on-device storage
 
 **Inputs (Blocked Accounts screen — AC-155):**
 - Authenticated user session (`auth.uid()`)
@@ -156,6 +183,7 @@ The "Beta Video Privacy" toggle (AC-157) reads from and writes to `users.beta_vi
 - **"Beta Video Privacy" toggle (AC-157)**: The toggle row is labeled "Beta 影片可見度" (or equivalent). Two states: `public` (default, displayed as "所有人"/"All Users") and `followers_only` (displayed as "僅限追蹤者"/"Followers Only"). Reads the current user's `beta_video_privacy` on Settings screen load. Changing the toggle calls MOD-001's public write service (e.g., `updateBetaVideoPrivacy(value)` imported from `mod-auth-profile/auth-service`). MOD-010 does NOT write directly to `users.beta_video_privacy`. This toggle is the only user-facing privacy control; profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063).
 - **Logout button at the bottom of SettingsScreen (AC-168)**: Add a Logout button at the very bottom of SettingsScreen, below all other rows — below the "Beta Video Privacy" toggle (AC-157) and below the "Blocked Accounts" row (AC-155). Same styling as the former ProfileScreen logout (error color, outlined). Same `signOut()` call and error-handling pattern. This is the relocation target for AC-167 (Logout removed from ProfileScreen).
 - **SettingsScreen row order**: The SettingsScreen row order from top to bottom is: (existing sections) → "Blocked Accounts" row (AC-155) → "Beta Video Privacy" toggle row (AC-157) → Logout button (AC-168).
+- **AC-202/AC-203 signed-out language and theme persistence — Engineering Notes (open question)**: AC-202 requires storing the language setting on the device at sign-out and reading it when no user is signed in. The language detection code `detectDeviceLanguage()` is in `src/lib/i18n.ts`, which is in MOD-012's Source Path (`src/lib/`). It is an open question whether the AC-202 language persistence change is implemented by the MOD-010 engineer (in `mod-localization-theme/` code) or by the MOD-012 engineer (in `src/lib/i18n.ts`). Similarly, the theme provider location must be confirmed — if the theme provider is outside `mod-localization-theme/`, the AC-203 sign-out store call may also fall under MOD-012's scope. This question is flagged as "For Tech Lead" in the Rev 49 PM Updates entry. Do not implement AC-202 or AC-203 until Tech Lead has assigned ownership of the affected files.
 
 ---
 
@@ -166,3 +194,4 @@ The "Beta Video Privacy" toggle (AC-157) reads from and writes to `users.beta_vi
 - Per-locale number/date formatting beyond what the i18n library provides out of the box.
 - Android-specific locale or theme handling (Phase 2).
 - Writing directly to `users.beta_video_privacy` — MOD-010 calls MOD-001's public service; MOD-001 owns the column write.
+- A language or theme control on the signed-out screens — the app uses stored on-device settings (or device defaults) before sign-in; no UI control is presented to signed-out users (AC-202/AC-203).

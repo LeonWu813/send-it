@@ -4,8 +4,8 @@
 **Module Name**: Auth & Profile
 **Phase**: 1
 **Dependencies**: MOD-005 (`BetaVideoGrid` component, `fetchBetaVideosByUser` service, and `BetaVideoReelViewer` `profile` context for the own-videos grid on ProfileScreen, AC-164)
-**Last Synced from PRD Revision**: 48
-**Last Updated**: 2026-10-18
+**Last Synced from PRD Revision**: 49
+**Last Updated**: 2026-10-22
 
 ---
 
@@ -18,6 +18,8 @@ Handle signup, sign-in (email, Apple, Google), session management, and user prof
 ## Context
 
 New climbers need a fast, trustworthy onboarding path that lets them complete signup and start logging. Send It supports Email, Apple Sign-In, and Google Sign-In; Apple Sign-In is required by the App Store because a third-party sign-in (Google) is offered. After auth, the user lands directly on the Home tab without requiring any gym selection step (AC-001 revised). The `privacy_setting` column is always `public`; there is no user-facing toggle to change it to `followers_only`. The column is retained in the schema for potential future use but is not user-controllable in Phase 1. Profile activity (send history, profile surface) is visible to all authenticated users regardless of this value (AC-063).
+
+For US-001 (AC-201), when the sign-in creates a new account, the system fills the user's `display_name` and `avatar_url` from the values the provider supplies at that sign-in, but only if the field is currently null or empty (blank after trimming). A field that already holds a value is never overwritten. Google supplies the full name and profile photo; Apple supplies the name only on the very first Apple sign-in and never supplies a photo. The provider's values are used only at account creation; later changes to the user's Google or Apple name or photo are not copied into the profile. The user may change both values through Edit Profile (AC-117).
 
 The MOD-001 engineer must also execute the `home_gym_id` removal: add a forward migration to DROP COLUMN `home_gym_id` from `public.users` and remove all source references listed in the Impact Map (auth-service.ts, types.ts, AuthNavigator.tsx, HomeGymSelectionScreen.tsx, test files, i18n catalogs). This removal is required because the `SavedGym` join table (owned by MOD-012) replaces the single `home_gym_id` field.
 
@@ -36,6 +38,7 @@ The Logout control is removed from the Profile screen (AC-167) and relocated to 
 - In-app admin tooling.
 - User-editable grade overrides.
 - Saved gyms (owned by MOD-012).
+- Copying later changes to the user's Google or Apple name or photo into the profile (AC-201 — provider values only fill empty fields on the sign-in that creates the account).
 
 ---
 
@@ -46,7 +49,7 @@ The Logout control is removed from the Profile screen (AC-167) and relocated to 
 - **US-012**: Set beta video privacy
 - **US-022**: See who follows me and who I follow
 
-**US-001 Acceptance Criteria**: AC-001
+**US-001 Acceptance Criteria**: AC-001, AC-201
 
 **US-011 Acceptance Criteria**: AC-116, AC-117, AC-118, AC-160, AC-162, AC-164
 
@@ -78,6 +81,8 @@ The Logout control is removed from the Profile screen (AC-167) and relocated to 
 
 
 **AC-200** (revised, Rev 48, cross-cutting — MOD-001 ownership row): The app shall be published and identified as "ProjectDay". MOD-001's scope for this AC: `src/modules/mod-auth-profile/auth-service.ts:142`: `'send-it'` becomes `'projectday'`. `__tests__/auth-service.test.ts:46` mock becomes `'projectday://auth'`. Same commit batch as MOD-012.
+
+**AC-201** (new, Rev 49, MOD-001): When a user signs in with Google Sign-In or Apple Sign-In, the system shall fill the user's profile `display_name` and `avatar_url` from the values the provider supplies at sign-in, but only for a field that is currently null or empty (blank after trimming). A field that already holds a value is never overwritten. Google supplies the user's full name (for `display_name`) and profile photo (for `avatar_url`). Apple supplies the user's name only on the very first Apple sign-in and never supplies a photo, so for an Apple account only `display_name` is filled and `avatar_url` stays empty. When the provider supplies no value for a field, that field is left unchanged. This applies only to the sign-in that creates the account; existing accounts are not changed. The user can change both values afterwards through Edit Profile (AC-117). Later changes to the user's Google or Apple name or photo are not copied into the profile.
 
 ---
 
@@ -127,7 +132,7 @@ All tables guarded by Supabase Row-Level Security policies.
 
 **Outputs:**
 - Authenticated Supabase session stored locally on the device
-- `User` row created/updated in Postgres
+- `User` row created/updated in Postgres; on account-creating sign-in via Google or Apple, `display_name` and `avatar_url` filled from the provider's values if the fields are null/empty (AC-201)
 - `beta_video_privacy` persisted on `User` (controls beta-video visibility across all listing surfaces, AC-158)
 - Profile screen rendering: display name, avatar, bio, follower/following count links (AC-145), embedded send history (MOD-008), 3-column `BetaVideoGrid` of own beta videos below send history (AC-164), and Logout control removed from Profile screen (AC-167; now in MOD-010 SettingsScreen)
 
@@ -147,6 +152,7 @@ All tables guarded by Supabase Row-Level Security policies.
 - The Logout control must be removed from the Profile screen `listFooterComponent`; the session-ending behavior moves to MOD-010's SettingsScreen (AC-167).
 - The notification bell and settings icon must NOT be rendered in the ProfileScreen header — those controls are on MOD-012's global app-level header (AC-184).
 - The MOD-001 engineer must add a migration to DROP COLUMN `home_gym_id` from `public.users` and remove all source references listed in the Impact Map (auth-service.ts, types.ts, AuthNavigator.tsx, HomeGymSelectionScreen.tsx, test files, i18n catalogs).
+- On the sign-in that creates the account, the system must fill `display_name` and `avatar_url` from the Google or Apple provider values if those fields are currently null or empty (blank after trimming); a field that already holds a value must not be overwritten; this applies only to new-account creation, never to subsequent sign-ins (AC-201).
 
 ---
 
@@ -168,6 +174,7 @@ All tables guarded by Supabase Row-Level Security policies.
 - `ProfileNavigator` must be exposed as a public entry-point component so that `AppShell` (MOD-012) can mount it as Tab 3.
 - **Own-videos grid on ProfileScreen (AC-164)**: Import `BetaVideoGrid` and `fetchBetaVideosByUser` from `mod-beta-video`. This is a cross-module import of a public component and service per the Cross-Module Imports convention. MOD-005 does not import from MOD-001 for this feature — it uses `supabase.auth.getSession()` from `lib/supabase` directly, so there is no circular dependency despite the mutual dependency edge.
 - **Logout removal (AC-167)**: Remove the Logout `Pressable` / button from the `ProfileScreen` `listFooterComponent`. The `signOut()` call and error-handling pattern move entirely to MOD-010's SettingsScreen (AC-168). The session-ending behavior is unchanged.
+- **AC-201 profile prefill — Engineering Notes (open Tech Lead decisions)**: AC-201 requires filling `display_name` and `avatar_url` on the account-creating sign-in. Two questions are flagged for Tech Lead review before implementation: (1) where the fill logic runs — in the app after sign-in completes, or at the database level when Supabase Auth writes the new user; (2) whether `avatar_url` links directly to Google's photo URL or copies the image into the avatars Storage bucket. Do not implement AC-201 until Tech Lead has answered both questions (flagged as "For Tech Lead" in the Rev 49 PM Updates entry).
 
 ---
 
@@ -183,3 +190,4 @@ All tables guarded by Supabase Row-Level Security policies.
 - Logout control on the Profile screen (removed per AC-167; moved to MOD-010 SettingsScreen per AC-168).
 - Notification bell or settings icon in the ProfileScreen header (removed per AC-171 revised and AC-184; both controls now live on MOD-012's global app-level header).
 - User-facing toggle for `privacy_setting` (AC-063 — `privacy_setting` is always `public` with no user-facing control in Phase 1).
+- Copying later changes to the user's Google or Apple name or photo into the profile (AC-201 — provider values only fill null/empty fields on the sign-in that creates the account).

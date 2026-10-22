@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-next: claude --agent doc-sync (Rev 49 [SUBSTANTIVE], not architectural: AC-201 into the MOD-001 spec; AC-202 and AC-203 into the MOD-010 spec). Then engineer-mod-auth-profile "implement" for AC-201 and engineer-mod-localization-theme "implement" for AC-202/AC-203, then their QA runs, before the Phase 1 checkpoint.
-timestamp: 2026-10-22T19:00:00Z
+next: Open Tech Lead decisions must be resolved before engineering starts on the new ACs (see Engineering Notes in both specs). After Tech Lead answers the AC-201 questions (where the fill runs; avatar_url direct link vs. copy to bucket) and the AC-202/AC-203 ownership question (which module's engineer touches src/lib/i18n.ts and the theme provider): engineer-mod-auth-profile "spec-update" for AC-201; engineer-mod-localization-theme "spec-update" for AC-202/AC-203. Then their QA runs, before the Phase 1 checkpoint.
+timestamp: 2026-10-22T20:00:00Z
 
 ## PM Updates
 
@@ -3625,6 +3625,35 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 ---
 
 ## Sync Reports
+
+### Sync Report — Delta Sync — 2026-10-22 (Rev 49)
+
+**Sync type:** delta
+**PRD Revision:** 49
+**PM Update reference:** 2026-10-22 [SUBSTANTIVE] — AC-201 Google/Apple profile prefill (MOD-001); AC-202/AC-203 signed-out language and theme persistence (MOD-010) (Rev 49).
+**Files modified:**
+- `project-planning/modules/mod-auth-profile/spec.md` — AC-201 added to Acceptance Criteria Covered, Related User Stories (US-001 AC list += AC-201), Context (US-001 prefill context paragraph added), Requirements, Key Implementation Notes (Tech Lead engineering notes), Out of Scope; Last Synced from PRD Revision 48 → 49.
+- `project-planning/modules/mod-localization-theme/spec.md` — AC-202 and AC-203 added to Acceptance Criteria Covered, Related User Stories (US-017 AC list += AC-202; US-018 AC list += AC-203), Context (signed-out language/theme paragraphs added), Input/Output Contract (signed-out language and signed-out theme sections added), Data Model note, Key Implementation Notes (engineering notes with open ownership question), Out of Scope, Non-goals; Last Synced from PRD Revision 48 → 49.
+- `project-planning/status.md` — Sync Report added (this entry). Last Action block updated.
+**Files created:**
+- none
+**Module removals noted:**
+- none
+**Agent wrappers regenerated:**
+- none — Source Paths, dependencies, and directories for MOD-001 and MOD-010 are unchanged (delta-sync step 5a trigger conditions not met).
+**AMBIGUITY markers added:**
+- none
+**AMBIGUITY markers resolved:**
+- none
+**CONFLICT markers added:**
+- none
+**Engineering Notes placed (open Tech Lead decisions — not AMBIGUITY markers):**
+- `mod-auth-profile/spec.md` Key Implementation Notes: AC-201 fill location (app vs. database trigger) and avatar_url handling (direct link vs. copy to avatars bucket) are flagged as open Tech Lead decisions. Engineering must not start on AC-201 until Tech Lead answers both questions (flagged in Rev 49 PM Updates "For Tech Lead: (1) and (2)").
+- `mod-localization-theme/spec.md` Key Implementation Notes: AC-202 language persistence requires touching `src/lib/i18n.ts` (MOD-012's Source Path). The theme provider location also needs confirmation. Which module's engineer makes those changes is flagged as an open Tech Lead question. Engineering must not start on AC-202/AC-203 until Tech Lead assigns ownership (flagged in Rev 49 PM Updates "For Tech Lead: (3)").
+
+**verify-sync.sh result:** pass — 6/6 checks passed.
+
+---
 
 ### Sync Report — Delta Sync — 2026-10-21 (Rev 48)
 
