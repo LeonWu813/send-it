@@ -4,7 +4,7 @@
 **Module Name**: Localization & Theming
 **Phase**: 1
 **Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
-**Last Synced from PRD Revision**: 43
+**Last Synced from PRD Revision**: 48
 **Last Updated**: 2026-09-30
 
 ---
@@ -64,6 +64,10 @@ For AC-168, the SettingsScreen presents a Logout button at the very bottom, belo
 **AC-157** (new): The Settings screen (SettingsScreen) shall present a "Beta Video Privacy" toggle row with two states — `public` (default, label "所有人"/"All Users") and `followers_only` (label "僅限追蹤者"/"Followers Only") — reflecting the current user's `beta_video_privacy` value (AC-156). Changing the toggle shall call MOD-001's public service function to update the current user's `beta_video_privacy` column (MOD-001 owns the write) and reflect the new state immediately. This row is the only user-facing privacy control. Profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063).
 
 **AC-168** (new): The SettingsScreen shall present a Logout button at the very bottom, below all other rows (including the "Beta Video Privacy" toggle, AC-157, and the "Blocked Accounts" row, AC-155). The button shall use the same styling as the former ProfileScreen logout button (error color, outlined) and the same `signOut()` call and error-handling pattern. This is the relocation target for the Logout control removed from ProfileScreen (AC-167).
+
+**AC-199** (new, Rev 47, MOD-010): No user-facing text (in locale catalogs, push notification text, or email text) shall say "Send It"; every user-visible reference to the app name shall say "ProjectDay" in both English and zh-TW. The climbing verb "send" is unchanged.
+
+**AC-200** (revised, Rev 48, cross-cutting — MOD-010 ownership row, carries AC-199): The app shall be published and identified as "ProjectDay". MOD-010's scope for this AC: `locales/en/common.json:3` and `locales/zh-TW/common.json:3` (`app.name` becomes "ProjectDay" in both). `src/modules/mod-localization-theme/stories/Tokens.stories.tsx:87`. Independent of the other owners.
 
 ---
 

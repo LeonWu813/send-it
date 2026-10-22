@@ -4,7 +4,7 @@
 **Module Name**: Notifications
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-006
-**Last Synced from PRD Revision**: 36
+**Last Synced from PRD Revision**: 48
 
 ---
 
@@ -52,6 +52,8 @@ Beta video uploaders need timely feedback when someone likes their video. The no
 **AC-173** (revised, Rev 35): The notification bell in the global app-level header (AC-184, AC-171 revised) shall display an unread-count badge when the current user has one or more unread notifications (`Notification` rows where `recipient_user_id` equals the current user and `is_read = false`). The badge value shall equal the number of unread rows. The badge shall disappear when the inbox is opened and the batch mark-read (AC-172) completes. (This supersedes the Rev 32 placement of the badge on the ProfileScreen-header bell.)
 
 > **Implementation note (MOD-007 push idempotency)**: The notification/push fan-out Edge Function must be invoked by a Postgres trigger on `Reaction` INSERT (via `pg_net`/webhook), never triggered from the client. The function must be idempotent: a unique constraint on `Notification(recipient_user_id, actor_user_id, type, target_id)` guarantees a second trigger fire (double-tap / client retry) cannot create a duplicate notification row or a duplicate push. This is a requirement for the MOD-007 spec.
+
+**AC-200** (revised, Rev 48, cross-cutting — MOD-007 ownership row, part of AC-199): The app shall be published and identified as "ProjectDay". MOD-007's scope for this AC: `supabase/functions/notify-beta-video-like/index.ts:185` (push title "ProjectDay"). Needs redeployment.
 
 ---
 

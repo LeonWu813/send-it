@@ -4,7 +4,7 @@
 **Module Name**: Gym Directory
 **Phase**: 1
 **Dependencies**: MOD-001
-**Last Synced from PRD Revision**: 44
+**Last Synced from PRD Revision**: 48
 
 ---
 
@@ -66,6 +66,8 @@ Gym cover photos are populated by a one-time server-side seeder script (AC-195) 
 **AC-197** (new, Rev 44, MOD-002 — Gym list cover photo thumbnail): The gym list shall display `cover_photo_url` as a thumbnail on each gym card when the value is non-null. When `cover_photo_url` is null, the gym card shall display the initials avatar (AC-198) in the thumbnail slot instead. The "Photos from Google" attribution required by AC-196 shall also be shown on the gym list screen when at least one card is displaying a Google-sourced cover photo.
 
 **AC-198** (new, Rev 44, MOD-002 — Initials avatar fallback): The system shall generate an initials avatar for the gym avatar slot on both the gym list card and the gym detail screen. The initials are derived from the gym's `name` field (first letter of each word, up to two letters, uppercased). The initials avatar is shown whenever `cover_photo_url` is null. It requires no Google API call and no network request. The fallback is purely client-generated and has no external dependency.
+
+**AC-200** (revised, Rev 48, cross-cutting — MOD-002 ownership row, part of AC-199): The app shall be published and identified as "ProjectDay". MOD-002's scope for this AC: New migration `supabase/migrations/<ts>_mod_002_rename_projectday_gym_notes.sql`: `UPDATE gyms SET notes = replace(notes, 'Send It', 'ProjectDay') WHERE notes LIKE '%Send It%'` (safe to re-run; never edit `20260920000002`). `GymDetailScreen.test.tsx:77,118`. Needs `supabase db push`.
 
 ---
 

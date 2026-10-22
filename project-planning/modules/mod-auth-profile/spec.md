@@ -4,7 +4,7 @@
 **Module Name**: Auth & Profile
 **Phase**: 1
 **Dependencies**: MOD-005 (`BetaVideoGrid` component, `fetchBetaVideosByUser` service, and `BetaVideoReelViewer` `profile` context for the own-videos grid on ProfileScreen, AC-164)
-**Last Synced from PRD Revision**: 43
+**Last Synced from PRD Revision**: 48
 **Last Updated**: 2026-10-18
 
 ---
@@ -75,6 +75,9 @@ The Logout control is removed from the Profile screen (AC-167) and relocated to 
 **AC-164** (new): The `ProfileScreen` shall display a 3-column `BetaVideoGrid` (AC-160) as a separate section below the full send history, showing the current user's own beta videos fetched via `fetchBetaVideosByUser(currentUserId)` (AC-162). Tapping a cell shall open `BetaVideoReelViewer` cycling through the current user's own videos, starting at the tapped index. In this context the viewer is passed `reelContext = 'profile'`: the poster-identity row is visible but NOT tappable (no navigation on tap). MOD-005 shall add a `reelContext: 'route' | 'profile'` prop to `BetaVideoReelViewer` — `'route'` keeps the existing behavior (poster row tappable, navigates to the poster's profile per AC-135); `'profile'` renders the poster row visible but not tappable. MOD-001 consumes MOD-005's `BetaVideoGrid`, `fetchBetaVideosByUser`, and `BetaVideoReelViewer` for this section.
 
 **AC-167** (new): The Logout control shall be removed from the `ProfileScreen` `listFooterComponent`. Logout moves to the SettingsScreen (AC-168). This supersedes AC-119's placement of the Logout control on the Profile screen; the session-ending behavior (ends the session and returns the user to the signed-out state) is unchanged — only its location moves.
+
+
+**AC-200** (revised, Rev 48, cross-cutting — MOD-001 ownership row): The app shall be published and identified as "ProjectDay". MOD-001's scope for this AC: `src/modules/mod-auth-profile/auth-service.ts:142`: `'send-it'` becomes `'projectday'`. `__tests__/auth-service.test.ts:46` mock becomes `'projectday://auth'`. Same commit batch as MOD-012.
 
 ---
 

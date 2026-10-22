@@ -4,7 +4,7 @@
 **Module Name**: Home
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002, MOD-003 (saved_routes / route-visit data and route detail navigation for the Projecting Routes section, AC-177/AC-178; shared route card thumbnail source `photo_url`, AC-183), MOD-006 (followed-climbers activity for the Following section, AC-182), MOD-007 (NotificationInboxScreen + unread-count for the global-header bell, AC-184)
-**Last Synced from PRD Revision**: 41
+**Last Synced from PRD Revision**: 48
 
 ---
 
@@ -89,7 +89,42 @@ As a climber connected to the local scene, I want a Home screen that shows an an
 
 **AC-192** (revised, Rev 41, MOD-012 shared route card): The shared route card (AC-183) shall accept a `size?: 'standard' | 'compact'` prop (default `'standard'`). In `'standard'` variant the thumbnail (sourced from the route's `photo_url` per AC-183) shall be **88pt × 88pt**; in `'compact'` variant it shall be **64pt × 64pt**. Callers in tight layouts (e.g. send-history) may use `compact`. The card layout shall be: left side = the tape badge (AC-191, displaying the route grade), the route name, the beta-count subtitle (when present, AC-189), the send badge (when `hasSend`, AC-190), and the bookmark icon (AC-046/AC-047); right side = the thumbnail at the size appropriate to the `size` prop. All icons and metadata are grouped on the left side of the card only, not scattered around the card.
 
+**AC-200** (revised, Rev 48, MOD-012 as project files owner; cross-cutting): The app shall be published and identified as "ProjectDay":
 
+(1) **App Store Connect**: the app name shall be "ProjectDay" and the subtitle shall be "Route Tracker & Beta Sharing" (28 characters; App Store Connect allows at most 30). Both values live in App Store Connect, not in the repository, so Leon checks (1) there once the App Store Connect record exists (setup.md 11.5); QA does not test it.
+
+(2) **Repository identifiers**: every app-name identifier in the repository (Expo app name, slug and scheme, iOS bundle identifier, package name, native project names, and code identifiers, comments and documentation) shall use "ProjectDay", or "projectday" where the identifier format does not allow capital letters. The exact values are:
+- Expo `name`: `ProjectDay`
+- Expo `slug`: `projectday`
+- Expo `scheme`: `projectday`
+- `ios.bundleIdentifier`: `com.projectday.bouldering`
+- `package.json` `name`: `projectday`
+- `extra.eas.projectId`: the real EAS project UUID from setup.md 11.4. The current value, `send-it-tw-bouldering-app`, is not a UUID and does not meet this criterion.
+
+(3) **Compliance check**: run at the repository root, the command `git grep -n -i -E "send it|send-it|send_it|sendit" -- . ':!project-planning' ':!README.md'` shall print only lines covered by the four exemptions below. The command searches tracked files only, so `node_modules/`, `ios/Pods/`, `ios/build/` and untracked files are outside the check. `README.md` is renamed at the final checkpoint.
+- **Exempt (a)**: migration files under `supabase/migrations/` committed before Rev 47 (commit `1e7f073`), and the one MOD-002 gym-notes rename migration. Applied migrations are never edited, and the rename migration has to name the old text to find it.
+- **Exempt (b)**: the path token `send-it-design`, which names an external design repository that this repository does not own. It appears in `src/lib/theme.ts`, `.storybook/MIGRATION.md` and the five design-team agent files. The prose around these paths is still renamed.
+- **Exempt (c)**: the English verb phrase "send it back" in the 12 `qa-mod-*` agent files. It is framework template wording, not the app name.
+- **Exempt (d)**: the phrase "Send It design team" in the five design-team agent files (`design-lead.md`, `ui-designer.md`, `ux-designer.md`, `ux-researcher.md`, `motion-designer.md`). Those files are outside Doc-Sync's generated set and their internal team-name phrase is exempt from the check.
+
+The check is run only after Leon has renamed the repository folder (setup.md 11.8) and Doc-Sync has run `"template refresh"` to regenerate the 24 engineer and QA agent files.
+
+The climbing verb "send" and identifiers built on it (for example `mod-send-logging`, `send-service.ts`) are not the app name and are unchanged. The new bundle identifier means a new App Store Connect app record, which Leon has accepted.
+
+**Ownership** (Tech Lead change review, 2026-10-21): each row that names a module is part of that module's work for AC-200 (and AC-199 where marked).
+
+| Owner | Files / scope |
+|---|---|
+| MOD-012 `engineer-mod-home` | `app.json`: `name`, `slug`, `ios.bundleIdentifier`, add `"scheme": "projectday"`, real EAS `extra.eas.projectId` UUID, `photosPermission` copy. `package.json` and `package-lock.json` (name `projectday`). `ios/` regenerated with `expo prebuild --clean` and `pod install` (`SendIt*` becomes `ProjectDay*`). `app.plugin.js`: must strip `aps-environment` from the entitlements, because the Apple Developer account is not active. `.storybook/MIGRATION.md` prose (keep the `send-it-design` path token). `src/lib/theme.ts:2,18` (comments only; keep the `send-it-design` path token). `src/components/ui/Stepper.tsx:38` (`ACCESSORY_ID`). `src/components/ui/ListRow.tsx:21`. `src/components/ui/stories/AppText.stories.tsx:12`. `src/components/ui/stories/ListRow.stories.tsx:73`. `src/modules/mod-home/components/__tests__/AppHeader.test.tsx:11` (stale comment). `.env.example:2` header. Lands first, together with MOD-001, because the scheme change spans both. Native Build Gate required. |
+| MOD-001 `engineer-mod-auth-profile` | `src/modules/mod-auth-profile/auth-service.ts:142`: `'send-it'` becomes `'projectday'`. `__tests__/auth-service.test.ts:46` mock becomes `'projectday://auth'`. Same commit batch as MOD-012. |
+| MOD-010 `engineer-mod-localization-theme` | `locales/en/common.json:3` and `locales/zh-TW/common.json:3` (`app.name` becomes "ProjectDay" in both). `src/modules/mod-localization-theme/stories/Tokens.stories.tsx:87`. Carries AC-199. Independent of the other owners. |
+| MOD-007 `engineer-mod-notifications` | `supabase/functions/notify-beta-video-like/index.ts:185` (push title "ProjectDay"). Needs redeployment. Part of AC-199. |
+| MOD-009 `engineer-mod-moderation` | `supabase/functions/report-digest/index.ts:114` (email header "ProjectDay — Open Report Digest"). Needs redeployment. Part of AC-199. |
+| MOD-002 `engineer-mod-gym-directory` | New migration `supabase/migrations/<ts>_mod_002_rename_projectday_gym_notes.sql`: `UPDATE gyms SET notes = replace(notes, 'Send It', 'ProjectDay') WHERE notes LIKE '%Send It%'` (safe to re-run; never edit `20260920000002`). `GymDetailScreen.test.tsx:77,118`. Needs `supabase db push`. Part of AC-199. |
+| Tech Lead | `.gitignore`: adds a `scratchpad/` entry. The header comment was already renamed in commit `9c2da95`. |
+| Doc-Sync | `production.md` app name. The 24 generated engineer and QA agent files, regenerated with `"template refresh"` after Leon renames the folder (setup.md 11.8). They are never hand-edited. |
+| Leon | Supabase dashboard, Google consent screen, Expo project, Apple Developer / App Store Connect, folder rename (setup.md section 11). Deletes `PRD_TW_Bouldering_App.md` and `scratchpad/` in a `human:` commit. |
+| Out of scope | Supabase and PostHog project names. `README.md` (final checkpoint). `project-planning/`. |
 
 ---
 

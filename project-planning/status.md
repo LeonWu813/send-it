@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-next: claude --agent doc-sync (Rev 48, AC-200 [SUBSTANTIVE], not architectural: no /pstack:how, no second Tech Lead review). INT-028 stays DEFERRED (Leon, 2026-10-21): re-decide it via claude --agent tech-lead "decisions: INT-028 ..." after the rename ships, before Apple Sign-In is re-enabled or the app is submitted.
-timestamp: 2026-10-21T23:55:00Z
+next: engineer-mod-home "spec-update" + engineer-mod-auth-profile "spec-update" together first (Native Build Gate required; same commit batch — scheme change spans both). Then independently: engineer-mod-localization-theme "spec-update", engineer-mod-notifications "spec-update", engineer-mod-moderation "spec-update", engineer-mod-gym-directory "spec-update". AC-200(3) compliance check runs only after Leon renames the repo folder (setup.md 11.8) and doc-sync runs "template refresh". INT-028 stays DEFERRED: re-decide via claude --agent tech-lead "decisions: INT-028 ..." after the rename ships.
+timestamp: 2026-10-21T23:59:00Z
 
 ## PM Updates
 
@@ -3502,6 +3502,34 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 ---
 
 ## Sync Reports
+
+### Sync Report — Delta Sync — 2026-10-21 (Rev 48)
+
+**Sync type:** delta
+**PRD Revision:** 48
+**PM Update reference:** 2026-10-21 [SUBSTANTIVE] — AC-200 revised with Leon's answers to Tech Lead Q1–Q5 and PM P1–P7: subtitle, identifiers, compliance check with four exemptions, ownership table (Rev 48).
+**Files modified:**
+- `project-planning/production.md` — App name renamed throughout: header, Project Overview, Architecture Overview — "Send It" → "ProjectDay" (5 occurrences). Header: Last synced from PRD rev 46 → 48; Last Updated 2026-10-20 → 2026-10-21.
+- `project-planning/modules/mod-home/spec.md` — AC-200 (full text, Rev 48) added to Acceptance Criteria Covered. Last Synced from PRD Revision 41 → 48.
+- `project-planning/modules/mod-auth-profile/spec.md` — AC-200 MOD-001 ownership row added to Acceptance Criteria Covered. Last Synced from PRD Revision 43 → 48.
+- `project-planning/modules/mod-gym-directory/spec.md` — AC-200 MOD-002 ownership row (part of AC-199) added to Acceptance Criteria Covered. Last Synced from PRD Revision 44 → 48.
+- `project-planning/modules/mod-notifications/spec.md` — AC-200 MOD-007 ownership row (part of AC-199) added to Acceptance Criteria Covered. Last Synced from PRD Revision 36 → 48.
+- `project-planning/modules/mod-moderation/spec.md` — AC-200 MOD-009 ownership row (part of AC-199) added to Acceptance Criteria Covered. Last Synced from PRD Revision 34 → 48.
+- `project-planning/modules/mod-localization-theme/spec.md` — AC-199 (formal definition, MOD-010 owner) and AC-200 MOD-010 ownership row (carries AC-199) added to Acceptance Criteria Covered. Last Synced from PRD Revision 43 → 48.
+- `project-planning/status.md` — Sync Report added (this entry). Last Action block updated.
+**Files created:**
+- none
+**Files NOT touched (per sync instructions):**
+- The 24 engineer/QA agent files — template refresh deferred until after Leon renames the repo folder (setup.md 11.8).
+- Design-team agent files (`design-lead.md`, `ui-designer.md`, `ux-designer.md`, `ux-researcher.md`, `motion-designer.md`) — exempt per AC-200 exemption (d).
+**AMBIGUITY markers added:**
+- none
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh result:** pass — 6/6 checks passed.
+
+---
 
 ### Sync Report — Delta Sync — 2026-10-20 (Rev 46)
 

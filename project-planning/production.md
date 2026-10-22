@@ -1,17 +1,17 @@
-# Send It — Production Reference
+# ProjectDay — Production Reference
 
-**Project**: Send It (Taiwan-first indoor bouldering app)
+**Project**: ProjectDay (Taiwan-first indoor bouldering app)
 **Phase**: 1 — iOS MVP, Taipei + New Taipei launch
-**Last synced from PRD**: rev 46 (2026-10-20)
-**Last Updated**: 2026-10-20
+**Last synced from PRD**: rev 48 (2026-10-21)
+**Last Updated**: 2026-10-21
 
 ---
 
 ## Project Overview
 
-Send It is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at the gyms they follow, and connect with other climbers in the local scene. The app is organized around a persistent three-tab bottom navigation shell — Home, Gyms, and Profile — with the Home tab as the landing screen after login. Rather than a single fixed home gym, each climber maintains a multi-gym saved list: they bookmark any gyms they care about and see them, alongside the climbers they follow, on the Home screen.
+ProjectDay is a Taiwan-first mobile app for indoor bouldering climbers. It gives climbers a fast way to log sends (route + grade + attempts + status), share and watch beta videos (short technique clips) tied to specific routes, browse what's currently set at the gyms they follow, and connect with other climbers in the local scene. The app is organized around a persistent three-tab bottom navigation shell — Home, Gyms, and Profile — with the Home tab as the landing screen after login. Rather than a single fixed home gym, each climber maintains a multi-gym saved list: they bookmark any gyms they care about and see them, alongside the climbers they follow, on the Home screen.
 
-Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a filter-first route submission flow with server-enforced duplicate protection that keeps user-submitted data clean without waiting on official gym partnerships.
+ProjectDay's wedge is a lightweight, Taiwan-first version of Kaya's core loop — log, watch beta, see history — built on an admin-curated gym directory (so the app has real coverage on day one) plus a filter-first route submission flow with server-enforced duplicate protection that keeps user-submitted data clean without waiting on official gym partnerships.
 
 ---
 
@@ -33,7 +33,7 @@ Send It's wedge is a lightweight, Taiwan-first version of Kaya's core loop — l
 
 ## Architecture Overview
 
-Send It is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
+ProjectDay is a mobile client (React Native / Expo, iOS-only for Phase 1) talking directly to Supabase for auth, data, storage, and serverless functions. There is no bespoke backend server in Phase 1.
 
 - The **client** owns rendering, local UI state, client-generated thumbnails, and localization. In Phase 1 the client performs **no** video compression — it uploads the original native video file as-is after an upfront size gate (≥ 45 MB is rejected; see §8 AC-031/AC-169). It authenticates via Supabase Auth (Email / Apple / Google) and stores the session locally.
 - The client's top-level UI is a **persistent three-tab bottom navigation shell**. **Tab 1 (Home)** hosts the Home surface (MOD-012). **Tab 2 (Gyms)** hosts the existing gym navigation stack (MOD-002 gym directory + detail, with MOD-003 route catalog reachable beneath it). **Tab 3 (Profile)** hosts the current user's profile surface (MOD-001) with their embedded send history and stats (MOD-008). The Home tab is the default tab after login. The tab shell (`AppShell`) lives in `src/modules/mod-home/` (MOD-012 owns it). Tab state is a local `useState<TabKey>` in `AppShell`. All tab subtrees are kept alive using `display: 'none'` (never conditional unmount). Session is threaded to each tab navigator as a prop; `useSession` remains the singleton for reactive session changes.

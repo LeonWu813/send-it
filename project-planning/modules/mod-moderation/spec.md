@@ -4,7 +4,7 @@
 **Module Name**: Moderation (Report & Block)
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-005, MOD-006
-**Last Synced from PRD Revision**: 34
+**Last Synced from PRD Revision**: 48
 **Last Updated**: 2026-09-30
 
 ---
@@ -60,6 +60,8 @@ App Store Guideline 1.2 requires that apps with user-generated content provide (
 **AC-085** (revised, Rev 34): The system shall run a scheduled Edge Function (every 6 hours) that emails the admin (wu.tsan@northeastern.edu) a digest of all open reports (`Report.status = open`) older than 12 hours, so the solo operator is alerted to unresolved objectionable-content reports within the App Store Guideline 1.2 response window. This digest covers the `Report` table only (user-profile and beta-video content reports filed via AC-080); it does not include the `VideoReport` table (beta-video reports filed via AC-140), which the admin reviews manually in Supabase Studio. **Phase 1 deferral (accepted, not a bug)**: real email delivery (Resend/SMTP) and cron registration are deferred post-launch; the `report-digest` Edge Function exists and queries the `Report` table correctly but only `console.log`s the digest in Phase 1. The operator (wu.tsan@northeastern.edu) reviews open reports manually in Supabase Studio. Real email delivery and a registered cron schedule are revisited post-launch when report volume warrants automation.
 
 **AC-151** (new): Selecting "Report" in the three-dots sheet (AC-150) shall, in a single user action, both notify the admin and block the reported user: the system shall call `reportUser` (persisting a report record to the `Report` table for admin review per AC-080) and `blockUser` (AC-082) sequentially for the target user. This report-and-block behavior replaces the prior report-only profile action. The user shall see a confirmation, and the profile shall immediately show the blocked state (AC-153).
+
+**AC-200** (revised, Rev 48, cross-cutting — MOD-009 ownership row, part of AC-199): The app shall be published and identified as "ProjectDay". MOD-009's scope for this AC: `supabase/functions/report-digest/index.ts:114` (email header "ProjectDay — Open Report Digest"). Needs redeployment.
 
 ---
 
