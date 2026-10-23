@@ -234,7 +234,7 @@ export default function StatsPanel({
             key={key}
             variant={onOpenDetails ? 'pressable' : 'static'}
             onPress={onOpenDetails}
-            padding={theme.spacing.smd}
+            padding={theme.layout.cardPadding}
             accessibilityLabel={`${label}, ${a11y}`}
             accessibilityHint={onOpenDetails ? t('profileHistory.stats.compactHint') : undefined}
             style={styles.compactTile}
@@ -480,8 +480,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       minWidth: 0,
     },
     tileInner: {
-      paddingVertical: theme.spacing.smd,
-      paddingHorizontal: 14,
+      padding: theme.layout.cardPadding,
       gap: theme.spacing.xs,
     },
     chartHeader: {
