@@ -11,7 +11,7 @@ import { ROUTE_COLORS } from '../types';
 // Off-spec design tooling. Fake data only.
 const SIZES = ['sm', 'md', 'lg'] as const;
 const GRADES = ['V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'];
-// 'unknown' demonstrates the "Other" fallback (surfaceAlt + hairline).
+// 'unknown' demonstrates the "Other" fallback (surfaceAlt).
 const COLOR_OPTIONS = [...ROUTE_COLORS, 'unknown'];
 
 const meta: Meta<typeof RouteColorBadge> = {

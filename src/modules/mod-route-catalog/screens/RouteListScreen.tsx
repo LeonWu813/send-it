@@ -488,7 +488,7 @@ export default function RouteListScreen({
         </View>
         <View style={styles.sheetGroup}>
           <AppText variant="headline">{t('routeCatalog.filter.color')}</AppText>
-          <View style={styles.chipWrap} accessibilityRole="radiogroup">
+          <View style={[styles.chipWrap, styles.colorChipWrap]} accessibilityRole="radiogroup">
             {ROUTE_COLORS.map((color) => (
               <ColorFilterChip
                 key={color}
@@ -571,7 +571,6 @@ function ColorFilterChip({
       variant="choice"
       label={t(`routeCatalog.colors.${color}`)}
       swatch={swatch.fill}
-      swatchHair={swatch.hair}
       selected={selected}
       onPress={onPress}
     />
@@ -597,7 +596,6 @@ function ActiveColorChip({
       selected
       label={label}
       swatch={swatch.fill}
-      swatchHair={swatch.hair}
       onPress={onPress}
       onClear={onClear}
       clearAccessibilityLabel={t('routeCatalog.filter.removeChip', { label })}
@@ -645,6 +643,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     },
     sheetGroup: {
       gap: theme.layout.sectionHeaderGap,
+    },
+    // C4/A8: transparent colour chips: pull the row left by the chip's 14pt padding so the swatch sits on the 20 keyline
+    colorChipWrap: {
+      marginLeft: -14,
     },
     chipWrap: {
       flexDirection: 'row',

@@ -511,7 +511,6 @@ function ColorOption({
       variant="choice"
       label={t(`routeCatalog.colors.${color}`)}
       swatch={swatch.fill}
-      swatchHair={swatch.hair}
       selected={selected}
       onPress={onPress}
     />

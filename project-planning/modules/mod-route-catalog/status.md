@@ -2,6 +2,13 @@
 
 ## Engineering Progress
 
+### Flat/alignment audit round 4 (2026-10-24, rev 3 section 6 + 7)
+
+- Ascent card (C1-C5): header row no longer 44 layout; it is the 24 pill height. The ⋯ is a `PressableScale` around a 20 icon (box at R16) with `hitSlop` 12 (inside the card clip; on-device check needed, RN-web drops hitSlop). Card `gap` 8 (sm) between header / 「N 次」 / note. Note: tinted box removed, plain upright `subhead` `textSecondary` at the 16 keyline (human decision C5).
+- White tape light `#C9C3B8`, fill only. `hair` flag, `TAPE_HAIR` and the swatch ring retired (`useTapeSwatch` returns `{ fill }`; `swatchHair` no longer passed to Chip; `src/lib/tape.ts` re-export updated). Chip's own `swatchHair` prop (shared) left untouched.
+- Route List filter sheet: colour chip wrap `marginLeft: -14` so the swatch sits on the 20 keyline.
+- Tests: SendHistoryDetail note/hitSlop, new `tape.test.ts`. jest mod-route-catalog 121/121, lint clean. Measured at :6006 (light): ascent card padding top 16 / right 16 / bottom 16 / left 16.
+
 ### Flat/alignment audit round 3 (2026-10-23, items #5 #6 #14)
 
 - #6 Send History ascent card: `SendStatus` is `alignSelf: flex-start`, which top-anchored the pill. Wrapped in a View inside a `minHeight: minTouchTarget` (44) header row, so pill, date and ⋯ share the row centre; 「N 次」 and note stay below on the same keyline (A7).

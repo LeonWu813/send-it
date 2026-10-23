@@ -23,6 +23,7 @@ jest.mock('../../mod-send-logging', () => ({
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
@@ -149,6 +150,19 @@ describe('SendHistoryDetailScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Struggled on the crux')).toBeTruthy();
     });
+  });
+
+  it('C5: the note is plain upright text (no tinted box, no italic) and the header row has a fixed hitSlop target', async () => {
+    mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT_WITH_NOTE]);
+
+    render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    const note = await screen.findByText('Struggled on the crux');
+    const flat = StyleSheet.flatten(note.props.style) ?? {};
+    expect(flat.fontStyle).not.toBe('italic');
+    expect(StyleSheet.flatten(note.parent?.props.style)?.backgroundColor).toBeUndefined();
+    const more = screen.getByLabelText('More actions');
+    expect(more.props.hitSlop).toEqual({ top: 12, bottom: 12, left: 12, right: 12 });
   });
 
   it('AC-129: shows private indicator for private ascents', async () => {

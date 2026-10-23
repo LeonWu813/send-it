@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../../lib/theme';
-import { TAPE_HAIR, resolveTape } from '../tape';
+import { resolveTape } from '../tape';
 import type { RouteColor } from '../types';
 
 interface RouteColorBadgeProps {
@@ -29,13 +29,13 @@ interface RouteColorBadgeProps {
   onMedia?: boolean;
 }
 
-/** Fill / hairline for the 11x11 tape swatch (colour-filter chip, thumbnail dot). */
-export function useTapeSwatch(color: string): { fill: string; hair?: string } {
+/** Fill for the 11x11 tape swatch (colour-filter chip, thumbnail dot). Fill only, no ring. */
+export function useTapeSwatch(color: string): { fill: string } {
   const { theme } = useTheme();
   const mode = theme.isDark ? 'dark' : 'light';
   const tape = resolveTape(mode, color);
-  if (!tape.known) return { fill: theme.colors.surfaceAlt, hair: TAPE_HAIR[mode] };
-  return { fill: tape.entry.fill, hair: tape.entry.hair ? TAPE_HAIR[mode] : undefined };
+  if (!tape.known) return { fill: theme.colors.surfaceAlt };
+  return { fill: tape.entry.fill };
 }
 
 export default function RouteColorBadge({

@@ -33,9 +33,11 @@ import {
   Card,
   IconButton,
   InlineError,
+  PressableScale,
   SendStatus,
   Spinner,
 } from '../../../components/ui';
+import { Ionicons } from '@expo/vector-icons';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, RADIUS, innerRadius, useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
@@ -164,7 +166,7 @@ export default function SendHistoryDetailScreen({
             ascents.map((ascent) => {
               const displayDate = new Date(ascent.logged_at).toLocaleDateString();
               return (
-                <Card key={ascent.id} variant="static">
+                <Card key={ascent.id} variant="static" style={styles.ascentCard}>
                   <View style={styles.ascentRowHeader}>
                     {/* A7: SendStatus is alignSelf flex-start; the wrapper lets the row centre it */}
                     <View>
@@ -173,13 +175,15 @@ export default function SendHistoryDetailScreen({
                     <View style={styles.ascentRowHeaderRight}>
                       <AppText variant="footnote" color="textSecondary">{displayDate}</AppText>
                       {/* SH-1: "..." opens the delete confirmation — all rows are the user's own ascents */}
-                      <IconButton
-                        name={ICON.more.outline}
-                        size={20}
-                        color="textSecondary"
+                      {/* C2: layout box = the 20pt glyph (C4: glyph edge on R16); the 44pt target is hitSlop 12 (4pt inside the card clip) */}
+                      <PressableScale
                         onPress={() => { setPendingDeleteId(ascent.id); }}
+                        hitSlop={styles.moreSlop}
+                        accessibilityRole="button"
                         accessibilityLabel={t('routeCatalog.detail.moreActions')}
-                      />
+                      >
+                        <Ionicons name={ICON.more.outline} size={theme.iconSize.md} color={theme.colors.textSecondary} />
+                      </PressableScale>
                     </View>
                   </View>
                   <View style={styles.ascentMeta}>
@@ -191,9 +195,7 @@ export default function SendHistoryDetailScreen({
                     )}
                   </View>
                   {ascent.note !== null && (
-                    <View style={styles.noteContainer}>
-                      <AppText variant="footnote" style={styles.noteText}>{ascent.note}</AppText>
-                    </View>
+                    <AppText variant="subhead" color="textSecondary">{ascent.note}</AppText>
                   )}
                 </Card>
               );
@@ -298,8 +300,16 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     emptyText: {
       paddingVertical: theme.spacing.xl,
     },
+    ascentCard: {
+      gap: theme.spacing.sm,
+    },
+    moreSlop: {
+      top: theme.spacing.md - theme.spacing.xs,
+      bottom: theme.spacing.md - theme.spacing.xs,
+      left: theme.spacing.md - theme.spacing.xs,
+      right: theme.spacing.md - theme.spacing.xs,
+    },
     ascentRowHeader: {
-      minHeight: theme.layout.minTouchTarget,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
@@ -308,22 +318,12 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing.xs,
-      marginRight: -theme.spacing.smd,
     },
     ascentMeta: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing.md,
       flexWrap: 'wrap',
-    },
-    noteContainer: {
-      marginTop: theme.spacing.sm,
-      padding: theme.spacing.sm,
-      borderRadius: theme.radius.control,
-      backgroundColor: theme.colors.surfaceAlt,
-    },
-    noteText: {
-      fontStyle: 'italic',
     },
   });
 }
