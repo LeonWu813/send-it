@@ -4789,3 +4789,83 @@ Both failures route to Engineer (mod-home):
 | No hardcoded values | PASS |
 
 **Result: PASS — ready for QA re-verification of AC-202/AC-203 sign-out path.**
+
+### QA Run 24 — Regression — AC-202/AC-203 Sign-out Wiring — 2026-10-22
+
+**Workflow**: regression-test (re-verifying the two failures from QA Run 23 after bugfix commits `1fc7cde` and `bf5c94b`)
+
+**Scope**: AC-202 sign-out wiring (`applySignedOutLanguage()`) and AC-203 sign-out wiring (`setThemeUserId(null)` + ThemeProvider branch). Also re-checks all items that passed in QA Run 23.
+
+---
+
+#### Verification 1 — AC-202: `applySignedOutLanguage()` called on sign-out
+
+REGRESSION PASS AC-202: `applySignedOutLanguage` is imported in `AppShell.tsx` (line 71). The existing `useEffect([session.user.id, setThemeUserId])` now returns a cleanup function that calls `void applySignedOutLanguage()` (line 196). On sign-out, React unmounts AppShell and triggers the cleanup, which reads the device-level stored language via `loadLanguage()` and calls `i18n.changeLanguage()` if the language differs. Falls back to `detectDeviceLanguage()` when nothing is stored. The function is correctly defined in `src/lib/i18n.ts` (lines 122–132) and is non-throwing.
+
+`grep -rn "applySignedOutLanguage" src/` confirms: defined once in `src/lib/i18n.ts`, called once in `src/modules/mod-home/AppShell.tsx` cleanup. The original failure — function defined but never called — is resolved.
+
+---
+
+#### Verification 2 — AC-203: `setThemeUserId(null)` called on sign-out; ThemeProvider branch fires
+
+REGRESSION PASS AC-203: `ThemeContextValue.setThemeUserId` is now typed `(userId: string | null) => void` (theme.ts line 540). The concrete implementation `function setThemeUserId(newUserId: string | null): void` (theme.ts line 634) sets `userId` state to the new value. The same AppShell cleanup now calls `setThemeUserId(null)` (line 195), which sets ThemeProvider's `userId` state to null. ThemeProvider's `useEffect([userId])` (theme.ts lines 594–625) then fires with `userId === null`, entering the `loadSignedOutTheme()` branch that calls `loadTheme()` from devicePrefs and applies the stored device-level theme. The ThemeProvider's internal `userId` state was already declared `string | null` — the fix is a public interface widening only, backward-compatible.
+
+The original failure — `setThemeUserId` accepting only `string` with no mechanism to reset to null in the same session — is resolved.
+
+---
+
+#### Verification 3 — `setThemeUserId` signature: interface and implementation both `string | null`
+
+PASS — Both confirmed:
+- `ThemeContextValue` interface: `setThemeUserId: (userId: string | null) => void` (theme.ts line 540)
+- Concrete implementation: `function setThemeUserId(newUserId: string | null): void` (theme.ts line 634)
+
+---
+
+#### Verification 4 — All callers of `setThemeUserId` still type-check
+
+PASS — `grep -rn "setThemeUserId" src/` finds only `AppShell.tsx`. Two call sites:
+- `setThemeUserId(session.user.id)` — `string` is assignable to `string | null` ✓
+- `setThemeUserId(null)` — `null` is assignable to `string | null` ✓
+No other callers exist. No type error.
+
+---
+
+#### Verification 5 — TypeScript
+
+PASS — `npx tsc --noEmit`: 0 errors, 0 output.
+
+---
+
+#### Verification 6 — Test suite
+
+PASS — `npm test -- --watchAll=false --no-coverage`: **655 tests, 45 suites, 0 failures**. Matches the QA Run 23 full-suite baseline. The engineer's self-check showed 654/655 (one pre-existing flaky failure in mod-send-logging); that suite passes cleanly in this run — no new failures.
+
+---
+
+#### Verification 7 — AC-202/AC-203 app-start behavior (from QA Run 23)
+
+Confirming the previously passing items are still intact:
+
+- **i18n.ts init chain** (AC-202 app-start): The `.then()` chain on `i18n.init()` that calls `loadLanguage()` and applies a stored device language at app start is unchanged — `src/lib/i18n.ts` was not modified in the bugfix commit. PASS.
+- **ThemeProvider `userId === null` branch** (AC-203 app-start): The `useEffect([userId])` in ThemeProvider that calls `loadSignedOutTheme()` when `userId === null` is unchanged from the original engineer commit. PASS.
+- **AC-090/AC-091/AC-092 signed-in behavior**: `detectDeviceLanguage()`, `loadLanguageForUser(userId)`, and `loadSavedOverride` per-user logic are all unchanged. PASS.
+
+---
+
+### Summary — QA Run 24
+
+| Item | Result |
+|---|---|
+| REGRESSION: AC-202 `applySignedOutLanguage()` called in AppShell cleanup | PASS — wired; original failure resolved |
+| REGRESSION: AC-203 `setThemeUserId(null)` called in AppShell cleanup | PASS — wired; original failure resolved |
+| `setThemeUserId` signature: `string \| null` in interface and implementation | PASS |
+| All callers of `setThemeUserId` type-check (string assignable to `string \| null`) | PASS |
+| TypeScript: `npx tsc --noEmit` | PASS — 0 errors |
+| Test suite: 655 tests, 45 suites | PASS — 0 failures |
+| AC-202 app-start stored language applied (unchanged from QA Run 23 PASS) | PASS |
+| AC-203 app-start stored theme applied when userId null (unchanged from QA Run 23 PASS) | PASS |
+| AC-090/AC-091/AC-092 signed-in behavior unchanged | PASS |
+| New regressions | NONE |
+
+**Result: PASS — AC-202 and AC-203 sign-out wiring verified. No new regressions.**

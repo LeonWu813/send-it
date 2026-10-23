@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-auth-profile
-mode: verify
-module: MOD-001
+agent: qa-mod-home
+mode: regression
+module: MOD-012
 result: pass
-summary: QA Run 9 — AC-201 (Google/Apple profile prefill on new account creation) + ProfileScreen layout bug fix. Migration SQL verified: ON CONFLICT DO NOTHING, NULLIF/TRIM guards, correct fallback chains for display_name and avatar_url. Apple in-app prefill (fillDisplayNameIfEmpty) verified: queries before updating, skips on non-empty and on nil fullName. Google avatar bucket copy (copyGoogleAvatarToBucket) verified: lh3 URL check, fetch+arrayBuffer+Uint8Array, content-type validation, errors swallowed. uploadAvatar remote URL guard verified. ProfileScreen fallback branch wraps contentTopInset/contentBottomInset. 8 new AC-201 tests pass (21 total in auth-service.test.ts). tsc 0 errors. 655 total tests, 654 pass (1 pre-existing flaky failure in mod-send-logging — not in scope). Apple first-sign-in fullName delivery noted as needs-device-test; does not block static pass.
-next: coordinator — AC-201 QA PASS (static). Apple first-sign-in device confirmation is a known prerequisite per the Native Build Gate convention. Resume coordinator flow from previous next step (qa-mod-home re-verify AC-202/AC-203, QA Run 24).
+summary: QA Run 24 — AC-202 (applySignedOutLanguage wired in AppShell cleanup) and AC-203 (setThemeUserId accepts string|null; setThemeUserId(null) called in AppShell cleanup; ThemeProvider userId===null branch fires) both verified. setThemeUserId callers type-check. tsc 0 errors. 655 tests, 45 suites, 0 failures. No new regressions. All QA Run 23 passing items confirmed intact.
+next: coordinator — MOD-012 QA Run 24 PASS. AC-202/AC-203 sign-out wiring verified. Resume coordinator flow.
 timestamp: 2026-10-22
 
 ## PM Updates
