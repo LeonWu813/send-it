@@ -87,7 +87,7 @@ export function Badge({ count, live = false }: BadgeProps): React.JSX.Element | 
         minHeight: size,
         minWidth: size,
         paddingHorizontal: theme.spacing.xs,
-        borderRadius: theme.borderRadius.full,
+        borderRadius: theme.radius.full,
         backgroundColor: theme.colors.error,
         alignItems: 'center',
         justifyContent: 'center',

@@ -215,11 +215,12 @@ export function Toast({
   );
   if (!mounted) return null;
 
+  // flash/error: dark HUD like default (bg/fg unified); icon colour stays tinted for differentiation.
   const palette =
     tone === 'flash'
-      ? { bg: c.sendFlashContainer, fg: c.sendFlash, action: c.sendFlash, icon: c.sendFlash, border: 'transparent' }
+      ? { bg: c.toastBackground, fg: c.onToast, action: c.toastAction, icon: c.sendFlash, border: 'transparent' }
       : tone === 'error'
-        ? { bg: c.errorContainer, fg: c.onErrorContainer, action: c.onErrorContainer, icon: c.error, border: 'transparent' }
+        ? { bg: c.toastBackground, fg: c.onToast, action: c.toastAction, icon: c.error, border: 'transparent' }
         : { bg: c.toastBackground, fg: c.onToast, action: c.toastAction, icon: c.onToast, border: c.toastBorder };
   const iconName = icon ?? (tone === 'flash' ? ICON.sendFlash.filled : tone === 'error' ? ICON.error.outline : undefined);
   const stacked = fontScale >= 1.6;

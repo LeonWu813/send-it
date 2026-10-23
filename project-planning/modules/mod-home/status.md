@@ -5024,3 +5024,46 @@ Steps:
 | Device check: language does not flash when changing theme with mismatched device/account languages | PENDING — needs Leon's sign-off on device |
 
 **Result: AUTOMATED PASS — device check PENDING. INT-030 automated verification complete. Device sign-off required before QA VERIFIED.**
+
+---
+
+## Engineering Progress — Design-System Fixes + HomeScreen Story — 2026-10-22
+
+**Scope**: Two design-system fixes to shared UI components owned by mod-home (`src/components/ui/`), plus a new Storybook story for HomeScreen.
+
+### Issue 1 — Toast.tsx: flash/error tone palette migrated to dark HUD
+
+**Fix**: In `src/components/ui/Toast.tsx`, the `palette` object for `flash` and `error` tones previously used light containers as background (`sendFlashContainer` / `errorContainer`). Changed `bg` and `fg` for both tones to `toastBackground` / `onToast` (the dark HUD tokens already used by the default tone). Action color for both tones changed from the light-container foreground to `toastAction`. Icon colours preserved as-is (`sendFlash` gold for flash, `error` red for error) to maintain visual differentiation by glyph/colour as spec requires.
+
+**Files changed**: `src/components/ui/Toast.tsx`
+
+### Issue 10 — Badge.tsx: deprecated `borderRadius.full` → `radius.full`
+
+**Fix**: In `src/components/ui/Badge.tsx` line 90 (Animated.View style), replaced deprecated `theme.borderRadius.full` with `theme.radius.full` (same value, 9999; `BORDER_RADIUS` is marked deprecated in theme.ts in favour of `RADIUS`). Grep confirmed no remaining `theme.borderRadius.*` references in either Toast.tsx or Badge.tsx.
+
+**Files changed**: `src/components/ui/Badge.tsx`
+
+### Task 2 — HomeScreen.stories.tsx
+
+**Added**: `src/modules/mod-home/stories/HomeScreen.stories.tsx` with three exported stories:
+- `Playground` / `SignedIn` — all four sections populated via supabase stubs (admin_banners, saved_gyms, user_route_visits, saved_routes, routes, rpc:routes_with_new_beta, ascents, follows, beta_videos).
+- `Empty` — all stubs return empty arrays; Events Banner shows the "No active events" placeholder card (AC-112 Rev 38, section never hidden); other sections show inline empty-state prompts.
+
+Pattern follows `AppHeader.stories.tsx` and `TabBar.stories.tsx`. Wraps in `ToastProvider` (required by `useToast()`). `AppHeaderContext` is a no-op without AppShell (returns 0 insets — correct for an isolated story).
+
+**Files changed**: `src/modules/mod-home/stories/HomeScreen.stories.tsx` (new)
+
+### Self-check results
+
+| Item | Result |
+|---|---|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| Tests for changed components (Toast, Badge, AppHeader, HomeScreen, TabBar, RouteCard) | PASS — 74 tests, 5 suites |
+| Full test suite | 661/662 — 1 pre-existing non-deterministic failure in `AscentList.test.tsx` (MOD-004, passes in isolation 12/12, confirmed pre-existing) |
+| No remaining `theme.borderRadius.*` in Toast.tsx or Badge.tsx | PASS |
+| No new dependencies | PASS |
+| No hardcoded colors | PASS |
+| Files outside mod-home source path | None |
+| Scripts: `self-check.sh` | Not present in this project — manual checklist performed instead |
+
+**Result: PASS**
