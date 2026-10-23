@@ -57,7 +57,7 @@ function Demo({ saved, sendStyle, betaVideoCount, hasPhoto, section, grade, colo
 }
 
 const meta: Meta<Args> = {
-  title: 'Home/RouteCard',
+  title: 'Patterns/RouteCard',
   component: Demo,
   args: {
     saved: false,
@@ -116,4 +116,4 @@ function ListDemo(): React.JSX.Element {
 }
 
 /** Cards stacked with `cardGap` 12, as in Projecting Routes: press, scroll-press and bookmark each independently. */
-export const List: StoryObj = { render: () => <ListDemo /> };
+export const AllVariants: StoryObj = { render: () => <ListDemo /> };

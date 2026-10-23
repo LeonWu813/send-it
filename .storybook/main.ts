@@ -45,7 +45,7 @@ function expoTypeDeclarationsPlugin(): Plugin {
 const config: StorybookConfig = {
   framework: '@storybook/react-native-web-vite',
   stories: ['../src/**/*.stories.@(ts|tsx)', '../src/**/*.mdx'],
-  addons: [],
+  addons: ['@storybook/addon-docs'],
   core: { disableTelemetry: true },
   viteFinal: async (viteConfig) => {
     viteConfig.plugins = [supabaseStubPlugin(), expoTypeDeclarationsPlugin(), ...(viteConfig.plugins ?? [])];

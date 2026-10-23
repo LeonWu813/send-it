@@ -38,7 +38,7 @@ function Scrolled({ scrolled, ...args }: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'Home/AppHeader',
+  title: 'Patterns/AppHeader',
   component: AppHeader as React.ComponentType<Args>,
   decorators: [
     (Story, ctx) => (

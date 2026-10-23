@@ -14,7 +14,7 @@ Off-spec design tooling (added on `design/storybook`, pending PR review).
 Colocate in the module: `src/modules/<mod-name>/stories/<ComponentName>.stories.tsx`
 (Tokens and Icons pages: `src/modules/mod-localization-theme/stories/`; shared `ui/` components: `src/components/ui/stories/`).
 One Controls-driven story per component; see `MIGRATION.md` section 6.
-Story titles: `<Module or area>/<ComponentName>`, e.g. `Home/HomeScreen`.
+Story titles: `Components/<Name>`, `Patterns/<Name>`, `Pages/<Tab>/<Page>` (see "How to add a page story").
 Jest ignores `*.stories.tsx` (it only runs `*.test.*` / `__tests__`).
 
 ```tsx
@@ -25,6 +25,40 @@ const meta: Meta<typeof MyCard> = { title: 'Home/MyCard', component: MyCard };
 export default meta;
 export const Default: StoryObj<typeof MyCard> = { args: { title: 'Hello' } };
 ```
+
+## How to add a page story
+
+Pages (full screens) live under `Pages/<Tab>/<Page>` (see `send-it-design/ux-team/storybook-ia/storybook-ia.md`)
+and render inside `PhoneFrame` (`.storybook/PhoneFrame.tsx`): an iPhone 16 Pro viewport (393x852, safe area top 59 /
+bottom 34) with the REAL `AppHeader` (driven by the real header store, so `useAppHeader` / `useAppHeaderRoot` /
+`useHideTabBar` / `useTabBarInset` work as in AppShell) and the real floating `TabBar`. Do not render your own
+header, TabBar or `ToastProvider`; the frame provides them (plus `CelebrationHost` and an unread-count provider).
+
+`parameters.page`: `tab` (`'home' | 'gyms' | 'profile'`, default `'home'`), `overlay` (true for notifications,
+settings, other-user profile: wraps in `AppHeaderOverlayScope`, no shell header/TabBar), `chrome` (false for Sign
+In / Sign Up: no header, no TabBar). The TabBar hides itself when the screen calls `useHideTabBar`.
+
+```tsx
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
+import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
+
+const meta: Meta = {
+  title: 'Pages/Gyms/Gym List',                  // English Title Case, no "Screen" suffix
+  component: GymListScreen,                      // the real screen, for traceability
+  tags: ['!autodocs'],                           // Pages have no Docs page
+  parameters: { layout: 'centered', page: { tab: 'gyms' } },
+  decorators: [withPhoneFrame],
+  render: () => <GymListScreen session={fakeSession} />,
+};
+export default meta;
+export const Populated: StoryObj = {};           // then Empty, Loading, Error where they really exist
+```
+
+Seed fake data synchronously before the screen renders (see the Home story): call `resetStubData()`,
+`setStubData('auth:session', { user: { id } })` (screens that call auth need it), then each table.
+`STUB_PENDING` (from the stub) makes a query never resolve: use it for a persistent Loading story.
+If a screen does not really have a Loading or Error state, do not invent one. A decorator listed in
+`decorators` before `withPhoneFrame` renders inside the frame.
 
 ## What every story gets (`.storybook/preview.tsx`)
 

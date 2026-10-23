@@ -1,20 +1,30 @@
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
-import React, { useEffect } from 'react';
-import { View } from 'react-native';
+import React from 'react';
 
-import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
-import { ToastProvider } from '../../../components/ui/Toast';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import HomeScreen from '../screens/HomeScreen';
 
 // Off-spec design tooling. Fake data only; supabase stub never touches the network.
 const fakeSession = { user: { id: 'story-user-me' } } as unknown as Session;
 
-type StubState = 'signed-in' | 'empty';
+type StubState = 'populated' | 'empty' | 'loading';
+
+const ME = 'story-user-me';
 
 function setupStubs(state: StubState): void {
   resetStubData();
-  if (state === 'signed-in') {
+  // fetchUserAchievements (projecting routes) reads the signed-in user from auth.
+  setStubData('auth:session', { user: { id: ME } });
+  if (state === 'loading') {
+    // Never-resolving queries keep every section in its loading state (headings only).
+    ['admin_banners', 'saved_gyms', 'saved_routes', 'routes', 'follows', 'beta_videos', 'user_route_visits', 'ascents', 'rpc:routes_with_new_beta'].forEach(
+      (key) => setStubData(key, STUB_PENDING),
+    );
+    return;
+  }
+  if (state === 'populated') {
     setStubData('admin_banners', [
       { id: 'b1', title: '壁面更新通知', body: '本週六全館 V0-V4 重設，歡迎挑戰。', image_url: null, is_active: true },
     ]);
@@ -42,37 +52,28 @@ function setupStubs(state: StubState): void {
   setStubData('ascents', []);
 }
 
-/** Seed stubs before first render and on arg change (Storybook Controls re-mount). */
+/** Seed stubs synchronously so HomeScreen's first fetch sees the data. */
 function WithStubs({ state, children }: { state: StubState; children: React.ReactNode }): React.JSX.Element {
-  setupStubs(state); // sync seed so HomeScreen's first fetch sees data
-  useEffect(() => { setupStubs(state); }, [state]);
+  setupStubs(state);
   return <>{children}</>;
 }
 
 type Args = { state: StubState };
 
 const meta: Meta<Args> = {
-  title: 'Home/HomeScreen',
-  parameters: { layout: 'fullscreen' },
+  title: 'Pages/Home/Home',
+  component: HomeScreen as never, // real component; story args only drive the stub data
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { tab: 'home' } },
   decorators: [
     (Story, ctx) => (
-      <View style={{ width: 390, height: 780 }}>
-        <ToastProvider>
-          <WithStubs state={(ctx.args as Args).state}>
-            <Story />
-          </WithStubs>
-        </ToastProvider>
-      </View>
+      <WithStubs state={(ctx.args as Args).state}>
+        <Story />
+      </WithStubs>
     ),
+    withPhoneFrame,
   ],
-  args: { state: 'signed-in' },
-  argTypes: {
-    state: {
-      control: 'inline-radio',
-      options: ['signed-in', 'empty'],
-      description: 'signed-in: all four sections populated; empty: every section shows its empty-state or placeholder',
-    },
-  },
+  argTypes: { state: { control: false } },
   render: () => (
     <HomeScreen
       session={fakeSession}
@@ -88,11 +89,13 @@ export default meta;
 
 type Story = StoryObj<Args>;
 
-/** Toggle signed-in / empty in Controls; Events Banner always renders (AC-112 Rev 38). */
-export const Playground: Story = {};
-
 /** All four sections populated: banner, two gyms, two projecting routes, two following-activity rows. */
-export const SignedIn: Story = { args: { state: 'signed-in' } };
+export const Populated: Story = { args: { state: 'populated' } };
 
-/** New-user state: no data. Events Banner shows "No active events" placeholder; other sections show inline empty prompts. */
+/** New-user state: no data. Events Banner shows the "No active events" placeholder; other sections show inline empty prompts. */
 export const Empty: Story = { args: { state: 'empty' } };
+
+/** Every section still fetching (queries never resolve). */
+export const Loading: Story = { args: { state: 'loading' } };
+
+// No Error story: HomeScreen has no error UI. A failed fetch logs to console and falls back to the Empty state.

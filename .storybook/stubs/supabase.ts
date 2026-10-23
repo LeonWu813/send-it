@@ -15,6 +15,12 @@
 type Json = unknown;
 const data = new Map<string, Json>();
 
+/**
+ * Seed a table/rpc with this to make its query never resolve (persistent Loading state):
+ *   setStubData('saved_gyms', STUB_PENDING);
+ */
+export const STUB_PENDING = Symbol('storybook-stub-pending');
+
 export function setStubData(key: string, value: Json): void {
   data.set(key, value);
 }
@@ -28,6 +34,7 @@ function builder(key: string): unknown {
     get(_t, prop) {
       if (prop === 'then') {
         return (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
+          if (data.get(key) === STUB_PENDING) return new Promise(() => {}).then(resolve, reject);
           const raw = data.has(key) ? data.get(key) : single ? null : [];
           const value = single && Array.isArray(raw) ? (raw[0] ?? null) : raw;
           return Promise.resolve({ data: value, error: null, count: Array.isArray(raw) ? raw.length : null }).then(
