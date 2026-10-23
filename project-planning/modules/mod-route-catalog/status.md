@@ -3642,3 +3642,6 @@ Result: **115 passed, 115 total** — 5 suites. Exit 0. No regressions. PASS.
 | TypeScript compilation clean (tsc --noEmit) | PASS |
 
 **REGRESSION PASS — INT-015 fix verified. `withdrawRoute` now throws 'Route could not be withdrawn — it may not be pending or may belong to another user.' when PostgREST returns 0 deleted rows (RLS-silent-block scenario). 115/115 mod-route-catalog tests pass. No regressions introduced.**
+
+### Engineering Progress - TapeBadge outline removal (designer request)
+- Removed the 1pt TAPE_HAIR hairline and the 1.5pt onMedia outline from TapeBadge (fill only, size unchanged). `onMedia` prop kept (no-op). TAPE_HAIR kept: still used by `useTapeSwatch` (11x11 filter-chip / thumbnail swatches), outside this request. Story caption updated. lint and full tests pass (682).

@@ -87,7 +87,7 @@ function PanelBody({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
   );
 }
 
-/** All 9 tapes plus the unknown fallback, sm / md (colour name) / lg (grade) plus an onMedia grade tape, light beside dark, on a white card (hairlines show on white/yellow/pink in light, black in dark). */
+/** All 9 tapes plus the unknown fallback, sm / md (colour name) / lg (grade) plus an onMedia grade tape, light beside dark, on a white card (fill only, no outline). */
 export const AllVariants: Story = {
   render: () => (
     <View style={{ flexDirection: 'row', gap: 16, padding: 16 }}>
