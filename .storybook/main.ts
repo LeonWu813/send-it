@@ -52,6 +52,7 @@ const config: StorybookConfig = {
     viteConfig.resolve ??= {};
     const existing = viteConfig.resolve.alias;
     const extra = [
+      { find: /^expo-image-picker$/, replacement: stub('expo-image-picker.ts') },
       { find: /^@react-native-async-storage\/async-storage$/, replacement: stub('async-storage.ts') },
       { find: /^@\//, replacement: `${path.resolve(root, 'src')}/` },
     ];

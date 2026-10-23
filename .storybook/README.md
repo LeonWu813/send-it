@@ -40,6 +40,7 @@ Every import of `src/lib/supabase` (relative or `@/`) is redirected by a Vite pl
 to `.storybook/stubs/supabase.ts`. Query chains resolve to `{ data: [], error: null }`
 (`null` after `.single()`/`.maybeSingle()`); auth/storage/functions/realtime are inert.
 `EXPO_PUBLIC_SUPABASE_*` are defined as dummy values. `AsyncStorage` is an in-memory stub.
+`expo-image-picker` is aliased to `.storybook/stubs/expo-image-picker.ts` (its raw TS source breaks the dep optimizer on web; pickers resolve as canceled, permissions as granted).
 
 ## Fake data
 
