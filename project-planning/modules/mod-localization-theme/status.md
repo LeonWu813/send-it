@@ -2,6 +2,44 @@
 
 ## Engineering Progress
 
+### Spec-update — 2026-10-22 (AC-202 / AC-203 sign-out save — MOD-010 portion, Rev 50)
+
+**Scope**: Add `saveDeviceLanguage` and `saveDeviceTheme` calls in `SettingsScreen.tsx` `handleLogout()` just before `signOut()` so the current signed-in language and theme override are persisted to device-level storage at sign-out. This is the MOD-010 portion of the AC-202/AC-203 code split defined in the Rev 50 spec (Engineering Notes).
+
+**MOD-012 dependency confirmed**: MOD-012 built `src/lib/devicePrefs.ts` in commit `e76e9d2` — `saveLanguage(DeviceLanguage): Promise<void>` and `saveTheme(DeviceTheme): Promise<void>` are available.
+
+**Changes**:
+
+1. `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`:
+   - Added import: `import { saveLanguage as saveDeviceLanguage, saveTheme as saveDeviceTheme } from '../../../lib/devicePrefs'`
+   - In `handleLogout()`: added `await saveDeviceLanguage(selectedLanguage)` and `await saveDeviceTheme(selectedOverride)` inside the `try` block, before `await signOut()`. Comments explain the AC-202/AC-203 purpose and the acceptable behavior if `signOut()` subsequently fails.
+   - Updated JSDoc block: added AC-202 / AC-203 documentation explaining what is saved, where, and when.
+
+**Type compatibility verified**:
+- `selectedLanguage: SupportedLanguage = 'en' | 'zh-TW'` matches `DeviceLanguage = 'en' | 'zh-TW'` — identical union, no casting.
+- `selectedOverride: ThemeOverride = 'system' | 'light' | 'dark'` matches `DeviceTheme = 'system' | 'light' | 'dark'` — identical union, no casting.
+
+**Self-check**:
+- [pass] `npx tsc --noEmit` — exit 0, 0 TypeScript errors
+- [pass] `npm run check:i18n` — "i18n completeness OK" (exit 0); no new i18n keys introduced
+- [pass] `npx jest --testPathPattern="mod-localization-theme" --watchAll=false --passWithNoTests` — exit 0 (no tests in this module)
+- [pass] `npm test -- --watchAll=false` — 655 tests pass, 45 suites, 0 failures
+- [pass] `git diff --name-only` — only `src/modules/mod-localization-theme/screens/SettingsScreen.tsx` changed (other 3 files in the diff are pre-existing uncommitted changes from other modules — `mod-auth-profile/__tests__/auth-service.test.ts`, `mod-auth-profile/auth-service.ts`, `mod-auth-profile/screens/ProfileScreen.tsx`)
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+- [pass] No new dependencies (devicePrefs.ts is in `src/lib/`, already in the project)
+- [skip] Integration tests — no integration test command configured in production.md
+- [skip] DB/PostgREST embed verification — no database queries in this change
+- [skip] Native dependency gate — no native dependency added or changed
+- [skip] Spring Boot, LLM, container, CORS checks — not applicable to this module
+
+**applySignedOutLanguage() gap noted**: `src/lib/i18n.ts` exports `applySignedOutLanguage()` which should be called from AppShell (MOD-012) when auth state changes to signed-out. Grep of `src/modules/mod-home/AppShell.tsx` confirms the call is NOT wired in. AppShell is in MOD-012's source path — this is outside MOD-010's write scope. Consequence: immediately after sign-out within the same app session, i18n language stays at the user's last set language (set by `loadLanguageForUser`) rather than switching to the device-level stored language. The stored language WILL be applied correctly on the next app launch (i18n.ts init reads `loadLanguage()` after setup). The theme side IS handled correctly (ThemeProvider reads `loadTheme()` when userId is null, per MOD-012's commit). **Blocker for QA on AC-202 same-session language behavior**: the `applySignedOutLanguage()` call in AppShell/AuthNavigator is missing; this must be wired by MOD-012's engineer before the signed-out language behavior (AC-202) can be fully verified in-session.
+
+**Files modified**:
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+
+---
+
 ### Spec-update — 2026-10-21 (AC-199 + AC-200 MOD-010 row — app name rename to ProjectDay)
 
 **Scope**: Rev 48 spec-update: rename app name from "Send It" to "ProjectDay" in all MOD-010-owned locale and story files.

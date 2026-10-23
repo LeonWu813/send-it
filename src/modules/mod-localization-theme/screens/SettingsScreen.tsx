@@ -19,6 +19,12 @@
  *
  * AC-168: Logout button at the very bottom calls signOut() from MOD-001.
  *
+ * AC-202 / AC-203: Just before signOut(), the current language (AC-091) and
+ *   theme override (AC-092) are saved to device-level storage via
+ *   saveDeviceLanguage() and saveDeviceTheme() from src/lib/devicePrefs.
+ *   These device-scoped values are read at app start and after sign-out by
+ *   i18n.ts and ThemeProvider so signed-out screens use the last chosen settings.
+ *
  * On mount, loads persisted preferences from AsyncStorage and applies them so
  * the saved state is restored correctly on each launch.
  *
@@ -48,6 +54,7 @@ import type { SupportedLanguage } from '../../../lib/i18n';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
+import { saveLanguage as saveDeviceLanguage, saveTheme as saveDeviceTheme } from '../../../lib/devicePrefs';
 import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
@@ -180,10 +187,16 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   }
 
   // AC-168: Logout handler
+  // AC-202 / AC-203: persist current language and theme to device storage just
+  // before sign-out so signed-out screens can restore them (saveLanguage /
+  // saveTheme are device-scoped, not per-user). If signOut() subsequently fails
+  // the saves have still happened — that is acceptable per spec.
   async function handleLogout(): Promise<void> {
     setIsSigningOut(true);
     setLogoutError(null);
     try {
+      await saveDeviceLanguage(selectedLanguage);
+      await saveDeviceTheme(selectedOverride);
       await signOut();
       // AuthNavigator observes onAuthStateChange and routes back to signed-out state
     } catch (err) {
