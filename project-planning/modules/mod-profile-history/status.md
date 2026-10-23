@@ -7,6 +7,8 @@
 
 **Off-spec design work (page-review v2.3) pending PR review** (2026-10-23, branch `design/page-templates`): StatsPanel `variant="compact"` + `onOpenDetails`; new `ProfileHistoryView` pushed view (useAppHeader back + title) and `useOpenProfileHistory()` / `ProfileHistoryNavProvider` wired in AppShell as an overlay; R0 spacing fixed (content x=16, StatsPanel no longer pads itself); T-1 verified (only the 12pt Highest pill remains); stories Compact + pushed Profile History; i18n key `profileHistory.stats.compactHint`.
 
+**Flat-alignment round 3** (2026-10-23): compact StatsPanel tiles use `cardPadding` 16 (A1, #8); full-panel small tiles padded 16 all round so labels share the hero baseline (#9); Profile History sends list now passes `colorTag` + `section` to RouteCard (gray tapes and repeated grade in meta were caused here, not in groupToRouteCards). No shadows in module.
+
 **Storybook screen story (2026-10-22)**: Added `ProfileHistoryScreen.stories.tsx` covering 4 states: Loading (static Spinner matching `visibility === 'loading'`), Populated (4 route cards, StatsPanel with sends, grade tabs), Empty (zero-records prompt), FilteredEmpty (attempt-only ascents — hasRecords=true, no route cards, inline empty state). Stub data seeded via `setStubData('rpc:get_profile_history', ...)` and `setStubData('rpc:get_profile_stats', ...)` in per-story decorators following the `NotificationInboxScreen.stories.tsx` pattern. No component source changed. tsc: 0 errors in module. 29/29 tests pass.
 
 **Off-spec design tooling (2026-10-16)**: Added Storybook stories for StatsPanel, FilterBar and AscentHistoryItem in `src/modules/mod-profile-history/stories/` on branch `design/storybook`. Not part of the spec; no component source changed. Pending PR review.
