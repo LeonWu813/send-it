@@ -10,12 +10,15 @@
  *   - MOD-006 (AC-163)
  *   - MOD-001 (AC-164)
  *
- * Design system v2.2 (§32.9, off-spec design work): portrait 3:4 tiles (`mediaTileAspect`), gap 2,
- * tiles measure their own width with onLayout; an inset grid (horizontalPadding > 0) is clipped by ONE
- * outer View (`media` 12 + continuous curve), tiles have radius 0; no per-tile badge or play disc;
+ * Design system v2.3 (§32.9, page-review RD-3): portrait 3:4 tiles (`mediaTileAspect`), gap 2,
+ * tiles measure their own width with onLayout (the PARENT owns the screen margin: the grid never adds
+ * its own, so tiles are 119pt at x=16 on a 393 screen); an inset grid (horizontalPadding > 0) rounds
+ * each tile's OUTER corners individually (`media` 12 + continuous curve) so a short last row still has
+ * round corners; no per-tile badge or play disc;
  * press overlays `mediaScrim` (press 100 in, release 120 out, no scale: Motion #12); a real thumbnail
  * fades in over `short` unless cached; with no videos and `onUpload`, the first tile is the upload
- * slot (existing upload flow only) followed by a dashed placeholder.
+ * slot (existing upload flow only) followed by a dashed placeholder; those slot tiles are separate
+ * objects, so they sit `inlineGap` 8 apart, each fully rounded.
  *
  * Tech Lead decisions (Rev 13, point 6):
  * - No VideoView per grid cell (avoid N live decoders).
@@ -64,8 +67,8 @@ export interface BetaVideoGridProps {
   /**
    * Horizontal padding (in dp) applied by the caller's wrapping container on each side of the grid.
    * 0 (default, profile screens, edge-to-edge): no outer rounding. > 0 (route detail, inset):
-   * the whole grid gets the `media` outer radius. The gap is 2 either way. The tile width itself comes from onLayout, not from this value
-   * (it is only the first-render estimate before the layout pass).
+   * the grid's outer corners get the `media` radius, per tile. The gap is 2 either way. The tile width comes from onLayout, not from
+   * this value (it is only the first-render estimate before the layout pass). The grid adds NO margin of its own.
    */
   horizontalPadding?: number;
   /**
@@ -86,6 +89,9 @@ function loadableThumbnailUri(video: BetaVideo): string | null {
 interface GridMetrics {
   cellSize: number;
   cellHeight: number;
+  /** Upload-slot tile width (its own 8pt gap) and height. */
+  slotSize: number;
+  slotHeight: number;
   gap: number;
   /** Outer corner radius of the whole grid (0 when full-bleed). */
   radius: number;
@@ -106,11 +112,16 @@ function useGridMetrics(horizontalPadding: number): {
     Math.max(0, (available - gap * (NUM_COLUMNS - 1)) / NUM_COLUMNS),
   );
   const cellHeight = PixelRatio.roundToNearestPixel(cellSize / theme.componentSize.mediaTileAspect);
+  const slotGap = theme.layout.inlineGap;
+  const slotSize = PixelRatio.roundToNearestPixel(
+    Math.max(0, (available - slotGap * (NUM_COLUMNS - 1)) / NUM_COLUMNS),
+  );
+  const slotHeight = PixelRatio.roundToNearestPixel(slotSize / theme.componentSize.mediaTileAspect);
   const onLayout = useCallback((e: LayoutChangeEvent): void => {
     const w = e.nativeEvent.layout.width;
     setMeasured((prev) => (prev === w || w <= 0 ? prev : w));
   }, []);
-  return { metrics: { cellSize, cellHeight, gap, radius }, onLayout };
+  return { metrics: { cellSize, cellHeight, slotSize, slotHeight, gap, radius }, onLayout };
 }
 
 interface TileProps {
@@ -160,16 +171,18 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
     }).start();
   };
 
-  // When the first row is not full (total < NUM_COLUMNS), the outer container's
-  // overflow:hidden clips the top corners of the grid container — but the spacer
-  // Views to the right of the last real tile sit between the tile and the clipped
-  // corner, so the top-right of the last real tile is NOT rounded by the outer
-  // clip. Apply explicit top corner radii to the relevant tiles instead.
-  const topLeftRadius = index === 0 ? metrics.radius : 0;
-  const topRightRadius = (total < NUM_COLUMNS && index === total - 1) || index === NUM_COLUMNS - 1
-    ? metrics.radius
-    : 0;
-  const bottomRightRadius = total < NUM_COLUMNS && index === total - 1 ? metrics.radius : 0;
+  // Each tile rounds only the corners on the grid's outer boundary (no clipping of the bounding box):
+  // a short last row also rounds the right side of the tile above the empty cell.
+  const rows = Math.ceil(total / NUM_COLUMNS);
+  const row = Math.floor(index / NUM_COLUMNS);
+  const col = index % NUM_COLUMNS;
+  const isLast = index === total - 1;
+  const hasTileBelow = index + NUM_COLUMNS < total;
+  const r = metrics.radius;
+  const topLeftRadius = row === 0 && col === 0 ? r : 0;
+  const topRightRadius = row === 0 && (col === NUM_COLUMNS - 1 || isLast) ? r : 0;
+  const bottomLeftRadius = row === rows - 1 && col === 0 ? r : 0;
+  const bottomRightRadius = isLast || (!hasTileBelow && col === NUM_COLUMNS - 1) ? r : 0;
 
   return (
     <Pressable
@@ -187,7 +200,9 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
         backgroundColor: theme.isDark ? c.surfaceAlt : c.border,
         borderTopLeftRadius: topLeftRadius,
         borderTopRightRadius: topRightRadius,
+        borderBottomLeftRadius: bottomLeftRadius,
         borderBottomRightRadius: bottomRightRadius,
+        ...CONTINUOUS,
       }}
     >
       {uri && !failed ? (
@@ -216,7 +231,7 @@ function UploadSlotRow({ metrics, onUpload }: { metrics: GridMetrics; onUpload: 
   const c = theme.colors;
   const outer = { borderRadius: theme.radius.media, ...CONTINUOUS } as const;
   return (
-    <View style={{ flexDirection: 'row', gap: metrics.gap }} testID="beta-video-grid-slot-row">
+    <View style={{ flexDirection: 'row', gap: theme.layout.inlineGap }} testID="beta-video-grid-slot-row">
       <Pressable
         onPress={onUpload}
         accessibilityRole="button"
@@ -225,8 +240,8 @@ function UploadSlotRow({ metrics, onUpload }: { metrics: GridMetrics; onUpload: 
         style={({ pressed }) => [
           outer,
           {
-            width: metrics.cellSize,
-            height: metrics.cellHeight,
+            width: metrics.slotSize,
+            height: metrics.slotHeight,
             backgroundColor: pressed ? c.surfacePressed : c.surface,
             alignItems: 'center',
             justifyContent: 'center',
@@ -245,8 +260,8 @@ function UploadSlotRow({ metrics, onUpload }: { metrics: GridMetrics; onUpload: 
         style={[
           outer,
           {
-            width: metrics.cellSize,
-            height: metrics.cellHeight,
+            width: metrics.slotSize,
+            height: metrics.slotHeight,
             borderWidth: theme.stroke.emphasis,
             borderStyle: 'dashed',
             borderColor: c.outline,
@@ -345,7 +360,7 @@ export default function BetaVideoGrid({
 
   return (
     <View onLayout={onLayout} testID="beta-video-grid">
-      <View style={{ borderRadius: metrics.radius, ...CONTINUOUS, overflow: 'hidden' }}>{rows}</View>
+      {rows}
     </View>
   );
 }

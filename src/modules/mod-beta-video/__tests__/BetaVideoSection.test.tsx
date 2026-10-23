@@ -161,6 +161,37 @@ describe('BetaVideoSection', () => {
     });
   });
 
+  it('RD-1: host-driven mode shows the header upload action; it reads "Replace my beta" once the viewer has a video (AC-165)', async () => {
+    mockFetchBetaVideos.mockResolvedValue([]);
+    const first = render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} onRegisterUploadLauncher={jest.fn()} />,
+      renderOptions(),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-video-section-upload')).toBeTruthy();
+    });
+    expect(screen.getByTestId('beta-video-section-upload').props.accessibilityLabel).toBe('Upload beta');
+    first.unmount();
+
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
+    render(
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} onRegisterUploadLauncher={jest.fn()} />,
+      renderOptions(),
+    );
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-video-section-upload').props.accessibilityLabel).toBe('Replace my beta');
+    });
+  });
+
+  it('RD-1: no header upload action without a host launcher (legacy mode)', async () => {
+    mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
+    render(<BetaVideoSection routeId="route-001" session={MOCK_SESSION} />, renderOptions());
+    await waitFor(() => {
+      expect(screen.getByTestId('beta-video-grid')).toBeTruthy();
+    });
+    expect(screen.queryByTestId('beta-video-section-upload')).toBeNull();
+  });
+
   it('AC-038: renders the three-column grid when videos exist', async () => {
     mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
 

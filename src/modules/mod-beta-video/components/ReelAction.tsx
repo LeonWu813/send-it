@@ -3,14 +3,18 @@
  *
  * 44pt target on a `mediaScrim` disc (`mediaScrimStrong` while pressed), `xl` glyph, always
  * `onMedia`: on / off is filled vs outline, never a colour (the like is not red). The like plays
- * celebratePeak + topOut + particles.like with a `toggle` haptic; Reduce Motion is a cross-fade only.
+ * celebratePeak + topOut + particles.like with a `toggle` haptic, plus the 3 FistBumpBurst ticks (200ms:
+ * drift 24u outward, opacity 0>1 over 0-60ms, hold to 120ms, out by 200ms) started at the peak, in sync
+ * with the swap to filled; Reduce Motion is a cross-fade only (no ticks).
+ * `fist` renders the approved custom fist (§9.12) instead of Ionicons.
  * Kept in its own file (no expo-video import) so Storybook can render it.
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, View } from 'react-native';
 import { AppText } from '../../../components/ui/AppText';
+import { FistBumpBurst, FistBumpIcon } from '../../../components/ui/FistBumpIcon';
 import { ParticleBurst } from '../../../components/ui/Particles';
 import { PressableScale } from '../../../components/ui/PressableScale';
 import { Spinner } from '../../../components/ui/ProgressBar';
@@ -21,20 +25,23 @@ import { useTheme } from '../../../lib/theme';
 /** Touch target of a Reel action (like / report): 44pt, the glyph is `xl` inside it. */
 export const ACTION_SIZE = 44;
 
+/** Burst ticks: 200ms one-shot; opacity 0>1 by 60ms, hold to 120ms, out by 200ms. */
+const TICK_MS = 200;
+/** Ticks sit 156-204 icon-grid units from the knuckle face (120, 278): a 24u outward drift is a scale about that point. */
+const TICK_SCALE = 1 + 24 / 180;
+const GRID = 512;
+const KNUCKLE = { x: 120, y: 278 };
+
 export interface ReelActionProps {
   testID: string;
   accessibilityLabel: string;
   onPress: () => void;
-  /** Outline when off, filled when on (never a colour change). Ignored when `emoji` is set. */
+  /** Outline when off, filled when on (never a colour change). Ignored when `fist` is set. */
   nameOff?: IoniconName;
-  /** Ignored when `emoji` is set. */
+  /** Ignored when `fist` is set. */
   nameOn?: IoniconName;
-  /**
-   * When set, renders this emoji character instead of an Ionicons glyph.
-   * Selected state is shown via full opacity (selected) vs 0.5 opacity (unselected).
-   * `nameOff` / `nameOn` are ignored when this prop is provided.
-   */
-  emoji?: string;
+  /** Renders the custom fist (outline / filled) instead of Ionicons; `nameOff` / `nameOn` are ignored. */
+  fist?: boolean;
   selected: boolean;
   disabled?: boolean;
   /** Replaces the glyph (report in flight). */
@@ -52,7 +59,7 @@ export function ReelAction({
   onPress,
   nameOff,
   nameOn,
-  emoji,
+  fist,
   selected,
   disabled,
   busy,
@@ -67,6 +74,7 @@ export function ReelAction({
   const [burstKey, setBurstKey] = useState(0);
   const fade = useRef(new Animated.Value(selected ? 1 : 0)).current;
   const pop = useRef(new Animated.Value(1)).current;
+  const tick = useRef(new Animated.Value(0)).current;
   const pressedOn = useRef(false);
 
   // Outline <-> filled cross-fade (also the whole Reduce Motion treatment).
@@ -87,7 +95,10 @@ export function ReelAction({
     setBurstKey((k) => k + 1);
     pop.setValue(scale.celebratePeak);
     Animated.spring(pop, { toValue: 1, ...spring.topOut, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
-  }, [selected, likeMotion, reduceMotion, pop, scale.celebratePeak, spring.topOut]);
+    // Fist bump ticks: one 200ms keyframe run, started with the peak (opacity and drift share `tick`).
+    tick.setValue(0);
+    Animated.timing(tick, { toValue: 1, duration: TICK_MS, easing: bezierFor('linear'), useNativeDriver: USE_NATIVE_DRIVER }).start();
+  }, [selected, likeMotion, reduceMotion, pop, tick, scale.celebratePeak, spring.topOut]);
 
   const glyph = theme.iconSize.xl;
   return (
@@ -117,14 +128,39 @@ export function ReelAction({
       >
         {busy ? (
           <Spinner color="onMedia" size="small" />
-        ) : emoji !== undefined ? (
-          // Emoji variant: single character, opacity conveys selected state.
+        ) : fist ? (
           <Animated.View
-            style={{ width: glyph, height: glyph, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pop }], opacity: selected ? 1 : 0.5 }}
+            style={{ width: glyph, height: glyph, transform: [{ scale: pop }] }}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
-            <Text style={{ fontSize: glyph, lineHeight: glyph * 1.2 }}>{emoji}</Text>
+            <Animated.View style={{ position: 'absolute', opacity: fade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
+              <FistBumpIcon variant="outline" size={glyph} color={c.onMedia} />
+            </Animated.View>
+            <Animated.View style={{ position: 'absolute', opacity: fade }}>
+              <FistBumpIcon variant="filled" size={glyph} color={c.onMedia} />
+            </Animated.View>
+            {likeMotion && burstKey > 0 && !reduceMotion ? (
+              <Animated.View
+                key={burstKey}
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  width: glyph,
+                  height: glyph,
+                  opacity: tick.interpolate({ inputRange: [0, 0.3, 0.6, 1], outputRange: [0, 1, 1, 0] }),
+                  transform: [
+                    { translateX: ((KNUCKLE.x - GRID / 2) / GRID) * glyph },
+                    { translateY: ((KNUCKLE.y - GRID / 2) / GRID) * glyph },
+                    { scale: tick.interpolate({ inputRange: [0, 1], outputRange: [1, TICK_SCALE] }) },
+                    { translateX: -((KNUCKLE.x - GRID / 2) / GRID) * glyph },
+                    { translateY: -((KNUCKLE.y - GRID / 2) / GRID) * glyph },
+                  ],
+                }}
+              >
+                <FistBumpBurst size={glyph} color={c.onMedia} />
+              </Animated.View>
+            ) : null}
           </Animated.View>
         ) : (
           <Animated.View
@@ -144,7 +180,7 @@ export function ReelAction({
       </PressableScale>
       {caption !== undefined ? (
         <View style={{ marginTop: theme.spacing.xs }}>
-          <AppText variant="caption1" weight="600" numeric color="onMedia" testID={captionTestID}>
+          <AppText variant="footnote" weight="600" numeric color="onMedia" testID={captionTestID}>
             {caption}
           </AppText>
         </View>

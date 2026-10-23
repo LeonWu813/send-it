@@ -47,10 +47,11 @@ interface DemoArgs {
 function Demo({ count, horizontalPadding, showUploadSlot, loading, thumbnails, onPressVideo }: DemoArgs): React.JSX.Element {
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  // Same wrapper the real screens use: the inset grid sits inside the screen margin.
+  // Same wrapper the real screens use: the PARENT owns the screen margin (16), the grid adds none.
+  // At 393 wide: grid x=16, tiles 119 (gap 2); upload slot tiles 8 apart.
   const wrapper = horizontalPadding > 0 ? { paddingHorizontal: screenMargin } : null;
   return (
-    <View style={{ width: 390, backgroundColor: theme.colors.background, paddingVertical: theme.spacing.md }}>
+    <View style={{ width: 393, backgroundColor: theme.colors.background, paddingVertical: theme.spacing.md }}>
       <View style={wrapper}>
         <BetaVideoGrid
           // key: remount when thumbnails toggle so the fade-in replays
@@ -105,7 +106,23 @@ export const Playground: Story = {};
 
 const noop = (): void => {};
 
-/** Layout variants side by side: route-detail inset grid, full-bleed profile grid, upload slot (empty), legacy inline empty state, and skeleton loading. */
+/** Incomplete last row (7 and 8 videos): every outer corner of the grid is rounded per tile, including the tile above the empty cell. */
+export const IncompleteLastRow: Story = {
+  render: () => (
+    <View style={{ gap: 24 }}>
+      <Demo count={7} horizontalPadding={16} showUploadSlot loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={8} horizontalPadding={16} showUploadSlot loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={1} horizontalPadding={16} showUploadSlot loading={false} thumbnails={false} onPressVideo={noop} />
+    </View>
+  ),
+};
+
+/** The upload slot (no videos yet): two separate rounded tiles 8pt apart, x=16. */
+export const UploadSlot: Story = {
+  render: () => <Demo count={0} horizontalPadding={16} showUploadSlot loading={false} thumbnails={false} onPressVideo={noop} />,
+};
+
+/** Layout variants side by side: route-detail/profile inset grid (x=16, 119pt tiles), edge-to-edge grid, upload slot (empty), legacy inline empty state, and skeleton loading. */
 export const AllVariants: Story = {
   render: () => (
     <View style={{ gap: 24 }}>

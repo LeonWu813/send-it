@@ -40,12 +40,12 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { AppText } from '../../../components/ui/AppText';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { InlineError } from '../../../components/ui/InlineError';
 import { supabase } from '../../../lib/supabase';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { useTheme } from '../../../lib/theme';
 import { fetchBlockedUserIds } from '../../mod-moderation';
 import { fetchBetaVideosForRoute } from '../beta-video-service';
 import type { BetaVideo } from '../types';
@@ -54,9 +54,9 @@ import BetaVideoReelViewer from './BetaVideoReelViewer';
 import BetaVideoUploader from './BetaVideoUploader';
 
 /**
- * Horizontal padding applied to the section container. Matches `useLayout().screenMargin` at the
- * compact width (16); passed to the grid so it uses the inset (gap 4, rounded) layout. The tile width
- * itself comes from the grid's own onLayout.
+ * Passed to the grid as "inset" (outer corners rounded per tile). The section adds NO margin of its own:
+ * the host screen's content container owns the screen margin and the section gap (page-review RD-3),
+ * so the grid sits at x=16 with 119pt tiles at 393 width.
  */
 const GRID_PADDING = 16;
 
@@ -66,10 +66,11 @@ interface BetaVideoSectionProps {
   /** Authenticated session — used to derive userId for uploads. */
   session: Session;
   /**
-   * AC-130: When provided, BetaVideoSection registers its upload launcher with the
-   * parent so that the AC-130 action row button in RouteDetailScreen can trigger the
-   * MOD-005 upload flow. No internal upload button is rendered in this section in
-   * that case — the trigger lives in RouteDetailScreen's action row only.
+   * Host-driven mode (page-review RD-1, AC-130 change). When provided, the section hides the legacy
+   * inline uploader button and renders the upload entry itself: a trailing action in the section
+   * header (>= 44pt hit area; "Upload beta", or "Replace my beta" once the viewer's own video exists,
+   * AC-165) plus the upload tile of the empty state. The callback receives a launcher the host MAY
+   * call to open the same flow programmatically; the host does not need to render any upload button.
    * The upload flow itself remains owned by MOD-005 (this component).
    */
   onRegisterUploadLauncher?: (launcher: () => void) => void;
@@ -121,7 +122,6 @@ export default function BetaVideoSection({
 }: BetaVideoSectionProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const screenMargin = useLayout().screenMargin;
 
   const [betaVideos, setBetaVideos] = useState<BetaVideo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -235,20 +235,48 @@ export default function BetaVideoSection({
   );
 
   /** AC-039: called by BetaVideoGrid when a cell is tapped. */
+  /** AC-165: one video per user per route; once the viewer's own video is in the list the action replaces it. */
+  const hasOwnVideo = betaVideos.some((v) => v.user_id === session.user.id);
+
   const handlePressVideo = useCallback((index: number): void => {
     setOpenIndex(index);
   }, []);
 
   return (
-    <View style={{ marginTop: theme.layout.sectionGap, paddingHorizontal: screenMargin }}>
-      {/* Section header */}
-      <AppText
-        variant="pageSection"
-        accessibilityRole="header"
-        style={{ marginBottom: theme.layout.sectionHeaderGap }}
+    <View>
+      {/* Section header: title + trailing upload entry (RD-1; >= 44pt hit area) */}
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          minHeight: theme.layout.minTouchTarget,
+          marginBottom: theme.layout.sectionHeaderGap,
+        }}
       >
-        {t('betaVideo.sectionTitle')}
-      </AppText>
+        <AppText variant="pageSection" accessibilityRole="header" style={{ flexShrink: 1 }}>
+          {t('betaVideo.sectionTitle')}
+        </AppText>
+        {onRegisterUploadLauncher && !isLoading ? (
+          <Pressable
+            onPress={() => { void selectHandlerRef.current?.(); }}
+            accessibilityRole="button"
+            accessibilityLabel={hasOwnVideo ? t('betaVideo.replaceMine') : t('betaVideo.emptyUpload')}
+            testID="beta-video-section-upload"
+            hitSlop={{ left: theme.spacing.sm, right: theme.spacing.sm }}
+            style={{
+              minHeight: theme.layout.minTouchTarget,
+              minWidth: theme.layout.minTouchTarget,
+              justifyContent: 'center',
+              alignItems: 'flex-end',
+            }}
+          >
+            <AppText variant="subhead" weight="600" color="primary">
+              {hasOwnVideo ? t('betaVideo.replaceMine') : t('betaVideo.emptyUpload')}
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
 
       {/* Load error (non-fatal) */}
       {loadError ? (
@@ -259,7 +287,7 @@ export default function BetaVideoSection({
 
       {/*
        * AC-038: Three-column thumbnail grid — shared BetaVideoGrid component (Fix 3).
-       * horizontalPadding={GRID_PADDING} selects the inset layout (gap 4, rounded tiles); the
+       * horizontalPadding={GRID_PADDING} selects the inset layout (gap 2, per-tile outer corners); the
        * grid measures its own width. While loading it shows skeleton tiles. The empty state is the
        * ui/ EmptyState `inline` ("no one has shared beta yet" + ghost upload when the header
        * launcher is in use, since the legacy button below already covers the other mode).

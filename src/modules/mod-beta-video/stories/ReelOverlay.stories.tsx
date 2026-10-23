@@ -115,8 +115,7 @@ function Demo(args: DemoArgs): React.JSX.Element {
               setLiked((v) => !v);
               setCount((n) => (liked ? n - 1 : n + 1));
             }}
-            nameOff={ICON.like.outline}
-            nameOn={ICON.like.filled}
+            fist
             selected={liked}
             likeMotion
             caption={String(count)}
@@ -169,7 +168,7 @@ export default meta;
 
 type Story = StoryObj<DemoArgs>;
 
-/** Tap the fistbump/thumbs-up (peak scale, particles; Reduce Motion cross-fades only), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
+/** Tap the fist bump (peak scale, particles, 3 burst ticks; Reduce Motion cross-fades only, no ticks), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
 export const Playground: Story = {};
 
 /** Dark and bright footage side by side: the overlay must read identically on both. */

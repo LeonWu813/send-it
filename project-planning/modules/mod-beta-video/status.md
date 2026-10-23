@@ -2,6 +2,15 @@
 
 ## Engineering Progress
 
+### Off-spec design: RD-3, RD-1, RD-5, like icon swap, T-1 — 2026-10-23 (branch design/page-templates)
+
+- RD-3: grid no longer double-inset (BetaVideoSection drops its own padding/marginTop; parent owns margin). Measured at 393: grid x=16, tiles 119, gap 2. Outer corners rounded per tile (short last row incl.); upload-slot tiles 8pt apart (`inlineGap`), each rounded.
+- RD-1: header trailing upload action (testID `beta-video-section-upload`, >=44pt) in host-driven mode (`onRegisterUploadLauncher` provided); "Upload beta" / "Replace my beta" (own video present, AC-165). Empty-state upload tile kept.
+- RD-5: `betaVideo.sectionTitle` = "Beta 影片" / "Beta videos"; new key `betaVideo.replaceMine`.
+- Like: ReelAction `fist` prop (FistBumpIcon outline/filled, xl 28, onMedia) + FistBumpBurst ticks (200ms, 24u drift, opacity keyframes, skipped under Reduce Motion). No `ICON.like` Ionicons names used in this module any more. No double-tap like burst exists in this module (nothing changed there).
+- T-1: caption1 (12) -> footnote (13) in ReelAction, BetaVideoPlayer, ReelViewer report error.
+- Stories: BetaVideoGrid (IncompleteLastRow, UploadSlot, 393 width), ReelOverlay (fist). Tests: 115 pass; tsc clean.
+
 ### Integration fixes: INT-016 INT-017 INT-020 — 2026-10-21
 
 **INT-016 — Remove getSession() from BetaVideoReelViewer (verified in-code)**
