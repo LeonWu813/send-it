@@ -3,19 +3,18 @@
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
-import { setStubData } from '../../../../.storybook/stubs/supabase';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import NotificationInboxScreen from '../screens/NotificationInboxScreen';
-import { UnreadCountProvider } from '../UnreadCountProvider';
 
-const session = { user: { id: 'user-me' } } as unknown as Session;
+const session = { user: { id: 'story-user-me' } } as unknown as Session;
 
 // Four beta-video-like notifications: rows 0 and 2 unread, rows 1 and 3 read.
 const FAKE_NOTIFICATIONS = [
   {
     id: 'n1',
-    recipient_user_id: 'user-me',
+    recipient_user_id: 'story-user-me',
     actor_user_id: 'u-alice',
     type: 'beta_video_like',
     target_type: 'beta_video',
@@ -25,7 +24,7 @@ const FAKE_NOTIFICATIONS = [
   },
   {
     id: 'n2',
-    recipient_user_id: 'user-me',
+    recipient_user_id: 'story-user-me',
     actor_user_id: 'u-bob',
     type: 'beta_video_like',
     target_type: 'beta_video',
@@ -35,7 +34,7 @@ const FAKE_NOTIFICATIONS = [
   },
   {
     id: 'n3',
-    recipient_user_id: 'user-me',
+    recipient_user_id: 'story-user-me',
     actor_user_id: 'u-cindy',
     type: 'beta_video_like',
     target_type: 'beta_video',
@@ -45,7 +44,7 @@ const FAKE_NOTIFICATIONS = [
   },
   {
     id: 'n4',
-    recipient_user_id: 'user-me',
+    recipient_user_id: 'story-user-me',
     actor_user_id: 'u-david',
     type: 'beta_video_like',
     target_type: 'beta_video',
@@ -56,76 +55,58 @@ const FAKE_NOTIFICATIONS = [
 ];
 
 const FAKE_ACTORS = [
-  { id: 'u-alice', display_name: 'Alice Lin', avatar_url: null },
-  { id: 'u-bob', display_name: 'Bob Chen', avatar_url: null },
-  { id: 'u-cindy', display_name: 'Cindy Wu', avatar_url: null },
-  { id: 'u-david', display_name: 'David Wang', avatar_url: null },
+  { id: 'u-alice', display_name: '林雅婷', avatar_url: null },
+  { id: 'u-bob', display_name: '陳柏宇', avatar_url: null },
+  { id: 'u-cindy', display_name: '吳欣怡', avatar_url: null },
+  { id: 'u-david', display_name: '王大明', avatar_url: null },
 ];
 
-// ── Meta ──────────────────────────────────────────────────────────────────────
+type StubState = 'populated' | 'empty' | 'loading';
 
-const meta: Meta = {
-  title: 'Notifications/NotificationInboxScreen',
-  parameters: { layout: 'fullscreen' },
+/** Seed stubs synchronously so the screen's first fetch sees the data. */
+function WithStubs({ state, children }: { state: StubState; children: React.ReactNode }): React.JSX.Element {
+  resetStubData();
+  setStubData('auth:session', { user: { id: 'story-user-me' } });
+  if (state === 'populated') {
+    setStubData('notifications', FAKE_NOTIFICATIONS);
+    setStubData('users', FAKE_ACTORS);
+  } else if (state === 'loading') {
+    setStubData('notifications', STUB_PENDING);
+  }
+  return <>{children}</>;
+}
+
+type Args = { state: StubState };
+
+const meta: Meta<Args> = {
+  title: 'Pages/Settings & Notifications/Notification Inbox',
+  component: NotificationInboxScreen as never, // real component; story args only drive the stub data
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { overlay: true } },
   decorators: [
-    (Story) => (
-      <View style={{ width: 390, height: 780 }}>
-        {/* UnreadCountProvider required: useUnreadCountContext() is called by the screen. */}
-        <UnreadCountProvider session={session}>
-          <Story />
-        </UnreadCountProvider>
-      </View>
+    (Story, ctx) => (
+      <WithStubs state={(ctx.args as Args).state}>
+        <Story />
+      </WithStubs>
     ),
+    withPhoneFrame,
   ],
+  argTypes: { state: { control: false } },
+  render: () => (
+    <NotificationInboxScreen session={session} isActive onBack={() => {}} onNavigateToUser={() => {}} />
+  ),
 };
 
 export default meta;
-type Story = StoryObj;
+type Story = StoryObj<Args>;
 
-// ── Stories ───────────────────────────────────────────────────────────────────
+/** 4 notifications, 2 unread (dot visible) and 2 read. */
+export const Populated: Story = { args: { state: 'populated' } };
 
-/** Loading skeleton — isActive=false holds the screen in its loading state. */
-export const Loading: Story = {
-  render: () => (
-    <NotificationInboxScreen
-      session={session}
-      isActive={false}
-    />
-  ),
-};
+/** No notifications: empty-state UI. */
+export const Empty: Story = { args: { state: 'empty' } };
 
-/** Populated inbox — 4 notifications, 2 unread (dot visible) and 2 read. */
-export const Populated: Story = {
-  decorators: [
-    (Story) => {
-      setStubData('notifications', FAKE_NOTIFICATIONS);
-      setStubData('users', FAKE_ACTORS);
-      return <Story />;
-    },
-  ],
-  render: () => (
-    <NotificationInboxScreen
-      session={session}
-      isActive={true}
-      onBack={() => {}}
-      onNavigateToUser={() => {}}
-    />
-  ),
-};
+/** Fetch never resolves: skeleton rows. */
+export const Loading: Story = { args: { state: 'loading' } };
 
-/** Empty inbox — no notifications (empty-state UI). */
-export const Empty: Story = {
-  decorators: [
-    (Story) => {
-      setStubData('notifications', []);
-      return <Story />;
-    },
-  ],
-  render: () => (
-    <NotificationInboxScreen
-      session={session}
-      isActive={true}
-      onBack={() => {}}
-    />
-  ),
-};
+// No Error story: the stub cannot return query errors.
