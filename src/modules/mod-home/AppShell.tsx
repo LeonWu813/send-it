@@ -68,7 +68,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { CelebrationHost } from '../../components/ui/CelebrationHost';
 import { ToastProvider } from '../../components/ui/Toast';
-import { loadLanguageForUser } from '../../lib/i18n';
+import { applySignedOutLanguage, loadLanguageForUser } from '../../lib/i18n';
 import { useTheme } from '../../lib/theme';
 import { UnreadCountProvider, NotificationsNavigator } from '../mod-notifications';
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
@@ -184,11 +184,17 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   //   theme override key (app_theme_override_<userId>).
   // - loadLanguageForUser: applies the user-scoped language key (app_language_<userId>)
   //   so the i18n language is per-user rather than device-global.
-  // Both run once per session — AppShell unmounts on sign-out, which causes
-  // ThemeProvider to reset to 'system' on the next login if no preference is saved.
+  // On unmount (sign-out):
+  // - setThemeUserId(null): resets ThemeProvider to device-level stored theme (AC-203).
+  // - applySignedOutLanguage(): restores the device-level stored language (AC-202).
   useEffect(() => {
     setThemeUserId(session.user.id);
     void loadLanguageForUser(session.user.id);
+    return () => {
+      // Restore device-level preferences when this user's session ends (sign-out).
+      setThemeUserId(null);
+      void applySignedOutLanguage();
+    };
   }, [session.user.id, setThemeUserId]);
 
   /** Measured TabBar height — toasts float `toastOffsetAboveTabBar` above it. */

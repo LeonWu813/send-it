@@ -4751,3 +4751,41 @@ PASS — `loadLanguageForUser(userId)` is called by `AppShell.useEffect([session
 Both failures route to Engineer (mod-home):
 1. Wire `applySignedOutLanguage()` into the sign-out path (AC-202).
 2. Add a mechanism to reset ThemeProvider's `userId` to `null` on sign-out so the device-level stored theme is loaded immediately after sign-out (AC-203).
+
+---
+
+## Engineering Progress — AC-202/AC-203 Sign-out Wiring Bugfix — 2026-10-22
+
+**Changes**: Wired the two sign-out cleanup calls that QA Run 23 identified as missing.
+
+### AC-202 — `applySignedOutLanguage()` sign-out wiring
+
+**Fix**: Added `applySignedOutLanguage` import to `AppShell.tsx` and a cleanup return function to the existing `useEffect` that sets user preferences on sign-in. On sign-out, AppShell unmounts, which triggers the cleanup: `void applySignedOutLanguage()` reads the device-level stored language (written by MOD-010's SettingsScreen before sign-out) and calls `i18n.changeLanguage()` if needed. Falls back to `detectDeviceLanguage()` if nothing is stored. Function is idempotent and non-throwing.
+
+**Impact**: The cleanup also fires if `session.user.id` changes while mounted (which does not occur in normal app flow). Safe: `loadLanguageForUser` runs again immediately after with the new id, overwriting any intermediate language change.
+
+**Files changed**: `src/modules/mod-home/AppShell.tsx`
+
+### AC-203 — `setThemeUserId(null)` sign-out wiring
+
+**Fix**: Changed `setThemeUserId` in `src/lib/theme.ts` to accept `string | null` (both the `ThemeContextValue` interface and the concrete implementation). The ThemeProvider's internal `userId` state was already `string | null` — the type widening is backward-compatible; all existing callers that pass a `string` continue to work unchanged. Added `setThemeUserId(null)` to the same AppShell cleanup function as AC-202. When `null` is set, ThemeProvider's `useEffect([userId])` fires with `userId === null` and runs `loadSignedOutTheme()`, which reads `loadTheme()` from devicePrefs and applies the stored device-level theme override immediately within the same session.
+
+**Impact note**: `setThemeUserId` is called from one place (`AppShell.tsx` on mount and now on unmount). No other caller exists in the codebase.
+
+**Files changed**: `src/lib/theme.ts`, `src/modules/mod-home/AppShell.tsx`
+
+### Self-check results
+
+| Item | Result |
+|---|---|
+| `npx tsc --noEmit` (= `npm run lint`) | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 654/655 (1 pre-existing failure in mod-send-logging, confirmed on base commit before and after my changes) |
+| Files outside module scope | None — only `src/lib/theme.ts` and `src/modules/mod-home/AppShell.tsx` modified |
+| AC-202 `applySignedOutLanguage()` called on sign-out | PASS — cleanup in AppShell useEffect |
+| AC-203 `setThemeUserId(null)` called on sign-out | PASS — cleanup in AppShell useEffect |
+| `setThemeUserId` accepts `string \| null` | PASS — interface and implementation both updated |
+| Backward compat: existing `setThemeUserId(string)` callers | PASS — no type error; string is assignable to string \| null |
+| No new dependencies | PASS |
+| No hardcoded values | PASS |
+
+**Result: PASS — ready for QA re-verification of AC-202/AC-203 sign-out path.**

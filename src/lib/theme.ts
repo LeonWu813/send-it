@@ -533,10 +533,11 @@ interface ThemeContextValue {
    * Called once the authenticated userId is known (e.g. from AppShell on mount).
    * ThemeProvider loads and persists the user-scoped theme override key
    * (app_theme_override_<userId>) from that point forward.
-   * When userId is undefined (unauthenticated), the provider falls back to the
-   * system theme with no AsyncStorage reads or writes.
+   * Pass null on sign-out to restore the device-level stored theme immediately
+   * (AC-203). When userId is null, the provider falls back to the device-level
+   * stored theme with no per-user AsyncStorage key.
    */
-  setThemeUserId: (userId: string) => void;
+  setThemeUserId: (userId: string | null) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
@@ -630,7 +631,7 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
     return () => subscription.remove();
   }, []);
 
-  function setThemeUserId(newUserId: string): void {
+  function setThemeUserId(newUserId: string | null): void {
     setUserId(newUserId);
   }
 
