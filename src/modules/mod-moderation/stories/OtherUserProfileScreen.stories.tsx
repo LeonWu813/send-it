@@ -54,9 +54,9 @@ function WithStubs({ state, children }: { state: StubState; children: React.Reac
 type Args = { state: StubState };
 
 const meta: Meta<Args> = {
-  title: 'Pages/Profile/Other User Profile',
+  title: 'Pages/Profile/Other User Profile (dead code)',
   component: OtherUserProfileScreen as never, // real component; story args only drive the stub data
-  tags: ['!autodocs'],
+  tags: ['!dev', '!autodocs'], // page-review §6 #7: dead code, hidden from sidebar, file kept
   parameters: { layout: 'centered', page: { overlay: true } },
   decorators: [
     (Story, ctx) => (
