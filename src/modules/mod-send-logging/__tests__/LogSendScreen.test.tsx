@@ -141,7 +141,7 @@ describe('LogSendScreen', () => {
     render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
 
     const style = StyleSheet.flatten(screen.getByLabelText(/^Attempts$|^嘗試次數$/).props.style);
-    expect(style).toMatchObject({ paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 });
+    expect(style).toMatchObject({ paddingVertical: 12, paddingLeft: 16, paddingRight: 16 });
   });
 
   it('locks attempts to 1 for flash and restores the previous count when switching away', async () => {
