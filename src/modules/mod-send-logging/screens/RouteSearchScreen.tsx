@@ -98,7 +98,10 @@ export default function RouteSearchScreen({
           paddingHorizontal: screenMargin,
         }}
       >
-        <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" on="background" />
+        {/* A8: ghost md button has 20pt (spacing.mdl) side padding; pull the glyph onto the 16pt keyline. */}
+        <View style={{ marginLeft: -theme.spacing.mdl }}>
+          <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" on="background" />
+        </View>
         <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}>
           <AppText variant="title3" accessibilityRole="header">
             {t('sends.selectRoute')}

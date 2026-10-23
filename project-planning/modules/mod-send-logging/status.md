@@ -1810,3 +1810,5 @@ None. All 366/366 tests pass. `tsc --noEmit` exits 0. No previously passing manu
 | New regressions | None |
 
 **Overall status: QA PASS.** All automated checks green (366/366 tests, tsc --noEmit exits 0). AC-131 and AC-132 formally closed: grade display is absent from the log-send form, and is_private is hardcoded true in the submit payload with no user-facing toggle. Human QA confirmed both ACs visually. All previously passing items continue to pass. MOD-004 (Send Logging) is ready for next phase.
+
+- 2026-10-23 flat-alignment round 3 (#15, #17): Cancel glyph on 16pt keyline (marginLeft -spacing.mdl; ghost md padH is 20 not 14), LogSend form flattened (no card, labels at 16); summary card kept.

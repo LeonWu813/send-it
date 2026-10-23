@@ -2,7 +2,7 @@
  * LogSendScreen — the send-logging form.
  *
  * Design system v2.2 (§18A, §19.9): optional compact route summary card, icon SegmentedControl for the
- * style, grouped form card, Stepper for attempts. The submitted payload is unchanged.
+ * style, flat form, Stepper for attempts. The submitted payload is unchanged.
  *
  * Entry point 2 (from Route Detail): routeId and grade are pre-populated.
  * Entry point 1 (from global "+"): caller passes routeId + grade after the
@@ -159,7 +159,10 @@ export default function LogSendScreen({
           marginBottom: theme.layout.sectionGap,
         }}
       >
-        <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" on="background" />
+        {/* A8: ghost md button has 20pt (spacing.mdl) side padding; pull the glyph onto the 16pt keyline. */}
+        <View style={{ marginLeft: -theme.spacing.mdl }}>
+          <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" on="background" />
+        </View>
         <View
           pointerEvents="none"
           style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}
@@ -215,8 +218,8 @@ export default function LogSendScreen({
         </Card>
       )}
 
-      {/* Grouped form card: ONE card, fields gap 16, each field keeps its own border. */}
-      <Card variant="static" style={{ rowGap: theme.layout.fieldGap }}>
+      {/* Flat form (F4): no card container, labels on the 16pt keyline, fields gap 16. */}
+      <View style={{ rowGap: theme.layout.fieldGap }}>
         {/* Style selector — Tap 2 in the ≤4-tap flow */}
         <View style={{ rowGap: theme.spacing.sm }}>
           <AppText variant="fieldLabel">{t('sends.style')}</AppText>
@@ -260,7 +263,7 @@ export default function LogSendScreen({
           maxLength={500}
           showCount
         />
-      </Card>
+      </View>
 
       {/* Error message — AC-012: always shown on failure */}
       {errorMessage !== null && (
