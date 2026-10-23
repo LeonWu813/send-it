@@ -1,23 +1,27 @@
-import React, { useEffect } from 'react';
+import React, { useMemo } from 'react';
 
-import { ThemeProvider, useTheme } from '../src/lib/theme';
+import { buildTheme, ThemeContext, ThemeProvider, useTheme } from '../src/lib/theme';
 
-function Apply({ mode, children }: { mode: 'light' | 'dark'; children: React.ReactNode }): React.JSX.Element | null {
-  const { override, setOverride } = useTheme();
-  useEffect(() => {
-    if (override !== mode) setOverride(mode);
-  }, [override, mode, setOverride]);
-  return override === mode ? <>{children}</> : null;
+function Force({ mode, children }: { mode: 'light' | 'dark'; children: React.ReactNode }): React.JSX.Element {
+  const base = useTheme();
+  // Provide the forced theme synchronously on first render. The real ThemeProvider
+  // loads the stored theme asynchronously and would otherwise overwrite a forced
+  // override after mount (and gating render on it blanked the story).
+  const value = useMemo(
+    () => ({ ...base, theme: buildTheme(mode === 'dark'), override: mode }),
+    [base, mode],
+  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 /**
- * Wraps children in a (nested) real ThemeProvider forced to `mode`, using the
- * provider's public setOverride(). Use it to show light AND dark side by side.
+ * Wraps children in a theme forced to `mode` (always rendered, never blank). Use it to
+ * show light AND dark side by side.
  */
 export function ForcedTheme({ mode, children }: { mode: 'light' | 'dark'; children: React.ReactNode }): React.JSX.Element {
   return (
     <ThemeProvider>
-      <Apply mode={mode}>{children}</Apply>
+      <Force mode={mode}>{children}</Force>
     </ThemeProvider>
   );
 }

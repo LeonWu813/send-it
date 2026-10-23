@@ -540,9 +540,9 @@ interface ThemeContextValue {
   setThemeUserId: (userId: string | null) => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-function buildTheme(isDark: boolean): Theme {
+export function buildTheme(isDark: boolean): Theme {
   return {
     colors: isDark ? DARK_PALETTE : LIGHT_PALETTE,
     spacing: SPACING,
@@ -650,6 +650,9 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
   );
 }
 
+/** Optional width override for useLayout (Storybook phone frame). Default null = real window width. */
+export const LayoutWidthOverrideContext = createContext<number | null>(null);
+
 // ─── Hooks ──
 
 /**
@@ -657,7 +660,9 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
  * module load time.
  */
 export function useLayout(): { screenMargin: number; width: number; isLarge: boolean } {
-  const { width } = useWindowDimensions();
+  const windowWidth = useWindowDimensions().width;
+  // Storybook-only seam: PhoneFrame provides the frame width. Null (the default) in the app.
+  const width = useContext(LayoutWidthOverrideContext) ?? windowWidth;
   const isLarge = width >= LAYOUT.largeWidthBreakpoint;
   return {
     screenMargin: isLarge ? LAYOUT.screenMarginLarge : LAYOUT.screenMarginCompact,

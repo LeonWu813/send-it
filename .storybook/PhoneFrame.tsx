@@ -30,7 +30,7 @@ import { SafeAreaFrameContext, SafeAreaInsetsContext } from 'react-native-safe-a
 
 import { CelebrationHost } from '../src/components/ui/CelebrationHost';
 import { ToastProvider } from '../src/components/ui/Toast';
-import { useTheme } from '../src/lib/theme';
+import { LayoutWidthOverrideContext, useTheme } from '../src/lib/theme';
 import AppHeader from '../src/modules/mod-home/components/AppHeader';
 import {
   AppHeaderProvider,
@@ -121,6 +121,7 @@ function PhoneFrame({ page, children }: { page: PageParameters; children: React.
   return (
     <SafeAreaFrameContext.Provider value={{ x: 0, y: 0, width: PHONE.width, height: PHONE.height }}>
       <SafeAreaInsetsContext.Provider value={insets}>
+        <LayoutWidthOverrideContext.Provider value={PHONE.width}>
         <View
           style={[
             styles.frame,
@@ -135,6 +136,7 @@ function PhoneFrame({ page, children }: { page: PageParameters; children: React.
             </ToastProvider>
           </UnreadCountProvider>
         </View>
+        </LayoutWidthOverrideContext.Provider>
       </SafeAreaInsetsContext.Provider>
     </SafeAreaFrameContext.Provider>
   );
