@@ -2,7 +2,25 @@
 
 ## Engineering Progress
 
-**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens. INT-012: index.ts barrel created; cross-module deep imports fixed in FollowersListScreen, FollowingListScreen, UserProfileScreen. F-4/L-3: fetchLikeInfoBatch removed from public barrel; marked @internal in service.
+**Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens. INT-012: index.ts barrel created; cross-module deep imports fixed in FollowersListScreen, FollowingListScreen, UserProfileScreen. F-4/L-3: fetchLikeInfoBatch removed from public barrel; marked @internal in service. Stories: design-lead audit complete — all four screen stories added (FeedScreen, UserProfileScreen, FollowersListScreen, FollowingListScreen).
+
+### Storybook Screen Stories (2026-10-22)
+
+**Added**: `src/modules/mod-social-feed/stories/` — four story files covering all module screens.
+
+- `FeedScreen.stories.tsx` — Loading (visual wrapper), Populated (3 feed items: 1 ascent + 2 beta videos seeded via `rpc:get_activity_feed` stub), Empty (stub returns []), Error (visual wrapper). Note: FeedScreen is dead code per AC-159; stories added for design coverage only.
+- `UserProfileScreen.stories.tsx` — Loading (visual wrapper), OwnProfile (session.user.id === targetUserId; seeded user/follower-counts/stats stubs), OtherUserPublic (public profile; seeded stubs; Follow button + ⋮ menu visible), PrivateProfile (followers_only profile for non-follower; video grid hidden per AC-063/AC-064).
+- `FollowersListScreen.stories.tsx` — Loading (visual wrapper), Populated (3 follower cards; `follows` stub seeded with `users` join shape), Empty (stub returns []).
+- `FollowingListScreen.stories.tsx` — Loading (visual wrapper), Populated (3 following cards; `follows` stub seeded), Empty (stub returns []).
+
+All stories use the Storybook supabase stub (`setStubData`/`resetStubData`) — no real network calls. `useNavigation`/`useRoute` not needed (app uses no react-navigation context per production.md convention). `useAppHeader` and `useTabBarInset` are no-ops outside AppShell (confirmed in AppHeaderContext source).
+
+**Self-check (stories)**:
+- PASS — `npx tsc --noEmit` — 0 errors
+- PASS — `npm test -- --watchAll=false --silent` — 662/662 tests pass, no regressions
+- PASS — No files changed outside `src/modules/mod-social-feed/stories/`
+- PASS — No new npm dependencies; stories import only from existing project sources and the Storybook stub
+- SKIP — native build gate: no native dependencies added (stories-only change)
 **Commit**: `00835e3` — `feat(mod-social-feed): implement social graph follow/unfollow and activity feed`
 **Bug-fix commit**: `3cfe732` — `fix(mod-social-feed): add blocks stub table to make migration self-contained`
 **Public entry-point commit**: `8da82b5` — `feat(mod-social-feed): add UserProfileNavigator public entry-point`

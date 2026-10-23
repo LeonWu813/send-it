@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-profile-history
+agent: engineer-mod-social-feed
 mode: stories
-module: mod-profile-history (MOD-008)
+module: mod-social-feed (MOD-006)
 result: pass
-timestamp: 2026-10-22T22:00:00Z
-next: No QA run required (Storybook screen story — off-spec design work, no AC behaviour changed). Coordinator should commit engineer-mod-profile-history(stories) and note the file is ready.
+timestamp: 2026-10-22T23:00:00Z
+next: No QA run required (Storybook stories only — off-spec design coverage, no AC behaviour changed). Coordinator should commit engineer-mod-social-feed(stories) and note files are ready.
 
 Note (engineer-mod-home): Toast.tsx — flash/error tones now use toastBackground/onToast (dark HUD, matching default; icon colours preserved for glyph differentiation). Badge.tsx — deprecated theme.borderRadius.full → theme.radius.full. HomeScreen.stories.tsx — new story with SignedIn and Empty states. tsc clean, 74 component tests pass, pre-existing non-deterministic AscentList failure in mod-send-logging unaffected.
 
