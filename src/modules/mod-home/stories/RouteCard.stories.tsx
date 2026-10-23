@@ -75,7 +75,7 @@ const meta: Meta<Args> = {
   argTypes: {
     variant: { control: 'inline-radio', options: ['compact', 'regular'], description: 'compact (default, 80pt, one meta line) or regular (104pt)' },
     sendStyle: { control: 'inline-radio', options: ['none', 'flash', 'top'], description: 'Flash / top only; attempts show nothing (AC-190)' },
-    betaVideoCount: { control: { type: 'number', min: 0, max: 120 }, description: '0 hides the line; the play disc also needs a photo (AC-189)' },
+    betaVideoCount: { control: { type: 'number', min: 0, max: 120 }, description: '0 hides the 「▶ n」 chip on the thumbnail (AC-189)' },
     section: { control: 'inline-radio', options: Object.keys(SECTIONS) },
     grade: { control: 'text', description: 'Printed on the tape badge (24/800)' },
     colorTag: { control: 'select', options: COLORS, description: 'Tape colour of the grade badge' },

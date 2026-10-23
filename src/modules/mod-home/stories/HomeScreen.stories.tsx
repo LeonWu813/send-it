@@ -37,7 +37,7 @@ function setupStubs(state: StubState): void {
       { id: 'r1', gym_id: 'g1', grade: 'V4', color_tag: 'red', photo_url: null, section_label: 'Cave', gyms: { name: '紅石攀岩館' }, status: 'active' },
       { id: 'r2', gym_id: 'g2', grade: 'V6', color_tag: 'blue', photo_url: null, section_label: null, gyms: { name: 'B-Pump 台北店' }, status: 'active' },
     ]);
-    // Five followed climbers: Following shows the latest 3 + 「顯示全部 (5)」 (H-1).
+    // Five followed climbers: the Following strip shows all five (4 tiles + a peek of the 5th).
     const FOLLOWED = [
       ['u1', 'Alex Chen'],
       ['u2', 'Jessica Wang'],
@@ -90,6 +90,7 @@ const meta: Meta<Args> = {
       onSelectGym={() => {}}
       onSelectRoute={() => {}}
       onSelectClimber={() => {}}
+      onViewAllFollowing={() => {}}
       onFindClimbers={() => {}}
     />
   ),
@@ -99,15 +100,15 @@ export default meta;
 type Story = StoryObj<Args>;
 
 /**
- * Order (AC-111 change): banner, Following, Saved Gyms, Projecting. Following heading at y318, three 72pt
- * rows end at y570, then the inline 「顯示全部 (5)」 row (tap to expand in place). Compact 80pt route cards.
+ * Order (AC-111 restored, home-v2): banner, Saved Gyms, Projecting (chips: 2 grades), Following.
+ * Following header at y770, 108pt avatar strip (64 avatar + 2-line caption), 「查看全部」 on the keyline.
  */
 export const Populated: Story = { args: { state: 'populated' } };
 
-/** New-user state: no data. 52pt "No active events" placeholder; Following is one 52pt row with 「找攀岩者」; other sections show inline empty prompts. */
+/** New-user state: flat centred banner placeholder; all three sections use the inline sentence + ghost sm action; no chips, no 「查看全部」. */
 export const Empty: Story = { args: { state: 'empty' } };
 
-/** Every section still fetching (queries never resolve). */
+/** Every section still fetching (queries never resolve): headings, Following shows 4 skeleton tiles. */
 export const Loading: Story = { args: { state: 'loading' } };
 
 // No Error story: HomeScreen has no error UI. A failed fetch logs to console and falls back to the Empty state.

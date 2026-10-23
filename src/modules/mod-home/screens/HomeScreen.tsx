@@ -3,25 +3,24 @@
  *   AC-174, AC-175, AC-176, AC-177, AC-178, AC-181, AC-182, AC-189, AC-190,
  *   AC-191, AC-192).
  *
- * Four sections in order (AC-111 as changed by page-review H-1: banner, Following, Saved Gyms,
- * Projecting). The scroll container owns the margin and the gaps (R0).
+ * Four sections in order (AC-111, restored by home-v2: banner, Saved Gyms, Projecting, Following).
+ * The scroll container owns the margin and the gaps (R0). Everything is flat on `background`.
  *   1. Events Banner (AC-112, AC-174) — single admin-managed banner from
- *      `admin_banners WHERE is_active = true LIMIT 1`; 52pt placeholder row shown
+ *      `admin_banners WHERE is_active = true LIMIT 1`; flat 52pt centred placeholder card shown
  *      when no active banner exists (section never hidden — AC-112 Rev 38).
- *   2. Following Activity (AC-182) — see section 4 below; 72pt rows, latest 3 + inline 「顯示全部 (n)」.
- *   3. Saved Gyms (AC-113, AC-114, AC-115, AC-175, AC-176) — horizontal scroll
+ *   2. Saved Gyms (AC-113, AC-114, AC-115, AC-175, AC-176) — horizontal scroll
  *      strip of 64pt tiles ordered by most-recently-viewed via `user_route_visits` MAX
  *      `last_viewed_at` per gym; tapping navigates to RouteListScreen.
- *   4. Projecting Routes (AC-177, AC-178, AC-181) — sourced from `saved_routes`
+ *   3. Projecting Routes (AC-177, AC-178, AC-181) — sourced from `saved_routes`
  *      via MOD-003's fetchSavedRouteIds(); V-grade filter tabs; uses RouteCard
  *      with betaVideoCount (placeholder 0 until fetchBetaVideoCounts lands in
- *      MOD-003), hasSend/sendStyle from fetchUserAchievements (MOD-004),
+ *      MOD-003), grade chips only when >= 2 grades (AC-177), hasSend/sendStyle from fetchUserAchievements (MOD-004),
  *      isSaved/onBookmarkToggle from saveRoute/unsaveRoute (MOD-003).
  *      hasNewBetaVideo chip removed (AC-181 Rev 39).
- *   4. Following Activity (AC-182, Rev 38) — followed user IDs via MOD-006's
- *      service; beta_videos grouped by uploader using updated_at (not created_at);
- *      avatar + display_name + "new video upload" label + MAX(updated_at)
- *      relative timestamp; no video count; tap → UserProfileScreen.
+ *   4. Following (AC-182, home-v2) — avatar strip like Saved Gyms: 64pt avatar + 2-line caption
+ *      (name, MAX(updated_at) relative time), 108pt, no marker; tap → UserProfileScreen; 「查看全部」 →
+ *      FollowingListScreen. At fontScale >= 1.6 the strip becomes 52pt vertical rows.
+ *      Empty states of all sections: inline sentence + optional ghost sm action 8pt below.
  *
  * Safe area:
  *   - Top inset NOT applied here — AppHeader (mounted by AppShell) owns the top.
@@ -43,8 +42,7 @@ import type { Session } from '@supabase/supabase-js';
 import { Image } from 'expo-image';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Ionicons } from '@expo/vector-icons';
-import { Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 
 import RouteCard from '../../../components/RouteCard';
 import { AppText } from '../../../components/ui/AppText';
@@ -52,10 +50,8 @@ import { Avatar } from '../../../components/ui/Avatar';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { Chip } from '../../../components/ui/Chip';
-import { EmptyState } from '../../../components/ui/EmptyState';
 import { PressableScale } from '../../../components/ui/PressableScale';
 import { useToast } from '../../../components/ui/Toast';
-import { ICON } from '../../../lib/icons';
 import { useMotion } from '../../../lib/motion';
 import { supabase } from '../../../lib/supabase';
 import { useLayout, useTheme } from '../../../lib/theme';
@@ -77,8 +73,18 @@ import type { SavedGymItem, ProjectingRoute } from '../home-service';
 
 /** How many days back to look for "new" beta videos in the Following section. */
 const FOLLOWING_ACTIVITY_DAYS = 14;
-/** Following rows shown before the inline 「顯示全部 (n)」 row (H-1). */
-const FOLLOWING_VISIBLE = 3;
+/** Fixed caption box under a strip tile: 2 x footnote 20 (both strips are 108pt). */
+const CAPTION_HEIGHT = 40;
+/** Font scale from which the Following strip becomes vertical rows (home-v2 2.2). */
+const AX_FONT_SCALE = 1.6;
+/** Section-header action target: 22pt line + 11 + 11 = 44pt; layout never changes. */
+const LINK_HIT_SLOP = { top: 11, bottom: 11, left: 8, right: 0 };
+/** Skeleton tiles while Following loads. */
+const SKELETON_TILES = 4;
+/** Section header row = title3 line height (A3). */
+const SECTION_HEADER_HEIGHT = 28;
+/** Ghost `sm` button side padding (Button dims). */
+const INLINE_BUTTON_PAD = 14;
 /** Saved-gym tile edge (= Avatar lg = compact RouteCard thumb) (H-3). */
 const GYM_TILE = 64;
 /** Banner height when an active banner exists. */
@@ -95,13 +101,15 @@ interface HomeScreenProps {
   onSelectGym: (gymId: string, gymName: string) => void;
   /** Called when a route card is tapped. Navigates to RouteDetailScreen. */
   onSelectRoute: (routeId: string, gymId: string) => void;
-  /** Called when a following-activity row is tapped. Opens UserProfileScreen. */
+  /** Called when a following-activity tile is tapped. Opens UserProfileScreen. */
   onSelectClimber: (userId: string) => void;
+  /** Called by 「查看全部」 in the Following header. Opens FollowingListScreen for the signed-in user. */
+  onViewAllFollowing?: (userId: string) => void;
   /** Called when the notifications bell is tapped (no-op here; handled by AppHeader). */
   onNavigateToNotifications?: () => void;
   /**
-   * Called by the 「找攀岩者」 action of the Following empty state (H-1). The action is hidden when
-   * no destination is wired.
+   * Called by the 「找攀岩者」 action of the Following empty state. The action is hidden when
+   * no destination is wired. The empty-state actions of Saved Gyms / Projecting use `onViewAllGyms`.
    */
   onFindClimbers?: () => void;
 }
@@ -155,12 +163,15 @@ export default function HomeScreen({
   onSelectGym,
   onSelectRoute,
   onSelectClimber,
+  onViewAllFollowing,
   onFindClimbers,
 }: HomeScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const { haptic } = useMotion();
+  const { fontScale } = useWindowDimensions();
+  const isAx = fontScale >= AX_FONT_SCALE;
   const toast = useToast();
   const c = theme.colors;
   const header = useAppHeaderRoot();
@@ -303,7 +314,6 @@ export default function HomeScreen({
 
   const [followingActivity, setFollowingActivity] = useState<FollowingActivity[]>([]);
   const [followingLoading, setFollowingLoading] = useState(true);
-  const [followingExpanded, setFollowingExpanded] = useState(false);
 
   const loadFollowingActivity = useCallback(async () => {
     setFollowingLoading(true);
@@ -421,6 +431,16 @@ export default function HomeScreen({
     return [ALL_GRADE_FILTER, ...grades];
   }, [projectingRoutes]);
 
+  // AC-177: the chip row only appears when the saved routes span at least two grades.
+  const showGradeChips = availableGrades.length > 2;
+
+  // If the selected grade disappears (its last route was unbookmarked), fall back to 「全部」.
+  useEffect(() => {
+    if (selectedGrade !== ALL_GRADE_FILTER && !availableGrades.includes(selectedGrade)) {
+      setSelectedGrade(ALL_GRADE_FILTER);
+    }
+  }, [availableGrades, selectedGrade]);
+
   const filteredRoutes = useMemo(() => {
     if (selectedGrade === ALL_GRADE_FILTER) return projectingRoutes;
     return projectingRoutes.filter((r) => r.grade === selectedGrade);
@@ -461,17 +481,40 @@ export default function HomeScreen({
   // R0: the scroll container owns the horizontal margin (screenMargin) and the section gap
   // (sectionGap); sections set neither. Horizontal strips bleed with a negative margin and re-inset.
 
-  const sectionHeader = (title: string, action?: React.ReactNode): React.JSX.Element => (
-    <View style={[styles.sectionHeader, action ? styles.sectionHeaderWithAction : null]}>
+  // A3: the title and its action share one 28pt row; the action is `subhead` 600, baseline-aligned,
+  // right edge on the keyline; the 44pt target comes from hitSlop (no layout change).
+  const sectionHeader = (title: string, action?: { label: string; onPress: () => void }): React.JSX.Element => (
+    <View style={styles.sectionHeader}>
       <AppText variant="pageSection" accessibilityRole="header">
         {title}
       </AppText>
-      {action}
+      {action ? (
+        <Pressable onPress={action.onPress} hitSlop={LINK_HIT_SLOP} accessibilityRole="button" accessibilityLabel={action.label}>
+          <AppText variant="subhead" weight="600" color="primary">
+            {action.label}
+          </AppText>
+        </Pressable>
+      ) : null}
     </View>
   );
 
-  const visibleFollowing = followingExpanded ? followingActivity : followingActivity.slice(0, FOLLOWING_VISIBLE);
-  const hiddenFollowing = followingActivity.length - visibleFollowing.length;
+  // One inline empty state for every section (A6/A8): sentence on the keyline, optional ghost `sm`
+  // action 8pt under it with its glyph on x16 (marginLeft -14 cancels the button's 14pt padding).
+  const inlineEmpty = (sentence: string, action?: { label: string; onPress: () => void }): React.JSX.Element => (
+    <View style={styles.inlineEmpty}>
+      <AppText variant="subhead" color="textSecondary">
+        {sentence}
+      </AppText>
+      {action ? (
+        <View style={styles.inlineEmptyAction}>
+          <Button variant="ghost" size="sm" on="background" label={action.label} onPress={action.onPress} style={styles.inlineEmptyButton} />
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const followingA11y = (name: string, time: string | null): string =>
+    t('home.followingActivity.rowA11y', { name, label: t('home.following.newUpload'), time: time ?? '' });
 
   return (
     <Animated.ScrollView
@@ -519,97 +562,17 @@ export default function HomeScreen({
         </View>
       ) : null}
 
-      {/* ── Section 2: Following Activity (AC-182; position 2 per AC-111 change, H-1) ── */}
-      <View>
-        {sectionHeader(t('home.followingActivity.title'))}
-
-        {!followingLoading && followingActivity.length === 0 ? (
-          <View style={styles.followingEmptyRow}>
-            <AppText variant="subhead" color="textSecondary" style={styles.flex} numberOfLines={2}>
-              {t('home.followingActivity.empty')}
-            </AppText>
-            {onFindClimbers ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                on="surface"
-                label={t('home.followingActivity.findClimbers')}
-                onPress={onFindClimbers}
-              />
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.activityList}>
-            {visibleFollowing.map((item, index) => {
-              const time = item.latestAt !== null ? relativeTime(item.latestAt, t) : null;
-              const isLast = index === visibleFollowing.length - 1 && hiddenFollowing === 0;
-              return (
-                <PressableScale
-                  key={item.userId}
-                  feedback="row"
-                  inScroll
-                  pressedColor={c.surfacePressed}
-                  style={[styles.activityRow, !isLast && styles.activityRowDivider]}
-                  onPress={() => onSelectClimber(item.userId)}
-                  accessibilityRole="button"
-                  accessibilityLabel={t('home.followingActivity.rowA11y', {
-                    name: item.displayName,
-                    label: t('home.following.newUpload'),
-                    time: time ?? '',
-                  })}
-                >
-                  <Avatar size="md" uri={item.avatarUrl} name={item.displayName} decorative />
-                  <View style={styles.activityInfo}>
-                    <AppText variant="headline" numberOfLines={1}>
-                      {item.displayName}
-                    </AppText>
-                    <AppText variant="footnote" numberOfLines={1}>
-                      {t('home.following.newUpload')}
-                      {time !== null ? (
-                        <AppText variant="footnote" color="textSecondary">
-                          {` · ${time}`}
-                        </AppText>
-                      ) : null}
-                    </AppText>
-                  </View>
-                  <Ionicons name={ICON.forward.outline} size={theme.iconSize.sm} color={c.textSecondary} />
-                </PressableScale>
-              );
-            })}
-            {hiddenFollowing > 0 ? (
-              <PressableScale
-                feedback="row"
-                inScroll
-                pressedColor={c.surfacePressed}
-                style={styles.showAllRow}
-                onPress={() => setFollowingExpanded(true)}
-                accessibilityRole="button"
-                accessibilityLabel={t('home.followingActivity.showAll', { count: followingActivity.length })}
-              >
-                <AppText variant="subhead" weight="600" color="primary">
-                  {t('home.followingActivity.showAll', { count: followingActivity.length })}
-                </AppText>
-              </PressableScale>
-            ) : null}
-          </View>
-        )}
-      </View>
-
-      {/* ── Section 3: Saved Gyms (AC-113, AC-114, AC-115, AC-175, AC-176) */}
+      {/* ── Section 2: Saved Gyms (AC-113, AC-114, AC-115, AC-175, AC-176) */}
       <View>
         {sectionHeader(
           t('home.savedGyms.title'),
-          <Button
-            variant="ghost"
-            size="sm"
-            on="background"
-            label={t('home.savedGyms.viewAll')}
-            onPress={onViewAllGyms}
-          />,
+          !savedGymsLoading && savedGyms.length === 0
+            ? undefined
+            : { label: t('home.savedGyms.viewAll'), onPress: onViewAllGyms },
         )}
 
         {!savedGymsLoading && savedGyms.length === 0 ? (
-          <EmptyState variant="inline" description={t('home.savedGyms.empty')} />
+          inlineEmpty(t('home.savedGyms.empty'), { label: t('home.savedGyms.explore'), onPress: onViewAllGyms })
         ) : (
           <ScrollView
             horizontal
@@ -640,42 +603,47 @@ export default function HomeScreen({
                     </AppText>
                   </View>
                 )}
-                <AppText variant="footnote" align="center" numberOfLines={2}>
-                  {gym.name}
-                </AppText>
+                <View style={styles.caption}>
+                  <AppText variant="footnote" align="center" numberOfLines={2}>
+                    {gym.name}
+                  </AppText>
+                </View>
               </Pressable>
             ))}
           </ScrollView>
         )}
       </View>
 
-      {/* ── Section 4: Projecting Routes (AC-177, AC-178, AC-181) ─────── */}
+      {/* ── Section 3: Projecting Routes (AC-177, AC-178, AC-181) ─────── */}
       <View>
         {sectionHeader(t('home.projectingRoutes.title'))}
 
-        {/* Grade filter chips (AC-178): single choice */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.bleed}
-          contentContainerStyle={styles.gradeTabsRow}
-          accessibilityRole="radiogroup"
-        >
-          {availableGrades.map((grade) => (
-            <Chip
-              key={grade}
-              variant="choice"
-              label={grade === ALL_GRADE_FILTER ? t('home.projectingRoutes.allGrades') : grade}
-              selected={selectedGrade === grade}
-              onPress={() => setSelectedGrade(grade)}
-            />
-          ))}
-        </ScrollView>
+        {/* Grade filter chips (AC-177/178): single choice, only when the routes span >= 2 grades */}
+        {showGradeChips ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.bleed}
+            contentContainerStyle={styles.gradeTabsRow}
+            accessibilityRole="radiogroup"
+          >
+            {availableGrades.map((grade) => (
+              <Chip
+                key={grade}
+                variant="choice"
+                label={grade === ALL_GRADE_FILTER ? t('home.projectingRoutes.allGrades') : grade}
+                selected={selectedGrade === grade}
+                onPress={() => setSelectedGrade(grade)}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
 
         {!projectingLoading && projectingRoutes.length === 0 ? (
-          <EmptyState variant="inline" description={t('home.projectingRoutes.empty')} />
-        ) : !projectingLoading && filteredRoutes.length === 0 ? (
-          <EmptyState variant="inline" description={t('home.projectingRoutes.emptyFiltered')} />
+          inlineEmpty(t('home.projectingRoutes.empty'), {
+            label: t('home.projectingRoutes.browse'),
+            onPress: onViewAllGyms,
+          })
         ) : (
           <View style={styles.routeList}>
             {filteredRoutes.map((route) => {
@@ -711,6 +679,96 @@ export default function HomeScreen({
           </View>
         )}
       </View>
+
+      {/* ── Section 4: Following (AC-182, home-v2 avatar strip) ───────── */}
+      <View>
+        {sectionHeader(
+          t('home.followingActivity.title'),
+          !followingLoading && followingActivity.length > 0 && onViewAllFollowing
+            ? { label: t('home.followingActivity.viewAll'), onPress: () => onViewAllFollowing(session.user.id) }
+            : undefined,
+        )}
+
+        {followingLoading ? (
+          <View style={styles.followingSkeleton} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            {Array.from({ length: SKELETON_TILES }, (_, i) => (
+              <View key={i} style={styles.followingTile}>
+                <View style={styles.skeletonAvatar} />
+                <View style={styles.skeletonBar} />
+              </View>
+            ))}
+          </View>
+        ) : followingActivity.length === 0 ? (
+          inlineEmpty(
+            t('home.followingActivity.empty'),
+            onFindClimbers ? { label: t('home.followingActivity.findClimbers'), onPress: onFindClimbers } : undefined,
+          )
+        ) : isAx ? (
+          <View>
+            {followingActivity.map((item) => {
+              const time = item.latestAt !== null ? relativeTime(item.latestAt, t) : null;
+              return (
+                <PressableScale
+                  key={item.userId}
+                  feedback="row"
+                  inScroll
+                  pressedColor={c.surfacePressed}
+                  style={styles.followingRow}
+                  onPress={() => onSelectClimber(item.userId)}
+                  accessibilityRole="button"
+                  accessibilityLabel={followingA11y(item.displayName, time)}
+                  accessibilityHint={t('home.followingActivity.openProfileHint')}
+                >
+                  <Avatar size="sm" uri={item.avatarUrl} name={item.displayName} decorative />
+                  <View style={styles.flex}>
+                    <AppText variant="subhead" weight="600" numberOfLines={2}>
+                      {item.displayName}
+                    </AppText>
+                    {time !== null ? (
+                      <AppText variant="footnote" color="textSecondary">
+                        {time}
+                      </AppText>
+                    ) : null}
+                  </View>
+                </PressableScale>
+              );
+            })}
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.bleed}
+            contentContainerStyle={styles.gymStripRow}
+          >
+            {followingActivity.map((item) => {
+              const time = item.latestAt !== null ? relativeTime(item.latestAt, t) : null;
+              return (
+                <Pressable
+                  key={item.userId}
+                  style={styles.followingTile}
+                  onPress={() => onSelectClimber(item.userId)}
+                  accessibilityRole="button"
+                  accessibilityLabel={followingA11y(item.displayName, time)}
+                  accessibilityHint={t('home.followingActivity.openProfileHint')}
+                >
+                  <Avatar size="lg" uri={item.avatarUrl} name={item.displayName} decorative />
+                  <View style={styles.caption}>
+                    <AppText variant="footnote" align="center" numberOfLines={1}>
+                      {item.displayName}
+                    </AppText>
+                    {time !== null ? (
+                      <AppText variant="footnote" color="textSecondary" align="center" numberOfLines={1}>
+                        {time}
+                      </AppText>
+                    ) : null}
+                  </View>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+      </View>
     </Animated.ScrollView>
   );
 }
@@ -724,13 +782,6 @@ function makeStyles(
   bottomInset: number,
 ) {
   const c = theme.colors;
-  const rowRadius = {
-    backgroundColor: c.surface,
-    borderRadius: theme.radius.card,
-    borderCurve: 'continuous' as const,
-    borderWidth: theme.isDark ? theme.stroke.thin : 0,
-    borderColor: c.border,
-  };
   return StyleSheet.create({
     root: {
       flex: 1,
@@ -751,15 +802,24 @@ function makeStyles(
     bleed: {
       marginHorizontal: -screenMargin,
     },
+    // A3: 28pt (title3 line height) with or without an action; baseline-aligned.
     sectionHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'baseline',
       justifyContent: 'space-between',
+      height: SECTION_HEADER_HEIGHT,
       marginBottom: theme.layout.sectionHeaderGap,
     },
-    // The ghost action keeps its 44pt hit area.
-    sectionHeaderWithAction: {
-      minHeight: theme.layout.minTouchTarget,
+    // Inline empty state: 16 + 22 + 16 = 54pt; with an action + 8 + 32.
+    inlineEmpty: {
+      paddingVertical: theme.spacing.md,
+    },
+    inlineEmptyAction: {
+      marginTop: theme.spacing.sm,
+      alignItems: 'flex-start',
+    },
+    inlineEmptyButton: {
+      marginLeft: -INLINE_BUTTON_PAD,
     },
     // ── Banner ──────────────────────────────────────────────────────────────
     bannerPlaceholderCard: {
@@ -830,43 +890,37 @@ function makeStyles(
     routeList: {
       rowGap: theme.layout.cardGap,
     },
-    // ── Following Activity ───────────────────────────────────────────────────
-    activityList: {
-      ...rowRadius,
-      overflow: 'hidden',
-    },
-    activityRow: {
-      flexDirection: 'row',
+    // ── Following (strip shares gymStripRow / the tile geometry of Saved Gyms) ──
+    followingTile: {
+      width: GYM_TILE,
       alignItems: 'center',
-      columnGap: theme.spacing.smd,
-      // 72 = Avatar md 48 + 2 x smd 12.
-      minHeight: 48 + 2 * theme.spacing.smd,
-      paddingHorizontal: theme.layout.cardPadding,
-      paddingVertical: theme.spacing.smd,
+      rowGap: theme.spacing.xs,
     },
-    activityRowDivider: {
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: c.divider,
-      // The hairline sits inside the 72pt row.
-      paddingBottom: theme.spacing.smd - StyleSheet.hairlineWidth,
+    caption: {
+      alignSelf: 'stretch',
+      height: CAPTION_HEIGHT,
     },
-    activityInfo: {
-      flex: 1,
-    },
-    showAllRow: {
-      minHeight: theme.layout.minTouchTarget,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: theme.layout.cardPadding,
-    },
-    followingEmptyRow: {
-      ...rowRadius,
+    followingRow: {
       flexDirection: 'row',
       alignItems: 'center',
       columnGap: theme.spacing.smd,
       minHeight: theme.layout.listRowMinHeight,
-      paddingLeft: theme.layout.cardPadding,
-      paddingRight: theme.spacing.sm,
+    },
+    followingSkeleton: {
+      flexDirection: 'row',
+      columnGap: theme.layout.cardGap,
+    },
+    skeletonAvatar: {
+      width: GYM_TILE,
+      height: GYM_TILE,
+      borderRadius: theme.radius.full,
+      backgroundColor: c.surfaceAlt,
+    },
+    skeletonBar: {
+      width: GYM_TILE,
+      height: CAPTION_HEIGHT / 2,
+      borderRadius: theme.radius.minor,
+      backgroundColor: c.surfaceAlt,
     },
   });
 }
