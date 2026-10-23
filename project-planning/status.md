@@ -2,14 +2,14 @@
 
 ## Last Action
 
-agent: engineer-mod-notifications
-mode: design-fix+stories
-module: mod-notifications (MOD-007)
+agent: engineer-mod-home
+mode: stories+design-fix
+module: mod-home (MOD-012)
 result: pass
-timestamp: 2026-10-22T19:00:00Z
-next: Commit changes and hand off to coordinator. No QA run required for design-token fix + Storybook stories (off-spec design work, no AC behaviour changed). Coordinator should note the commit is ready.
+timestamp: 2026-10-22T20:00:00Z
+next: No QA run required (design-token fix + Storybook stories — off-spec design work, no AC behaviour changed). Coordinator should note commit 5cdaa71 is ready.
 
-Note (engineer-mod-notifications): Design fix — `theme.borderRadius.full` → `theme.radius.full` in `NotificationInboxScreen.tsx` `unreadDot` style (was the only deprecated occurrence). Storybook stories created for `NotificationInboxScreen` (Loading, Populated, Empty) and `NotificationPreferenceScreen` (Loaded, PreferenceOff). Full test suite 662/662 pass, tsc clean. Pending items from prior session remain unchanged (INT-031 human verification, INT-030 device check).
+Note (engineer-mod-home): Toast.tsx — flash/error tones now use toastBackground/onToast (dark HUD, matching default; icon colours preserved for glyph differentiation). Badge.tsx — deprecated theme.borderRadius.full → theme.radius.full. HomeScreen.stories.tsx — new story with SignedIn and Empty states. tsc clean, 74 component tests pass, pre-existing non-deterministic AscentList failure in mod-send-logging unaffected.
 
 Device test script for INT-030 (show to Leon word for word):
 Prerequisites: device language set to a language different from the account's stored language (e.g., device = Japanese, account = English). Sign in to ProjectDay.
