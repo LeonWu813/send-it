@@ -2,6 +2,13 @@
 
 ## Engineering Progress
 
+### Off-spec: custom like icon (fist bump) in the icon library — 2026-10-23
+
+Branch `design/page-templates`, approved by the human designer, reviewed via PR (design system v2.3 §9.12).
+- Added `react-native-svg` 15.15.4 (native module: dev-client rebuild required). New `src/components/ui/FistBumpIcon.tsx` (`FistBumpIcon`, `FistBumpBurst`).
+- `src/lib/icons.ts`: `IconEntry.custom?: 'fistbump'`; `ICON.like.custom` marks the custom glyph. Temporary Ionicons `outline`/`filled` kept as a compile alias until call sites swap.
+- Stories: Foundations/Icons shows the custom like; `Components/FistBumpIcon`. Test added for the custom-glyph rule.
+
 ### Off-spec design work (page-review v2.3) pending PR review — 2026-10-23
 
 Branch `design/page-templates`, not part of the PRD/spec; reviewed via PR.

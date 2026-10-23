@@ -8,6 +8,8 @@ export { ButtonGroup, BUTTON_GROUP_STACK_FONT_SCALE } from './ButtonGroup';
 export type { ButtonGroupItem, ButtonGroupProps } from './ButtonGroup';
 export { IconButton, IconButtonGroup } from './IconButton';
 export type { IconButtonProps, IconButtonVariant, IconButtonGroupItem } from './IconButton';
+export { FistBumpIcon, FistBumpBurst } from './FistBumpIcon';
+export type { FistBumpIconProps, FistBumpBurstProps, FistBumpVariant } from './FistBumpIcon';
 export { Badge } from './Badge';
 export type { BadgeProps } from './Badge';
 export { Chip } from './Chip';

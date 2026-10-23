@@ -87,7 +87,13 @@ describe('design tokens (design system v2.2)', () => {
 describe('ICON dictionary', () => {
   const glyphs: { concept: string; glyph: string }[] = [];
   Object.entries(ICON).forEach(([concept, entry]) => {
-    Object.values(entry).forEach((glyph) => glyphs.push({ concept, glyph: glyph as string }));
+    const { custom: _custom, ...ionicons } = entry as Record<string, string>;
+    Object.values(ionicons).forEach((glyph) => glyphs.push({ concept, glyph }));
+  });
+
+  it('only the approved like concept is a custom (non-Ionicons) glyph', () => {
+    const custom = Object.entries(ICON).filter(([, e]) => 'custom' in e).map(([k]) => k);
+    expect(custom).toEqual(['like']);
   });
 
   it('only uses glyphs that exist in Ionicons', () => {

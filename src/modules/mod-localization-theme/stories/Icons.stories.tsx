@@ -4,11 +4,12 @@ import React from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { AppText } from '../../../components/ui/AppText';
+import { FistBumpIcon } from '../../../components/ui/FistBumpIcon';
 import { ICON } from '../../../lib/icons';
 import type { IoniconName } from '../../../lib/icons';
 import { ICON_SIZE, useTheme } from '../../../lib/theme';
 
-type Entry = { outline?: IoniconName; filled?: IoniconName; on?: IoniconName };
+type Entry = { outline?: IoniconName; filled?: IoniconName; on?: IoniconName; custom?: 'fistbump' };
 type IconSizeKey = keyof typeof ICON_SIZE;
 
 function Icons({ size, color }: { size: IconSizeKey; color: 'textPrimary' | 'textSecondary' | 'primary' }): React.JSX.Element {
@@ -29,13 +30,36 @@ function Icons({ size, color }: { size: IconSizeKey; color: 'textPrimary' | 'tex
             {key}
           </AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', flex: 1 }}>
-            <GlyphColored name={e.outline} size={px} caption="no outline" color={color} />
-            <GlyphColored name={e.filled} size={px} caption="no filled" color={color} />
+            {e.custom === 'fistbump' ? (
+              <>
+                <CustomGlyph variant="outline" size={px} color={color} />
+                <CustomGlyph variant="filled" size={px} color={color} />
+              </>
+            ) : (
+              <>
+                <GlyphColored name={e.outline} size={px} caption="no outline" color={color} />
+                <GlyphColored name={e.filled} size={px} caption="no filled" color={color} />
+              </>
+            )}
             {e.on ? <GlyphColored name={e.on} size={px} caption="" color={color} /> : null}
           </View>
         </View>
       ))}
     </ScrollView>
+  );
+}
+
+function CustomGlyph({ variant, size, color }: { variant: 'outline' | 'filled'; size: number; color: 'textPrimary' | 'textSecondary' | 'primary' }): React.JSX.Element {
+  const { theme } = useTheme();
+  return (
+    <View style={{ width: 150, alignItems: 'center' }}>
+      <View style={{ height: 32, justifyContent: 'center' }}>
+        <FistBumpIcon variant={variant} size={size} color={theme.colors[color]} />
+      </View>
+      <AppText variant="caption2" color="textSecondary" numberOfLines={1}>
+        {`fistbump-${variant} (custom)`}
+      </AppText>
+    </View>
   );
 }
 

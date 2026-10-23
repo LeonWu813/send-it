@@ -120,3 +120,9 @@ Toolbar items (`.storybook/preview.tsx`):
 
 Shared base components live in `src/components/ui/` with stories in `src/components/ui/stories/`.
 See `.storybook/MIGRATION.md` for the migration rules and the story convention.
+
+## react-native-svg (custom like icon)
+
+`src/components/ui/FistBumpIcon.tsx` uses `react-native-svg` (the only approved use, design system §9.12). It is a
+native module: the native app needs a dev-client rebuild. A Storybook dev server started before the dependency was
+installed must be restarted once so Vite re-optimises deps.

@@ -4,7 +4,9 @@
  * Components never write glyph strings directly: `<Ionicons name={ICON.bookmark.filled} />`.
  *
  *  - outline = default / off, filled = on / achieved (I2, I3), `on` = the toggle's other state.
- *  - Only Ionicons, only `*-outline` and filled styles (never `*-sharp`), no emoji, no custom SVG.
+ *  - Only Ionicons, only `*-outline` and filled styles (never `*-sharp`), no emoji, no custom SVG,
+ *    EXCEPT the approved custom `like` icon (fist bump, §9.12): `ICON.like.custom === 'fistbump'`
+ *    renders `<FistBumpIcon variant size color />` (src/components/ui/FistBumpIcon.tsx), never an Ionicon.
  *  - New concepts: follow §9.11 (UI Designer updates the spec first).
  */
 
@@ -18,6 +20,8 @@ interface IconEntry {
   filled?: IoniconName;
   /** The other state of a non-filled toggle (e.g. password visibility). */
   on?: IoniconName;
+  /** Approved custom SVG glyph (§9.12). Render with the matching component, not `<Ionicons>`. */
+  custom?: 'fistbump';
 }
 
 export const ICON = {
@@ -69,7 +73,12 @@ export const ICON = {
   uploaded: { outline: 'cloud-done-outline', filled: 'cloud-done' },
   library: { outline: 'images-outline' },
   camera: { outline: 'camera-outline' },
-  like: { outline: 'thumbs-up-outline', filled: 'thumbs-up' },
+  /**
+   * Custom fist bump (§9.12): use `<FistBumpIcon variant={liked ? 'filled' : 'outline'} />`.
+   * TEMPORARY: `outline`/`filled` Ionicons below are a compile alias for call sites not yet migrated
+   * (IconButton in FeedScreen, ReelOverlay, NotificationInboxScreen). Delete them once those swap.
+   */
+  like: { custom: 'fistbump', outline: 'thumbs-up-outline', filled: 'thumbs-up' },
   report: { outline: 'flag-outline', filled: 'flag' },
   // E. Social
   follow: { outline: 'person-add-outline' },
