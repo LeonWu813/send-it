@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { fn } from 'storybook/test';
 
 import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
@@ -27,7 +27,12 @@ const makeNote = (n: number): string => SAMPLE.repeat(Math.ceil(n / SAMPLE.lengt
 
 function Demo({ visible, reason, noteLength, submitResult, onDismiss }: Args): React.JSX.Element {
   const [open, setOpen] = useState(visible);
-  useEffect(() => setOpen(visible), [visible]);
+  // Sync the Controls toggle during render (no effect, so no post-mount state update outside act()).
+  const [seenVisible, setSeenVisible] = useState(visible);
+  if (seenVisible !== visible) {
+    setSeenVisible(visible);
+    setOpen(visible);
+  }
   resetStubData();
   if (submitResult !== 'error') setStubData('auth:session', { user: { id: 'user-me' } });
   return (
@@ -50,7 +55,7 @@ function Demo({ visible, reason, noteLength, submitResult, onDismiss }: Args): R
 }
 
 const meta: Meta<Args> = {
-  title: 'Moderation/ReportSheet',
+  title: 'Patterns/ReportSheet',
   render: (args) => <Demo {...args} />,
   args: { visible: true, reason: 'none', noteLength: 0, submitResult: 'success', onDismiss: fn() },
   argTypes: {
