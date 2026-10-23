@@ -9,6 +9,8 @@
 
 **Flat-alignment round 3** (2026-10-23): compact StatsPanel tiles use `cardPadding` 16 (A1, #8); full-panel small tiles padded 16 all round so labels share the hero baseline (#9); Profile History sends list now passes `colorTag` + `section` to RouteCard (gray tapes and repeated grade in meta were caused here, not in groupToRouteCards). No shadows in module.
 
+**Off-spec design round 4** (2026-10-24, flat-alignment-audit rev 3 §6 C1/C3): grade distribution card title -> first bar 8 (`sectionHeaderGap`, was 20 visible) and last bar -> card bottom 16 (`cardPadding`, was 28) by pulling the row slack (ROW_HEIGHT - bar height)/2 out of the rows container. Measured on :6006 headless: 8 / 16. No story change needed (Playground covers it); tests and lint pass.
+
 **Storybook screen story (2026-10-22)**: Added `ProfileHistoryScreen.stories.tsx` covering 4 states: Loading (static Spinner matching `visibility === 'loading'`), Populated (4 route cards, StatsPanel with sends, grade tabs), Empty (zero-records prompt), FilteredEmpty (attempt-only ascents — hasRecords=true, no route cards, inline empty state). Stub data seeded via `setStubData('rpc:get_profile_history', ...)` and `setStubData('rpc:get_profile_stats', ...)` in per-story decorators following the `NotificationInboxScreen.stories.tsx` pattern. No component source changed. tsc: 0 errors in module. 29/29 tests pass.
 
 **Off-spec design tooling (2026-10-16)**: Added Storybook stories for StatsPanel, FilterBar and AscentHistoryItem in `src/modules/mod-profile-history/stories/` on branch `design/storybook`. Not part of the spec; no component source changed. Pending PR review.

@@ -390,7 +390,7 @@ export default function StatsPanel({
                 {t('profileHistory.stats.chartTotal')}
               </AppText>
             </View>
-            <View accessibilityLabel={t('profileHistory.stats.chartA11y')}>
+            <View accessibilityLabel={t('profileHistory.stats.chartA11y')} style={styles.rows}>
               {rows.map(({ grade, i, count }, order) => {
                 const highest = i === topIndex;
                 const a11y = t(
@@ -486,7 +486,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     chartHeader: {
       flexDirection: 'row',
       alignItems: 'baseline',
-      marginBottom: theme.spacing.sm,
+      marginBottom: theme.layout.sectionHeaderGap,
+    },
+    // C3/C1: row slack above the first and below the last bar is pulled out, so the visible gaps are
+    // title -> first bar `sectionHeaderGap` 8 and last bar -> card edge `cardPadding` 16.
+    rows: {
+      marginTop: -(ROW_HEIGHT - theme.componentSize.statsBarHeight) / 2,
+      marginBottom: -(ROW_HEIGHT - theme.componentSize.statsBarHeight) / 2,
     },
     barRow: {
       flexDirection: 'row',
