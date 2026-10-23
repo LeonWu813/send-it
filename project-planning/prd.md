@@ -1,9 +1,9 @@
 # ProjectDay — Product Requirements Document
 
 **Author**: Leon
-**Status**: [SUBSTANTIVE] — Revision 49
+**Status**: [SUBSTANTIVE] — Revision 50
 **Date**: 2026-10-22
-**Revision**: 49
+**Revision**: 50
 
 ---
 
@@ -424,7 +424,7 @@ The data flow for the two most important loops:
 
 **User Stories**: US-017, US-018, US-012
 
-**Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
+**Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155), MOD-012 (device-level language and theme save helpers in `src/lib/`, called just before `signOut()` in SettingsScreen, AC-202/AC-203)
 
 ---
 
@@ -440,7 +440,7 @@ The data flow for the two most important loops:
 
 ### MOD-012: Home
 
-**Purpose**: Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders four sections in order — (1) a single admin-managed Events Banner (AC-112/AC-174), (2) the user's Saved Gyms strip (AC-113/AC-114/AC-115), (3) the user's Projecting Routes section sourced from `saved_routes` with V-grade filter tabs (AC-177/AC-178), and (4) a Following activity section with one row per followed climber who has uploaded or replaced a beta video — showing a fixed "new video upload" label and the climber's most-recent beta-video activity time (AC-182) — and provides navigation from those sections into the gym route list, route detail, and user profile surfaces. **Tech-Lead-assigned cross-cutting ownership (pending review)**: MOD-012 is the proposed owner of (a) the global app-level header rendered on all screens except the fullscreen beta-video reel viewer (AC-133) and auth/signed-out screens — bell and settings icon together on the right side (AC-184 revised — left side = screen title/back button; right side = bell + settings as a group); (b) the shared route card component with a `photo_url` thumbnail (88pt standard / 64pt compact per the `size` prop, AC-192 revised), a tape badge showing the route grade via `src/lib/tape.ts` (AC-191 revised — grade shown on badge; no plain-text grade `<Text>` label), a beta-count subtitle (AC-189), a has-sent flash/top badge (AC-190), and an interactive bookmark icon wired to MOD-003's save/unsave backend (AC-046/AC-047); the "new beta video" chip is removed (AC-181, Rev 39) while `user_route_visits`/`fetchRoutesWithNewBeta` are retained for AC-175 ordering. The card is consumed by the Home Projecting section, RouteListScreen, and the profile send-history section (AC-183); and (c) the swipe left-to-right back gesture on all screens that have a back icon (AC-185). Final ownership of (a), (b), and (c) is assigned by the Tech Lead in architecture review.
+**Purpose**: Own the persistent three-tab bottom navigation shell (Home / Gyms / Profile) and the Home tab surface. The Home surface renders four sections in order — (1) a single admin-managed Events Banner (AC-112/AC-174), (2) the user's Saved Gyms strip (AC-113/AC-114/AC-115), (3) the user's Projecting Routes section sourced from `saved_routes` with V-grade filter tabs (AC-177/AC-178), and (4) a Following activity section with one row per followed climber who has uploaded or replaced a beta video — showing a fixed "new video upload" label and the climber's most-recent beta-video activity time (AC-182) — and provides navigation from those sections into the gym route list, route detail, and user profile surfaces. **Tech-Lead-assigned cross-cutting ownership (pending review)**: MOD-012 is the proposed owner of (a) the global app-level header rendered on all screens except the fullscreen beta-video reel viewer (AC-133) and auth/signed-out screens — bell and settings icon together on the right side (AC-184 revised — left side = screen title/back button; right side = bell + settings as a group); (b) the shared route card component with a `photo_url` thumbnail (88pt standard / 64pt compact per the `size` prop, AC-192 revised), a tape badge showing the route grade via `src/lib/tape.ts` (AC-191 revised — grade shown on badge; no plain-text grade `<Text>` label), a beta-count subtitle (AC-189), a has-sent flash/top badge (AC-190), and an interactive bookmark icon wired to MOD-003's save/unsave backend (AC-046/AC-047); the "new beta video" chip is removed (AC-181, Rev 39) while `user_route_visits`/`fetchRoutesWithNewBeta` are retained for AC-175 ordering. The card is consumed by the Home Projecting section, RouteListScreen, and the profile send-history section (AC-183); and (c) the swipe left-to-right back gesture on all screens that have a back icon (AC-185). Final ownership of (a), (b), and (c) is assigned by the Tech Lead in architecture review. MOD-012 also owns the `src/lib/` part of AC-202/AC-203, as Tech Lead assigned on 2026-10-22 (Q-C): device-level save and load helpers for the language setting and the theme setting, which `i18n.ts` and `ThemeProvider` read whenever no user is signed in. MOD-010 calls the save helpers at sign-out. AC-202 and AC-203 remain MOD-010's criteria.
 
 **User Stories**: US-020, US-019
 
@@ -807,6 +807,13 @@ There shall be no disabled-button state and no "delete your existing video first
 **AC-202** (new, Rev 49, MOD-010): When no user is signed in (before the first sign-in, and after sign-out), the app shall display in the last language setting stored on this device, if one has been stored. If no language setting has ever been stored on this device (for example, a new install before any sign-in), the app shall use the language AC-090 picks from the device language. While a user is signed in, that user's Settings language (AC-091) remains the active setting; when the user signs out, it is stored on this device as the device's language setting.
 
 **AC-203** (new, Rev 49, MOD-010): When no user is signed in (before the first sign-in, and after sign-out), the app shall use the last theme setting (System, Light or Dark) stored on this device, if one has been stored. If no theme setting has ever been stored on this device, or the stored setting is System, the app shall follow the device's Light/Dark appearance and shall switch immediately when the device appearance changes while the app is open. While a user is signed in, that user's Settings override (AC-092) remains the active setting; when the user signs out, it is stored on this device as the device's theme setting.
+
+**AC-202/AC-203 ownership** (Tech Lead record-decisions, 2026-10-22, Q-C (B)): AC-202 and AC-203 are MOD-010's criteria, but the code is split across two Source Paths. Each row below is part of that module's work for AC-202/AC-203.
+
+| Owner | Files / scope | Order |
+|---|---|---|
+| MOD-012 `engineer-mod-home` | `src/lib/`: device-level storage keys for the language setting and the theme setting, plus save and load helpers for each. `src/lib/i18n.ts` uses the stored language whenever no user is signed in (at app start and after sign-out), and uses AC-090 device detection when no language is stored. `ThemeProvider` (`src/lib/theme.ts`) uses the stored theme whenever no user is signed in (at app start and after sign-out), and follows the device appearance when no theme is stored or the stored theme is System. | First. MOD-010's row depends on it. |
+| MOD-010 `engineer-mod-localization-theme` | `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`: just before `signOut()`, call MOD-012's save helpers with the signed-in user's current language and theme setting. | After MOD-012. |
 
 ---
 

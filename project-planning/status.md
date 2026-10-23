@@ -5,9 +5,9 @@
 agent: pm
 mode: change
 module: n/a
-result: needs-human
-next: show project-planning/pm-proposals/2026-10-22-ac-202-203-mod-012-scope.md to Leon (4 questions: Q1 [TRIVIAL] vs [SUBSTANTIVE] — PM recommends [SUBSTANTIVE]; Q2 architectural; Q3 PRD text 1a-1c; Q4 Decisions line); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-22-ac-202-203-mod-012-scope.md" with his exact words quoted. After the apply pass: claude --agent doc-sync, then the Tech Lead record-decisions sequence from step (3) onward (engineer-mod-auth-profile "implement" ... engineer-mod-home "implement" only after Doc-Sync, then engineer-mod-localization-theme "spec-update").
-timestamp: 2026-10-22T22:30:00Z
+result: success
+next: claude --agent doc-sync (delta sync of Rev 50: AC-202/AC-203 into the MOD-012 spec with its ownership row; MOD-012 added to MOD-010 Dependencies with the MOD-010 ownership row). Then the Tech Lead record-decisions sequence from step (3) onward: claude --agent engineer-mod-auth-profile "implement", claude --agent engineer-mod-home "implement" (only after Doc-Sync), then claude --agent engineer-mod-localization-theme "spec-update".
+timestamp: 2026-10-22T23:00:00Z
 
 ## PM Updates
 
@@ -323,6 +323,16 @@ timestamp: 2026-10-22T22:30:00Z
   - For Doc-Sync: AC-201 into the MOD-001 spec; AC-202 and AC-203 into the MOD-010 spec (and into the MOD-012 spec if Tech Lead assigns it the i18n.ts change).
   - Approved by Leon in the coordinator session: "First sign-in only. I'll manually delete the account I create with Google without name and avatar and test again after fix"
   - Leon's answers: Q1 "First sign-in only. I'll manually delete the account I create with Google without name and avatar and test again after fix"; Q2 "Apple also"; Q3 "Yes"; Q4 "no, language stay as any non-English device → zh-TW, English -> en"; Q5 "applied above"; Q6 "(a)"; Q7 "No just making sure"; Q8 "no"; Q9 "okay".
+- 2026-10-22 [SUBSTANTIVE] MOD-012's src/lib/ part of AC-202/AC-203 added: device-level language/theme save and load helpers, read by i18n.ts and ThemeProvider when signed out; MOD-010 depends on MOD-012 for the sign-out save call (Rev 50)
+  - Answers Tech Lead Reviews "Record-decisions — 2026-10-22 (Rev 49 Q-A, Q-B, Q-C; ProfileScreen inset bug)", Q-C (B), and its condition (a PM change synced into the MOD-012 spec before engineer-mod-home runs). Proposal: project-planning/pm-proposals/2026-10-22-ac-202-203-mod-012-scope.md.
+  - prd.md §6 MOD-010 Dependencies: MOD-012 added (save helpers in src/lib/, called just before signOut() in SettingsScreen, AC-202/AC-203).
+  - prd.md §6 MOD-012 Purpose: one sentence added. MOD-012 owns the src/lib/ part of AC-202/AC-203; AC-202 and AC-203 remain MOD-010's criteria.
+  - prd.md §8: "AC-202/AC-203 ownership" table added after AC-203. MOD-012 row (first): storage keys and save/load helpers in src/lib/; i18n.ts and ThemeProvider (src/lib/theme.ts) use the stored values when signed out, at app start and after sign-out; AC-090 detection / device appearance when nothing is stored (or theme is System). MOD-010 row (after MOD-012): SettingsScreen.tsx calls the save helpers just before signOut().
+  - No US, AC wording, Module Map, module or phase change. AC-202 and AC-203 text unchanged.
+  - prd.md: Revision 49 → 50, Status "[SUBSTANTIVE] — Revision 50".
+  - Not architectural, per Leon (Q2): "no". No /pstack:how run and no second Tech Lead review; Doc-Sync runs next.
+  - For Doc-Sync: add AC-202 and AC-203 to the MOD-012 spec's Acceptance Criteria Covered, with the MOD-012 ownership row as its scope, and record that MOD-010 depends on these helpers. Add MOD-012 to the MOD-010 spec's Dependencies, and copy the MOD-010 ownership row into the MOD-010 spec. A module whose spec lacks its row cannot build or test its part.
+  - Approved by Leon: "1. substantive 2. no 3. yes 4. yes"
 
 ## Tech Lead Reviews
 
@@ -3654,6 +3664,7 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 - 2026-10-22: Default language rule AC-090 stays as is: any non-English device → zh-TW, English → en (Leon, Q4).
 - 2026-10-22: After sign-out, the language and theme last set on the device stay on the device; AC-090 detection and the device appearance apply only when nothing is stored (AC-202/AC-203), per Leon (Q6: "(a)").
 - 2026-10-22: AC-201, AC-202 and AC-203 ship in Phase 1, before the Phase 1 checkpoint, per Leon.
+- 2026-10-22: AC-202/AC-203 code is split by Source Path. engineer-mod-home builds the src/lib/ helpers first, and engineer-mod-localization-theme then calls them before signOut() (Q-C, Leon: "B").
 
 ## Checkpoint History
 
