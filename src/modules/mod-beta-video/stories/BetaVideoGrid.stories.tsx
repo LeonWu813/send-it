@@ -77,7 +77,7 @@ function Demo({ count, horizontalPadding, showUploadSlot, loading, thumbnails, o
 }
 
 const meta: Meta<DemoArgs> = {
-  title: 'Beta Video/BetaVideoGrid',
+  title: 'Patterns/BetaVideoGrid',
   component: Demo,
   args: {
     count: 7,
@@ -102,3 +102,18 @@ type Story = StoryObj<DemoArgs>;
 
 /** Press a tile (mediaScrim overlay, no scale), drag Item count to 0 for the upload slot tile, toggle Loading for skeletons, Thumbnails for the fade-in. */
 export const Playground: Story = {};
+
+const noop = (): void => {};
+
+/** Layout variants side by side: route-detail inset grid, full-bleed profile grid, upload slot (empty), legacy inline empty state, and skeleton loading. */
+export const AllVariants: Story = {
+  render: () => (
+    <View style={{ gap: 24 }}>
+      <Demo count={7} horizontalPadding={16} showUploadSlot loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={7} horizontalPadding={0} showUploadSlot loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={0} horizontalPadding={16} showUploadSlot loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={0} horizontalPadding={16} showUploadSlot={false} loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={6} horizontalPadding={16} showUploadSlot loading thumbnails={false} onPressVideo={noop} />
+    </View>
+  ),
+};
