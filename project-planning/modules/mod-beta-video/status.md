@@ -2,6 +2,30 @@
 
 ## Engineering Progress
 
+### Bugfix: uploadBetaVideo returns null identity (shows 匿名 until reload) — 2026-10-23
+
+**Root cause**: `uploadBetaVideo` upserted the row and selected only insert columns — no join to `users`. It explicitly returned `{ ...data, display_name: null, avatar_url: null }`. `BetaVideoSection.handleUploadSuccess` prepended this null-identity `BetaVideo` to state, so the uploader's own player showed 匿名 with no avatar until the route was reloaded (which re-fetched via `fetchBetaVideosForRoute` with the proper embedded join).
+
+**Fix**: After the upsert succeeds, do a second `.select()` using the same join string as `fetchBetaVideosForRoute` scoped to `data.id`, then flatten `users.display_name` / `users.avatar_url` / `users.beta_video_privacy` to the returned `BetaVideo` — exactly as `fetchBetaVideosForRoute` does. Non-fatal fallback: if the follow-up fetch fails (network hiccup after a successful write), log the error and return `{ ...data, display_name: null, avatar_url: null }` so the upload is not considered failed.
+
+**Impact note**: `uploadBetaVideo` is called by `BetaVideoUploader`; its result flows to `BetaVideoSection.handleUploadSuccess`. Both callers already handle null identity and benefit automatically from populated values — no caller-side changes needed.
+
+**Query verification**: The identity-fetch select string is verbatim from `fetchBetaVideosForRoute` line 50, which is already verified in production (INT-016/INT-017/INT-020 QA pass). No new embed string to validate against a live backend.
+
+**Self-check**:
+- `npm run lint` (tsc --noEmit): 0 errors. PASS.
+- `npx jest --testPathPattern="mod-beta-video" --watchAll=false`: 115/115 pass (113 pre-existing + 2 new bugfix tests). PASS.
+- No new dependencies introduced.
+- No hardcoded values. No PII logged.
+- All changed files within MOD-005 Source Path.
+- `any` cast consistent with existing pattern at line 65 of the same file.
+
+**Files modified**:
+- `src/modules/mod-beta-video/beta-video-service.ts`
+- `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts`
+
+---
+
 ### Integration fixes: INT-016 INT-017 INT-020 — 2026-10-21
 
 **INT-016 — Remove getSession() from BetaVideoReelViewer (verified in-code)**

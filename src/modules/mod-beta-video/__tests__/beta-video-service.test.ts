@@ -287,6 +287,8 @@ describe('uploadBetaVideo', () => {
       // instead of insert, so we mock upsert (which chains the same way as insert).
       upsert: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
+      // eq is needed for the follow-up identity fetch: .from().select(...).eq('id', ...).single()
+      eq: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue(insertResult),
     };
   }
@@ -379,6 +381,83 @@ describe('uploadBetaVideo', () => {
 
     // Cleanup: the video artifact should have been removed
     expect(storageBucket.remove).toHaveBeenCalled();
+  });
+
+  it('bugfix: returned BetaVideo includes display_name and avatar_url from follow-up identity fetch', async () => {
+    const storageBucket = makeStorageMock();
+    (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
+
+    const upsertChain = {
+      upsert: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: MOCK_VIDEO_ROW, error: null }),
+    };
+    const identityRow = {
+      ...MOCK_VIDEO_ROW,
+      users: {
+        display_name: 'Test User',
+        avatar_url: 'https://example.com/avatar.jpg',
+        beta_video_privacy: 'public',
+      },
+    };
+    const identityChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: identityRow, error: null }),
+    };
+    (mockSupabase.from as jest.Mock)
+      .mockReturnValueOnce(upsertChain)
+      .mockReturnValueOnce(identityChain);
+
+    const result = await uploadBetaVideo(
+      {
+        route_id: 'route-001',
+        localVideoUri: 'file:///path/to/video.mp4',
+        localThumbnailUri: 'file:///path/to/video.mp4',
+        duration_seconds: 30,
+      },
+      'user-001',
+    );
+
+    expect(result.display_name).toBe('Test User');
+    expect(result.avatar_url).toBe('https://example.com/avatar.jpg');
+    expect(result.id).toBe('vid-001');
+    expect(result.route_id).toBe('route-001');
+    expect(identityChain.eq).toHaveBeenCalledWith('id', MOCK_VIDEO_ROW.id);
+  });
+
+  it('bugfix: falls back to null identity when the follow-up identity fetch fails (non-fatal)', async () => {
+    // The upload must succeed even when the follow-up identity fetch errors.
+    const storageBucket = makeStorageMock();
+    (mockSupabase.storage.from as jest.Mock).mockReturnValue(storageBucket);
+
+    const upsertChain = {
+      upsert: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: MOCK_VIDEO_ROW, error: null }),
+    };
+    const identityChain = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: null, error: new Error('network error') }),
+    };
+    (mockSupabase.from as jest.Mock)
+      .mockReturnValueOnce(upsertChain)
+      .mockReturnValueOnce(identityChain);
+
+    const result = await uploadBetaVideo(
+      {
+        route_id: 'route-001',
+        localVideoUri: 'file:///path/to/video.mp4',
+        localThumbnailUri: 'file:///path/to/video.mp4',
+        duration_seconds: 30,
+      },
+      'user-001',
+    );
+
+    expect(result.id).toBe('vid-001');
+    expect(result.display_name).toBeNull();
+    expect(result.avatar_url).toBeNull();
   });
 });
 

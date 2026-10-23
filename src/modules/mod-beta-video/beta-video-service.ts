@@ -170,9 +170,38 @@ export async function uploadBetaVideo(
 
     onProgress?.({ percent: 100, phase: 'saving' });
 
-    // No join needed here (the uploader does not render poster overlay info).
-    // display_name and avatar_url are not insert columns — default to null.
-    return { ...data, display_name: null, avatar_url: null } as BetaVideo;
+    // Fetch poster identity so the uploader's own player shows display_name / avatar_url
+    // immediately without a route reload (bugfix: upsert return has no users join).
+    // Non-fatal: if the fetch fails after a successful write, fall back to null identity.
+    let enrichedRow: BetaVideo;
+    try {
+      const { data: joinedData, error: joinError } = await supabase
+        .from('beta_videos')
+        .select(
+          'id, route_id, user_id, video_url, thumbnail_url, duration_seconds, caption, created_at, is_reported, report_dismissed, users!beta_videos_user_id_fkey(display_name, avatar_url, beta_video_privacy)',
+        )
+        .eq('id', data!.id)
+        .single();
+
+      if (joinError || !joinedData) {
+        console.error('[uploadBetaVideo] follow-up identity fetch failed:', joinError);
+        enrichedRow = { ...data!, display_name: null, avatar_url: null } as BetaVideo;
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const row = joinedData as any;
+        enrichedRow = {
+          ...row,
+          display_name: row.users?.display_name ?? null,
+          avatar_url: row.users?.avatar_url ?? null,
+          beta_video_privacy: row.users?.beta_video_privacy ?? 'public',
+        } as BetaVideo;
+      }
+    } catch (fetchError) {
+      console.error('[uploadBetaVideo] follow-up identity fetch threw:', fetchError);
+      enrichedRow = { ...data!, display_name: null, avatar_url: null } as BetaVideo;
+    }
+
+    return enrichedRow;
   } catch (error) {
     console.error('[uploadBetaVideo] error:', error);
     throw error;

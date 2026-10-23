@@ -2,14 +2,14 @@
 
 ## Last Action
 
-agent: engineer-mod-localization-theme
-mode: stories+design-fix
-module: mod-localization-theme (MOD-010)
+agent: engineer-mod-beta-video
+mode: bugfix
+module: mod-beta-video (MOD-005)
 result: pass
-timestamp: 2026-10-23T00:20:00Z
-next: No QA run required (Storybook stories + design-token fix only — off-spec design coverage, no AC behaviour changed). Coordinator: commit engineer-mod-localization-theme(stories+design-fix): design token fixes + Storybook screen stories.
+timestamp: 2026-10-23T10:00:00Z
+next: qa-mod-beta-video — verify bugfix: uploadBetaVideo now returns display_name/avatar_url via follow-up identity join; poster overlay shows real identity on first render without route reload. 115/115 tests pass.
 
-Previous action: engineer-mod-auth-profile(stories+design-fix) mod-auth-profile (MOD-001) — pass (2026-10-22T23:55:00Z).
+Previous action: engineer-mod-localization-theme(stories+design-fix) mod-localization-theme (MOD-010) — pass (2026-10-23T00:20:00Z).
 
 Note (engineer-mod-home): Toast.tsx — flash/error tones now use toastBackground/onToast (dark HUD, matching default; icon colours preserved for glyph differentiation). Badge.tsx — deprecated theme.borderRadius.full → theme.radius.full. HomeScreen.stories.tsx — new story with SignedIn and Empty states. tsc clean, 74 component tests pass, pre-existing non-deterministic AscentList failure in mod-send-logging unaffected.
 
