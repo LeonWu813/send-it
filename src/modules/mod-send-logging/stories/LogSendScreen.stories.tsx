@@ -1,43 +1,42 @@
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
+import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import LogSendScreen from '../screens/LogSendScreen';
 
 // Off-spec design work. Fake data only; the supabase stub resolves the insert.
-const session = { user: { id: 'user-me' } } as unknown as Session;
+const session = { user: { id: 'story-user-me' } } as unknown as Session;
 
-interface PlaygroundArgs {
-  /** Compact route summary card (card 20, padding 8, thumbnail 12, tape 6). Off = the plain form (AC-131). */
-  showRouteSummary: boolean;
-  routeColor: 'red' | 'blue' | 'green' | 'yellow' | 'black' | 'white';
-  grade: string;
+/** Seed stubs synchronously so the screen's first call sees the session. */
+function WithStubs({ children }: { children: React.ReactNode }): React.JSX.Element {
+  resetStubData();
+  setStubData('auth:session', { user: { id: 'story-user-me' } });
+  return <>{children}</>;
 }
 
-const meta: Meta<PlaygroundArgs> = {
-  title: 'SendLogging/LogSendScreen',
-  parameters: { layout: 'fullscreen' },
+type Args = { withSummary: boolean };
+
+const meta: Meta<Args> = {
+  title: 'Pages/Home/Log Send',
+  component: LogSendScreen as never, // real component; story args only toggle the route summary card
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { chrome: false } },
   decorators: [
     (Story) => (
-      <View style={{ width: 390, height: 780 }}>
+      <WithStubs>
         <Story />
-      </View>
+      </WithStubs>
     ),
+    withPhoneFrame,
   ],
-  args: { showRouteSummary: true, routeColor: 'red', grade: 'V4' },
-  argTypes: {
-    showRouteSummary: { control: 'boolean' },
-    routeColor: { control: 'select', options: ['red', 'blue', 'green', 'yellow', 'black', 'white'] },
-    grade: { control: 'select', options: ['V0', 'V2', 'V4', 'V6', 'V9'] },
-  },
-  render: ({ showRouteSummary, routeColor, grade }) => (
+  argTypes: { withSummary: { control: false } },
+  render: ({ withSummary }) => (
     <LogSendScreen
       routeId="route-1"
-      routeGrade={grade}
-      routeSummary={
-        showRouteSummary ? { color: routeColor, grade, title: '紅色 · A 區', subtitle: '紅石攀岩館' } : undefined
-      }
+      routeGrade="V4"
+      routeSummary={withSummary ? { color: 'red', grade: 'V4', title: '紅色 · A 區', subtitle: '紅石攀岩館' } : undefined}
       session={session}
       onSuccess={() => {}}
       onCancel={() => {}}
@@ -45,10 +44,10 @@ const meta: Meta<PlaygroundArgs> = {
   ),
 };
 export default meta;
-type Story = StoryObj<PlaygroundArgs>;
+type Story = StoryObj<Args>;
 
-/**
- * Try: pick Flash (the Stepper locks to 1 and announces it), then Send again (the previous count returns);
- * press and hold - / + for auto-repeat; tap the number to type (Done accessory); toggle the summary card.
- */
-export const Playground: Story = {};
+/** Form opened from a route: compact route summary card above the style / attempts fields. */
+export const Default: Story = { args: { withSummary: true } };
+
+/** Form without the route summary card (AC-131). */
+export const WithoutSummary: Story = { args: { withSummary: false }, name: 'Without Summary' };

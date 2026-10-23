@@ -1,9 +1,9 @@
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React, { useEffect } from 'react';
-import { View } from 'react-native';
 
-import { setStubData, supabase } from '../../../../.storybook/stubs/supabase';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import type { RouteSummary } from '../../mod-route-catalog';
 import RouteSearchScreen from '../screens/RouteSearchScreen';
 
@@ -64,94 +64,67 @@ const sampleRoutes: RouteSummary[] = [
   },
 ];
 
-type SearchState = 'default' | 'loading' | 'results' | 'noResults';
+type SearchState = 'default' | 'results' | 'loading' | 'noResults';
 
-interface PlaygroundArgs {
-  /** Which search phase to display. */
+interface Args {
   state: SearchState;
 }
 
 /**
- * Seeds the routes stub and auto-triggers a gym-ID search so the component
- * renders the requested state. For Loading, `supabase.from('routes')` is
- * replaced with a never-settling proxy; the original is restored on cleanup.
- * `key={args.state}` remounts this wrapper on every state change.
+ * Seeds the stubs synchronously, then auto-triggers a gym-ID search so the screen shows the requested phase.
+ * `key={state}` remounts this wrapper on every state change.
  */
-function Seeded({ state }: PlaygroundArgs): React.JSX.Element {
+function Seeded({ state }: Args): React.JSX.Element {
+  resetStubData();
+  setStubData('auth:session', { user: { id: 'story-user-me' } });
   if (state === 'results') setStubData('routes', sampleRoutes);
   if (state === 'noResults') setStubData('routes', []);
+  if (state === 'loading') setStubData('routes', STUB_PENDING);
 
   useEffect(() => {
     if (state === 'default') return;
-
-    let originalFrom: typeof supabase.from | null = null;
-    if (state === 'loading') {
-      originalFrom = supabase.from;
-      const neverResolve: unknown = new Proxy({} as object, {
-        get(_, prop: string | symbol) {
-          if (prop === 'then') return () => {};
-          return () => neverResolve;
-        },
-      });
-      supabase.from = (table: string) =>
-        table === 'routes' ? neverResolve : originalFrom!(table);
-    }
-
-    // react-native-web renders TextInput as <input> and Pressable as [role="button"].
-    // Cancel is buttons[0]; Search is buttons[1].
-    const input = document.querySelector('input') as HTMLInputElement | null;
-    if (input) {
+    // react-native-web renders TextInput as <input>. Poll for ~6s: the frame can mount (or remount) the screen
+    // after this effect, so re-fill whenever the input is found empty.
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (++tries > 60) clearInterval(timer);
+      const input = document.querySelector('input') as HTMLInputElement | null;
+      if (!input || input.value !== '') return;
       const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       nativeSetter?.call(input, 'gym-001');
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
+      // Enter runs onSubmitEditing -> search (a synthetic click on the Pressable is not picked up).
       setTimeout(() => {
-        const buttons = document.querySelectorAll<HTMLElement>('[role="button"]');
-        buttons[1]?.click();
-      }, 0);
-    }
-
-    return () => {
-      if (originalFrom !== null) supabase.from = originalFrom;
-    };
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      }, 50);
+    }, 100);
+    return () => clearInterval(timer);
   }, [state]);
 
-  return (
-    <RouteSearchScreen
-      session={session}
-      onRouteSelected={() => {}}
-      onCancel={() => {}}
-    />
-  );
+  return <RouteSearchScreen session={session} onRouteSelected={() => {}} onCancel={() => {}} />;
 }
 
-const meta: Meta<PlaygroundArgs> = {
-  title: 'SendLogging/RouteSearchScreen',
-  parameters: { layout: 'fullscreen' },
-  decorators: [
-    (Story) => (
-      <View style={{ width: 390, height: 780 }}>
-        <Story />
-      </View>
-    ),
-  ],
-  args: { state: 'default' },
-  argTypes: {
-    state: {
-      control: 'inline-radio',
-      options: ['default', 'loading', 'results', 'noResults'],
-    },
-  },
+const meta: Meta<Args> = {
+  title: 'Pages/Home/Route Search',
+  component: RouteSearchScreen as never, // real component; story args only drive the search phase
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { chrome: false } },
+  decorators: [withPhoneFrame],
+  argTypes: { state: { control: false } },
   render: (args) => <Seeded key={args.state} {...args} />,
 };
 export default meta;
-type Story = StoryObj<PlaygroundArgs>;
+type Story = StoryObj<Args>;
 
-/**
- * Switch the state control to inspect each search phase:
- * - default   — capsule search bar, no results yet
- * - loading   — three AscentRowSkeleton rows while the request is in flight
- * - results   — five ListRow cards with TapeBadge thumbnails from gym-001
- * - noResults — inline EmptyState after a search that returned nothing
- */
-export const Playground: Story = {};
+/** Search bar with no query run yet. */
+export const Default: Story = { args: { state: 'default' } };
+
+/** Search returned five routes from gym-001. */
+export const Populated: Story = { args: { state: 'results' } };
+
+/** Search returned nothing: inline empty state. */
+export const Empty: Story = { args: { state: 'noResults' } };
+
+/** Request in flight: skeleton rows. */
+export const Loading: Story = { args: { state: 'loading' } };

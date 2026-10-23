@@ -91,7 +91,7 @@ function Seeded({ state, rowCount, ownOnly, refreshKey }: PlaygroundArgs): React
 }
 
 const meta: Meta<PlaygroundArgs> = {
-  title: 'SendLogging/AscentList',
+  title: 'Patterns/AscentList',
   parameters: { layout: 'fullscreen' },
   args: { state: 'populated', rowCount: 5, ownOnly: false, refreshKey: 0 },
   argTypes: {
@@ -111,3 +111,12 @@ type Story = StoryObj<PlaygroundArgs>;
  * the floating confirm sheet; raise refreshKey after adding a row to see the landing motion.
  */
 export const Playground: Story = {};
+
+/** No sends logged yet for this route: inline empty state. */
+export const Empty: Story = { args: { state: 'empty' } };
+
+/** Fetch failed: the real error UI with retry. */
+export const ErrorState: Story = {
+  name: 'Error',
+  args: { state: 'error' },
+};
