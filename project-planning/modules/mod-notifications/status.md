@@ -1367,3 +1367,6 @@ Implementation matches spec exactly.
 | AC-173 (Rev 35) | PASS (no regression) |
 
 46 of 46 mod-notifications tests pass. TypeScript 0 errors. Single-line rename verified against spec. No regressions in any previously-passing AC.
+
+### Engineering Progress: off-spec design round 4 (2026-10-24)
+- Inbox unread dot moved to a trailing 8pt `primary` slot (always reserved so like icons align), vertically centred, right edge on R16 (audit §6 C1/C4). Added test; lint and 49 notification tests pass. No other §6 row owned by this module.

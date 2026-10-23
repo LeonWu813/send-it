@@ -294,9 +294,6 @@ function NotificationRow({
         accessibilityRole="button"
         accessibilityLabel={t('notifications.betaVideoLikeA11y')}
       >
-        {/* Unread indicator dot: 8x8 error (spec 15.9 / COMPONENT_SIZE.unreadDot) */}
-        {!item.is_read && <View style={styles.unreadDot} />}
-
         {/* Actor avatar */}
         <View style={styles.avatarContainer}>
           <Avatar size="md" uri={item.actor_avatar_url} name={actorName} decorative />
@@ -317,6 +314,12 @@ function NotificationRow({
         {/* Type marker: custom fist-bump glyph, no chip text (L-1) */}
         <View style={styles.typeBadge}>
           <FistBumpIcon variant="outline" size={ICON_SIZE.sm} color={theme.colors.textSecondary} />
+        </View>
+
+        {/* Unread dot: trailing, centred, right edge on R16 (audit C1/C4). The slot is
+            always reserved so the like icons stay aligned across read/unread rows. */}
+        <View style={styles.unreadSlot}>
+          {!item.is_read && <View testID="unread-dot" style={styles.unreadDot} />}
         </View>
       </PressableScale>
       {divider && <View style={styles.divider} />}
@@ -439,15 +442,16 @@ function makeStyles(
       marginLeft: theme.spacing.md + avatarWidth + theme.spacing.smd,
       backgroundColor: theme.colors.divider,
     },
+    unreadSlot: {
+      width: theme.componentSize.unreadDot,
+      height: theme.componentSize.unreadDot,
+      marginLeft: theme.spacing.smd,
+    },
     unreadDot: {
-      position: 'absolute',
-      left: theme.spacing.xs,
-      top: '50%',
-      marginTop: -theme.componentSize.unreadDot / 2,
       width: theme.componentSize.unreadDot,
       height: theme.componentSize.unreadDot,
       borderRadius: theme.radius.full,
-      backgroundColor: theme.colors.error,
+      backgroundColor: theme.colors.primary,
     },
     avatarContainer: {
       marginRight: theme.spacing.smd,

@@ -115,6 +115,20 @@ describe('NotificationInboxScreen', () => {
     });
   });
 
+  it('renders the unread dot as the last item of the row (trailing, audit C1/C4)', async () => {
+    mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
+
+    render(
+      <NotificationInboxScreen session={MOCK_SESSION} />,
+      renderOptions(),
+    );
+
+    const dot = await screen.findByTestId('unread-dot');
+    const slot = dot.parent!;
+    const row = slot.parent!;
+    expect(row.children[row.children.length - 1]).toBe(slot);
+  });
+
   it('calls markNotificationsRead when inbox loads (AC-172)', async () => {
     mockFetchNotifications.mockResolvedValueOnce([MOCK_NOTIFICATION]);
 
