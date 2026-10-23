@@ -2,6 +2,58 @@
 
 ## Engineering Progress
 
+**Design fix + Storybook stories — complete 2026-10-22**
+
+### What was implemented
+
+**Task 1 — Design fix (NotificationInboxScreen.tsx)**
+
+- Fixed `unreadDot` style in `makeStyles`: `borderRadius: theme.borderRadius.full` (deprecated token) → `borderRadius: theme.radius.full`. This was the only `theme.borderRadius.*` occurrence in the file; all other `borderRadius` usages already used the correct `theme.radius.*` token.
+
+**Task 2 — Storybook screen stories**
+
+- Created `src/modules/mod-notifications/stories/NotificationInboxScreen.stories.tsx` with three stories:
+  - `Loading` — `isActive=false` holds the component in its loading skeleton state.
+  - `Populated` — 4 beta-video-like notifications (2 unread, 2 read); unread dot visible on appropriate rows (AC-055 / AC-058 inbox layout). Seeded via `setStubData('notifications', ...)` and `setStubData('users', ...)`. Uses real `UnreadCountProvider` in a decorator (required because `useUnreadCountContext()` throws outside the provider).
+  - `Empty` — empty inbox empty state (AC-055 empty case). Seeded via `setStubData('notifications', [])`.
+- Created `src/modules/mod-notifications/stories/NotificationPreferenceScreen.stories.tsx` with two stories:
+  - `Loaded` — preference row with `beta_video_like: true` (toggle ON, default opt-in per AC-057).
+  - `PreferenceOff` — preference row with `beta_video_like: false` (toggle OFF per AC-057).
+  - Both seeded via `setStubData('notification_preferences', [...])` in per-story decorators.
+
+### Self-Check
+
+#### Automated
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `npx tsc --noEmit` | PASS | 0 errors |
+| `npm test -- --watchAll=false --silent` | PASS | 662/662 tests pass, 47 suites, exit 0 (full suite, no regressions) |
+| Files changed outside module Source Path | PASS | Only `src/modules/mod-notifications/screens/NotificationInboxScreen.tsx` modified and `src/modules/mod-notifications/stories/` created — all within MOD-007 Source Path; pre-existing changes in README.md, Badge.tsx, Toast.tsx, RouteDetailScreen.tsx, RouteSubmitScreen.tsx are not from this session |
+| self-check.sh | N/A | Script not present in project (no `scripts/self-check.sh`); manual judgment checks performed instead |
+
+#### Judgment-Based
+
+| Item | Result | Notes |
+|------|--------|-------|
+| Design fix correct | PASS | `theme.radius.full` is the canonical token; `theme.borderRadius.*` is the deprecated namespace. One occurrence fixed; grepped to confirm no remaining `theme.borderRadius.*` in the file. |
+| No other logic or structure changed | PASS | Diff is exactly one token name substitution on line 413; surrounding unread dot positioning logic, color, and size are untouched. |
+| Stories follow screen-level pattern (`LogSendScreen.stories.tsx`) | PASS | Same CSF3 format, `@storybook/react-native-web-vite` Meta, fullscreen layout, `width: 390, height: 780` device frame, fake session, supabase stub seeding. |
+| No `useNavigation`/`useRoute` mocks in stories | PASS | This app does not use `@react-navigation/native` hooks (prohibited by production.md Shared Conventions). The screens use callback props; no navigation-context mock is needed or appropriate. |
+| `UnreadCountProvider` provided in inbox story decorator | PASS | `NotificationInboxScreen` calls `useUnreadCountContext()` which throws without the provider. Real provider used with a fake session; supabase stub resolves the unread count query without network. |
+| Stories cover all specified UI states | PASS | Loading, Populated (3-4 notifications with unread dots), Empty — all covered. NotificationPreferenceScreen: Loaded (toggle ON), PreferenceOff (toggle OFF). |
+| No hardcoded values introduced | PASS | Stories use only fake UUIDs and ISO dates scoped to story data. |
+| TypeScript strict mode | PASS | 0 errors with `tsc --noEmit`. Story files are not included in jest (no test-only code paths). |
+| No new production dependencies | PASS | Stories import only existing packages (`@storybook/react-native-web-vite`, `@supabase/supabase-js`) and the storybook stub already in `.storybook/stubs/`. |
+
+### Files Modified / Created
+
+- `src/modules/mod-notifications/screens/NotificationInboxScreen.tsx` — design fix: `theme.borderRadius.full` → `theme.radius.full` at line 413
+- `src/modules/mod-notifications/stories/NotificationInboxScreen.stories.tsx` — created; 3 stories (Loading, Populated, Empty)
+- `src/modules/mod-notifications/stories/NotificationPreferenceScreen.stories.tsx` — created; 2 stories (Loaded, PreferenceOff)
+
+---
+
 **AC-200 MOD-007 spec-update (push title rename) — complete 2026-10-21**
 
 ### What was implemented

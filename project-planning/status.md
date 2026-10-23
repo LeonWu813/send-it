@@ -2,16 +2,14 @@
 
 ## Last Action
 
-agent: qa-mod-localization-theme
-mode: integration-fix-verify
-module: mod-localization-theme (MOD-010)
+agent: engineer-mod-notifications
+mode: design-fix+stories
+module: mod-notifications (MOD-007)
 result: pass
-timestamp: 2026-10-22T18:00:00Z
-next: INT-031 is QA VERIFIED. No device check needed (per INT-031 spec note). Next: show Leon the fix summary and ask for HUMAN VERIFIED. When Leon gives his verification, relay to tech-lead: "confirm-fix INT-031 — Leon: \"<his exact words>\""
+timestamp: 2026-10-22T19:00:00Z
+next: Commit changes and hand off to coordinator. No QA run required for design-token fix + Storybook stories (off-spec design work, no AC behaviour changed). Coordinator should note the commit is ready.
 
-Note (qa-mod-localization-theme): INT-031 REGRESSION PASS. `handleLogout()` in SettingsScreen.tsx now uses `Promise.allSettled([saveDeviceLanguage, saveDeviceTheme])` + per-result error logging + `signOut()` in its own try/catch. A failed save can no longer prevent sign-out. All 5 new unit tests pass. Full suite: 662/662 pass, 47 suites, exit 0. Integration-review row INT-031 set to QA VERIFIED. Module status.md updated with QA Run 7.
-
-Note: qa-mod-home needs-signoff for INT-030 device test is still pending (see Device test script below). Resume that after INT-031 and INT-032a are confirmed closed (it is independent and can run in parallel).
+Note (engineer-mod-notifications): Design fix — `theme.borderRadius.full` → `theme.radius.full` in `NotificationInboxScreen.tsx` `unreadDot` style (was the only deprecated occurrence). Storybook stories created for `NotificationInboxScreen` (Loading, Populated, Empty) and `NotificationPreferenceScreen` (Loaded, PreferenceOff). Full test suite 662/662 pass, tsc clean. Pending items from prior session remain unchanged (INT-031 human verification, INT-030 device check).
 
 Device test script for INT-030 (show to Leon word for word):
 Prerequisites: device language set to a language different from the account's stored language (e.g., device = Japanese, account = English). Sign in to ProjectDay.

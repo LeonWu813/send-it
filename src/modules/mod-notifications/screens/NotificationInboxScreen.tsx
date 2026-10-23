@@ -410,7 +410,7 @@ function makeStyles(
       marginTop: -theme.componentSize.unreadDot / 2,
       width: theme.componentSize.unreadDot,
       height: theme.componentSize.unreadDot,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       backgroundColor: theme.colors.error,
     },
     avatarContainer: {
