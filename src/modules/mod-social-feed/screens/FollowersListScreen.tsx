@@ -105,13 +105,17 @@ export default function FollowersListScreen({
     return (
       <FlatList
         data={users}
-        contentContainerStyle={[styles.listContent, { paddingBottom: tabInset.contentBottom }]}
+        contentContainerStyle={
+          users.length > 0
+          ? [styles.group, { marginBottom: tabInset.contentBottom }]
+          : [styles.listContent, { paddingBottom: tabInset.contentBottom }]
+        }
         scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         keyExtractor={(item) => item.userId}
         renderItem={({ item, index }) => (
           <ListRow
             variant="content"
-            inset="screen"
+            inset="grouped"
             title={item.displayName}
             accessibilityLabel={item.displayName}
             leading={<Avatar size="sm" uri={item.avatarUrl} name={item.displayName} decorative />}
@@ -153,6 +157,14 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     },
     listContent: {
       paddingTop: 0,
+    },
+    // A8: inset grouped container (16), rows pad 16 so the avatar sits at x32.
+    group: {
+      marginHorizontal: screenMargin,
+      backgroundColor: theme.colors.surface,
+      borderRadius: theme.radius.card,
+      overflow: 'hidden',
+      flexGrow: 0,
     },
     centered: {
       flex: 1,

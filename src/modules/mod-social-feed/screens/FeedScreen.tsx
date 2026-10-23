@@ -17,17 +17,16 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
 import {
   AppText,
   Avatar,
   Card,
   EmptyState,
-  IconButton,
+  FistBumpIcon,
   InlineError,
   Spinner,
 } from '../../../components/ui';
@@ -185,7 +184,7 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
       {items.map((item) =>
         item.item_type === 'ascent'
           ? renderAscentCard(item, styles, t)
-          : renderBetaVideoCard(item, styles, t, likeMap, handleLikeToggle),
+          : renderBetaVideoCard(item, styles, t, likeMap, handleLikeToggle, theme),
       )}
     </ScrollView>
   );
@@ -246,6 +245,7 @@ function renderBetaVideoCard(
   t: Translate,
   likeMap: LikeMap,
   onLikeToggle: (itemId: string) => void,
+  theme: ReturnType<typeof useTheme>['theme'],
 ): React.JSX.Element {
   const likeInfo = likeMap[item.item_id] ?? { like_count: 0, user_has_liked: false };
 
@@ -282,19 +282,23 @@ function renderBetaVideoCard(
 
       {/* Like button — AC-052: only on beta_video items; AC-053: NOT on ascents */}
       <View style={styles.likeRow}>
-        <IconButton
-          variant="toggle"
-          name={ICON.like.outline}
-          nameOn={ICON.like.filled}
-          selected={likeInfo.user_has_liked}
-          color="textSecondary"
+        <Pressable
+          accessibilityRole="button"
           accessibilityLabel={
             likeInfo.user_has_liked
               ? t('socialFeed.unlike')
               : t('socialFeed.like')
           }
+          accessibilityState={{ selected: likeInfo.user_has_liked }}
+          style={styles.likeButton}
           onPress={() => onLikeToggle(item.item_id)}
-        />
+        >
+          <FistBumpIcon
+            variant={likeInfo.user_has_liked ? 'filled' : 'outline'}
+            size={theme.iconSize.md}
+            color={likeInfo.user_has_liked ? theme.colors.primary : theme.colors.textSecondary}
+          />
+        </Pressable>
         {likeInfo.like_count > 0 && (
           <AppText variant="subhead" color="textSecondary" numeric>
             {likeInfo.like_count}
@@ -383,6 +387,12 @@ function makeStyles(
     caption: {
       paddingHorizontal: theme.layout.cardPadding,
       paddingTop: theme.spacing.sm,
+    },
+    likeButton: {
+      minWidth: theme.layout.minTouchTarget,
+      minHeight: theme.layout.minTouchTarget,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     likeRow: {
       flexDirection: 'row',

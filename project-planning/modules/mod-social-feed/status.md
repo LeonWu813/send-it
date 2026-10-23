@@ -1083,3 +1083,7 @@ All five verification points pass:
 - mod-social-feed test suite 63/63 pass with no import errors.
 
 INT-012 row set to `QA VERIFIED` in `project-planning/integration-review.md`.
+
+### Off-spec design round 3 (2026-10-23)
+- Followers/Following: inset grouped container (margin 16, surface, radius.card), ListRow inset=grouped (avatar x32, name avatar+12 per A8).
+- FeedScreen like: IconButton thumbs-up replaced with Pressable (44pt) + FistBumpIcon. User Profile: no shadows found, no change. tsc and 64 tests pass.
