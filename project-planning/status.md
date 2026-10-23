@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-home
+agent: engineer-mod-gym-directory
 mode: stories+design-fix
-module: mod-home (MOD-012)
+module: mod-gym-directory (MOD-002)
 result: pass
-timestamp: 2026-10-22T20:00:00Z
-next: No QA run required (design-token fix + Storybook stories — off-spec design work, no AC behaviour changed). Coordinator should note commit 5cdaa71 is ready.
+timestamp: 2026-10-22T21:00:00Z
+next: No QA run required (design-token fix + Storybook stories — off-spec design work, no AC behaviour changed). Coordinator should commit engineer-mod-gym-directory(stories+design-fix) and note files are ready.
 
 Note (engineer-mod-home): Toast.tsx — flash/error tones now use toastBackground/onToast (dark HUD, matching default; icon colours preserved for glyph differentiation). Badge.tsx — deprecated theme.borderRadius.full → theme.radius.full. HomeScreen.stories.tsx — new story with SignedIn and Empty states. tsc clean, 74 component tests pass, pre-existing non-deterministic AscentList failure in mod-send-logging unaffected.
 

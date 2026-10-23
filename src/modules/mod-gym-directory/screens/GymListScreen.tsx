@@ -373,14 +373,14 @@ function makeStyles(
     thumbnail: {
       width: 56,
       height: 56,
-      borderRadius: theme.spacing.sm,
+      borderRadius: theme.radius.media,
       backgroundColor: theme.colors.surfaceAlt,
       flexShrink: 0,
     },
     initialsAvatar: {
       width: 56,
       height: 56,
-      borderRadius: theme.spacing.sm,
+      borderRadius: theme.radius.media,
       backgroundColor: theme.colors.surfaceAlt,
       alignItems: 'center',
       justifyContent: 'center',

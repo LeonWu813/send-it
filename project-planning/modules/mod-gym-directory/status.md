@@ -2,6 +2,32 @@
 
 ## Engineering Progress
 
+### Stories + Design fix — 2026-10-22 (Issue 5 — borderRadius semantic token fix + Storybook screen stories)
+
+**Files modified:**
+- `src/modules/mod-gym-directory/screens/GymListScreen.tsx` — design-token fix (Issue 5 from design-lead audit): changed `thumbnail` and `initialsAvatar` `borderRadius` from `theme.spacing.sm` (8 — a spacing token, semantically wrong) to `theme.radius.media` (12 — the correct semantic token for 56×56 media list thumbnails). Both style objects had the same incorrect token; both are now corrected. The visual change is minimal (8→12) but the semantic meaning is now correct: `spacing.sm` is an inter-element gap measure, not a corner radius.
+
+**Files created:**
+- `src/modules/mod-gym-directory/stories/GymListScreen.stories.tsx` — 4 states: Populated (5 gyms, gym-001 saved + floats to top, gym-003 has cover photo triggering "Photos from Google" attribution), Empty (empty stub), Loading (static skeleton shell matching the screen's loading branch), Error (static InlineError block). Uses `setStubData`/`resetStubData` from the Storybook supabase stub to drive Populated and Empty states.
+- `src/modules/mod-gym-directory/stories/GymDetailScreen.stories.tsx` — 3 states: Populated (full gym record with cover photo, saved bookmark, "View Routes" CTA), Loading (static skeleton shell), Error (static InlineError block). Populated state uses `setStubData` with a single-item array (stub returns first element for `.single()` calls).
+- `src/modules/mod-gym-directory/stories/RequestGymScreen.stories.tsx` — 4 states: Default (real `RequestGymScreen` rendered with a fake session — empty form, submit button disabled), Submitting (static wrapper showing form with loading button), Success (static wrapper showing the success confirmation card with Ionicons check + translated title/body/Done button), ValidationError (static wrapper showing form with InlineError block visible, matching a failed API-call state). All wrapper components use `useTranslation` for real i18n strings.
+
+**Design decisions:**
+- Loading and error states rendered as static wrappers (not actual component async states) because the Storybook supabase stub always resolves immediately (`Promise.resolve`) and `@storybook/test` is not available in this Storybook setup. Static wrappers show the exact same JSX the screen renders in those states.
+- No `@react-navigation/native` hooks used or mocked — project uses custom state-machine navigators with no `NavigationContainer`; all screen props are plain callbacks.
+- `setStubData`/`resetStubData` called inside story `decorators` (synchronously before story render) so stub data is available when `useEffect` fires on first render.
+- RequestGymScreen Default story renders the real component (no stub needed — the form's initial state requires no data fetch).
+
+**Self-check:**
+- TypeScript: `npx tsc --noEmit` — EXIT 0, 0 errors
+- Tests: `npx jest --testPathPattern="mod-gym-directory" --watchAll=false` — 46/46 passed, 4 suites, exit code 0
+- Pre-existing failure in `mod-send-logging/__tests__/AscentList.test.tsx` is unrelated and pre-dates this change
+- Scope: all changed files are inside `src/modules/mod-gym-directory/`; no files outside the module Source Path were modified
+- No new npm dependencies introduced
+- Stories follow `@storybook/react-native-web-vite` v10 pattern; Storybook preview.tsx provides ThemeProvider, SafeAreaProvider, and i18n via its global decorator
+
+---
+
 ### Spec-update — 2026-10-21 (AC-200 MOD-002: rename "Send It" → "ProjectDay" in gym notes)
 
 **Files created:**
