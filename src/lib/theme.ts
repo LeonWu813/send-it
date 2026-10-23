@@ -10,7 +10,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Appearance, ColorSchemeName, StyleSheet, useWindowDimensions } from 'react-native';
 
 import { loadTheme } from './devicePrefs';
@@ -631,9 +631,14 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
     return () => subscription.remove();
   }, []);
 
-  function setThemeUserId(newUserId: string | null): void {
+  // useCallback with empty deps: setUserId is a React useState setter (stable per
+  // React guarantee), so an empty dep array is correct. Without useCallback, every
+  // ThemeProvider render would create a new function reference, causing AppShell's
+  // useEffect([session.user.id, setThemeUserId]) to re-run its cleanup
+  // (setThemeUserId(null) + applySignedOutLanguage()) on every render — INT-030.
+  const setThemeUserId = useCallback((newUserId: string | null): void => {
     setUserId(newUserId);
-  }
+  }, []);
 
   const isDark = resolveScheme(override, systemScheme);
   const theme = buildTheme(isDark);

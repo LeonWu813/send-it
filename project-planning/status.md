@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: record-decisions
-module: n/a
-next: claude --agent engineer-mod-localization-theme "integration-fix INT-031" and claude --agent engineer-mod-auth-profile "integration-fix INT-032a" (no prerequisite, any order); for INT-030 the coordinator first runs /pstack:blast-radius on the planned fix (save to project-planning/pstack-findings/2026-10-22-blast-radius-INT-030.md), then claude --agent engineer-mod-home "integration-fix INT-030" (or claude --agent tech-lead "on-demand review of INT-030 blast-radius" if it changes the plan)
+agent: engineer-mod-home
+mode: integration-fix
+module: mod-home
+next: claude --agent qa-mod-home "integration-fix-qa INT-030 — verify setThemeUserId useCallback fix; device check: changing theme in Settings does not flash language when device and account languages differ"
 result: success
-timestamp: 2026-10-22T12:00:00Z
+timestamp: 2026-10-22T13:00:00Z
 
 ## PM Updates
 

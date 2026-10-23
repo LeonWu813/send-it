@@ -2,6 +2,41 @@
 
 ## Engineering Progress
 
+### Integration Fix — INT-030 — 2026-10-22
+
+**Task**: Wrap `setThemeUserId` in `useCallback` with empty deps so AppShell's `useEffect([session.user.id, setThemeUserId])` does not re-run its cleanup on unrelated ThemeProvider re-renders.
+
+**Root cause**: `setThemeUserId` was a plain function defined in the ThemeProvider render body. Every ThemeProvider render created a new function reference. AppShell's `useEffect` listed it as a dep, so the cleanup (`setThemeUserId(null)` + `applySignedOutLanguage()`) ran on every ThemeProvider re-render while the user was still signed in. When the device-stored language differed from the account language, this caused a visible language flash.
+
+**Fix**: Wrapped `setThemeUserId` in `useCallback(..., [])`. `setUserId` is a React `useState` setter (stable per React guarantee), so empty deps are correct. The cleanup now runs only when `session.user.id` actually changes (real sign-out).
+
+**Impact note**: `setThemeUserId` has exactly one caller (AppShell, lines 191/195). All other `useTheme()` consumers only destructure `{ theme }`. The context re-render behavior for all other consumers is unchanged. The function signature is identical. No cross-module impact.
+
+**Files changed:**
+- `src/lib/theme.ts:13` — added `useCallback` to the React import.
+- `src/lib/theme.ts:634–641` — replaced plain function with `const setThemeUserId = useCallback(fn, [])`.
+- `src/lib/__tests__/theme.test.tsx` — new file; two regression pin tests:
+  1. Does not call `applySignedOutLanguage` when ThemeProvider re-renders without a session change.
+  2. `setThemeUserId` reference is stable across ThemeProvider re-renders (referential identity check).
+
+**Self-check results:**
+
+| Check | Result |
+|-------|--------|
+| `npm run lint` (tsc --noEmit) | PASS — 0 errors |
+| `npm test -- --no-coverage` | PASS — 662 tests, 47 suites, all pass (+2 from new theme.test.tsx) |
+| New tests: applySignedOutLanguage not called on re-render | PASS |
+| New tests: setThemeUserId reference stable across re-renders | PASS |
+| Only files within src/lib/ changed (mod-home Source Path) | PASS |
+| No new dependencies introduced | PASS |
+| TypeScript strict mode — no unguarded `any` | PASS |
+| Impact note written: only AppShell calls setThemeUserId; other consumers unaffected | PASS |
+| Judgment: fix does not break any dependents (same signature, stable reference is an improvement) | PASS |
+
+**Result: FIXED – AWAITING QA**
+
+---
+
 ### Implementation — AC-202/AC-203 src/lib/ helpers — 2026-10-22
 
 **Task**: Implement the MOD-012-owned src/lib/ portion of AC-202 (language) and AC-203 (theme): device-level storage helpers that i18n.ts and ThemeProvider read when no user is signed in.
