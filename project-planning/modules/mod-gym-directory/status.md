@@ -2,6 +2,11 @@
 
 ## Engineering Progress
 
+### Flat/alignment audit round 3 #11 #13 #17 — 2026-10-23 (off-spec design, design/page-templates)
+- GymListScreen: Google attribution right-aligned; request-gym link at x16 (marginLeft -14, A6/A8). No shadows.
+- RequestGymScreen: header title hidden until large title scrolls off (A9); form is flat, no Card, labels at 16 (F4).
+- Test added (title shown once); gym-directory jest 47 pass. tsc error only in mod-localization-theme Tokens.stories (not this module).
+
 ### Page review G-1 + G-2 + R0/T-1 — 2026-10-23 (off-spec design implementation, design/page-templates)
 
 - GymListScreen: fixed 72pt rows (padding smd 12 + 48 thumbnail), one footnote meta line (branch · city · district) at stackTight 2 below the name (R14); cardGap via ItemSeparator instead of gap + header margin (R0); 「申請加入」 stays at the end of results and is the secondary action of the no-results EmptyState; attribution 13pt.

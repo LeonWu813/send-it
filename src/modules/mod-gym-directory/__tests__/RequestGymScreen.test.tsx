@@ -47,6 +47,11 @@ describe('RequestGymScreen', () => {
     jest.clearAllMocks();
   });
 
+  it('shows the title once: header title stays hidden until the large title scrolls off (A9)', () => {
+    render(<RequestGymScreen session={MOCK_SESSION} onBack={jest.fn()} />, renderOptions());
+    expect(screen.getAllByText('Request a Gym')).toHaveLength(1);
+  });
+
   it('renders the form with name, city, and optional maps URL fields', () => {
     render(
       <RequestGymScreen session={MOCK_SESSION} onBack={jest.fn()} />,

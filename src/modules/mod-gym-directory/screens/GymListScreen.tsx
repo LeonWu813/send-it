@@ -407,12 +407,14 @@ function makeStyles(
       marginTop: theme.layout.stackTight,
     },
     googleAttribution: {
-      textAlign: 'center',
+      textAlign: 'right',
       marginTop: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
+    // A6/A8: ghost button has 14pt padding; pull the label onto the 16pt keyline.
     requestRow: {
-      alignItems: 'center',
+      alignItems: 'flex-start',
+      marginLeft: -14,
     },
   });
 }
