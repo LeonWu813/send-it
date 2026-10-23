@@ -3,11 +3,15 @@
 ## Last Action
 
 agent: tech-lead
-mode: on-demand-review
+mode: record-decisions
 module: n/a
-result: needs-human
-next: Leon decides Q-A, Q-B and Q-C in Tech Lead Reviews "Review — 2026-10-22 — on-demand (Rev 49 ...)". Then: claude --agent engineer-mod-auth-profile "implement AC-201 per Leon's Q-A/Q-B decisions, and fix the ProfileScreen fallback-branch inset bug (Tech Lead Review 2026-10-22)". The layout bug can start now, since it does not depend on the decisions. For AC-202/AC-203: if Leon picks Q-C (B), first claude --agent pm "change" (a [TRIVIAL] change adding the MOD-012 src/lib read-side requirement), then doc-sync, then claude --agent engineer-mod-home, then claude --agent engineer-mod-localization-theme "spec-update". Then QA for each module.
-timestamp: 2026-10-22T21:00:00Z
+result: success
+next: claude --agent pm "change" — proposal pass for a [TRIVIAL] change adding MOD-012's part of AC-202/AC-203 (device-level language/theme save/load helpers in src/lib/; i18n.ts and ThemeProvider read them when nobody is signed in) to the PRD so it reaches the MOD-012 spec; show the proposal to Leon, then the apply pass with his quoted approval. Then, in order: (2) claude --agent doc-sync (sync the [TRIVIAL] change into the MOD-012 spec); (3) claude --agent engineer-mod-auth-profile "implement" — AC-201 per Q-A hybrid (Google: new *_mod_001_* migration extending handle_new_auth_user() for display_name + avatar_url; Apple: in-app display_name fill from credential.fullName when still empty) and Q-B (B) (copy Google photo into the avatars bucket in the app after sign-in, via uploadAvatar() or equivalent), plus the ProfileScreen.tsx:238-260 loading-branch inset bug fix — see Tech Lead Reviews "Record-decisions — 2026-10-22 (Rev 49 Q-A, Q-B, Q-C)"; (4) claude --agent qa-mod-auth-profile "verify"; (5) claude --agent engineer-mod-home "implement" — AC-202/AC-203 src/lib/ helpers (only after step 2); (6) claude --agent engineer-mod-localization-theme "spec-update" — AC-202/AC-203 helper call before signOut() in SettingsScreen.tsx (only after step 5); (7) claude --agent qa-mod-home "verify" and claude --agent qa-mod-localization-theme "verify"; (8) coordinator runs /pstack:thermos on the combined delta; (9) claude --agent tech-lead integration review; (10) claude --agent pm "checkpoint". Check the Required pstack steps table at each handoff (blast-radius may apply after fixes on depended-on modules).
+timestamp: 2026-10-22T22:00:00Z
+summary: |
+  Recorded Leon's answers to Q-A (hybrid), Q-B (B: copy into avatars bucket, in-app) and Q-C (B: MOD-012 helpers
+  first, MOD-010 sign-out call second), and the assignment of the ProfileScreen loading-branch inset bug to
+  engineer-mod-auth-profile. Q-C (B) carries the condition of a [TRIVIAL] PM change + Doc-Sync before engineer-mod-home.
 
 ## PM Updates
 
@@ -325,6 +329,22 @@ timestamp: 2026-10-22T21:00:00Z
   - Leon's answers: Q1 "First sign-in only. I'll manually delete the account I create with Google without name and avatar and test again after fix"; Q2 "Apple also"; Q3 "Yes"; Q4 "no, language stay as any non-English device → zh-TW, English -> en"; Q5 "applied above"; Q6 "(a)"; Q7 "No just making sure"; Q8 "no"; Q9 "okay".
 
 ## Tech Lead Reviews
+
+### Record-decisions — 2026-10-22 (Rev 49 Q-A, Q-B, Q-C; ProfileScreen inset bug)
+
+Decisions are Leon's, quoted exactly. They answer the questions in "Review — 2026-10-22 — on-demand (Rev 49 open engineering questions ...)" below. (The project-level `## Decisions` section is PM's; PM may carry these into it with its next change.)
+
+- **Q-A → hybrid.** Leon: "Q-A AC-201: where should the profile fill run? hybrid". Google: extend the existing `handle_new_auth_user()` trigger (new `*_mod_001_*` migration, `CREATE OR REPLACE`) to fill `display_name` and `avatar_url` from `raw_user_meta_data` when the provider is Google. Apple: in the app, after `signInWithIdToken` succeeds, fill `display_name` from `credential.fullName` only if it is still empty.
+- **Q-B → (B), copy into the `avatars` bucket.** Leon: "Q-B AC-201: should avatar_url store Google's link, or a copy in the avatars bucket? B". The copy runs in the app after sign-in, using the existing `uploadAvatar()` in `auth-service.ts` or equivalent — not a new Edge Function. (This differs from my recommendation (A); Leon's choice stands.)
+- **Q-C → (B), split ownership.** Leon: "Q-C. AC-202/AC-203: who changes the language and theme files in src/lib/? B". `engineer-mod-home` (MOD-012) goes first: device-level save/load helpers in `src/lib/`, and `i18n.ts` and `ThemeProvider` read them when nobody is signed in. `engineer-mod-localization-theme` (MOD-010) goes second: calls those helpers before `signOut()` in `SettingsScreen.tsx`. **Condition:** a `[TRIVIAL]` PM change adding the MOD-012 work, synced by Doc-Sync into the MOD-012 spec, before `engineer-mod-home` runs.
+- **ProfileScreen loading-branch inset bug** (`ProfileScreen.tsx:238-260`): assigned to `engineer-mod-auth-profile` as a bug fix alongside AC-201. No PRD change.
+
+**Engineering notes for `engineer-mod-auth-profile` that follow from Q-A + Q-B together** (advisory, not decisions):
+- The trigger runs first and writes Google's photo URL into `avatar_url`; the in-app copy then downloads it, uploads it through the `avatars` bucket path, and replaces `avatar_url` with the bucket URL. The app should only copy when `avatar_url` is still a non-bucket (Google) URL for the signed-in user, so existing accounts and user-chosen photos are never overwritten, and a repeat sign-in does not re-copy.
+- `uploadAvatar()` reads a local file. The Google image has to be downloaded to a local file first; the bucket accepts only jpeg/png/webp, so check the content type.
+- If the app is closed before the copy finishes, `avatar_url` stays on Google's URL. `Avatar` falls back to the initial if that URL ever fails, so this degrades safely; a retry on the next sign-in under the rule above covers it.
+- Still applies: `EditProfileScreen.tsx:61-113` must not try to upload a remote `https://` `avatar_url` as a local file.
+- Confirm the Apple `credential.fullName` behavior on one new Apple test account, as noted in the review below.
 
 ### Review — 2026-10-22 — on-demand (Rev 49 open engineering questions: AC-201, AC-202/AC-203; ProfileScreen layout bug)
 
