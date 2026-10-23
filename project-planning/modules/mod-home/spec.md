@@ -4,7 +4,7 @@
 **Module Name**: Home
 **Phase**: 1
 **Dependencies**: MOD-001, MOD-002, MOD-003 (saved_routes / route-visit data and route detail navigation for the Projecting Routes section, AC-177/AC-178; shared route card thumbnail source `photo_url`, AC-183), MOD-006 (followed-climbers activity for the Following section, AC-182), MOD-007 (NotificationInboxScreen + unread-count for the global-header bell, AC-184)
-**Last Synced from PRD Revision**: 48
+**Last Synced from PRD Revision**: 50
 
 ---
 
@@ -126,6 +126,8 @@ The climbing verb "send" and identifiers built on it (for example `mod-send-logg
 | Leon | Supabase dashboard, Google consent screen, Expo project, Apple Developer / App Store Connect, folder rename (setup.md section 11). Deletes `PRD_TW_Bouldering_App.md` and `scratchpad/` in a `human:` commit. |
 | Out of scope | Supabase and PostHog project names. `README.md` (final checkpoint). `project-planning/`. |
 
+**AC-202/AC-203 (MOD-012 src/lib/ scope — Rev 50)**: MOD-012 owns the `src/lib/` part of AC-202/AC-203 as assigned by Tech Lead on 2026-10-22 (Q-C). MOD-012 must provide: device-level storage keys for the language setting and the theme setting, plus save and load helpers for each. `src/lib/i18n.ts` uses the stored language whenever no user is signed in (at app start and after sign-out), and uses AC-090 device detection when no language is stored. `ThemeProvider` (`src/lib/theme.ts`) uses the stored theme whenever no user is signed in (at app start and after sign-out), and follows the device appearance when no theme is stored or the stored theme is System. MOD-010's row depends on this — MOD-012 must be built first. AC-202 and AC-203 remain MOD-010's acceptance criteria; the full AC text is in `mod-localization-theme/spec.md`.
+
 ---
 
 ## Requirements
@@ -175,6 +177,8 @@ The climbing verb "send" and identifiers built on it (for example `mod-send-logg
 - MOD-006 (followed-climbers activity data for the Following activity section, AC-182)
 - MOD-007 (NotificationInboxScreen navigation target for global-header bell, AC-184; UnreadCountProvider context for unread-count badge, AC-173)
 
+**Downstream dependents**: MOD-010 (SettingsScreen calls MOD-012's save helpers just before `signOut()` for AC-202/AC-203). MOD-012's helpers must be built before MOD-010's sign-out path can be completed.
+
 ---
 
 ## Integration Points
@@ -194,6 +198,8 @@ The climbing verb "send" and identifiers built on it (for example `mod-send-logg
 7. **Global header bell wires to MOD-007's NotificationInboxScreen and UnreadCountProvider**: MOD-007 must expose `NotificationInboxScreen` as a navigable target and `UnreadCountProvider` as a React context. MOD-012 mounts `UnreadCountProvider` inside `AppShell` wrapping the global header. The global header subscribes to `unreadCount` for the badge value. `NotificationInboxScreen` calls `refresh()` on the provider after the AC-172 batch mark-read. MOD-007 must be implemented before MOD-012 QA for this integration.
 
 8. **Shared route card component (`src/components/RouteCard.tsx`) consumed by MOD-003 RouteListScreen and MOD-008 send-history section**: MOD-012 owns the file at `src/components/RouteCard.tsx`. Both MOD-003 and MOD-008 import it via the app-level path per the App-Level Shared Presentational Components convention in production.md. MOD-012 must ship `RouteCard` before MOD-003 and MOD-008 QA handoff for any surface that uses it.
+
+9. **MOD-010 SettingsScreen calls MOD-012's language and theme save helpers just before signOut() (AC-202/AC-203)**: MOD-012 must expose save helpers for the language setting and the theme setting from `src/lib/`. MOD-010's SettingsScreen.tsx imports and calls these helpers just before `signOut()` with the signed-in user's current language and theme setting. MOD-012 must ship these helpers before MOD-010's SettingsScreen sign-out path can be completed.
 
 ---
 
@@ -252,6 +258,7 @@ The composite PK `(user_id, gym_id)` is the only index needed — the leading `u
   - `routeCard.topSend` — EN "Top" / zh-TW "完攀"
   Remove: `home.routeCard.newBeta` (chip removed per AC-181, Rev 39).
 - The `saved_gyms` migration (`20260924000001_mod_012_home.sql`) must include: table DDL, both FK constraints with ON DELETE CASCADE, the three RLS policies, RLS enabled, and the explicit GRANT.
+- **AC-202/AC-203 — src/lib/ helpers (MOD-012 scope, Rev 50)**: MOD-012 owns the `src/lib/` part of AC-202/AC-203: device-level save and load helpers for the language setting and the theme setting. `i18n.ts` and `ThemeProvider` read these stored values whenever no user is signed in. MOD-010 calls the save helpers at sign-out. Implement the helpers in `src/lib/` (within MOD-012's Source Path). MOD-010's sign-out path depends on these helpers — MOD-012 must be built first.
 
 ---
 

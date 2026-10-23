@@ -3,8 +3,8 @@
 **Module ID**: MOD-010
 **Module Name**: Localization & Theming
 **Phase**: 1
-**Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155)
-**Last Synced from PRD Revision**: 49
+**Dependencies**: MOD-001 (public service to update `beta_video_privacy` for the SettingsScreen beta-video privacy toggle, AC-157), MOD-009 (block-status + unblock public services `fetchMyBlockedUsers` / `unblockUser` for the Blocked Accounts screen, AC-155), MOD-012 (device-level language and theme save helpers in `src/lib/`, called just before `signOut()` in SettingsScreen, AC-202/AC-203)
+**Last Synced from PRD Revision**: 50
 **Last Updated**: 2026-10-22
 
 ---
@@ -85,6 +85,8 @@ For US-018 (AC-203), when no user is signed in (before the first sign-in, and af
 **MOD-009 public services consumed by AC-155**: `fetchMyBlockedUsers()` (queries `blocks JOIN users` where `blocker_user_id = auth.uid()`, returns `Array<{ userId, displayName, avatarUrl }>`) and `unblockUser(userId)` (AC-152) are direct imports from `mod-moderation/moderation-service`. These are read-only and write-only respectively; no write permissions beyond what AC-152 already grants are needed.
 
 **MOD-001 public service consumed by AC-157**: The "Beta Video Privacy" toggle calls MOD-001's public `updateBetaVideoPrivacy(value)` service (or equivalent) to update `users.beta_video_privacy`. MOD-001 owns the write to this column. MOD-010 does not write directly to `users.beta_video_privacy`. This is a direct import of a public service function from `mod-auth-profile/auth-service` (or equivalent) per the Cross-Module Imports convention.
+
+**MOD-012 save helpers called by AC-202/AC-203**: SettingsScreen.tsx must import and call MOD-012's device-level save helpers for the language setting and the theme setting just before `signOut()`. MOD-012 must be implemented before MOD-010's SettingsScreen sign-out path can be completed.
 
 ---
 
@@ -183,7 +185,7 @@ The "Beta Video Privacy" toggle (AC-157) reads from and writes to `users.beta_vi
 - **"Beta Video Privacy" toggle (AC-157)**: The toggle row is labeled "Beta 影片可見度" (or equivalent). Two states: `public` (default, displayed as "所有人"/"All Users") and `followers_only` (displayed as "僅限追蹤者"/"Followers Only"). Reads the current user's `beta_video_privacy` on Settings screen load. Changing the toggle calls MOD-001's public write service (e.g., `updateBetaVideoPrivacy(value)` imported from `mod-auth-profile/auth-service`). MOD-010 does NOT write directly to `users.beta_video_privacy`. This toggle is the only user-facing privacy control; profile visibility (`privacy_setting`) is always public and has no user-facing toggle (AC-063).
 - **Logout button at the bottom of SettingsScreen (AC-168)**: Add a Logout button at the very bottom of SettingsScreen, below all other rows — below the "Beta Video Privacy" toggle (AC-157) and below the "Blocked Accounts" row (AC-155). Same styling as the former ProfileScreen logout (error color, outlined). Same `signOut()` call and error-handling pattern. This is the relocation target for AC-167 (Logout removed from ProfileScreen).
 - **SettingsScreen row order**: The SettingsScreen row order from top to bottom is: (existing sections) → "Blocked Accounts" row (AC-155) → "Beta Video Privacy" toggle row (AC-157) → Logout button (AC-168).
-- **AC-202/AC-203 signed-out language and theme persistence — Engineering Notes (open question)**: AC-202 requires storing the language setting on the device at sign-out and reading it when no user is signed in. The language detection code `detectDeviceLanguage()` is in `src/lib/i18n.ts`, which is in MOD-012's Source Path (`src/lib/`). It is an open question whether the AC-202 language persistence change is implemented by the MOD-010 engineer (in `mod-localization-theme/` code) or by the MOD-012 engineer (in `src/lib/i18n.ts`). Similarly, the theme provider location must be confirmed — if the theme provider is outside `mod-localization-theme/`, the AC-203 sign-out store call may also fall under MOD-012's scope. This question is flagged as "For Tech Lead" in the Rev 49 PM Updates entry. Do not implement AC-202 or AC-203 until Tech Lead has assigned ownership of the affected files.
+- **AC-202/AC-203 signed-out language and theme persistence — Engineering Notes (Rev 50, resolved)**: Ownership of the AC-202/AC-203 code split was assigned by Tech Lead on 2026-10-22 (Q-C). MOD-012 (`engineer-mod-home`) owns the `src/lib/` part: device-level storage keys and save/load helpers for the language and theme settings; `src/lib/i18n.ts` reads the stored language when no user is signed in; `ThemeProvider` (`src/lib/theme.ts`) reads the stored theme when no user is signed in. MOD-010 (`engineer-mod-localization-theme`) owns the `src/modules/mod-localization-theme/screens/SettingsScreen.tsx` part: just before `signOut()`, call MOD-012's save helpers with the signed-in user's current language setting (AC-091) and theme override (AC-092). MOD-012 must be built first — do not implement the MOD-010 sign-out side until MOD-012's helpers are available.
 
 ---
 

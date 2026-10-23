@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: pm
-mode: change
+agent: doc-sync
+mode: delta
 module: n/a
 result: success
-next: claude --agent doc-sync (delta sync of Rev 50: AC-202/AC-203 into the MOD-012 spec with its ownership row; MOD-012 added to MOD-010 Dependencies with the MOD-010 ownership row). Then the Tech Lead record-decisions sequence from step (3) onward: claude --agent engineer-mod-auth-profile "implement", claude --agent engineer-mod-home "implement" (only after Doc-Sync), then claude --agent engineer-mod-localization-theme "spec-update".
-timestamp: 2026-10-22T23:00:00Z
+next: claude --agent engineer-mod-home "implement" (MOD-012 now owns AC-202/AC-203 src/lib/ helpers; build first — MOD-010 depends on it). Then claude --agent engineer-mod-localization-theme "spec-update" (MOD-010 spec updated: MOD-012 dependency added, AC-202/AC-203 engineering notes resolved). claude --agent engineer-mod-auth-profile "implement" may run in parallel with engineer-mod-home.
+timestamp: 2026-10-22T23:30:00Z
 
 ## PM Updates
 
@@ -3695,6 +3695,35 @@ Phase 1: iOS MVP — Taipei/New Taipei launch
 ---
 
 ## Sync Reports
+
+### Sync Report — Delta Sync — 2026-10-22 (Rev 50)
+
+**Sync type:** delta
+**PRD Revision:** 50
+**PM Update reference:** 2026-10-22 [SUBSTANTIVE] — Rev 50: AC-202/AC-203 implementation scope added to MOD-012. MOD-010 gets a new dependency on MOD-012.
+**Files modified:**
+- `project-planning/modules/mod-home/spec.md` — AC-202/AC-203 MOD-012 scope entry added to Acceptance Criteria Covered; downstream dependent note (MOD-010) added to Dependencies section; Integration Point 9 added (MOD-010 SettingsScreen calls MOD-012 save helpers before signOut()); Key Implementation Note for AC-202/AC-203 src/lib/ helpers added; Last Synced from PRD Revision 48 → 50.
+- `project-planning/modules/mod-localization-theme/spec.md` — MOD-012 added to Dependencies header line; MOD-012 Integration Point added; AC-202/AC-203 Engineering Notes updated from "open question" to resolved ownership assignment; Last Synced from PRD Revision 49 → 50.
+- `.claude/agents/engineer-mod-localization-theme.md` — MOD-012 status file added to dependency status files (AC-202/AC-203 dependency).
+- `.claude/agents/qa-mod-localization-theme.md` — MOD-012 status file added to dependency status files (AC-202/AC-203 dependency).
+- `project-planning/status.md` — Sync Report added (this entry). Last Action block updated.
+**Files created:**
+- none
+**Module removals noted:**
+- none
+**Agent wrappers regenerated:**
+- `engineer-mod-localization-theme.md` and `qa-mod-localization-theme.md` — MOD-012 added as dependency (AC-202/AC-203). Source Path, directory unchanged. (Delta-sync step 5a: dependency changed.)
+- `engineer-mod-home.md` and `qa-mod-home.md` — NOT regenerated. MOD-010 is a downstream caller of MOD-012, not a dependency of MOD-012. MOD-012's Source Path, dependencies, and directory are unchanged — step 5a trigger conditions not met. The AC-202/AC-203 scope addition is captured in the spec, which the agent already reads.
+**AMBIGUITY markers added:**
+- none
+**AMBIGUITY markers resolved:**
+- `mod-localization-theme/spec.md` Key Implementation Notes: the Rev 49 "open question" about AC-202/AC-203 file ownership is resolved. Tech Lead assigned MOD-012 the src/lib/ helpers and MOD-010 the SettingsScreen sign-out call (Q-C, 2026-10-22, PRD Rev 50). The open-question paragraph has been replaced with the resolved assignment.
+**CONFLICT markers added:**
+- none
+
+**verify-sync.sh result:** pass — 6/6 checks passed.
+
+---
 
 ### Sync Report — Delta Sync — 2026-10-22 (Rev 49)
 
