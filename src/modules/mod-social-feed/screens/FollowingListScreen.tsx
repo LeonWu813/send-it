@@ -115,8 +115,8 @@ export default function FollowingListScreen({
             inset="screen"
             title={item.displayName}
             accessibilityLabel={item.displayName}
-            leading={<Avatar size="md" uri={item.avatarUrl} name={item.displayName} decorative />}
-            leadingWidth={AVATAR_SIZE.md}
+            leading={<Avatar size="sm" uri={item.avatarUrl} name={item.displayName} decorative />}
+            leadingWidth={AVATAR_SIZE.sm}
             divider={index < users.length - 1}
             inScroll
             onPress={() => { onNavigateToUser(item.userId); }}
@@ -153,7 +153,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       backgroundColor: theme.colors.background,
     },
     listContent: {
-      paddingTop: theme.spacing.sm,
+      paddingTop: 0,
     },
     centered: {
       flex: 1,

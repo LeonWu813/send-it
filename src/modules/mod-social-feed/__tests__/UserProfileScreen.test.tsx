@@ -39,9 +39,20 @@ jest.mock('../social-feed-service', () => ({
   unfollow: jest.fn(),
 }));
 
-jest.mock('../../mod-profile-history', () => ({
-  fetchProfileStats: jest.fn(),
-}));
+const mockOpenHistory = jest.fn();
+jest.mock('../../mod-profile-history', () => {
+  const { Pressable, Text } = require('react-native');
+  return {
+    fetchProfileStats: jest.fn(),
+    useOpenProfileHistory: () => mockOpenHistory,
+    // P-2: compact StatsPanel stub — one pressable entry that opens Profile History.
+    StatsPanel: ({ variant, stats, onOpenDetails }: { variant: string; stats: { total_sends: number }; onOpenDetails: () => void }) => (
+      <Pressable testID={`stats-panel-${variant}`} onPress={onOpenDetails}>
+        <Text>{String(stats.total_sends)}</Text>
+      </Pressable>
+    ),
+  };
+});
 
 jest.mock('../../mod-moderation', () => ({
   fetchBlockedUserIds: jest.fn(),
@@ -514,6 +525,17 @@ describe('UserProfileScreen', () => {
       .queryAllByText('Beta Videos')
       .concat(screen.queryAllByText('試攀影片'));
     expect(videoTitles.length).toBe(0);
+  });
+
+  it('P-2: shows the compact StatsPanel and opens full stats for the other user', async () => {
+    setupProfileMock({ ...MOCK_PROFILE, privacy_setting: 'public' });
+    render(
+      <UserProfileScreen targetUserId={TARGET_USER_ID} session={MOCK_SESSION} onBack={jest.fn()} />,
+      renderOptions(),
+    );
+    const panel = await screen.findByTestId('stats-panel-compact');
+    fireEvent.press(panel);
+    expect(mockOpenHistory).toHaveBeenCalledWith(TARGET_USER_ID, false);
   });
 
   it('AC-163: shows BetaVideoGrid for followers_only profile when viewer is following', async () => {

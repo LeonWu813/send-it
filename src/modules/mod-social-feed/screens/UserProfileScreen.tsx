@@ -32,7 +32,7 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { ScrollView, StyleSheet, View } from 'react-native';
 
-import { fetchProfileStats } from '../../mod-profile-history';
+import { StatsPanel, fetchProfileStats, useOpenProfileHistory } from '../../mod-profile-history';
 import type { ProfileStats } from '../../mod-profile-history';
 import {
   BetaVideoGrid,
@@ -71,13 +71,6 @@ import {
 } from '../social-feed-service';
 import type { FollowerCounts } from '../types';
 
-// ── Constants ──────────────────────────────────────────────────────────────────
-
-/** Minimum bar width (px) so zero-count bars are still visible as a hairline. */
-const BAR_MIN_WIDTH = 2;
-/** Maximum bar track width — bar fills proportionally within this. */
-const BAR_TRACK_WIDTH = 160;
-
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface UserProfileScreenProps {
@@ -109,6 +102,7 @@ export default function UserProfileScreen({
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const tabInset = useTabBarInset();
+  const openProfileHistory = useOpenProfileHistory();
   const styles = makeStyles(theme, screenMargin);
 
   const [profile, setProfile] = useState<TargetUserProfile | null>(null);
@@ -342,11 +336,6 @@ export default function UserProfileScreen({
     );
   }
 
-  // Compute bar chart max for proportional widths
-  const maxBarCount = stats !== null
-    ? Math.max(...stats.sends_by_grade.filter((g) => g.count > 0).map((g) => g.count), 1)
-    : 1;
-
   // AC-153: blocked state rendering
   if (isProfileBlocked) {
     return (
@@ -405,7 +394,7 @@ export default function UserProfileScreen({
                         size={theme.iconSize.xs}
                         color={theme.colors.textSecondary}
                       />
-                      <AppText variant="caption1" color="textSecondary">
+                      <AppText variant="footnote" color="textSecondary">
                         {t('socialFeed.privateProfile')}
                       </AppText>
                     </View>
@@ -413,16 +402,15 @@ export default function UserProfileScreen({
                 </View>
               </View>
 
-              {/* Follower counts (AC-050: update immediately) */}
+              {/* Follower counts (AC-050: update immediately), inline + left-aligned (R13) */}
               <View style={styles.countsRow}>
                 <View style={styles.countItem}>
-                  <AppText variant="title2" numeric>{counts.follower_count}</AppText>
-                  <AppText variant="caption1" color="textSecondary">{t('socialFeed.followers')}</AppText>
+                  <AppText variant="headline" numeric>{counts.follower_count}</AppText>
+                  <AppText variant="footnote" color="textSecondary">{t('socialFeed.followers')}</AppText>
                 </View>
-                <View style={styles.countDivider} />
                 <View style={styles.countItem}>
-                  <AppText variant="title2" numeric>{counts.following_count}</AppText>
-                  <AppText variant="caption1" color="textSecondary">{t('socialFeed.following')}</AppText>
+                  <AppText variant="headline" numeric>{counts.following_count}</AppText>
+                  <AppText variant="footnote" color="textSecondary">{t('socialFeed.following')}</AppText>
                 </View>
               </View>
 
@@ -443,71 +431,15 @@ export default function UserProfileScreen({
               )}
             </Card>
 
-            {/* Stats section — shown when stats loaded successfully */}
+            {/* Compact stats row (P-2): opens the full StatsPanel on Profile History */}
             {stats !== null && (
-              <>
-                {/* Section divider */}
-                <View style={styles.statsDivider} />
-
-                {/* Summary row: Total Sends / Days Climbed / Best Grade */}
-                <View style={styles.statsRow}>
-                  <View style={styles.statItem}>
-                    <AppText variant="title2" numeric>{stats.total_sends}</AppText>
-                    <AppText variant="caption1" color="textSecondary" align="center" style={styles.statLabel}>
-                      {t('profileHistory.stats.totalSends')}
-                    </AppText>
-                  </View>
-                  <View style={styles.statItemDivider} />
-                  <View style={styles.statItem}>
-                    <AppText variant="title2" numeric>{stats.accumulated_days}</AppText>
-                    <AppText variant="caption1" color="textSecondary" align="center" style={styles.statLabel}>
-                      {t('profileHistory.stats.accumulatedDays')}
-                    </AppText>
-                  </View>
-                  <View style={styles.statItemDivider} />
-                  <View style={styles.statItem}>
-                    <AppText variant="title2" numeric>
-                      {stats.highest_grade ?? t('profileHistory.stats.noGrade')}
-                    </AppText>
-                    <AppText variant="caption1" color="textSecondary" align="center" style={styles.statLabel}>
-                      {t('profileHistory.stats.highestGrade')}
-                    </AppText>
-                  </View>
-                </View>
-
-                {/* Grade bar chart — only when there are sends */}
-                {stats.total_sends > 0 && (
-                  <View
-                    style={styles.chartContainer}
-                    accessibilityLabel={t('profileHistory.stats.chartA11y')}
-                  >
-                    <AppText variant="pageSection" style={styles.chartTitle}>
-                      {t('profileHistory.stats.chartTitle')}
-                    </AppText>
-                    {stats.sends_by_grade
-                      .filter(({ count }) => count > 0)
-                      .map(({ grade, count }) => {
-                        const barWidth = Math.max(
-                          BAR_MIN_WIDTH,
-                          Math.round((count / maxBarCount) * BAR_TRACK_WIDTH),
-                        );
-                        return (
-                          <View key={grade} style={styles.barRow}>
-                            <AppText variant="caption2" color="textSecondary" style={styles.barGradeLabel}>
-                              {grade}
-                            </AppText>
-                            <View style={styles.barTrack}>
-                              <View style={[styles.bar, { width: barWidth }]} />
-                            </View>
-                            <AppText variant="caption2" color="textSecondary" numeric align="right" style={styles.barCount}>
-                              {count}
-                            </AppText>
-                          </View>
-                        );
-                      })}
-                  </View>
-                )}
-              </>
+              <View style={styles.statsBlock}>
+                <StatsPanel
+                  variant="compact"
+                  stats={stats}
+                  onOpenDetails={() => { openProfileHistory(targetUserId, false); }}
+                />
+              </View>
             )}
 
             {/* AC-163: Beta video grid — below stats section.
@@ -642,9 +574,7 @@ function makeStyles(
     errorBlock: {
       marginBottom: theme.spacing.md,
     },
-    profileCard: {
-      marginBottom: theme.layout.sectionGap,
-    },
+    profileCard: {},
     identityRow: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -670,71 +600,18 @@ function makeStyles(
     },
     countsRow: {
       flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginVertical: theme.spacing.md,
+      alignItems: 'baseline',
+      gap: theme.spacing.lg,
+      marginTop: theme.spacing.md,
+      marginBottom: theme.spacing.md,
     },
     countItem: {
-      alignItems: 'center',
-      paddingHorizontal: theme.spacing.xl,
-    },
-    countDivider: {
-      alignSelf: 'stretch',
-      width: theme.stroke.hairline,
-      backgroundColor: theme.colors.divider,
-    },
-    // ── Stats section ────────────────────────────────────────────────────────
-    statsDivider: {
-      height: theme.stroke.hairline,
-      backgroundColor: theme.colors.divider,
-      marginVertical: theme.layout.sectionGap,
-    },
-    statsRow: {
       flexDirection: 'row',
-      justifyContent: 'space-around',
-      alignItems: 'center',
-      marginBottom: theme.layout.sectionGap,
+      alignItems: 'baseline',
+      gap: theme.layout.iconTextGap,
     },
-    statItem: {
-      alignItems: 'center',
-      flex: 1,
-    },
-    statLabel: {
-      marginTop: theme.spacing.xs,
-    },
-    statItemDivider: {
-      alignSelf: 'stretch',
-      width: theme.stroke.hairline,
-      backgroundColor: theme.colors.divider,
-    },
-    chartContainer: {
-      marginBottom: theme.layout.sectionGap,
-    },
-    chartTitle: {
-      marginBottom: theme.layout.sectionHeaderGap,
-    },
-    barRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      minHeight: theme.spacing.lg,
-    },
-    barGradeLabel: {
-      minWidth: theme.spacing.xl,
-    },
-    barTrack: {
-      flex: 1,
-      height: theme.spacing.smd,
-      backgroundColor: theme.colors.surfaceAlt,
-      borderRadius: theme.radius.full,
-      overflow: 'hidden',
-    },
-    bar: {
-      height: '100%',
-      backgroundColor: theme.colors.primary,
-      borderRadius: theme.radius.full,
-    },
-    barCount: {
-      minWidth: theme.spacing.lg + theme.spacing.xs,
+    statsBlock: {
+      marginTop: theme.layout.cardGap,
     },
     // ── Beta video grid section (AC-163) ─────────────────────────────────────
     videoSection: {
