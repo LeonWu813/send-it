@@ -548,7 +548,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       alignSelf: 'flex-start',
       paddingHorizontal: theme.spacing.sm,
       paddingVertical: theme.spacing.xxs,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       backgroundColor: theme.colors.surfaceAlt,
       marginBottom: theme.spacing.sm,
     },

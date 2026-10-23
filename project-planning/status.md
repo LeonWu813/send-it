@@ -2,14 +2,14 @@
 
 ## Last Action
 
-agent: engineer-mod-send-logging
-mode: stories
-module: mod-send-logging (MOD-004)
+agent: engineer-mod-route-catalog
+mode: stories+design-fix
+module: mod-route-catalog (MOD-003)
 result: pass
-timestamp: 2026-10-22T23:30:00Z
-next: No QA run required (Storybook story only — off-spec design coverage, no AC behaviour changed). Coordinator should commit engineer-mod-send-logging(stories): add RouteSearchScreen story.
+timestamp: 2026-10-22T23:45:00Z
+next: No QA run required (Storybook stories + design-token fixes only — off-spec design coverage, no AC behaviour changed). Coordinator should commit engineer-mod-route-catalog(stories+design-fix): design token fixes + Storybook screen stories.
 
-Previous action: engineer-mod-social-feed(stories) mod-social-feed (MOD-006) — pass (2026-10-22T23:00:00Z). Coordinator note: commit engineer-mod-social-feed(stories) and note files are ready.
+Previous action: engineer-mod-send-logging(stories) mod-send-logging (MOD-004) — pass (2026-10-22T23:30:00Z).
 
 Note (engineer-mod-home): Toast.tsx — flash/error tones now use toastBackground/onToast (dark HUD, matching default; icon colours preserved for glyph differentiation). Badge.tsx — deprecated theme.borderRadius.full → theme.radius.full. HomeScreen.stories.tsx — new story with SignedIn and Empty states. tsc clean, 74 component tests pass, pre-existing non-deterministic AscentList failure in mod-send-logging unaffected.
 

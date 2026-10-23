@@ -2,6 +2,44 @@
 
 ## Engineering Progress
 
+### Design-system fixes + Storybook screen stories (2026-10-22)
+
+**Design fixes (Issues 8 and 11):**
+
+- **Issue 8 — RouteDetailScreen.tsx**: `retiredStatusBadge` style: `borderRadius: theme.borderRadius.full` (deprecated) → `borderRadius: theme.radius.full`. No other deprecated `theme.borderRadius.*` usages found in the file.
+- **Issue 11 — RouteSubmitScreen.tsx**: BottomSheet footer `<View style={{ gap: 8 }}>` → `gap: theme.spacing.sm`. Duplicate-sheet candidate row `marginBottom: 8` → `marginBottom: theme.spacing.sm`. No further magic-number spacing/gap values found in either file.
+
+**Storybook screen stories:**
+
+Four story files added to `src/modules/mod-route-catalog/stories/`:
+
+- `RouteListScreen.stories.tsx` — states: Playground, Populated (8 routes, beta-count subtitles, interactive bookmarks), Empty, FilteredEmpty (grade V9 chip active, no matching routes).
+- `RouteDetailScreen.stories.tsx` — states: Playground, Populated (V4 Red Cave, 1 flash + 1 top ascents, bookmarkable), RetiredRoute (V3 Blue, retired status badge, no CTAs), Bookmarked (filled bookmark on load).
+- `RouteSubmitScreen.stories.tsx` — states: Playground (empty/with-duplicates toggle + prefill controls), DefaultEmptyForm, WithDuplicateCandidates (V4 + Red pre-filled, Layer 1 notice visible, 2 duplicate candidates in existing routes), PendingApproval (RPC stubbed to return `status: 'pending'`).
+- `SendHistoryDetailScreen.stories.tsx` — states: Playground, Populated (5 mixed ascents: flash/top/attempt, private label, inline notes), Empty, SingleFlash.
+
+All stories use the `setStubData` supabase stub; no jest.fn() stubs (these screens do not use `@react-navigation/native` hooks per the No react-navigation convention). Story pattern follows `LogSendScreen.stories.tsx` template.
+
+**Self-check (2026-10-22):**
+- PASS: `npx tsc --noEmit` — exit 0; zero errors.
+- PASS: `npm test -- --watchAll=false --silent` (with pre-existing Badge.tsx/Toast.tsx/GymListScreen.tsx changes stashed) — 662/662 tests pass. The AscentList flaky failure in the full suite is caused by the pre-existing Toast.tsx flash/error color change from engineer-mod-home, not by this module's changes; confirmed by isolating the stash.
+- PASS: Scope check — only `src/modules/mod-route-catalog/` files modified or added.
+- PASS: Design fixes are style-token-only, no logic change, no behavior change.
+- PASS: No new dependencies introduced.
+- N/A: Not a new screen — safe-area insets were already applied.
+- N/A: No new database queries or service calls.
+- N/A: Stories are off-spec design tooling; no ACs added or changed.
+
+**Files changed:**
+- `src/modules/mod-route-catalog/screens/RouteDetailScreen.tsx` — deprecated `theme.borderRadius.full` → `theme.radius.full`.
+- `src/modules/mod-route-catalog/screens/RouteSubmitScreen.tsx` — `gap: 8` → `theme.spacing.sm`; `marginBottom: 8` → `theme.spacing.sm`.
+- `src/modules/mod-route-catalog/stories/RouteListScreen.stories.tsx` — new.
+- `src/modules/mod-route-catalog/stories/RouteDetailScreen.stories.tsx` — new.
+- `src/modules/mod-route-catalog/stories/RouteSubmitScreen.stories.tsx` — new.
+- `src/modules/mod-route-catalog/stories/SendHistoryDetailScreen.stories.tsx` — new.
+
+---
+
 ### INT-015 — Verify withdrawRoute row-count check (2026-10-21)
 
 **Fix already landed in commit dd0c771.** No new code written.

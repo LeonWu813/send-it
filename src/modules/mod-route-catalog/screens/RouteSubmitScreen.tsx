@@ -441,7 +441,7 @@ export default function RouteSubmitScreen({
       title={t('routes.duplicateSheet.title')}
       variant="content"
       footer={
-        <View style={{ gap: 8 }}>
+        <View style={{ gap: theme.spacing.sm }}>
           <Button
             variant="primary"
             size="lg"
@@ -479,7 +479,7 @@ export default function RouteSubmitScreen({
           section: candidate.section_label ?? null,
         };
         return (
-          <View key={candidate.id} style={{ marginBottom: 8 }}>
+          <View key={candidate.id} style={{ marginBottom: theme.spacing.sm }}>
             <RouteCard route={cardRoute} onPress={() => {}} />
           </View>
         );
