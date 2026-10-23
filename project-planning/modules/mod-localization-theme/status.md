@@ -1520,3 +1520,135 @@ No files outside MOD-010's source path were modified by this commit. PASS.
 **Overall verdict: QA PASS**
 
 AC-202 and AC-203 save calls are correctly placed: inside the try block, before signOut(), with directly compatible types (no casting). TypeScript passes. The pre-existing AscentList test failure in mod-send-logging does not affect this verdict. The known applySignedOutLanguage() wiring gap is in MOD-012's source path and is being addressed separately — the save itself (MOD-010's scope) is correct and complete.
+
+---
+
+### QA Run 7 — Integration-Fix Regression — 2026-10-22
+
+**Workflow**: regression-test (integration-fix-verify INT-031 — save failures must not block sign-out)
+
+**Bug being re-verified**: INT-031. Before the fix, `saveDeviceLanguage` and `saveDeviceTheme` were awaited inside the same `try` block as `signOut()`. A storage failure on either save threw an error that was caught, preventing `signOut()` from running and leaving the user permanently signed in with a misleading error message. Approved behavior after fix: a failed save is logged but does not block sign-out; signed-out screens fall back to AC-090 device language / System appearance.
+
+**Fix applied (commit 0ed789b)**: `handleLogout()` in `SettingsScreen.tsx` now runs both saves via `Promise.allSettled([saveDeviceLanguage(selectedLanguage), saveDeviceTheme(selectedOverride)])`. `Promise.allSettled` never rejects, so a failure in either save cannot propagate. Per-result errors are logged via `console.error`. `signOut()` is then called in its own separate `try/catch` at lines 215–222. 5 unit tests added to `__tests__/SettingsScreen.test.tsx`.
+
+**Automated test run**
+- `npx jest --testPathPattern="mod-localization-theme" --watchAll=false --silent` — 5 passed, 1 suite. Exit 0.
+- `npm test -- --watchAll=false --silent` — 662 passed, 47 suites, 0 failures. Exit 0.
+- `npx tsc --noEmit` — exit 0. 0 TypeScript errors.
+- `npm run check:i18n` — "i18n completeness OK". Exit 0.
+
+---
+
+**REGRESSION PASS INT-031: save failure no longer blocks sign-out**
+
+Verification method: code inspection of `SettingsScreen.tsx` `handleLogout()` (lines 201–223) and unit tests.
+
+**Code inspection:**
+
+`handleLogout()` structure after fix (lines 201–223):
+```
+async function handleLogout(): Promise<void> {
+  setIsSigningOut(true);
+  setLogoutError(null);
+  const saveResults = await Promise.allSettled([
+    saveDeviceLanguage(selectedLanguage),
+    saveDeviceTheme(selectedOverride),
+  ]);
+  for (const result of saveResults) {
+    if (result.status === 'rejected') {
+      console.error('[handleLogout] device pref save error:', result.reason);
+    }
+  }
+  try {
+    await signOut();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : t('auth.errors.signOutFailed');
+    setLogoutError(message);
+    setIsSigningOut(false);
+  }
+}
+```
+
+`Promise.allSettled` resolves to an array of `{status:'fulfilled'}` or `{status:'rejected', reason:...}` — it never rejects itself. Neither save rejection can propagate to prevent `signOut()` from being called. The outer `try/catch` exists only for `signOut()` errors, which keep their original error-message handling per AC-168.
+
+Input=`saveDeviceLanguage` rejects with `new Error('AsyncStorage failure')`; Expected per INT-031 approved fix=`signOut()` still called; Actual=`Promise.allSettled` catches the rejection internally, logs via `console.error`, and execution continues to `await signOut()`. REGRESSION PASS.
+
+Input=both `saveDeviceLanguage` and `saveDeviceTheme` reject; Expected per INT-031 approved fix=`signOut()` still called; Actual=`Promise.allSettled` completes with two rejected results; both errors logged via `console.error`; `signOut()` called in the separate try block. REGRESSION PASS.
+
+**Unit test confirmation:**
+All 5 tests in `src/modules/mod-localization-theme/__tests__/SettingsScreen.test.tsx` pass:
+1. saves succeed → signOut called — PASS
+2. saveDeviceLanguage rejects → signOut still called — PASS
+3. saveDeviceTheme rejects → signOut still called — PASS
+4. both saves reject → signOut still called — PASS
+5. signOut rejects → error message surfaced to user — PASS
+
+---
+
+**Re-verification of previously passing ACs**
+
+**AC-090** — PASS. `src/lib/i18n.ts` unchanged. `detectDeviceLanguage()` logic unchanged. PASS carries forward.
+
+**AC-091** — PASS. `handleLanguageSelect` (lines 160–167) unchanged. Language section (lines 250–277) unchanged. PASS carries forward.
+
+**AC-092** — PASS. `handleOverrideSelect` (lines 169–176) unchanged. Appearance section (lines 279–307) unchanged. `src/lib/theme.ts` unchanged. PASS carries forward.
+
+**AC-155** — PASS. Sub-view early return (lines 237–239) unchanged. Blocked Accounts row (lines 309–325) unchanged. `BlockedAccountsScreen.tsx` unchanged. PASS carries forward.
+
+**AC-157** — PASS. Row order: AC-155 (Blocked Accounts, lines 309–325) before AC-157 (Beta Video Privacy, lines 327–348) before AC-168 (Logout, lines 350–363) — matches spec. Short state labels `t('settings.betaVideoPrivacyPublic')` / `t('settings.betaVideoPrivacyFollowersOnly')` in `settingRowSubtext` (lines 334–337). `updateBetaVideoPrivacy(newValue)` called via MOD-001 import. `disabled={!privacyFetched || privacyLoading}` guards premature interaction. The `handleLogout` change has no effect on this code path. PASS carries forward.
+
+**AC-168** — PASS. Logout button is the last element in the `ScrollView`, below all other rows (line 354–363). `signOut()` still called from `mod-auth-profile` barrel. `signOut()` error handling preserved: `setLogoutError(message)` and `setIsSigningOut(false)` on failure (lines 219–222). Styling unchanged (`variant="destructive"` Button). AC-168's "same signOut() call and error-handling pattern" is preserved — the error-handling for signOut() errors is unchanged; only the save-failure path changed (approved per INT-031). PASS.
+
+**AC-199 / AC-200** — PASS. `locales/en/common.json` and `locales/zh-TW/common.json` and `Tokens.stories.tsx` unchanged. PASS carries forward.
+
+**AC-202** — PASS. `saveDeviceLanguage(selectedLanguage)` is still called just before `signOut()` (now via `Promise.allSettled`, which guarantees the call is attempted even if `saveDeviceTheme` fails first). PASS.
+
+**AC-203** — PASS. `saveDeviceTheme(selectedOverride)` is still called just before `signOut()` (via the same `Promise.allSettled` call). PASS.
+
+**REQ-CI** — PASS. `.github/workflows/i18n-check.yml` unchanged. `npm run check:i18n` exits 0. PASS carries forward.
+
+**All strings via i18n hook** — PASS. No new user-facing strings introduced by the fix. `console.error` calls are developer-facing only. `t('auth.errors.signOutFailed')` was already present in the prior implementation. PASS.
+
+**No hardcoded hex colors** — PASS. The fix adds no color literals. All colors remain `theme.colors.*` tokens. PASS.
+
+**No gold-plating** — PASS. Change is confined to `handleLogout()` restructuring and 5 unit tests. No new features or ACs introduced. PASS.
+
+---
+
+**Adjacent code check (per regression-test workflow step 5)**
+
+The fix touches `handleLogout()` only. Adjacent code checked:
+- `handleLanguageSelect` and `handleOverrideSelect` (the only other callers of `selectedLanguage` and `selectedOverride` state) — unchanged; their save calls use the per-user scoped `saveLanguage`/`saveThemeOverride` from `settings-storage`, not the device-scoped helpers. No effect from the `handleLogout` change.
+- `handleBetaVideoPrivacyToggle` — unchanged; no shared state with `handleLogout`. No effect.
+- Mount `restorePreferences` effect — unchanged; no interaction with `handleLogout`. No effect.
+- No new imports introduced — `saveDeviceLanguage` and `saveDeviceTheme` were already imported (from prior AC-202/AC-203 implementation). `Promise.allSettled` is a built-in. No dependency changes.
+
+No new regressions found in adjacent code paths.
+
+---
+
+**Summary**
+
+| AC / Requirement | Result | Notes |
+|---|---|---|
+| INT-031: save failure no longer blocks sign-out | REGRESSION PASS | Promise.allSettled + separate signOut try/catch; confirmed in code and 5 unit tests |
+| AC-090: Device locale detection | PASS | Unchanged; no regression |
+| AC-091: Language toggle, immediate effect | PASS | Unchanged; no regression |
+| AC-092: Three-state theme override | PASS | Unchanged; no regression |
+| AC-155: Blocked Accounts screen | PASS | Unchanged; no regression |
+| AC-157: Beta Video Privacy toggle — labels, row order, MOD-001 write | PASS | Unchanged; no regression |
+| AC-168: Logout button — position, styling, signOut error handling | PASS | signOut() still called; error handling for signOut errors preserved |
+| AC-202: saveDeviceLanguage called at sign-out | PASS | Still called via Promise.allSettled before signOut() |
+| AC-203: saveDeviceTheme called at sign-out | PASS | Still called via Promise.allSettled before signOut() |
+| AC-199 / AC-200: app name "ProjectDay" | PASS | Unchanged; no regression |
+| REQ-CI: zh-TW key-parity CI gate | PASS | Unchanged; no regression |
+| All strings via i18n hook | PASS | No new inline literals |
+| No hardcoded hex colors | PASS | All colors from theme.colors.* tokens |
+| i18n catalog completeness | PASS | npm run check:i18n exits 0 |
+| TypeScript strict mode | PASS | npx tsc --noEmit exits 0 |
+| No gold-plating | PASS | handleLogout restructuring + 5 unit tests only |
+| Automated test suite — 662 tests | PASS | 662/662 pass, 47 suites, exit 0 |
+
+**Overall verdict: QA PASS**
+
+INT-031 is resolved. A failed `saveDeviceLanguage` or `saveDeviceTheme` call no longer blocks `signOut()`. All previously passing ACs (AC-090 through AC-203, REQ-CI) continue to pass. No regressions introduced. Integration-review row INT-031 is set to QA VERIFIED.

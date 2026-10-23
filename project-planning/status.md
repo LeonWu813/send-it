@@ -2,27 +2,26 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: confirm-fix
-module: n/a
-next: Leon states whether he has verified INT-032a himself (e.g. reviewed the diff in avatarSync.ts / auth-service.ts, or re-ran Google/Apple sign-in and saw name prefill and avatar copy still work). Then: claude --agent tech-lead "confirm-fix INT-032a — Leon: \"<his exact words>\""
-result: needs-human
-timestamp: 2026-10-22T17:15:00Z
+agent: qa-mod-localization-theme
+mode: integration-fix-verify
+module: mod-localization-theme (MOD-010)
+result: pass
+timestamp: 2026-10-22T18:00:00Z
+next: INT-031 is QA VERIFIED. No device check needed (per INT-031 spec note). Next: show Leon the fix summary and ask for HUMAN VERIFIED. When Leon gives his verification, relay to tech-lead: "confirm-fix INT-031 — Leon: \"<his exact words>\""
 
-Note (tech-lead): INT-032a is QA VERIFIED but not yet HUMAN VERIFIED, so it cannot be closed. Tech Lead pre-checked the code: avatarSync.ts exports copyGoogleAvatarToBucket(userId: string) with no getSession(); fillDisplayNameIfEmpty(name, userId) at auth-service.ts:373 has no getSession(); the only remaining getSession() is updateBetaVideoPrivacy at :411. Once Leon's verification is recorded, the row can close without further findings.
+Note (qa-mod-localization-theme): INT-031 REGRESSION PASS. `handleLogout()` in SettingsScreen.tsx now uses `Promise.allSettled([saveDeviceLanguage, saveDeviceTheme])` + per-result error logging + `signOut()` in its own try/catch. A failed save can no longer prevent sign-out. All 5 new unit tests pass. Full suite: 662/662 pass, 47 suites, exit 0. Integration-review row INT-031 set to QA VERIFIED. Module status.md updated with QA Run 7.
 
-Note: qa-mod-home had a prior needs-signoff for INT-030 device test (see Device test script below). Resume that after INT-032a is confirmed closed (it can also run in parallel; it is independent of INT-032a).
+Note: qa-mod-home needs-signoff for INT-030 device test is still pending (see Device test script below). Resume that after INT-031 and INT-032a are confirmed closed (it is independent and can run in parallel).
 
-Device test script (show to Leon word for word):
+Device test script for INT-030 (show to Leon word for word):
 Prerequisites: device language set to a language different from the account's stored language (e.g., device = Japanese, account = English). Sign in to ProjectDay.
 Steps:
 1. Open the app. Confirm the UI is in the account language (English).
 2. Navigate to Settings.
-3. Change the Theme (e.g. System → Dark). Watch for a momentary flash of the device language.
-4. Expected (after INT-030 fix): no language flash — UI stays in account language throughout the theme change.
+3. Change the Theme (e.g. System -> Dark). Watch for a momentary flash of the device language.
+4. Expected (after INT-030 fix): no language flash -- UI stays in account language throughout the theme change.
 5. Failure (regression): UI briefly switches to device language (Japanese) then back to English.
 6. Navigate away from Settings and back. Confirm language is still correct and no further flashing occurs.
-
 ## PM Updates
 
 - **2026-09-21 [SUBSTANTIVE]** — Two spec clarifications added to the PRD (Revision 3):
