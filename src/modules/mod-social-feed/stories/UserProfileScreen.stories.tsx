@@ -1,28 +1,14 @@
 /**
- * Storybook stories for UserProfileScreen (MOD-006, AC-050, AC-063, AC-149,
- * AC-150, AC-152, AC-153, AC-163).
- *
- * States:
- *   Loading          — loading spinner while profile data is in flight
- *   OwnProfile       — current user viewing their own profile (no Follow button,
- *                      no three-dots menu, stats section visible)
- *   OtherUserPublic  — public profile of another user (Follow button + ⋮ menu,
- *                      stats section, empty beta-video grid)
- *   PrivateProfile   — followers_only profile for a non-follower (AC-063/AC-064):
- *                      profile card visible but beta-video grid is hidden
- *
- * No real Supabase calls — all service functions go through the Storybook
- * supabase stub (`.storybook/stubs/supabase.ts`).
+ * Pages/Profile/User Profile (AC-050, AC-063, AC-149, AC-150, AC-152, AC-153, AC-163).
+ * Fake data only; the supabase stub never touches the network.
  */
 
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
-import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
-import { useTheme } from '../../../lib/theme';
-import { Spinner } from '../../../components/ui';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
 import UserProfileScreen from '../screens/UserProfileScreen';
 
 // ── Mock session & user IDs ───────────────────────────────────────────────────
@@ -30,15 +16,14 @@ import UserProfileScreen from '../screens/UserProfileScreen';
 const OWN_USER_ID = 'story-user-me';
 const TARGET_USER_ID = 'story-user-alice';
 const MOCK_SESSION = { user: { id: OWN_USER_ID } } as unknown as Session;
-const OWN_SESSION_AS_OWN = { user: { id: OWN_USER_ID } } as unknown as Session;
 
 // ── Seed helpers ──────────────────────────────────────────────────────────────
 
 const ALICE_PROFILE = {
   id: TARGET_USER_ID,
-  display_name: 'Alice Chen',
+  display_name: '陳怡君',
   avatar_url: null,
-  bio: '台北攀岩愛好者 · Taipei bouldering since 2019',
+  bio: '台北抱石愛好者，2019 年開始攀岩',
   privacy_setting: 'public' as const,
 };
 
@@ -49,9 +34,9 @@ const PRIVATE_ALICE_PROFILE = {
 
 const OWN_PROFILE = {
   id: OWN_USER_ID,
-  display_name: 'Story User (Me)',
+  display_name: '我',
   avatar_url: null,
-  bio: 'V5 climber based in Taipei',
+  bio: '住在台北的 V5 攀岩者',
   privacy_setting: 'public' as const,
 };
 
@@ -77,109 +62,69 @@ const PROFILE_STATS = {
   ],
 };
 
-// ── Visual wrapper for loading state ──────────────────────────────────────────
-
-/** Mirrors UserProfileScreen's loading branch: spinner centred on background. */
-function LoadingWrapper(): React.JSX.Element {
-  const { theme } = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: theme.colors.background,
-      }}
-    >
-      <Spinner size="large" color="primary" accessibilityLabel="Loading" />
-    </View>
-  );
-}
-
-// ── Meta ──────────────────────────────────────────────────────────────────────
-
 const meta: Meta = {
-  title: 'SocialFeed/UserProfileScreen',
-  parameters: { layout: 'fullscreen' },
-  decorators: [
-    (Story) => (
-      <View style={{ width: 390, height: 780 }}>
-        <Story />
-      </View>
-    ),
-  ],
+  title: 'Pages/Profile/User Profile',
+  component: UserProfileScreen as never,
+  tags: ['!autodocs'],
+  // AppShell renders this as a climber-profile overlay (AC-182).
+  parameters: { layout: 'centered', page: { overlay: true } },
+  decorators: [withPhoneFrame],
 };
 export default meta;
 
-// ── Stories ───────────────────────────────────────────────────────────────────
+type Seed = 'other' | 'own' | 'private' | 'loading';
 
-/** Loading spinner — shown while profile + stats data is in flight. */
+function seed(kind: Seed): void {
+  resetStubData();
+  setStubData('auth:session', { user: { id: OWN_USER_ID } });
+  if (kind === 'loading') {
+    ['users', 'rpc:get_follower_counts', 'rpc:get_profile_stats', 'follows', 'beta_videos'].forEach((k) =>
+      setStubData(k, STUB_PENDING),
+    );
+    return;
+  }
+  setStubData('users', [kind === 'own' ? OWN_PROFILE : kind === 'private' ? PRIVATE_ALICE_PROFILE : ALICE_PROFILE]);
+  setStubData('rpc:get_follower_counts', kind === 'private' ? { follower_count: 89, following_count: 31 } : FOLLOWER_COUNTS);
+  setStubData('rpc:get_profile_stats', PROFILE_STATS);
+  // follows defaults to [] -> not following
+}
+
+const profile = (id: string): React.JSX.Element => (
+  <UserProfileScreen targetUserId={id} session={MOCK_SESSION} onBack={() => {}} />
+);
+
+/** Another climber's public profile: Follow button, overflow menu, stats. */
+export const Populated: StoryObj = {
+  render: () => {
+    seed('other');
+    return profile(TARGET_USER_ID);
+  },
+};
+
+/** Viewing your own profile: no Follow button, no overflow menu. */
+export const OwnProfile: StoryObj = {
+  name: 'Own Profile',
+  render: () => {
+    seed('own');
+    return profile(OWN_USER_ID);
+  },
+};
+
+/** followers_only profile viewed by a non-follower (AC-063/AC-064): beta-video grid hidden. */
+export const PrivateProfile: StoryObj = {
+  name: 'Private Profile',
+  render: () => {
+    seed('private');
+    return profile(TARGET_USER_ID);
+  },
+};
+
+/** Profile queries never resolve. */
 export const Loading: StoryObj = {
   render: () => {
-    resetStubData();
-    return <LoadingWrapper />;
+    seed('loading');
+    return profile(TARGET_USER_ID);
   },
 };
 
-/**
- * Own profile — session.user.id === targetUserId.
- * No Follow button, no three-dots (⋮) menu. Stats section and bio visible.
- */
-export const OwnProfile: StoryObj = {
-  render: () => {
-    resetStubData();
-    setStubData('users', [OWN_PROFILE]);
-    setStubData('rpc:get_follower_counts', FOLLOWER_COUNTS);
-    setStubData('rpc:get_profile_stats', PROFILE_STATS);
-    return (
-      <UserProfileScreen
-        targetUserId={OWN_USER_ID}
-        session={OWN_SESSION_AS_OWN}
-        onBack={() => {}}
-      />
-    );
-  },
-};
-
-/**
- * Other user's public profile — Follow button + three-dots (⋮) menu visible.
- * Stats section shown. Beta-video grid shows empty state (no videos in stub).
- */
-export const OtherUserPublic: StoryObj = {
-  render: () => {
-    resetStubData();
-    setStubData('users', [ALICE_PROFILE]);
-    setStubData('rpc:get_follower_counts', FOLLOWER_COUNTS);
-    setStubData('rpc:get_profile_stats', PROFILE_STATS);
-    // follows stub returns [] by default → isFollowing = false
-    return (
-      <UserProfileScreen
-        targetUserId={TARGET_USER_ID}
-        session={MOCK_SESSION}
-        onBack={() => {}}
-      />
-    );
-  },
-};
-
-/**
- * Private (followers_only) profile for a non-follower (AC-063, AC-064).
- * Profile card and Follow button are visible; the beta-video grid is hidden
- * because the viewer is not yet a follower.
- */
-export const PrivateProfile: StoryObj = {
-  render: () => {
-    resetStubData();
-    setStubData('users', [PRIVATE_ALICE_PROFILE]);
-    setStubData('rpc:get_follower_counts', { follower_count: 89, following_count: 31 });
-    setStubData('rpc:get_profile_stats', PROFILE_STATS);
-    // follows stub returns [] by default → isFollowing = false → video grid hidden
-    return (
-      <UserProfileScreen
-        targetUserId={TARGET_USER_ID}
-        session={MOCK_SESSION}
-        onBack={() => {}}
-      />
-    );
-  },
-};
+// No Error story: the error branch cannot be driven through the stub.

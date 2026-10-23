@@ -129,7 +129,8 @@ function ErrorWrapper(): React.JSX.Element {
 // ── Meta ──────────────────────────────────────────────────────────────────────
 
 const meta: Meta = {
-  title: 'SocialFeed/FeedScreen',
+  title: 'Pages/Profile/Feed (dead code)',
+  tags: ['!dev', '!autodocs'], // AC-159: hidden from the sidebar, file kept for Phase 2
   parameters: { layout: 'fullscreen' },
   decorators: [
     (Story) => (
