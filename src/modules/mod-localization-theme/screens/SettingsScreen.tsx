@@ -24,6 +24,9 @@
  *   saveDeviceLanguage() and saveDeviceTheme() from src/lib/devicePrefs.
  *   These device-scoped values are read at app start and after sign-out by
  *   i18n.ts and ThemeProvider so signed-out screens use the last chosen settings.
+ *   A failed save is logged but does not block sign-out (INT-031). If either
+ *   save throws, the user is still signed out; signed-out screens fall back to
+ *   AC-090 device language / System appearance.
  *
  * On mount, loads persisted preferences from AsyncStorage and applies them so
  * the saved state is restored correctly on each launch.
@@ -189,14 +192,27 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   // AC-168: Logout handler
   // AC-202 / AC-203: persist current language and theme to device storage just
   // before sign-out so signed-out screens can restore them (saveLanguage /
-  // saveTheme are device-scoped, not per-user). If signOut() subsequently fails
-  // the saves have still happened — that is acceptable per spec.
+  // saveTheme are device-scoped, not per-user).
+  //
+  // INT-031 fix: save failures are logged but do not block sign-out. The user
+  // is always signed out regardless of whether the device preference saves
+  // succeeded. If a save throws, signed-out screens fall back to AC-090 device
+  // language / System appearance.
   async function handleLogout(): Promise<void> {
     setIsSigningOut(true);
     setLogoutError(null);
+    // Attempt both saves in parallel. allSettled never rejects, so a failure
+    // in either save cannot prevent the signOut() call below.
+    const saveResults = await Promise.allSettled([
+      saveDeviceLanguage(selectedLanguage),
+      saveDeviceTheme(selectedOverride),
+    ]);
+    for (const result of saveResults) {
+      if (result.status === 'rejected') {
+        console.error('[handleLogout] device pref save error:', result.reason);
+      }
+    }
     try {
-      await saveDeviceLanguage(selectedLanguage);
-      await saveDeviceTheme(selectedOverride);
       await signOut();
       // AuthNavigator observes onAuthStateChange and routes back to signed-out state
     } catch (err) {

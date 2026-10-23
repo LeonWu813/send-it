@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-auth-profile
+agent: engineer-mod-localization-theme
 mode: integration-fix
-module: mod-auth-profile (MOD-001)
-next: claude --agent qa-mod-auth-profile "regression AC-201 for INT-032a — copyGoogleAvatarToBucket extracted to avatarSync.ts, userId passed as parameter to both copyGoogleAvatarToBucket and fillDisplayNameIfEmpty, getSession() removed from both; 30/30 tests pass; see Engineering Progress INT-032a in project-planning/modules/mod-auth-profile/status.md"
+module: mod-localization-theme (MOD-010)
 result: success
-timestamp: 2026-10-22T14:00:00Z
+timestamp: 2026-10-22T15:00:00Z
+next: claude --agent qa-mod-localization-theme "regression INT-031 — handleLogout now uses Promise.allSettled for saves so signOut is always called even when saveDeviceLanguage or saveDeviceTheme throws; 5 unit tests added and passing; see Engineering Progress INT-031 in project-planning/modules/mod-localization-theme/status.md"
 
 ## PM Updates
 

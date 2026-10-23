@@ -2,6 +2,46 @@
 
 ## Engineering Progress
 
+### Integration fix — 2026-10-22 (INT-031: save-failure should not block sign-out)
+
+**Scope**: Fix `handleLogout()` in `SettingsScreen.tsx` so that a failure in `saveDeviceLanguage` or `saveDeviceTheme` does not keep the user signed in. Previously, both saves and `signOut()` were all inside a single `try/catch`; any save error was caught and `signOut()` was never called.
+
+**Fix applied**: Replaced the sequential `await save1 → await save2 → await signOut()` inside one try block with `Promise.allSettled([saveDeviceLanguage, saveDeviceTheme])` (so saves run in parallel and neither rejection can propagate), followed by per-result error logging, followed by `signOut()` inside its own separate `try/catch`. `signOut` errors keep their original handling.
+
+**Approved behavior change**: A failed save is logged but does not block sign-out. The user is always signed out; signed-out screens fall back to AC-090 device language / System appearance if the save did not complete (per INT-031 approval).
+
+**Impact check**: The only callers of `selectedLanguage` and `selectedOverride` state are (a) the save in `handleLogout` (changed) and (b) `handleLanguageSelect` / `handleOverrideSelect` live-update paths (unchanged). No dependents broken.
+
+**Test added**: `src/modules/mod-localization-theme/__tests__/SettingsScreen.test.tsx` — 5 tests for `handleLogout`:
+1. saves succeed → signOut called
+2. `saveDeviceLanguage` rejects → signOut still called
+3. `saveDeviceTheme` rejects → signOut still called
+4. both saves reject → signOut still called
+5. signOut rejects → error message surfaced to user
+
+**No changes to `src/lib/devicePrefs.ts`** — helpers belong to MOD-012, left as-is per instructions.
+
+**Self-check**:
+- [pass] `npx tsc --noEmit` — exit 0, 0 TypeScript errors
+- [pass] `npm run lint` — exit 0 (lint = tsc --noEmit)
+- [pass] `npm run check:i18n` — "i18n completeness OK" (exit 0); no new i18n keys
+- [pass] `npx jest --testPathPattern="mod-localization-theme" --watchAll=false` — 5/5 new tests pass
+- [pass] `npm test -- --watchAll=false --silent` — 662 tests pass, 47 suites, 0 failures
+- [pass] Git scope: only `src/modules/mod-localization-theme/screens/SettingsScreen.tsx` (modified) and `src/modules/mod-localization-theme/__tests__/SettingsScreen.test.tsx` (new) changed by this fix; pre-existing mod-auth-profile changes are unchanged from before
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+- [pass] No new dependencies (Promise.allSettled is built-in; no new imports)
+- [skip] Integration tests — no integration test command configured in production.md
+- [skip] DB/PostgREST embed verification — no database queries changed
+- [skip] Native dependency gate — no native dependency added or changed
+- [skip] Spring Boot, LLM, container, CORS checks — not applicable
+
+**Files modified/created**:
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`
+- `src/modules/mod-localization-theme/__tests__/SettingsScreen.test.tsx` (new)
+
+---
+
 ### Spec-update — 2026-10-22 (AC-202 / AC-203 sign-out save — MOD-010 portion, Rev 50)
 
 **Scope**: Add `saveDeviceLanguage` and `saveDeviceTheme` calls in `SettingsScreen.tsx` `handleLogout()` just before `signOut()` so the current signed-in language and theme override are persisted to device-level storage at sign-out. This is the MOD-010 portion of the AC-202/AC-203 code split defined in the Rev 50 spec (Engineering Notes).
