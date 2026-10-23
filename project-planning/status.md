@@ -2,13 +2,13 @@
 
 ## Last Action
 
-agent: engineer-mod-localization-theme
-mode: spec-update
-module: MOD-010
-result: success
-summary: Implemented AC-202/AC-203 MOD-010 portion (Rev 50). Added saveDeviceLanguage(selectedLanguage) and saveDeviceTheme(selectedOverride) calls in SettingsScreen.tsx handleLogout() just before signOut(). Imported from src/lib/devicePrefs (built by MOD-012). Types are directly compatible (SupportedLanguage = DeviceLanguage, ThemeOverride = DeviceTheme). 655 tests pass; tsc --noEmit exits 0. Blocker noted: applySignedOutLanguage() is not wired in AppShell (MOD-012) — same-session language restoration after sign-out (AC-202) requires MOD-012 engineer to add the call.
-next: claude --agent qa-mod-localization-theme "verify" (AC-202/AC-203 MOD-010 sign-out save). Also: claude --agent engineer-mod-home "bugfix" for the applySignedOutLanguage() wiring gap in AppShell (AC-202 same-session language behavior).
-timestamp: 2026-10-22T23:55:00Z
+agent: qa-mod-home
+mode: verify
+module: MOD-012
+result: fail
+summary: QA Run 23 — AC-202/AC-203 src/lib/ helpers. devicePrefs.ts save/load helpers pass (13 tests); i18n.ts app-start behavior pass; ThemeProvider app-start behavior pass; AC-090/signed-in regressions pass; 655 tests, 0 failures; tsc clean. Two wiring failures found: (1) AC-202 BLOCKER — applySignedOutLanguage() is exported but never called anywhere; sign-out language restoration is not wired in. (2) AC-203 FAIL — ThemeProvider.setThemeUserId() accepts only string, not string|null; no mechanism to reset userId to null after sign-out; device-level stored theme is not reloaded in the same session after sign-out. Both route to engineer-mod-home.
+next: claude --agent engineer-mod-home "bugfix AC-202 AC-203 sign-out wiring — see QA Run 23 in project-planning/modules/mod-home/status.md for exact failures and routing"
+timestamp: 2026-10-22
 
 ## PM Updates
 

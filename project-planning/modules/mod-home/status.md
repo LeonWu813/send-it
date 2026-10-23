@@ -4647,3 +4647,107 @@ AC-200(3) — no "Send It" brand strings in source: PASS
 AC-200(4) — native build compiles and launches as "ProjectDay": PASS
 
 **MOD-012 (mod-home) QA: PASS — all ACs verified. Ready for Phase 1 checkpoint (PM).**
+
+---
+
+### QA Run 23 — AC-202/AC-203 src/lib/ helpers — 2026-10-22
+
+**Workflow**: functional-test (scoped to AC-202/AC-203 src/lib/ helpers delivered in commit `e76e9d2`)
+
+**Scope**: Verify `src/lib/devicePrefs.ts`, `src/lib/i18n.ts` (AC-202 additions), `src/lib/theme.ts` (AC-203 additions), and their integration wiring (sign-out path). AC-090 and signed-in behavior are regression-checked but not the primary focus.
+
+---
+
+**Automated test run:**
+- `npx tsc --noEmit`: PASS — 0 errors
+- `npx jest src/lib/__tests__/devicePrefs.test.ts --no-coverage`: PASS — 13 tests, 1 suite, 0 failures
+- `npx jest --no-coverage`: PASS — 655 tests, 45 suites, 0 failures (no regressions in full suite)
+- QA runner: test command not configured in production.md; ran tests directly above
+
+Note: The engineer's status entry states "14 tests" but the test file contains 13 `it()` calls (6 in `saveLanguage/loadLanguage`, 7 in `saveTheme/loadTheme`). The test run confirms 13 tests. This is a documentation discrepancy in the Engineering Progress entry only — not a code issue.
+
+---
+
+#### devicePrefs.ts — save/load helpers
+
+PASS — `saveLanguage(lang)` and `saveTheme(theme)` call `AsyncStorage.setItem` with the correct keys (`device_language`, `device_theme`) and re-throw on failure. `loadLanguage()` and `loadTheme()` call `AsyncStorage.getItem`, validate that the stored value belongs to the allowed set, and return `null` (never throw) for unrecognized or missing values. Types `DeviceLanguage` and `DeviceTheme` are exported. All 13 unit tests pass covering null-on-cold-start, round-trip for every valid value, overwrite, unrecognized-value guard, and setItem error propagation.
+
+---
+
+#### AC-202 — i18n.ts: app-start behavior
+
+PASS — `i18n.ts` chains a `.then()` on the `i18n.init()` promise. After init (which uses `detectDeviceLanguage()` as the sync starting language), it calls `loadLanguage()` and, if a stored language is found that differs from the current language, calls `i18n.changeLanguage(stored)`. This correctly applies the stored device-level language at app start. Falls back silently to the device-locale default when nothing is stored or on error.
+
+---
+
+#### AC-202 — i18n.ts: `applySignedOutLanguage()` wiring — BLOCKER
+
+FAIL — `applySignedOutLanguage()` is correctly defined and exported in `src/lib/i18n.ts` (lines 122–132). It reads `loadLanguage()`, falls back to `detectDeviceLanguage()` when nothing is stored, and calls `i18n.changeLanguage()` when needed. However, a project-wide search (`grep -rn "applySignedOutLanguage" src/`) finds only the function's own definition and its documentation comment. The function is never called anywhere in the codebase.
+
+Input: user signs out; a device-level language was saved by MOD-010's SettingsScreen just before sign-out.
+Actual: `applySignedOutLanguage()` is never invoked; the i18n language is not restored to the device-level stored language.
+Expected per spec: "Call this from AppShell when auth state changes to signed-out" (spec Key Implementation Notes); signed-out language must match the device-level stored language, or fall back to AC-090 device detection when nothing is stored.
+
+The engineer's own status entry flagged this: "applySignedOutLanguage() exported; call from AppShell on sign-out." The wiring was not implemented.
+
+Architecture note: `AppShell` only receives a `session` prop and is unmounted when `AuthNavigator` detects `!session`. The sign-out hook (`useSession.onAuthStateChange`) does not call `applySignedOutLanguage()`. No component in the auth flow calls it.
+
+Route to: Engineer (mod-home). Wire `applySignedOutLanguage()` into the sign-out path — either in AppShell's unmount/cleanup effect, in `useSession`'s auth-state listener on the `SIGNED_OUT` event, or in `AuthNavigator`.
+
+---
+
+#### AC-203 — theme.ts: ThemeProvider app-start behavior
+
+PASS — `ThemeProvider` initializes `userId` state as `null`. The `useEffect([userId])` fires immediately and, for `userId === null`, calls `loadTheme()` asynchronously. If the stored value is `'light'` or `'dark'`, it sets `override` to that value. If stored is `null` or `'system'`, it sets `override` to `'system'` (device appearance). This correctly applies the stored device-level theme at app start.
+
+---
+
+#### AC-203 — theme.ts: ThemeProvider after sign-out — FAIL
+
+FAIL — `ThemeContext` exposes `setThemeUserId(userId: string): void`. The parameter type is `string`, not `string | null`. There is no exported mechanism to reset `userId` back to `null` after sign-out.
+
+Trace: On sign-in, `AppShell.tsx` calls `setThemeUserId(session.user.id)` in a `useEffect`. On sign-out, AppShell unmounts (AuthNavigator renders auth screens when `!session`). The `useEffect` cleanup does not call anything to reset `userId`. `ThemeProvider` remains mounted (it wraps App.tsx root), and its `userId` state stays as the previous user's ID string. The `useEffect([userId])` branch that loads the device-level stored theme (`if (userId === null)`) never fires again in the same session.
+
+Input: user signs out; a device-level theme was saved by MOD-010's SettingsScreen just before sign-out; theme differs from what the signed-in user had set.
+Actual: ThemeProvider's `userId` remains as the signed-in user's ID; device-level theme is not loaded; app shows signed-in user's theme on the auth screens.
+Expected per spec: "ThemeProvider uses the stored theme whenever no user is signed in (at app start and after sign-out)" (spec AC-202/AC-203 section); "ThemeProvider reads stored theme when `userId` becomes null" (engineer notes).
+
+Note: the device-level theme IS applied correctly on the next app start (when ThemeProvider initializes with `userId = null`). The failure is limited to the same-session sign-out scenario.
+
+Route to: Engineer (mod-home). Either (a) change `setThemeUserId` to accept `string | null` and add a companion `clearThemeUserId()` or reset call that is made by the auth-state listener on sign-out, or (b) move the device-level theme load into a separate effect that listens to the auth-state directly.
+
+---
+
+#### AC-090 — Device detection unchanged for signed-in users
+
+PASS — `detectDeviceLanguage()` in `i18n.ts` is a private function unchanged from its previous form. `loadLanguageForUser(userId)` reads only the user-scoped key (`app_language_${userId}`) and leaves the language unchanged if nothing is stored. Signed-in users without a Settings language choice continue to see the AC-090 device-detected language. No regression.
+
+---
+
+#### AC-091/AC-092 — Signed-in behavior unchanged
+
+PASS — `loadLanguageForUser(userId)` is called by `AppShell.useEffect([session.user.id])`. The per-user AsyncStorage key pattern is unchanged. `ThemeProvider.loadSavedOverride` reads `app_theme_override_${userId}` for signed-in users. Both are unchanged from prior QA runs.
+
+---
+
+### Summary — QA Run 23
+
+| Item | Result |
+|---|---|
+| `src/lib/devicePrefs.ts` — saveLanguage / loadLanguage / saveTheme / loadTheme | PASS |
+| `DeviceLanguage` / `DeviceTheme` types exported | PASS |
+| 13 tests in devicePrefs.test.ts (all pass) | PASS (note: engineer stated 14; file has 13) |
+| AC-202 — i18n.ts app-start: stored language applied after init | PASS |
+| AC-202 — i18n.ts sign-out: `applySignedOutLanguage()` wired into sign-out path | **FAIL — not called anywhere; BLOCKER** |
+| AC-203 — ThemeProvider app-start: stored theme applied when userId is null | PASS |
+| AC-203 — ThemeProvider sign-out: userId reset to null so device-level theme reloads | **FAIL — setThemeUserId accepts string only; no reset mechanism** |
+| AC-090 — device detection unchanged for signed-in users | PASS |
+| AC-091/AC-092 — signed-in behavior unchanged | PASS |
+| TypeScript: `npx tsc --noEmit` | PASS — 0 errors |
+| Full suite: 655 tests, 45 suites | PASS — 0 failures |
+
+**Result: FAIL — 2 failures, both wiring gaps in the sign-out path.**
+
+Both failures route to Engineer (mod-home):
+1. Wire `applySignedOutLanguage()` into the sign-out path (AC-202).
+2. Add a mechanism to reset ThemeProvider's `userId` to `null` on sign-out so the device-level stored theme is loaded immediately after sign-out (AC-203).
