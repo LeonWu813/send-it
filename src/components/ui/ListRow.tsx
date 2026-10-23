@@ -224,7 +224,7 @@ export function ListRow({
           {title}
         </AppText>
         {subtitle ? (
-          <AppText variant={!isContent && density === 'content' ? 'caption1' : 'footnote'} color={subColor} numberOfLines={isContent || density === 'content' ? 2 : 1} style={{ marginTop: theme.layout.stackTight }}>
+          <AppText variant="footnote" color={subColor} numberOfLines={isContent || density === 'content' ? 2 : 1} style={{ marginTop: theme.layout.stackTight }}>
             {subtitle}
           </AppText>
         ) : null}

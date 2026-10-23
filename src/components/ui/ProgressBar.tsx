@@ -18,7 +18,7 @@ export interface ProgressBarProps {
   tone?: 'default' | 'media';
   /** The fill turns `error` and stays where it stopped. */
   failed?: boolean;
-  /** "62%" above the bar, right-aligned (caption1 numeric textSecondary). */
+  /** "62%" above the bar, right-aligned (footnote numeric textSecondary). */
   showPercent?: boolean;
   /** Required: describes what is progressing ("Uploading"). */
   accessibilityLabel: string;
@@ -70,7 +70,7 @@ export function ProgressBar({
       style={style}
     >
       {showPercent ? (
-        <AppText variant="caption1" numeric color="textSecondary" align="right" style={{ marginBottom: theme.spacing.xs }}>
+        <AppText variant="footnote" numeric color="textSecondary" align="right" style={{ marginBottom: theme.spacing.xs }}>
           {`${pct}%`}
         </AppText>
       ) : null}

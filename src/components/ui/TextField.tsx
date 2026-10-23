@@ -217,7 +217,7 @@ export function TextField({
             ) : null}
           </View>
           {showCount && maxLength ? (
-            <AppText variant="caption1" numeric color="textSecondary" style={{ marginLeft: theme.spacing.sm }}>
+            <AppText variant="footnote" numeric color="textSecondary" style={{ marginLeft: theme.spacing.sm }}>
               {`${value.length}/${maxLength}`}
             </AppText>
           ) : null}
