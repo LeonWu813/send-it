@@ -2,6 +2,52 @@
 
 ## Engineering Progress
 
+### Storybook story — RouteSearchScreen (2026-10-22)
+
+**Mode:** stories (off-spec Storybook coverage)
+**Date:** 2026-10-22
+**Engineer:** engineer-mod-send-logging
+
+#### Changes
+
+Added `src/modules/mod-send-logging/stories/RouteSearchScreen.stories.tsx` covering four RouteSearchScreen states via a single `Playground` story with an `inline-radio` state control:
+
+- **default** — empty search form, no results yet; rendered directly from `RouteSearchScreen` with no stub data
+- **loading** — skeleton rows shown while the route request is in flight; `supabase.from('routes')` is temporarily replaced with a never-settling proxy so `isLoading` stays true, and a DOM-event auto-trigger fills the gym-ID field and clicks Search
+- **results** — five ListRow cards with TapeBadge thumbnails from gym-001; routes table seeded via `setStubData` before the component mounts; auto-trigger fires the search
+- **noResults** — inline EmptyState after a search that returned nothing; routes table seeded with `[]`; auto-trigger fires the search
+
+Pattern follows `LogSendScreen.stories.tsx` exactly: `Meta<PlaygroundArgs>`, fullscreen layout, 390×780 decorator, `render: (args) => <Seeded key={args.state} {...args} />`, single `Playground` named export. Callback props (`onRouteSelected`, `onCancel`) are stub functions (`() => {}`); no NavigationContainer used (consistent with production.md No `@react-navigation/native` Hooks convention).
+
+#### Files Created
+
+- `src/modules/mod-send-logging/stories/RouteSearchScreen.stories.tsx`
+
+#### Automated Self-Check Results
+
+| Check | Result | Notes |
+|-------|--------|-------|
+| `scripts/self-check.sh` | N/A | Script does not exist in this project |
+| Build (`npx tsc --noEmit`) | PASS | Zero TypeScript errors, strict mode on; DOM lib available via expo/tsconfig.base |
+| Tests (`npm test -- --watchAll=false --silent`) | PASS | 662/662 tests pass, 47 suites — zero regressions; story files are excluded from Jest by default |
+| Git scope | PASS | Only `src/modules/mod-send-logging/stories/RouteSearchScreen.stories.tsx` added; no other files modified in this module |
+| Lint (`npm run lint`) | NOTE | Pre-existing TS2322 error in `src/modules/mod-route-catalog/stories/RouteListScreen.stories.tsx` (untracked, not authored by this agent); zero errors in mod-send-logging files |
+
+#### Judgment-Based Checklist
+
+| Item | Result |
+|------|--------|
+| Story follows `LogSendScreen.stories.tsx` pattern for imports, meta, structure | PASS — same Meta shape, fullscreen parameter, 390×780 decorator, single Playground export |
+| All 4 required states covered (Default, Loading, Results, No Results) | PASS — `state` inline-radio control with four options |
+| `useNavigation`/`useRoute` not used (no NavigationContainer) | PASS — component uses callback props; no `@react-navigation/native` hooks |
+| Callbacks are stubs (not real navigator) | PASS — `() => {}` for `onRouteSelected` and `onCancel` |
+| No new runtime dependencies | PASS — imports only from existing stub, mod-route-catalog types, and RouteSearchScreen |
+| No hardcoded colors or configuration values | PASS — no inline hex colors or hardcoded URLs |
+| TypeScript strict mode satisfied | PASS — zero errors from `tsc --noEmit` |
+| Story files do not affect Jest test suite | PASS — 662/662 tests pass |
+
+---
+
 > Off-spec design work (pending PR review): design system v1.2 applied to `src/modules/mod-send-logging/**` (2026-10-16, branch design/storybook). Visual + motion only; no service changes, nothing from spec Appendix F.
 > - AscentList (§32.8): Card + hairline rows, Avatar sm, `SendStyleChip` (replaces `FLASH_BADGE_COLOR`), IconButton delete (own rows only), 3-line note + More, Skeleton / EmptyState inline / InlineError block, VoiceOver row label, delete via BottomSheet `confirm` (failure shown in the sheet with Retry, row stays, per §32.8), "Deleted" toast, D1 new-row landing (detected as an own new id after a `refreshKey` refresh).
 > - LogSendScreen: `SendStylePicker` (D2 grip pop via ui), attempts locked to 1 on flash (already today's behaviour) with a `short` cross-fade, `TextField` / `Button` / `InlineError`; save error now a translated sentence. No date picker exists today, so the date stays a text field.
