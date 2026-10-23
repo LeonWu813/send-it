@@ -17,19 +17,21 @@
  * AC-184: Notification bell and settings gear removed from ProfileScreen header —
  *          both controls now live on MOD-012's global app-level header.
  *
- * Scroll architecture: SendHistoryProfile owns the FlatList as the sole
- * scroll container. The profile header (avatar, name, bio, Edit Profile
- * button) is passed as `listHeaderComponent` and the beta-video grid
- * section is passed as `listFooterComponent` so they scroll with the list.
- * This avoids nesting a vertical FlatList inside a vertical ScrollView,
- * which triggers the VirtualizedList-nested-in-ScrollView warning.
+ * Page-review P-1 (DS v2.3): left-aligned header card (R13) with inline follower / following
+ * counts, then the COMPACT StatsPanel row (3 tiles) which opens the pushed Profile History
+ * (full StatsPanel: hero + chart), then the sends list. Content sits at screenMargin (R0).
+ *
+ * Scroll architecture: one Animated.FlatList is the sole scroll container (sends list), with the
+ * header card + compact stats as ListHeaderComponent and the beta-video grid as ListFooterComponent.
  */
 
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
-import { AppText, Avatar, Button, PressableScale } from '../../../components/ui';
+import { Animated, StyleSheet, View } from 'react-native';
+import SharedRouteCard from '../../../components/RouteCard';
+import { AppText, Avatar, Button, Card, EmptyState, PressableScale, Spinner } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
 import {
   BetaVideoGrid,
@@ -37,7 +39,14 @@ import {
   fetchBetaVideosByUser,
 } from '../../mod-beta-video';
 import type { BetaVideo } from '../../mod-beta-video';
-import { SendHistoryProfile } from '../../mod-profile-history';
+import {
+  fetchProfileHistory,
+  fetchProfileStats,
+  groupToRouteCards,
+  StatsPanel,
+  useOpenProfileHistory,
+} from '../../mod-profile-history';
+import type { ProfileStats, RouteCard } from '../../mod-profile-history';
 import { fetchFollowerCounts } from '../../mod-social-feed';
 import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
 import { useSession } from '../hooks/useSession';
@@ -84,18 +93,27 @@ export default function ProfileScreen({
   const [followerCount, setFollowerCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
 
+  // Sends list + compact stats (P-1). `loaded` flips after the first fetch settles.
+  const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [routeCards, setRouteCards] = useState<RouteCard[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const openHistory = useOpenProfileHistory();
+
   // AC-164: beta video grid state.
   const [betaVideos, setBetaVideos] = useState<BetaVideo[]>([]);
   const [reelStartIndex, setReelStartIndex] = useState(0);
   const [showReel, setShowReel] = useState(false);
 
   // AC-062: Increment refetchKey each time the Profile tab becomes active so
-  // SendHistoryProfile re-fetches stats even though the component never
+  // the stats + sends list re-fetch even though the component never
   // unmounts (keep-alive display:none pattern in AppShell).
   const [refetchKey, setRefetchKey] = useState(0);
   useEffect(() => {
     if (isActive) setRefetchKey((prev) => prev + 1);
   }, [isActive]);
+  useEffect(() => {
+    if (refetchKey > 0 && hasLoadedOnce.current) void loadData();
+  }, [refetchKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tracks whether the first data load has completed. Used to decide whether to
   // show a loading state (first load only) or silently refetch in the background
@@ -107,13 +125,18 @@ export default function ProfileScreen({
   const loadData = useCallback(async (): Promise<void> => {
     if (!profile?.id) return;
     const userId = profile.id;
-    const [counts, videos] = await Promise.all([
+    const [counts, videos, history, statsData] = await Promise.all([
       fetchFollowerCounts(userId),
       fetchBetaVideosByUser(userId),
+      fetchProfileHistory(userId).catch(() => []),
+      fetchProfileStats(userId).catch(() => null),
     ]);
     setFollowerCount(counts.follower_count);
     setFollowingCount(counts.following_count);
     setBetaVideos(videos);
+    setRouteCards(groupToRouteCards(history));
+    setStats(statsData);
+    setLoaded(true);
     hasLoadedOnce.current = true;
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -124,81 +147,86 @@ export default function ProfileScreen({
     void loadData();
   }, [profile?.id, loadData]);
 
-  // Trigger refetch when tab becomes active (keep-alive pattern — no NavigationContainer).
-  // Guard with hasLoadedOnce so we don't double-fetch on the first mount cycle.
-  useEffect(() => {
-    if (isActive && hasLoadedOnce.current) void loadData();
-  }, [isActive, loadData]);
-
   // ── Profile header (AC-116 + AC-117 + AC-145) ───────────────────────────────
   // Passed as listHeaderComponent to SendHistoryProfile so it scrolls with
   // the FlatList rather than requiring a wrapping ScrollView.
   // AC-184: Notification bell and settings gear are NOT rendered here — they
   //         live on MOD-012's global app-level header.
+  const hasRecords = routeCards.length > 0 || (stats?.total_sends ?? 0) > 0;
   const profileHeader = (
     <View style={styles.headerContainer}>
-      {/* Avatar + display name + bio (AC-116) */}
-      <View style={styles.header}>
-        <Avatar
-          size="xl"
-          uri={profile?.avatar_url}
-          name={profile?.display_name}
-          decorative
-        />
-        <AppText variant="title2" align="center">
-          {profile?.display_name ?? ''}
-        </AppText>
+      {/* R13: left-aligned header card; avatar beside name + inline counts (AC-116, AC-145) */}
+      <Card variant="static" style={styles.headerCard}>
+        <View style={styles.identityRow}>
+          <Avatar size="lg" uri={profile?.avatar_url} name={profile?.display_name} decorative />
+          <View style={styles.identityText}>
+            <AppText variant="title2" numberOfLines={1}>
+              {profile?.display_name ?? ''}
+            </AppText>
+            <View style={styles.followCountsRow}>
+              <PressableScale
+                feedback="row"
+                pressedColor={theme.colors.surfaceAltPressed}
+                style={styles.followCountItem}
+                onPress={onNavigateToFollowers}
+                accessibilityRole="button"
+                accessibilityLabel={`${followerCount} ${t('socialFeed.followers')}`}
+              >
+                <AppText variant="headline" numeric>
+                  {followerCount}
+                </AppText>
+                <AppText variant="footnote" color="textSecondary">
+                  {t('socialFeed.followers')}
+                </AppText>
+              </PressableScale>
+              <PressableScale
+                feedback="row"
+                pressedColor={theme.colors.surfaceAltPressed}
+                style={styles.followCountItem}
+                onPress={onNavigateToFollowing}
+                accessibilityRole="button"
+                accessibilityLabel={`${followingCount} ${t('socialFeed.following')}`}
+              >
+                <AppText variant="headline" numeric>
+                  {followingCount}
+                </AppText>
+                <AppText variant="footnote" color="textSecondary">
+                  {t('socialFeed.following')}
+                </AppText>
+              </PressableScale>
+            </View>
+          </View>
+        </View>
         {profile?.bio ? (
-          <AppText variant="body" color="textSecondary" align="center">
+          <AppText variant="body" color="textSecondary">
             {profile.bio}
           </AppText>
         ) : null}
-      </View>
+        {/* Edit Profile entry (AC-117) */}
+        <Button
+          label={t('profile.editProfile')}
+          onPress={onNavigateEditProfile}
+          variant="secondary"
+          size="md"
+          fullWidth
+          accessibilityLabel={t('profile.editProfile')}
+        />
+      </Card>
 
-      {/* AC-145: Follower / following count links — immediately below bio */}
-      <View style={styles.followCountsRow}>
-        <PressableScale
-          feedback="row"
-          pressedColor={theme.colors.surfaceAltPressed}
-          style={styles.followCountItem}
-          onPress={onNavigateToFollowers}
-          accessibilityRole="button"
-          accessibilityLabel={`${followerCount} ${t('socialFeed.followers')}`}
-        >
-          <AppText variant="headline" numeric>
-            {followerCount}
-          </AppText>
-          <AppText variant="footnote" color="textSecondary">
-            {t('socialFeed.followers')}
-          </AppText>
-        </PressableScale>
+      {/* P-1: compact stats row; opens Profile History (full StatsPanel) */}
+      {stats ? (
+        <StatsPanel
+          variant="compact"
+          stats={stats}
+          onOpenDetails={profile?.id ? () => openHistory(profile.id, true) : undefined}
+        />
+      ) : null}
 
-        <PressableScale
-          feedback="row"
-          pressedColor={theme.colors.surfaceAltPressed}
-          style={styles.followCountItem}
-          onPress={onNavigateToFollowing}
-          accessibilityRole="button"
-          accessibilityLabel={`${followingCount} ${t('socialFeed.following')}`}
-        >
-          <AppText variant="headline" numeric>
-            {followingCount}
-          </AppText>
-          <AppText variant="footnote" color="textSecondary">
-            {t('socialFeed.following')}
-          </AppText>
-        </PressableScale>
-      </View>
-
-      {/* Edit Profile entry (AC-117) */}
-      <Button
-        label={t('profile.editProfile')}
-        onPress={onNavigateEditProfile}
-        variant="secondary"
-        size="md"
-        fullWidth
-        accessibilityLabel={t('profile.editProfile')}
-      />
+      {hasRecords ? (
+        <AppText variant="pageSection" accessibilityRole="header">
+          {t('profile.sendHistory')}
+        </AppText>
+      ) : null}
     </View>
   );
 
@@ -232,43 +260,51 @@ export default function ProfileScreen({
     </View>
   );
 
-  // ── Root: View (no ScrollView) — FlatList inside SendHistoryProfile scrolls ──
+  // ── Root: FlatList (sends list) is the sole scroll container ────────────────
+  const listEmpty = !loaded ? (
+    <Spinner />
+  ) : hasRecords ? null : (
+    <EmptyState variant="inline" description={t('profileHistory.empty')} icon={ICON.sends.outline} />
+  );
+
   return (
     <View style={styles.root}>
-      {profile?.id ? (
-        <SendHistoryProfile
-          userId={profile.id}
-          isOwnProfile
-          refetchKey={refetchKey}
-          listHeaderComponent={profileHeader}
-          listFooterComponent={profileFooter}
-          onNavigateToRoute={onNavigateToRoute}
-          scrollProps={{
-            onScroll: h.onScroll,
-            onContentSizeChange: h.onContentSizeChange,
-            onLayout: h.onLayout,
-            scrollEventThrottle: h.scrollEventThrottle,
-            contentContainerStyle: { paddingTop: h.contentTopInset, paddingBottom: h.contentBottomInset },
-            scrollIndicatorInsets: { top: h.contentTopInset, bottom: h.indicatorBottomInset },
-          }}
-        />
-      ) : (
-        // Profile not yet loaded — show header and footer without history list.
-        // Wrap in a View that applies contentTopInset and contentBottomInset so
-        // the avatar clears the navigation bar (matches the FlatList path which
-        // applies these insets via contentContainerStyle on line 251). Without
-        // this, the loading-state avatar overlaps the navigation bar on every
-        // provider. Layout bug fix — not provider-specific.
-        <View
-          style={{
-            paddingTop: h.contentTopInset,
-            paddingBottom: h.contentBottomInset,
-          }}
-        >
-          {profileHeader}
-          {profileFooter}
-        </View>
-      )}
+      <Animated.FlatList
+        data={routeCards}
+        keyExtractor={(item) => item.route_id}
+        renderItem={({ item }) => {
+          const colorLabel = item.color_tag ? t(`routeCatalog.colors.${item.color_tag}`) : '';
+          const sectionSuffix = item.section_label ? ` (${item.section_label})` : '';
+          const routeName = `${item.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionSuffix}`;
+          return (
+            <SharedRouteCard
+              route={{
+                id: item.route_id,
+                name: routeName,
+                grade: item.grade,
+                photo_url: item.photo_url,
+                gymName: item.gym_name,
+              }}
+              onPress={() => onNavigateToRoute?.(item.route_id, item.gym_id)}
+            />
+          );
+        }}
+        ItemSeparatorComponent={() => <View style={{ height: theme.layout.cardGap }} />}
+        ListHeaderComponent={profileHeader}
+        ListEmptyComponent={listEmpty}
+        ListFooterComponent={profileFooter}
+        showsVerticalScrollIndicator={false}
+        onScroll={h.onScroll}
+        onContentSizeChange={h.onContentSizeChange}
+        onLayout={h.onLayout}
+        scrollEventThrottle={h.scrollEventThrottle}
+        contentContainerStyle={{
+          paddingTop: h.contentTopInset,
+          paddingBottom: h.contentBottomInset,
+          paddingHorizontal: screenMargin,
+        }}
+        scrollIndicatorInsets={{ top: h.contentTopInset, bottom: h.indicatorBottomInset }}
+      />
 
       {/* AC-164: Beta video reel viewer — rendered as a fullscreen Modal overlay */}
       {showReel ? (
@@ -295,22 +331,28 @@ function makeStyles(
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    // R0: the list's contentContainer owns screenMargin; sections add no horizontal padding.
     headerContainer: {
       paddingTop: theme.spacing.md,
-      paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.md,
+      gap: theme.spacing.md,
     },
-    header: {
+    headerCard: {
+      gap: theme.spacing.md,
+    },
+    identityRow: {
+      flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: theme.spacing.md,
-      gap: theme.spacing.sm,
+      gap: theme.spacing.md,
     },
-    // AC-145: follower / following count row
+    identityText: {
+      flex: 1,
+      gap: theme.spacing.xs,
+    },
+    // AC-145: inline follower / following counts
     followCountsRow: {
       flexDirection: 'row',
-      justifyContent: 'flex-start',
       gap: theme.spacing.lg,
-      marginBottom: theme.spacing.sm,
     },
     followCountItem: {
       flexDirection: 'row',
@@ -322,7 +364,6 @@ function makeStyles(
     videoSectionContainer: {
       paddingTop: theme.layout.sectionGap,
       paddingBottom: theme.spacing.xl,
-      paddingHorizontal: screenMargin,
     },
     videoSectionTitle: {
       marginBottom: theme.spacing.sm,

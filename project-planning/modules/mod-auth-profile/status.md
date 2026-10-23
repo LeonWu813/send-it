@@ -3100,3 +3100,11 @@ Exit code: 0 (empty output)
 | pstack:deslop reviewed — no slop identified | PASS |
 
 **Result: READY FOR QA**
+
+## Engineering Progress — page-review P-1 — 2026-10-23
+
+Off-spec design implementation (human-approved, reviewed via PR on design/page-templates).
+- `ProfileScreen.tsx`: left-aligned header card (R13: avatar + name + inline follower/following counts, bio, Edit Profile); compact `StatsPanel` row opens Profile History via `useOpenProfileHistory()(profile.id, true)`; sends list now rendered by ProfileScreen's own FlatList (fetchProfileHistory / fetchProfileStats / groupToRouteCards from the MOD-008 barrel) because `SendHistoryProfile` always renders the full StatsPanel. Grade tabs live on Profile History only. Content at screenMargin 16 (R0). No 11/12pt text.
+- Story-data bug fixed: `ProfileScreen.stories.tsx` seeds `rpc:get_profile_history` (5 ascents) so the populated story shows a sends list. Populated / Empty / Loading kept.
+- Tests updated (`ProfileScreen.test.tsx`) for the new barrel mock and compact-stats tap.
+- Measured: sends list starts ~490pt in-frame (was ~1080). `npm run lint` clean, 31 module tests pass, `check:i18n` OK.

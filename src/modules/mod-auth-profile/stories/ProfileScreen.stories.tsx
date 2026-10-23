@@ -18,6 +18,23 @@ const fakeSession = { user: { id: ME } } as unknown as Session;
 
 type StubState = 'populated' | 'empty' | 'loading';
 
+const row = (n: number, gym: [string, string], grade: string, color: string, style: string, daysAgo: number, section: string | null = null) => ({
+  ascent_id: `a${n}`, route_id: `r${n}`, gym_id: gym[0], gym_name: gym[1],
+  grade, color_tag: color, section_label: section, photo_url: null,
+  style, attempts: style === 'flash' ? 1 : 3, note: null,
+  logged_at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), is_private: false,
+});
+const RED_ROCK: [string, string] = ['g1', '紅石攀岩館'];
+const B_PUMP: [string, string] = ['g2', 'B-Pump 台北店'];
+/** Realistic recent sends so the populated list is not empty next to 85 sends. */
+const MOCK_ASCENTS = [
+  row(1, RED_ROCK, 'V6', 'purple', 'top', 1, 'Cave'),
+  row(2, RED_ROCK, 'V4', 'blue', 'flash', 2),
+  row(3, B_PUMP, 'V5', 'green', 'top', 3),
+  row(4, B_PUMP, 'V3', 'red', 'flash', 5, '懸岩區'),
+  row(5, RED_ROCK, 'V2', 'yellow', 'flash', 7),
+];
+
 const GRADES = ['VB', 'V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'];
 
 function setupStubs(state: StubState): void {
@@ -29,10 +46,11 @@ function setupStubs(state: StubState): void {
     setStubData('rpc:get_follower_counts', STUB_PENDING);
     setStubData('rpc:get_profile_stats', STUB_PENDING);
     setStubData('beta_videos', STUB_PENDING);
-    setStubData('ascents', STUB_PENDING);
+    setStubData('rpc:get_profile_history', STUB_PENDING);
     return;
   }
   const populated = state === 'populated';
+  setStubData('rpc:get_profile_history', populated ? MOCK_ASCENTS : []);
   setStubData('users', [
     {
       id: ME,

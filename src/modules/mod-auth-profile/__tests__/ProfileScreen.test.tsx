@@ -15,6 +15,8 @@ jest.mock('../../../lib/supabase', () => ({
   },
 }));
 
+const mockOpenHistory = jest.fn();
+
 jest.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => undefined },
   useTranslation: () => ({
@@ -34,8 +36,19 @@ jest.mock('../../mod-beta-video', () => ({
 }));
 
 jest.mock('../../mod-profile-history', () => ({
-  SendHistoryProfile: ({ listHeaderComponent }: { listHeaderComponent?: React.ReactElement }) =>
-    listHeaderComponent ?? null,
+  fetchProfileHistory: jest.fn().mockResolvedValue([]),
+  fetchProfileStats: jest.fn().mockResolvedValue({
+    total_sends: 85,
+    sends_by_grade: [],
+    accumulated_days: 30,
+    highest_grade: 'V6',
+  }),
+  groupToRouteCards: jest.fn().mockReturnValue([]),
+  StatsPanel: ({ onOpenDetails }: { onOpenDetails?: () => void }) => {
+    const { Pressable } = jest.requireActual('react-native');
+    return <Pressable accessibilityLabel="compact-stats" onPress={onOpenDetails} />;
+  },
+  useOpenProfileHistory: () => mockOpenHistory,
 }));
 
 jest.mock('../hooks/useSession', () => ({
@@ -55,7 +68,7 @@ jest.mock('../hooks/useSession', () => ({
 }));
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ProfileScreen from '../screens/ProfileScreen';
 import { ThemeProvider } from '../../../lib/theme';
 import type { Session } from '@supabase/supabase-js';
@@ -95,4 +108,14 @@ describe('ProfileScreen', () => {
     expect(getByLabelText(/socialFeed.following/)).toBeTruthy();
   });
 
+  it('shows the compact stats row that opens Profile History for own profile (P-1)', async () => {
+    const { findByLabelText } = render(
+      <ThemeProvider>
+        <ProfileScreen session={mockSession} onNavigateEditProfile={jest.fn()} />
+      </ThemeProvider>,
+    );
+    const stats = await findByLabelText('compact-stats');
+    fireEvent.press(stats);
+    await waitFor(() => expect(mockOpenHistory).toHaveBeenCalledWith('user-1', true));
+  });
 });
