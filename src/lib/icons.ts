@@ -91,7 +91,7 @@ export const ICON = {
   error: { outline: 'alert-circle-outline', filled: 'alert-circle' },
   warning: { outline: 'warning-outline' },
   info: { outline: 'information-circle-outline' },
-  retry: { outline: 'refresh-outline' },
+  retry: { outline: 'reload-outline' },
   selected: { outline: 'checkmark' },
   passwordVisibility: { outline: 'eye-outline', on: 'eye-off-outline' },
 } as const satisfies Record<string, IconEntry>;

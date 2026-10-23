@@ -174,7 +174,7 @@ function Tokens(): React.JSX.Element {
 
       <Section title="ELEVATION (current theme)">
         <View style={{ flexDirection: 'row' }}>
-          {(['card', 'control', 'raised'] as const).map((k) => (
+          {(['control', 'raised'] as const).map((k) => (
             <View
               key={k}
               style={[

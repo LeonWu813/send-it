@@ -4,6 +4,7 @@ import { AccessibilityInfo, Animated, View, useWindowDimensions } from 'react-na
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { ICON } from '../../lib/icons';
+import type { IoniconName } from '../../lib/icons';
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
 import { useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
@@ -27,6 +28,8 @@ export interface InlineErrorProps {
   /** `sm` action: Retry / Open Settings / Choose another. Same row as the text; under it at font scale >= 1.6. */
   actionLabel?: string;
   onAction?: () => void;
+  /** 16pt leading icon on the action (pass `ICON.retry.outline` for Retry). */
+  actionIcon?: IoniconName;
   actionLoading?: boolean;
   /** block only: the surface it sits on (page card = surface, inside a BottomSheet = elevated). */
   on?: 'surface' | 'elevated';
@@ -47,6 +50,7 @@ export function InlineError({
   message,
   actionLabel,
   onAction,
+  actionIcon,
   actionLoading,
   on = 'surface',
   warning = false,
@@ -95,7 +99,7 @@ export function InlineError({
   const textColor = warn ? 'onNoticeContainer' : 'textPrimary';
   const iconTop = ((notice ? theme.typeScale.subhead.lineHeight : theme.typeScale.headline.lineHeight) - iconSize) / 2;
   const action = actionLabel ? (
-    <Button variant={notice || !page ? 'ghost' : 'secondary'} size="sm" on="tinted" label={actionLabel} loading={actionLoading} onPress={() => onAction?.()} />
+    <Button variant={notice || !page ? 'ghost' : 'secondary'} size="sm" on="tinted" label={actionLabel} icon={actionIcon} loading={actionLoading} onPress={() => onAction?.()} />
   ) : null;
 
   return (
@@ -112,7 +116,6 @@ export function InlineError({
           paddingHorizontal: page ? theme.layout.cardPadding : 14,
           opacity: appear,
         },
-        page ? theme.elevation.card : null,
         style,
       ]}
     >

@@ -39,7 +39,7 @@ export interface SegmentedControlProps<T extends string = string> {
 
 /**
  * 2-4 mutually exclusive options. Capsule track (`surfaceAlt`), capsule thumb (`segmentedThumb`,
- * light: control shadow, dark: 1pt `outline` ring) that glides between items with `spring.glide`.
+ * light: flat (no shadow), dark: 1pt `outline` ring) that glides between items with `spring.glide`.
  * Item text is two cross-faded layers (unselected 400 / selected 600, `micro` + `standard`), colour is
  * never animated. standard/compact can be dragged (horizontal only, value commits on release);
  * icon is tap only. Reduce Motion: the thumb fades out, jumps, fades in. Haptic `select`.
@@ -209,7 +209,6 @@ export function SegmentedControl<T extends string = string>({
               opacity: thumbOpacity,
               transform: [{ translateX: x }],
             },
-            theme.elevation.control,
           ]}
         />
       ) : null}

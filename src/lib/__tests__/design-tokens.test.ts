@@ -58,7 +58,10 @@ describe('design tokens (design system v2.2)', () => {
     expect(DARK_PALETTE.segmentedThumb).toBe('#4E4637');
     expect(ELEVATION.control.shadowOpacity).toBe(0.1);
     expect(ELEVATION_DARK.control.shadowOpacity).toBe(0);
-    expect(LAYOUT).toMatchObject({ listRowPaddingV: 14, listRowMinHeight: 52, sheetInset: 8, routeCardPadding: 8, mediaGridGapInset: 2 });
+    // Super Flat: no content-layer `card` elevation token
+    expect(ELEVATION).not.toHaveProperty('card');
+    expect(ELEVATION_DARK).not.toHaveProperty('card');
+    expect(LAYOUT).toMatchObject({ listRowPaddingV: 12, listRowMinHeight: 52, sheetInset: 8, routeCardPadding: 8, mediaGridGapInset: 2 });
   });
 
   it('adds the display / numeric1 type roles and derived variants', () => {

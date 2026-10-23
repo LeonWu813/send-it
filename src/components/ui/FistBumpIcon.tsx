@@ -27,8 +27,8 @@ export interface FistBumpIconProps {
 
 export function FistBumpIcon({ variant = 'outline', size, color, accessibilityLabel }: FistBumpIconProps): React.JSX.Element {
   const a11y = accessibilityLabel
-    ? ({ accessible: true, accessibilityRole: 'image', accessibilityLabel } as const)
-    : ({ accessibilityElementsHidden: true, importantForAccessibility: 'no-hide-descendants' } as const);
+    ? ({ role: 'img', 'aria-label': accessibilityLabel } as const)
+    : ({ 'aria-hidden': true } as const);
   return (
     <Svg width={size} height={size} viewBox="0 0 512 512" {...a11y}>
       {variant === 'outline' ? (
@@ -57,10 +57,8 @@ export function FistBumpBurst({ size, color }: FistBumpBurstProps): React.JSX.El
       width={size * 1.5}
       height={size * 1.5}
       viewBox="-128 -128 768 768"
-      pointerEvents="none"
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={{ position: 'absolute', left: -size / 4, top: -size / 4 }}
+      aria-hidden
+      style={{ position: 'absolute', left: -size / 4, top: -size / 4, pointerEvents: 'none' }}
     >
       <Path d={BURST_D} fill="none" stroke={color} strokeWidth={32} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>

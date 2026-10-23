@@ -26,8 +26,8 @@ export interface CardProps {
 }
 
 /**
- * `card` (20, continuous) radius container. Light theme: soft shadow, NO border (raised shadow for elevated). Dark
- * theme: 1pt `border`, NO shadow (ELEVATION resolves to none in dark). Pressed = surfacePressed.
+ * `card` (20, continuous) radius container. Super Flat: light theme = white surface only, NO border, NO shadow (raised shadow only for elevated). Dark
+ * theme: 1pt `border`, NO shadow. Pressed = surfacePressed.
  * Margins belong to the parent (`gap: cardGap`), never to the card. Interactive children must be
  * siblings of a pressable card's body, not nested inside it.
  */
@@ -52,7 +52,7 @@ export function Card({
     padding: padding ?? theme.layout.cardPadding,
     borderWidth: theme.isDark && !tinted ? theme.stroke.thin : 0,
     borderColor: c.border,
-    ...(tinted ? null : theme.elevation[elevated ? 'raised' : 'card']),
+    ...(elevated ? theme.elevation.raised : null),
   };
 
   if (variant === 'pressable' && onPress) {

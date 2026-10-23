@@ -161,7 +161,6 @@ export function RouteCardSkeleton({ compact = false, style }: { compact?: boolea
           borderWidth: theme.isDark ? theme.stroke.thin : 0,
           borderColor: theme.colors.border,
         },
-        theme.elevation.card,
         style,
       ]}
     >

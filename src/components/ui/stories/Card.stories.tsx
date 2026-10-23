@@ -32,5 +32,5 @@ const meta: Meta<CardProps> = {
 };
 export default meta;
 
-/** Light: shadow, no border. Dark: 1pt border, no shadow. pressable: colour only, never scales. */
+/** Super Flat: light = white surface only (no shadow, no border). Dark: 1pt border, no shadow. pressable: colour only, never scales. */
 export const Playground: StoryObj<CardProps> = {};

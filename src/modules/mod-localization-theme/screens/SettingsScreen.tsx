@@ -337,7 +337,7 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
               accessibilityLabel={t('settings.notifications')}
             >
               <AppText variant="body">{t('settings.notifications')}</AppText>
-              <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+              <Ionicons name="chevron-forward" size={theme.iconSize.sm} color={theme.colors.textSecondary} />
             </Pressable>
           ) : null}
           <Pressable
@@ -351,7 +351,7 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
             accessibilityLabel={t('settings.blockedAccounts')}
           >
             <AppText variant="body">{t('settings.blockedAccounts')}</AppText>
-            <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+            <Ionicons name="chevron-forward" size={theme.iconSize.sm} color={theme.colors.textSecondary} />
           </Pressable>
         </View>
 

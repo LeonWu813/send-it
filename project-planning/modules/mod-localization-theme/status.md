@@ -1717,3 +1717,7 @@ No new regressions found in adjacent code paths.
 **Overall verdict: QA PASS**
 
 INT-031 is resolved. A failed `saveDeviceLanguage` or `saveDeviceTheme` call no longer blocks `signOut()`. All previously passing ACs (AC-090 through AC-203, REQ-CI) continue to pass. No regressions introduced. Integration-review row INT-031 is set to QA VERIFIED.
+
+### Off-spec round 3 (2026-10-23)
+- Super Flat: `ELEVATION.card` removed; Card/InlineError/Skeleton/SegmentedControl thumb flat. ICON.retry = reload-outline (Button icon on UploadProgressCard, InlineError `actionIcon`). listRowPaddingV 12. Settings chevrons 16. BlockedAccounts inset grouped (16), avatar 32, name = avatar+12. FistBumpIcon web aria props; IconButton story off thumbs-up.
+- Pending: remove temporary Ionicons alias on `ICON.like` once FeedScreen.tsx is swapped.

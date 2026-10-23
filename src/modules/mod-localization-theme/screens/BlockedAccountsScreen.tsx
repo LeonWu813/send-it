@@ -6,7 +6,7 @@
  * On mount: fetches fetchMyBlockedUsers() from mod-moderation.
  * Loading state: ActivityIndicator centered.
  * Error state: error text with retry.
- * Each row (L-2): listRowMinHeight 52, Avatar sm 32, display_name, "Unblock" button centred.
+ * Inset grouped container (16). Each row (L-2): listRowMinHeight 52, Avatar sm 32, display_name, "Unblock" button centred.
  * Unblock tap: opens a confirm sheet; on confirm calls unblockUser(), removes the
  *              entry optimistically, re-fetches on error.
  * Empty state: "No blocked accounts" / "沒有已封鎖的帳號".
@@ -49,6 +49,8 @@ interface BlockedUserRowProps {
   onUnblock: (user: BlockedUser) => void;
   theme: ReturnType<typeof useTheme>['theme'];
   screenMargin: number;
+  first: boolean;
+  last: boolean;
   unblockLabel: string;
 }
 
@@ -57,9 +59,11 @@ function BlockedUserRow({
   onUnblock,
   theme,
   screenMargin,
+  first,
+  last,
   unblockLabel,
 }: BlockedUserRowProps): React.JSX.Element {
-  const styles = makeRowStyles(theme, screenMargin);
+  const styles = makeRowStyles(theme, screenMargin, first, last);
 
   return (
     <View style={styles.row}>
@@ -83,22 +87,30 @@ function BlockedUserRow({
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeRowStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
+function makeRowStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number, first: boolean, last: boolean) {
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       minHeight: theme.layout.listRowMinHeight,
       paddingVertical: theme.spacing.smd,
-      paddingHorizontal: screenMargin,
-      // card-less list: rows sit on surface, not directly on the sand background
+      // inset grouped container (A8): rows sit in a `screenMargin`-inset surface group, content padded 16
+      marginHorizontal: screenMargin,
+      paddingHorizontal: theme.spacing.md,
       backgroundColor: theme.colors.surface,
-      borderBottomWidth: theme.stroke.hairline,
+      borderTopLeftRadius: first ? theme.radius.card : 0,
+      borderTopRightRadius: first ? theme.radius.card : 0,
+      borderBottomLeftRadius: last ? theme.radius.card : 0,
+      borderBottomRightRadius: last ? theme.radius.card : 0,
+      borderCurve: 'continuous',
+      borderBottomWidth: last ? 0 : theme.stroke.hairline,
       borderBottomColor: theme.colors.divider,
     },
     displayNameFlex: {
       flex: 1,
-      marginHorizontal: theme.spacing.smd,
+      // name = avatar + 12 (A8)
+      marginLeft: theme.spacing.smd,
+      marginRight: theme.spacing.sm,
     },
     unblock: {
       alignSelf: 'center',
@@ -187,12 +199,14 @@ export default function BlockedAccountsScreen({
       <FlatList
         data={blockedUsers}
         keyExtractor={(item) => item.userId}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <BlockedUserRow
             item={item}
             onUnblock={setPendingUnblock}
             theme={theme}
             screenMargin={screenMargin}
+            first={index === 0}
+            last={index === blockedUsers.length - 1}
             unblockLabel={t('moderation.unblock')}
           />
         )}

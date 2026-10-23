@@ -197,7 +197,7 @@ export function UploadProgressCard({
       {failed && (retryLabel || cancelLabel) ? (
         <View style={{ flexDirection: 'row', columnGap: theme.spacing.sm, marginTop: theme.spacing.md, justifyContent: 'flex-end' }}>
           {cancelLabel ? <Button variant="secondary" size="sm" label={cancelLabel} onPress={() => onCancel?.()} /> : null}
-          {retryLabel ? <Button variant="primary" size="sm" label={retryLabel} onPress={() => onRetry?.()} /> : null}
+          {retryLabel ? <Button variant="primary" size="sm" icon={ICON.retry.outline} label={retryLabel} onPress={() => onRetry?.()} /> : null}
         </View>
       ) : null}
     </Card>

@@ -207,7 +207,7 @@ export const LAYOUT = {
   largeWidthBreakpoint: 428,
   cardPadding: 16,
   cardGap: 12,
-  listRowPaddingV: 14,
+  listRowPaddingV: 12,
   listRowMinHeight: 52,
   sectionGap: 24,
   sectionHeaderGap: 8,
@@ -338,7 +338,7 @@ const NO_SHADOW: ElevationStyle = {
   elevation: 0,
 };
 
-/** Light theme shadows. Dark theme uses NO shadow: use a 1px border (`border` / `toastBorder`). */
+/** Light theme shadows (Super Flat: content layers have none; only closed-list floating surfaces). Dark theme uses NO shadow: use a 1px border (`border` / `toastBorder`). */
 export const ELEVATION = {
   /** Toast, celebration card, floating surfaces. */
   raised: {
@@ -348,15 +348,7 @@ export const ELEVATION = {
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   } as ElevationStyle,
-  /** Very light card shadow (light theme cards use this instead of a border). */
-  card: {
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  } as ElevationStyle,
-  /** Small floating controls: float IconButton, SegmentedControl thumb. */
+  /** Small floating controls: float IconButton in the header / over media (SegmentedControl thumb is flat). */
   control: {
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -366,7 +358,7 @@ export const ELEVATION = {
   } as ElevationStyle,
 };
 
-export const ELEVATION_DARK: typeof ELEVATION = { raised: NO_SHADOW, card: NO_SHADOW, control: NO_SHADOW };
+export const ELEVATION_DARK: typeof ELEVATION = { raised: NO_SHADOW, control: NO_SHADOW };
 
 const FW = { w400: '400', w500: '500', w600: '600', w700: '700', w800: '800' } as const;
 

@@ -11,7 +11,7 @@ import { View } from 'react-native';
 const glyphs = {
   notifications: [ICON.notifications.outline, undefined],
   bookmark: [ICON.bookmark.outline, ICON.bookmark.filled],
-  like: [ICON.like.outline, ICON.like.filled],
+  follow: [ICON.follow.outline, undefined],
   report: [ICON.report.outline, ICON.report.filled],
   password: [ICON.passwordVisibility.outline, ICON.passwordVisibility.on],
   back: [ICON.back.outline, undefined],
