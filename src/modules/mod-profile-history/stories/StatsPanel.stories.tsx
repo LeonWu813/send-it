@@ -30,7 +30,7 @@ function buildStats({ state, totalSends, accumulatedDays, highestGrade, counts }
 }
 
 const meta: Meta<Args> = {
-  title: 'Profile/StatsPanel',
+  title: 'Patterns/StatsPanel',
   render: (args) => (
     <View style={{ paddingVertical: 16, maxWidth: 420 }}>
       <StatsPanel stats={buildStats(args)} hasRecords={args.state !== 'noRecords'} onLogSend={() => undefined} />

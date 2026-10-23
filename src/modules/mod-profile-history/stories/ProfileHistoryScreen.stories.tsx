@@ -1,61 +1,47 @@
 /**
- * Storybook stories for ProfileHistoryScreen (MOD-008).
- *
- * Fake data only — the Supabase stub (stubs/supabase.ts) intercepts all
- * network calls. `setStubData` seeds each story's expected RPC rows.
- *
- * Stories:
- *   Loading       — static Spinner, matching the screen's loading-state UI.
- *   Populated     — StatsPanel + grade tabs + 4 route cards (4-5 ascents).
- *   Empty         — zero-records state: single EmptyState prompt (AC-061).
- *   FilteredEmpty — hasRecords=true, no flash/top sends: route card list is
- *                   empty (grade tab shows "All", inline empty state renders).
+ * Pages/Profile/Profile History (MOD-008): the history + stats list that the Profile tab embeds.
+ * Fake data only; the Supabase stub intercepts the RPCs. Wired like ProfileScreen: the list is bound to
+ * the AppShell header and TabBar insets through `useAppHeaderRoot()`.
+ * No Error story: the stub cannot make an RPC fail.
  */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
-import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
-import { Spinner } from '../../../components/ui';
-import { useTheme } from '../../../lib/theme';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
+import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
 import ProfileHistoryScreen from '../screens/ProfileHistoryScreen';
 import { GRADE_ORDER } from '../types';
 
-// ── Fake data ──────────────────────────────────────────────────────────────────
+const ME = 'story-user-me';
+
+const row = (
+  n: number,
+  gym: [string, string],
+  grade: string,
+  color: string,
+  style: string,
+  attempts: number,
+  daysAgo: number,
+  section: string | null = null,
+) => ({
+  ascent_id: `a${n}`, route_id: `r${n}`, gym_id: gym[0], gym_name: gym[1],
+  grade, color_tag: color, section_label: section, photo_url: null,
+  style, attempts, note: null,
+  logged_at: new Date(Date.now() - daysAgo * 86_400_000).toISOString(), is_private: true,
+});
+
+const RED_ROCK: [string, string] = ['g1', '紅石攀岩館'];
+const B_PUMP: [string, string] = ['g2', 'B-Pump 台北店'];
 
 /** 4 flash/top sends across 2 gyms (V2/V3/V4/V5) + 1 attempt (V6, excluded from route cards). */
 const MOCK_ASCENTS = [
-  {
-    ascent_id: 'a1', route_id: 'r1', gym_id: 'g1', gym_name: 'Boulder Planet',
-    grade: 'V4', color_tag: 'blue', section_label: 'Cave', photo_url: null,
-    style: 'flash', attempts: 1, note: null,
-    logged_at: '2026-10-20T14:00:00Z', is_private: true,
-  },
-  {
-    ascent_id: 'a2', route_id: 'r2', gym_id: 'g1', gym_name: 'Boulder Planet',
-    grade: 'V3', color_tag: 'red', section_label: null, photo_url: null,
-    style: 'top', attempts: 3, note: null,
-    logged_at: '2026-10-19T12:00:00Z', is_private: true,
-  },
-  {
-    ascent_id: 'a3', route_id: 'r3', gym_id: 'g2', gym_name: 'Camp 4 Climbing',
-    grade: 'V5', color_tag: 'green', section_label: null, photo_url: null,
-    style: 'top', attempts: 5, note: null,
-    logged_at: '2026-10-18T10:00:00Z', is_private: true,
-  },
-  {
-    ascent_id: 'a4', route_id: 'r4', gym_id: 'g1', gym_name: 'Boulder Planet',
-    grade: 'V2', color_tag: 'yellow', section_label: null, photo_url: null,
-    style: 'flash', attempts: 1, note: null,
-    logged_at: '2026-10-17T09:00:00Z', is_private: true,
-  },
-  {
-    ascent_id: 'a5', route_id: 'r5', gym_id: 'g2', gym_name: 'Camp 4 Climbing',
-    grade: 'V6', color_tag: 'purple', section_label: 'Overhang', photo_url: null,
-    style: 'attempt', attempts: 8, note: null,
-    logged_at: '2026-10-16T08:00:00Z', is_private: true,
-  },
+  row(1, RED_ROCK, 'V4', 'blue', 'flash', 1, 1, 'Cave'),
+  row(2, RED_ROCK, 'V3', 'red', 'top', 3, 2),
+  row(3, B_PUMP, 'V5', 'green', 'top', 5, 3),
+  row(4, RED_ROCK, 'V2', 'yellow', 'flash', 1, 4),
+  row(5, B_PUMP, 'V6', 'purple', 'attempt', 8, 5, '懸岩區'),
 ];
 
 /** Stats matching MOCK_ASCENTS: 4 sends, 4 accumulated days, highest V5. */
@@ -69,22 +55,6 @@ const MOCK_STATS = {
   highest_grade: 'V5',
 };
 
-/** Two attempt-only ascents: groupToRouteCards skips them, so routeCards is empty while hasRecords=true. */
-const ATTEMPT_ASCENTS = [
-  {
-    ascent_id: 'b1', route_id: 'r10', gym_id: 'g1', gym_name: 'Boulder Planet',
-    grade: 'V7', color_tag: 'black', section_label: null, photo_url: null,
-    style: 'attempt', attempts: 12, note: null,
-    logged_at: '2026-10-20T09:00:00Z', is_private: true,
-  },
-  {
-    ascent_id: 'b2', route_id: 'r11', gym_id: 'g1', gym_name: 'Boulder Planet',
-    grade: 'V8', color_tag: 'white', section_label: 'Overhang', photo_url: null,
-    style: 'attempt', attempts: 20, note: null,
-    logged_at: '2026-10-19T11:00:00Z', is_private: true,
-  },
-];
-
 const ZERO_STATS = {
   total_sends: 0,
   sends_by_grade: GRADE_ORDER.map((g) => ({ grade: g, count: 0 })),
@@ -92,130 +62,83 @@ const ZERO_STATS = {
   highest_grade: null,
 };
 
-// ── Meta ──────────────────────────────────────────────────────────────────────
+type StubState = 'populated' | 'empty' | 'attemptsOnly' | 'loading';
 
-const meta: Meta = {
-  title: 'Profile/ProfileHistoryScreen',
-  parameters: { layout: 'fullscreen' },
-  decorators: [
-    (Story) => (
-      <View style={{ width: 390, height: 780 }}>
-        <Story />
-      </View>
-    ),
-  ],
-};
-
-export default meta;
-type Story = StoryObj;
-
-// ── Loading ───────────────────────────────────────────────────────────────────
-
-/**
- * Loading — static Spinner matching what ProfileHistoryScreen renders while
- * `visibility === 'loading'`. The Supabase stub resolves synchronously so the
- * screen is shown as a static composition.
- */
-export const Loading: Story = {
-  decorators: [
-    (Story) => {
-      resetStubData();
-      return <Story />;
-    },
-  ],
-  render: () => <LoadingShell />,
-};
-
-function LoadingShell(): React.JSX.Element {
-  const { theme } = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: theme.colors.background,
-      }}
-    >
-      <Spinner />
-    </View>
-  );
+function setupStubs(state: StubState): void {
+  resetStubData();
+  setStubData('auth:session', { user: { id: ME } });
+  if (state === 'loading') {
+    setStubData('rpc:get_profile_history', STUB_PENDING);
+    setStubData('rpc:get_profile_stats', STUB_PENDING);
+  } else if (state === 'populated') {
+    setStubData('rpc:get_profile_history', MOCK_ASCENTS);
+    setStubData('rpc:get_profile_stats', MOCK_STATS);
+  } else if (state === 'attemptsOnly') {
+    setStubData('rpc:get_profile_history', [row(10, RED_ROCK, 'V7', 'black', 'attempt', 12, 1), row(11, RED_ROCK, 'V8', 'white', 'attempt', 20, 2, '懸岩區')]);
+    setStubData('rpc:get_profile_stats', ZERO_STATS);
+  } else {
+    setStubData('rpc:get_profile_history', []);
+    setStubData('rpc:get_profile_stats', ZERO_STATS);
+  }
 }
 
-// ── Populated ─────────────────────────────────────────────────────────────────
+/** Seed stubs synchronously so the screen's first fetch sees the data. */
+function WithStubs({ state, children }: { state: StubState; children: React.ReactNode }): React.JSX.Element {
+  setupStubs(state);
+  return <>{children}</>;
+}
 
-/**
- * Populated — StatsPanel with 4 sends (V2 flash, V3 top, V4 flash, V5 top),
- * grade tabs (All / V2 / V3 / V4 / V5), and four route cards. The fifth
- * ascent (V6 attempt) is excluded from route cards by groupToRouteCards.
- *
- * Switch the grade tab chips to see per-grade filtered views.
- */
-export const Populated: Story = {
-  decorators: [
-    (Story) => {
-      resetStubData();
-      setStubData('rpc:get_profile_history', MOCK_ASCENTS);
-      setStubData('rpc:get_profile_stats', MOCK_STATS);
-      return <Story />;
-    },
-  ],
-  render: () => (
+/** Mirrors ProfileScreen: binds the list to the shell header and TabBar insets. */
+function Host(): React.JSX.Element {
+  const h = useAppHeaderRoot();
+  return (
     <ProfileHistoryScreen
-      userId="user-123"
+      userId={ME}
       isOwnProfile
       onNavigateToRoute={() => {}}
       onLogSend={() => {}}
+      scrollProps={{
+        onScroll: h.onScroll,
+        onContentSizeChange: h.onContentSizeChange,
+        onLayout: h.onLayout,
+        scrollEventThrottle: h.scrollEventThrottle,
+        contentContainerStyle: { paddingTop: h.contentTopInset, paddingBottom: h.contentBottomInset },
+        scrollIndicatorInsets: { top: h.contentTopInset, bottom: h.indicatorBottomInset },
+      }}
     />
-  ),
-};
+  );
+}
 
-// ── Empty ─────────────────────────────────────────────────────────────────────
+type Args = { state: StubState };
 
-/**
- * Empty — own profile with no ascent records at all. The StatsPanel is
- * replaced by a single EmptyState prompt with an "onLogSend" button (AC-061
- * zero-records state: one prompt replaces the stats AND the history section).
- */
-export const Empty: Story = {
+const meta: Meta<Args> = {
+  title: 'Pages/Profile/Profile History',
+  component: ProfileHistoryScreen as never, // real component; story args only drive the stub data
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { tab: 'profile' } },
   decorators: [
-    (Story) => {
-      resetStubData();
-      setStubData('rpc:get_profile_history', []);
-      setStubData('rpc:get_profile_stats', ZERO_STATS);
-      return <Story />;
-    },
+    (Story, ctx) => (
+      <WithStubs state={(ctx.args as Args).state}>
+        <Story />
+      </WithStubs>
+    ),
+    withPhoneFrame,
   ],
-  render: () => (
-    <ProfileHistoryScreen
-      userId="user-123"
-      isOwnProfile
-      onLogSend={() => {}}
-    />
-  ),
+  argTypes: { state: { control: false } },
+  render: () => <Host />,
 };
+export default meta;
 
-// ── FilteredEmpty ─────────────────────────────────────────────────────────────
+type Story = StoryObj<Args>;
 
-/**
- * FilteredEmpty — attempt-only ascents: hasRecords=true but groupToRouteCards
- * yields no route cards, so the grade tab shows only "All" and the list renders
- * the inline EmptyState (sends attempted, none completed yet).
- */
-export const FilteredEmpty: Story = {
-  decorators: [
-    (Story) => {
-      resetStubData();
-      setStubData('rpc:get_profile_history', ATTEMPT_ASCENTS);
-      setStubData('rpc:get_profile_stats', ZERO_STATS);
-      return <Story />;
-    },
-  ],
-  render: () => (
-    <ProfileHistoryScreen
-      userId="user-123"
-      isOwnProfile
-      onLogSend={() => {}}
-    />
-  ),
-};
+/** StatsPanel, grade tabs (All / V2-V5) and four route cards; the V6 attempt is excluded from the cards. */
+export const Populated: Story = { args: { state: 'populated' } };
+
+/** Own profile with no records: one EmptyState prompt replaces stats and history (AC-061). */
+export const Empty: Story = { args: { state: 'empty' } };
+
+/** Attempt-only ascents: records exist but no sends, so the list shows the inline empty state. */
+export const AttemptsOnly: Story = { args: { state: 'attemptsOnly' } };
+
+/** Queries never resolve: the screen's loading spinner. */
+export const Loading: Story = { args: { state: 'loading' } };
