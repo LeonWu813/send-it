@@ -67,76 +67,51 @@ const sampleRoutes: RouteSummary[] = [
 type SearchState = 'default' | 'loading' | 'results' | 'noResults';
 
 interface PlaygroundArgs {
-  /**
-   * Which search phase to display:
-   * - default  — empty form, no search triggered yet
-   * - loading  — skeleton rows shown while the request is in flight
-   * - results  — 5 matching routes from gym-001
-   * - noResults — empty-state label after a search that returned nothing
-   */
+  /** Which search phase to display. */
   state: SearchState;
 }
 
 /**
  * Seeds the routes stub and auto-triggers a gym-ID search so the component
- * renders the requested state without manual user interaction.
- *
- * For the Loading state `supabase.from('routes')` is temporarily replaced with
- * a never-settling thenable so `isLoading` stays visible. The original `from`
- * is restored in the effect cleanup. The parent story passes `key={args.state}`
- * so this wrapper remounts on every state change, keeping lifecycles clean.
- *
- * react-native-web renders `TextInput` as `<input>` and `Pressable` as a
- * `<div role="button">`, so standard DOM events reach the component's handlers.
+ * renders the requested state. For Loading, `supabase.from('routes')` is
+ * replaced with a never-settling proxy; the original is restored on cleanup.
+ * `key={args.state}` remounts this wrapper on every state change.
  */
 function Seeded({ state }: PlaygroundArgs): React.JSX.Element {
-  // Seed the routes table synchronously before the component mounts so that
-  // the search resolves against the correct data.
   if (state === 'results') setStubData('routes', sampleRoutes);
   if (state === 'noResults') setStubData('routes', []);
 
   useEffect(() => {
     if (state === 'default') return;
 
-    // For the Loading state: replace supabase.from('routes') with a proxy
-    // whose `then` handler never calls resolve or reject — the awaited request
-    // hangs indefinitely, keeping isLoading true.
     let originalFrom: typeof supabase.from | null = null;
     if (state === 'loading') {
       originalFrom = supabase.from;
       const neverResolve: unknown = new Proxy({} as object, {
         get(_, prop: string | symbol) {
-          if (prop === 'then') return (): void => {};
-          return (): unknown => neverResolve;
+          if (prop === 'then') return () => {};
+          return () => neverResolve;
         },
       });
       supabase.from = (table: string) =>
         table === 'routes' ? neverResolve : originalFrom!(table);
     }
 
-    // Fill the gym-ID field and click Search.
-    // react-native-web renders TextInput as <input>.
+    // react-native-web renders TextInput as <input> and Pressable as [role="button"].
+    // Cancel is buttons[0]; Search is buttons[1].
     const input = document.querySelector('input') as HTMLInputElement | null;
     if (input) {
-      // Use the native value setter so React's synthetic onChange fires.
-      const nativeSetter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        'value',
-      )?.set;
+      const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
       nativeSetter?.call(input, 'gym-001');
       input.dispatchEvent(new Event('input', { bubbles: true }));
       input.dispatchEvent(new Event('change', { bubbles: true }));
-
-      // Give React one tick to process the value change, then press Search.
-      // Cancel is buttons[0]; Search is buttons[1].
       setTimeout(() => {
-        const buttons =
-          document.querySelectorAll<HTMLElement>('[role="button"]');
+        const buttons = document.querySelectorAll<HTMLElement>('[role="button"]');
         buttons[1]?.click();
       }, 0);
     }
 
-    return (): void => {
+    return () => {
       if (originalFrom !== null) supabase.from = originalFrom;
     };
   }, [state]);
@@ -144,8 +119,8 @@ function Seeded({ state }: PlaygroundArgs): React.JSX.Element {
   return (
     <RouteSearchScreen
       session={session}
-      onRouteSelected={(): void => {}}
-      onCancel={(): void => {}}
+      onRouteSelected={() => {}}
+      onCancel={() => {}}
     />
   );
 }
