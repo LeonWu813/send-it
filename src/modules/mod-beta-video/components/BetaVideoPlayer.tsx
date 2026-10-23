@@ -138,7 +138,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     container: {
       marginBottom: theme.spacing.md,
-      borderRadius: theme.borderRadius.md,
+      borderRadius: theme.radius.media,
       overflow: 'hidden',
       backgroundColor: theme.colors.surfaceAlt,
     },
@@ -159,7 +159,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       bottom: theme.spacing.sm,
       right: theme.spacing.sm,
       backgroundColor: theme.colors.mediaScrim,
-      borderRadius: theme.borderRadius.sm,
+      borderRadius: theme.radius.minor,
       paddingHorizontal: theme.spacing.xs,
       paddingVertical: theme.spacing.xxs,
     },
@@ -176,7 +176,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
     playButton: {
       width: theme.layout.minTouchTarget + theme.spacing.smd,
       height: theme.layout.minTouchTarget + theme.spacing.smd,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       backgroundColor: theme.colors.mediaScrim,
       alignItems: 'center',
       justifyContent: 'center',

@@ -771,7 +771,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
       minHeight: theme.layout.minTouchTarget,
       justifyContent: 'center',
       backgroundColor: c.mediaScrim,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       paddingHorizontal: theme.spacing.smd,
     },
     /** left / right / bottom are set inline from screenMargin and the safe-area inset. */
