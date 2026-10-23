@@ -2,14 +2,16 @@
 
 ## Last Action
 
-agent: qa-mod-auth-profile
-mode: integration-fix-verify INT-032a
-module: mod-auth-profile (MOD-001)
-result: pass
-timestamp: 2026-10-22T17:00:00Z
-next: claude --agent tech-lead "confirm-fix INT-032a — QA VERIFIED; 30/30 tests pass, tsc 0 errors, copyGoogleAvatarToBucket extracted to avatarSync.ts with userId param, getSession() removed from both helpers; see QA Run 10 in project-planning/modules/mod-auth-profile/status.md and INT-032a row in project-planning/integration-review.md"
+agent: tech-lead
+mode: confirm-fix
+module: n/a
+next: Leon states whether he has verified INT-032a himself (e.g. reviewed the diff in avatarSync.ts / auth-service.ts, or re-ran Google/Apple sign-in and saw name prefill and avatar copy still work). Then: claude --agent tech-lead "confirm-fix INT-032a — Leon: \"<his exact words>\""
+result: needs-human
+timestamp: 2026-10-22T17:15:00Z
 
-Note: qa-mod-home had a prior needs-signoff for INT-030 device test (see Device test script below). Resume that after INT-032a is confirmed closed.
+Note (tech-lead): INT-032a is QA VERIFIED but not yet HUMAN VERIFIED, so it cannot be closed. Tech Lead pre-checked the code: avatarSync.ts exports copyGoogleAvatarToBucket(userId: string) with no getSession(); fillDisplayNameIfEmpty(name, userId) at auth-service.ts:373 has no getSession(); the only remaining getSession() is updateBetaVideoPrivacy at :411. Once Leon's verification is recorded, the row can close without further findings.
+
+Note: qa-mod-home had a prior needs-signoff for INT-030 device test (see Device test script below). Resume that after INT-032a is confirmed closed (it can also run in parallel; it is independent of INT-032a).
 
 Device test script (show to Leon word for word):
 Prerequisites: device language set to a language different from the account's stored language (e.g., device = Japanese, account = English). Sign in to ProjectDay.
