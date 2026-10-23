@@ -157,7 +157,7 @@ export default function SendHistoryDetailScreen({
             <RouteSummaryCard route={route} gymName={gymName} photoUri={photoUri} />
           ) : null}
           {ascents.length === 0 ? (
-            <AppText variant="body" color="textSecondary" align="center" style={styles.emptyText}>
+            <AppText variant="body" color="textSecondary" align="left" style={styles.emptyText}>
               {t('routeCatalog.detail.noSends')}
             </AppText>
           ) : (
@@ -166,7 +166,10 @@ export default function SendHistoryDetailScreen({
               return (
                 <Card key={ascent.id} variant="static">
                   <View style={styles.ascentRowHeader}>
-                    <SendStatus sendStyle={ascent.style} variant="tag" />
+                    {/* A7: SendStatus is alignSelf flex-start; the wrapper lets the row centre it */}
+                    <View>
+                      <SendStatus sendStyle={ascent.style} variant="tag" />
+                    </View>
                     <View style={styles.ascentRowHeaderRight}>
                       <AppText variant="footnote" color="textSecondary">{displayDate}</AppText>
                       {/* SH-1: "..." opens the delete confirmation — all rows are the user's own ascents */}
@@ -251,7 +254,10 @@ function RouteSummaryCard({
             <Image source={{ uri: photoUri }} style={{ width: thumb, height: thumb }} accessibilityIgnoresInvertColors />
           ) : null}
         </View>
-        <RouteColorBadge color={route.color_tag} grade={route.grade} size="lg" />
+        {/* A4/A5: same header spec as Log Send; the wrapper keeps the badge on the row centre */}
+        <View>
+          <RouteColorBadge color={route.color_tag} grade={route.grade} size="lg" />
+        </View>
         <View style={{ flex: 1 }}>
           <AppText variant="headline" numberOfLines={1}>{title}</AppText>
           {gymName ? (
@@ -293,6 +299,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       paddingVertical: theme.spacing.xl,
     },
     ascentRowHeader: {
+      minHeight: theme.layout.minTouchTarget,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',

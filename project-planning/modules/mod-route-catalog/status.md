@@ -2,6 +2,14 @@
 
 ## Engineering Progress
 
+### Flat/alignment audit round 3 (2026-10-23, items #5 #6 #14)
+
+- #6 Send History ascent card: `SendStatus` is `alignSelf: flex-start`, which top-anchored the pill. Wrapped in a View inside a `minHeight: minTouchTarget` (44) header row, so pill, date and ⋯ share the row centre; 「N 次」 and note stay below on the same keyline (A7).
+- #5 Send History summary: RouteColorBadge wrapped like Log Send's header (same spec, badge centred with the text block).
+- #14 Route Detail: added-date footer `align="left"` (A6). Send History empty text also left (A6, inline empty).
+- Flat: no shadow/elevation in this module (only the shared Card shadow, removed elsewhere).
+- Test: added-date textAlign left. jest mod-route-catalog 118/118; tsc errors only in other modules (Tokens.stories, FeedScreen). Verified at :6006 (Send History Populated): pill/date row centre and badge/text centre aligned. Shared files untouched by me.
+
 ### Page review P1/P2 (off-spec design implementation, 2026-10-23)
 
 Source: `send-it-design/ux-team/page-review/page-review.md`. Branch `design/page-templates`. Changes AC-130 (RD-1) and AC-127 wording (RD-4); needs PRD follow-up by Leon.

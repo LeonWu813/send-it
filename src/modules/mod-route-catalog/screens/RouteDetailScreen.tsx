@@ -477,7 +477,7 @@ export default function RouteDetailScreen({
       />
 
       {/* ── AC-126: Added date footer ─────────────────────────────────────── */}
-      <AppText variant="footnote" color="textSecondary" align="center">
+      <AppText variant="footnote" color="textSecondary" align="left">
         {addedDateLabel}
       </AppText>
 

@@ -65,6 +65,7 @@ jest.mock('../../mod-beta-video', () => {
 });
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
@@ -190,6 +191,8 @@ describe('RouteDetailScreen', () => {
         screen.queryAllByText(/新增於/),
       );
       expect(addedTexts.length).toBeGreaterThan(0);
+      // A6: left-aligned on the keyline, not centred under a left grid
+      expect(StyleSheet.flatten(addedTexts[0].props.style).textAlign).toBe('left');
     });
   });
 
