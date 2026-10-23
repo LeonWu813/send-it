@@ -4609,3 +4609,85 @@ REGRESSION PASS — fresh-environment bucket creation gap is resolved.
 - All 113 prior tests pass; no new failures.
 
 **QA PASS — INT-016, INT-017, INT-020.** All three fixes verified. Rows set to QA VERIFIED. Human verification of the running app is the next step.
+
+### QA Run 2 — Regression — 2026-10-23
+
+**QA agent**: qa-mod-beta-video
+**Mode**: regression (bugfix verify — anonymous-uploader identity bug)
+**Bug being re-verified**: Commit 20a6217 — `uploadBetaVideo` previously returned `{ ...data, display_name: null, avatar_url: null }`, causing the uploader's own player to show 匿名 with no avatar until the route was reloaded.
+
+---
+
+**Step 1 — Original bug description**
+
+The prior QA run had no explicit FAIL entry for this scenario because the bug was discovered by the Engineer (self-detected), not by a prior QA run. The bug report is in the Engineering Progress section (2026-10-23):
+- Root cause: `uploadBetaVideo` upserted the row and selected only insert columns with no users join, then explicitly returned `{ ...data, display_name: null, avatar_url: null }`. `BetaVideoSection.handleUploadSuccess` prepended this null-identity `BetaVideo` to state, so the uploader's own player showed 匿名 with no avatar until the route was reloaded.
+
+---
+
+**Step 2 — Fix verification (root cause)**
+
+The fix is in `src/modules/mod-beta-video/beta-video-service.ts`. After the upsert succeeds (lines 146–169), the service now does a second `.select()` using the same embedded users join string as `fetchBetaVideosForRoute`, scoped to `data!.id` (lines 177–184). It then flattens `users.display_name` / `users.avatar_url` / `users.beta_video_privacy` onto the returned `BetaVideo` — exactly as `fetchBetaVideosForRoute` does. Non-fatal fallback: if the follow-up fetch fails (`joinError || !joinedData`), the service logs the error and returns `{ ...data!, display_name: null, avatar_url: null }` — the upload is not considered failed.
+
+REGRESSION PASS — root cause fixed. The uploader's own player now receives the enriched `BetaVideo` with populated `display_name` and `avatar_url` on first render, without requiring a route reload.
+
+---
+
+**Step 3 — New tests coverage**
+
+Two new tests added to `src/modules/mod-beta-video/__tests__/beta-video-service.test.ts` in the `uploadBetaVideo` describe block:
+
+**Test 1 (lines 386–427)**: `bugfix: returned BetaVideo includes display_name and avatar_url from follow-up identity fetch`
+- Mocks upsert success → MOCK_VIDEO_ROW.
+- Mocks identity fetch success → row with `users: { display_name: 'Test User', avatar_url: 'https://example.com/avatar.jpg', beta_video_privacy: 'public' }`.
+- Asserts: `result.display_name === 'Test User'`, `result.avatar_url === 'https://example.com/avatar.jpg'`, `result.id === 'vid-001'`, `result.route_id === 'route-001'`.
+- Asserts: `identityChain.eq` called with `('id', MOCK_VIDEO_ROW.id)` — verifies the follow-up query is scoped to the correct video ID.
+- Root cause covered: PASS.
+
+**Test 2 (lines 429–461)**: `bugfix: falls back to null identity when the follow-up identity fetch fails (non-fatal)`
+- Mocks upsert success → MOCK_VIDEO_ROW.
+- Mocks identity fetch → error (`new Error('network error')`).
+- Asserts: `result.id === 'vid-001'` (upload not failed, resolves normally).
+- Asserts: `result.display_name === null`, `result.avatar_url === null`.
+- Non-fatal fallback path covered: PASS.
+
+Both tests cover exactly the root cause. PASS.
+
+---
+
+**Step 4 — AC behavior unchanged**
+
+- `uploadBetaVideo` still resolves with a `BetaVideo` object after a successful upsert — the function signature, return type, and error-throw behavior are unchanged.
+- `BetaVideoSection.handleUploadSuccess` (lines 211–219 of BetaVideoSection.tsx) is unchanged — it still prepends the returned video to state via `setBetaVideos(prev => [video, ...prev.filter(...)])`. The only observable difference is that `video.display_name` and `video.avatar_url` are now populated instead of null.
+- No AC text changed. No new dependencies. No new schema changes.
+
+PASS — no AC behavior regressed.
+
+---
+
+**Step 5 — Automated test suite**
+
+Command: `npx jest --testPathPattern=mod-beta-video --watchAll=false`
+Result: **115 tests passed, 5 suites, exit 0** (up from 113 in the prior QA run — 2 new bugfix tests added).
+
+The act() warnings in console.error are pre-existing (documented in INT-010 integration fix — "pre-existing pattern from `useLikeState` reset effect firing on mount") and are not new failures.
+
+No new failing tests. PASS.
+
+---
+
+**Step 6 — Regression check (adjacent behavior)**
+
+- Previously-passing test `AC-032: uploads video then upserts row with route_id` (line 296): This test uses `makeFromMock` which chains `upsert → select → eq → single`. After the fix, `uploadBetaVideo` makes two `supabase.from()` calls (upsert + identity fetch). The test's `makeFromMock` is used for the first call; the second call (identity fetch) uses the same mock since no `.mockReturnValueOnce` differentiation is set — it falls back to the last mock for `supabase.from`. The test still passes (115/115 confirmed). PASS.
+- Upload failure path: `throws (no cleanup needed) when video upload fails` — still passes; the identity fetch block is never reached when storage upload fails. PASS.
+- Row insert failure path: `throws and cleans up video artifact when row insert fails` — still passes; the identity fetch block is never reached when upsert fails. PASS.
+
+---
+
+**QA PASS — Regression test complete.**
+
+- REGRESSION PASS: root cause (null identity returned by uploadBetaVideo) is fixed.
+- REGRESSION PASS: fallback path (non-fatal identity fetch failure) is tested.
+- REGRESSION PASS: AC behavior unchanged; BetaVideoSection.handleUploadSuccess is unchanged.
+- Automated suite: 115/115 passed (exit 0). No new failures.
+- No new regressions found in adjacent behavior.
