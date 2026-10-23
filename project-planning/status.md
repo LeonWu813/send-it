@@ -2,12 +2,22 @@
 
 ## Last Action
 
-agent: engineer-mod-localization-theme
-mode: integration-fix
-module: mod-localization-theme (MOD-010)
-result: success
-timestamp: 2026-10-22T15:00:00Z
-next: claude --agent qa-mod-localization-theme "regression INT-031 — handleLogout now uses Promise.allSettled for saves so signOut is always called even when saveDeviceLanguage or saveDeviceTheme throws; 5 unit tests added and passing; see Engineering Progress INT-031 in project-planning/modules/mod-localization-theme/status.md"
+agent: qa-mod-home
+mode: integration-fix-qa
+module: mod-home (MOD-012)
+result: needs-signoff
+timestamp: 2026-10-22T16:00:00Z
+next: Show Leon the device test script below and wait for his reply. When the reply arrives, restart qa-mod-home with: ui-results: "<Leon's exact words>"
+
+Device test script (show to Leon word for word):
+Prerequisites: device language set to a language different from the account's stored language (e.g., device = Japanese, account = English). Sign in to ProjectDay.
+Steps:
+1. Open the app. Confirm the UI is in the account language (English).
+2. Navigate to Settings.
+3. Change the Theme (e.g. System → Dark). Watch for a momentary flash of the device language.
+4. Expected (after INT-030 fix): no language flash — UI stays in account language throughout the theme change.
+5. Failure (regression): UI briefly switches to device language (Japanese) then back to English.
+6. Navigate away from Settings and back. Confirm language is still correct and no further flashing occurs.
 
 ## PM Updates
 

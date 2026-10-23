@@ -4904,3 +4904,123 @@ Confirming the previously passing items are still intact:
 | New regressions | NONE |
 
 **Result: PASS — AC-202 and AC-203 sign-out wiring verified. No new regressions.**
+
+### QA Run 25 — Integration-Fix Verify — INT-030 — 2026-10-22
+
+**Workflow**: regression-test (integration-fix-verify INT-030)
+
+**Bug being re-verified**: INT-030 — `setThemeUserId` plain function (new reference every render) caused AppShell's `useEffect([session.user.id, setThemeUserId])` to run its cleanup (`setThemeUserId(null)` + `applySignedOutLanguage()`) on every ThemeProvider re-render while the user was still signed in. Visible effect: language flash when device and account languages differ.
+
+**Fix committed**: `327b1f2` — `setThemeUserId` wrapped in `useCallback(..., [])` in `src/lib/theme.ts:639–641`.
+
+---
+
+#### Verification 1 — Code: useCallback wrapping at `src/lib/theme.ts`
+
+Confirmed at lines 639–641:
+```
+const setThemeUserId = useCallback((newUserId: string | null): void => {
+  setUserId(newUserId);
+}, []);
+```
+Empty dep array is correct: `setUserId` is a React `useState` setter (stable per React guarantee). The comment at lines 634–638 explicitly documents the INT-030 fix rationale. PASS.
+
+#### Verification 2 — Code: AppShell effect deps unchanged
+
+`src/modules/mod-home/AppShell.tsx:190–198` — effect deps are `[session.user.id, setThemeUserId]`, unchanged. With `setThemeUserId` now stable, the cleanup path (`setThemeUserId(null)` + `applySignedOutLanguage()`) only fires when `session.user.id` changes (real sign-out) or AppShell unmounts. PASS.
+
+#### Verification 3 — New regression-pin tests
+
+`src/lib/__tests__/theme.test.tsx` (new file, 2 tests):
+
+1. **"does not call applySignedOutLanguage when ThemeProvider re-renders without a session change"** — mirrors the exact AppShell effect pattern; calls `capturedSetOverride('dark')` to force a ThemeProvider re-render without changing `session.user.id`; asserts `applySignedOutLanguage` was NOT called. PASS.
+
+2. **"setThemeUserId reference is stable across ThemeProvider re-renders"** — captures `setThemeUserId` before and after a `setOverride` re-render; asserts both references are `===`. PASS.
+
+```
+npx jest --testPathPattern="src/lib/__tests__/theme" --verbose
+
+PASS src/lib/__tests__/theme.test.tsx
+  ThemeProvider — setThemeUserId stability (INT-030)
+    ✓ does not call applySignedOutLanguage when ThemeProvider re-renders without a session change (9 ms)
+    ✓ setThemeUserId reference is stable across ThemeProvider re-renders (2 ms)
+
+Tests: 2 passed, 2 total
+```
+
+REGRESSION PASS: original INT-030 failure scenario (sign-out cleanup fires on unrelated re-renders) no longer reproduces at the unit-test layer.
+
+#### Verification 4 — Adjacent AC re-verification (automated)
+
+Re-ran all mod-home and src/lib test suites to confirm no adjacent regressions:
+
+```
+npx jest --testPathPattern="src/lib/__tests__/theme|mod-home" --watchAll=false
+Test Suites: 6 passed, 6 total
+Tests: 71 passed, 71 total
+```
+
+```
+npx jest --testPathPattern="src/lib/__tests__" --watchAll=false
+Test Suites: 6 passed, 6 total
+Tests: 43 passed, 43 total
+```
+
+Previously passing items confirmed:
+- AC-202 `applySignedOutLanguage()` called on sign-out: covered by AppShell effect (cleanup path unchanged for real sign-out). PASS.
+- AC-203 `setThemeUserId(null)` called on sign-out: same path. PASS.
+- AC-090/AC-091/AC-092 signed-in per-user language and theme behavior: unmodified by this fix. PASS.
+- `theme.ts` `useTheme` hook, `buildTheme`, `resolveScheme`, design tokens: all src/lib tests pass. PASS.
+
+#### Verification 5 — TypeScript
+
+`npx tsc --noEmit` — 0 errors in `src/lib/theme.ts` and `src/modules/mod-home/AppShell.tsx`. PASS.
+
+#### Verification 6 — Full test suite
+
+```
+npx jest --watchAll=false
+Test Suites: 1 failed, 46 passed, 47 total
+Tests: 1 failed, 661 passed, 662 total
+```
+
+The single failing test is `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — pre-existing flaky failure (documented in QA Run 24 notes: "one pre-existing flaky failure in mod-send-logging; that suite passes cleanly in isolation"). Confirmed: running in isolation yields 12/12 pass. Not introduced by the INT-030 fix. No new regressions.
+
+**Test count delta from QA Run 24 baseline (655):** +7 tests total across the two runs between QA Run 24 and now (engineer added 2 new theme tests in commit `327b1f2`; 5 others from intermediate commits). All 662 tests are accounted for in the engineer's self-check ("All 662 tests pass. tsc --noEmit: 0 errors.").
+
+#### Verification 7 — Device check (PENDING — needs Leon's sign-off)
+
+The INT-030 fix rationale states a visible symptom: when device and account languages differ and the user changes the theme in Settings, the UI flashes the device language before snapping back to the account language. The automated tests verify the mechanism (stable `setThemeUserId` reference → cleanup does not fire on theme changes) but cannot verify the observable UI behavior on a physical device.
+
+**Test script for Leon:**
+
+Prerequisites:
+- Two languages available on the device, e.g. device language = Japanese (日本語), account language = English.
+- Sign in to a ProjectDay account.
+
+Steps:
+1. Open the app. Confirm the UI is in the account's stored language (English).
+2. Navigate to Settings (Tab 4 or Profile → Settings).
+3. Change the Theme (e.g. from System to Dark, or Dark to Light). Watch for a momentary flash of the device language (Japanese text replacing English text).
+4. **Expected (after fix)**: no language flash. The UI stays in the account language throughout the theme change.
+5. **Failure (regression)**: the language briefly switches to the device language (Japanese) and then switches back to English within the same re-render cycle.
+6. Additionally: navigate away from Settings and back. Confirm the language is still in the account language and no further flashing occurs.
+
+---
+
+### Summary — QA Run 25
+
+| Item | Result |
+|---|---|
+| REGRESSION PASS: `setThemeUserId` wrapped in `useCallback(..., [])` | PASS — confirmed in code at `theme.ts:639–641` |
+| REGRESSION PASS: AppShell cleanup no longer fires on ThemeProvider re-renders | PASS — new test "does not call applySignedOutLanguage when ThemeProvider re-renders without a session change" |
+| New test: `setThemeUserId` reference stable across re-renders | PASS |
+| TypeScript: `npx tsc --noEmit` | PASS — 0 errors |
+| mod-home + src/lib test suites: 71 tests, 6 suites | PASS — 0 failures |
+| Full test suite: 662 tests, 47 suites | PASS — 1 pre-existing flaky (AscentList, passes in isolation 12/12), 0 new failures |
+| AC-202/AC-203 sign-out wiring (QA Run 24 baseline) | PASS — unchanged |
+| AC-090/AC-091/AC-092 signed-in per-user behavior | PASS — unchanged |
+| New regressions introduced by fix | NONE |
+| Device check: language does not flash when changing theme with mismatched device/account languages | PENDING — needs Leon's sign-off on device |
+
+**Result: AUTOMATED PASS — device check PENDING. INT-030 automated verification complete. Device sign-off required before QA VERIFIED.**
