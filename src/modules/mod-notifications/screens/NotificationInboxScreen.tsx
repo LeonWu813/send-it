@@ -451,7 +451,7 @@ function makeStyles(
       width: theme.componentSize.unreadDot,
       height: theme.componentSize.unreadDot,
       borderRadius: theme.radius.full,
-      backgroundColor: theme.colors.primary,
+      backgroundColor: theme.colors.error,
     },
     avatarContainer: {
       marginRight: theme.spacing.smd,
