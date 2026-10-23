@@ -2,6 +2,15 @@
 
 ## Engineering Progress
 
+### Storybook story: OtherUserProfileScreen (2026-10-22)
+
+Added `src/modules/mod-moderation/stories/OtherUserProfileScreen.stories.tsx` covering four states: Loading (static spinner), PublicProfile (name/avatar/bio + send history + Block + Report buttons), ViewerHasBlocked (unblock notice row; history visible), and BlockedByTarget (same unblock row since isBlocked() checks both directions; history empty — server privacy gate).
+
+- [pass] `npx tsc --noEmit`: zero errors in files I created/modified (pre-existing TSC error in mod-notifications story file, not in scope)
+- [pass] `npm test -- --watchAll=false --silent --testPathPattern=mod-moderation`: 24 tests pass across 3 suites
+- [pass] Matches `ModerationActions.stories.tsx` / `ReportSheet.stories.tsx` patterns: off-spec header, `resetStubData`/`setStubData`, `ToastProvider` wrapper, `fn()` for callbacks, fullscreen decorator
+- [pass] No new dependencies; no files outside module Source Path
+
 ### AC-199 / AC-200 spec-update: rename email header "Send It" → "ProjectDay" (2026-10-21)
 
 Changed `supabase/functions/report-digest/index.ts:114` email header from `Send It — Open Report Digest` to `ProjectDay — Open Report Digest` per AC-200 MOD-009 ownership row (spec Rev 48). Only this one string literal was changed; no other logic, schedule, or file was modified. Redeployment is Leon's step (setup.md 11.7).
