@@ -1,14 +1,4 @@
-/**
- * Storybook stories for NotificationPreferenceScreen (MOD-007).
- *
- * Fake data only — the Supabase stub (stubs/supabase.ts) intercepts all
- * network calls. `setStubData` seeds notification_preferences rows so the
- * screen loads the toggle in the expected on/off state.
- *
- * Stories:
- *   Loaded           — preference loaded, beta_video_like toggle ON (default).
- *   PreferenceOff    — preference loaded, beta_video_like toggle OFF.
- */
+// Fake data only — the Supabase stub intercepts all network calls.
 
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
@@ -17,8 +7,6 @@ import { View } from 'react-native';
 
 import { setStubData } from '../../../../.storybook/stubs/supabase';
 import NotificationPreferenceScreen from '../screens/NotificationPreferenceScreen';
-
-// ── Fake session ──────────────────────────────────────────────────────────────
 
 const session = { user: { id: 'user-me' } } as unknown as Session;
 
@@ -41,10 +29,7 @@ type Story = StoryObj;
 
 // ── Stories ───────────────────────────────────────────────────────────────────
 
-/**
- * Loaded — preference row exists with beta_video_like = true (push enabled).
- * The toggle is ON. Matches the default opt-in state (AC-057).
- */
+/** Loaded — toggle ON, default opt-in (beta_video_like = true). */
 export const Loaded: Story = {
   decorators: [
     (Story) => {
@@ -61,11 +46,7 @@ export const Loaded: Story = {
   render: () => <NotificationPreferenceScreen session={session} />,
 };
 
-/**
- * PreferenceOff — beta_video_like = false (push disabled).
- * The toggle is OFF. In-app Notification rows are still created; push is not
- * enqueued (AC-057).
- */
+/** PreferenceOff — toggle OFF (beta_video_like = false, push disabled). */
 export const PreferenceOff: Story = {
   decorators: [
     (Story) => {

@@ -1,34 +1,17 @@
-/**
- * Storybook stories for NotificationInboxScreen (MOD-007).
- *
- * Fake data only — the Supabase stub (stubs/supabase.ts) intercepts all
- * network calls. `setStubData` seeds each story's expected table rows.
- *
- * The screen uses useUnreadCountContext(); a real UnreadCountProvider is
- * mounted in the shared decorator so the context is available.
- *
- * Stories:
- *   Loading           — isActive=false keeps the screen in its loading state.
- *   Populated         — 4 beta-video-like notifications (2 unread, 2 read).
- *   Empty             — no notifications (empty-state UI).
- */
+// Fake data only — the Supabase stub intercepts all network calls.
 
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
 import { View } from 'react-native';
 
-import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
+import { setStubData } from '../../../../.storybook/stubs/supabase';
 import NotificationInboxScreen from '../screens/NotificationInboxScreen';
 import { UnreadCountProvider } from '../UnreadCountProvider';
 
-// ── Fake session ──────────────────────────────────────────────────────────────
-
 const session = { user: { id: 'user-me' } } as unknown as Session;
 
-// ── Fake data ─────────────────────────────────────────────────────────────────
-
-/** Four beta-video-like notifications: rows 0 and 2 unread, rows 1 and 3 read. */
+// Four beta-video-like notifications: rows 0 and 2 unread, rows 1 and 3 read.
 const FAKE_NOTIFICATIONS = [
   {
     id: 'n1',
@@ -101,20 +84,8 @@ type Story = StoryObj;
 
 // ── Stories ───────────────────────────────────────────────────────────────────
 
-/**
- * Loading skeleton.
- *
- * isActive=false prevents the data-fetch effect from running, holding the
- * screen in its initial loading state indefinitely. The skeleton animates in
- * after the skeletonDelay threshold.
- */
+/** Loading skeleton — isActive=false holds the screen in its loading state. */
 export const Loading: Story = {
-  decorators: [
-    (Story) => {
-      resetStubData();
-      return <Story />;
-    },
-  ],
   render: () => (
     <NotificationInboxScreen
       session={session}
@@ -123,10 +94,7 @@ export const Loading: Story = {
   ),
 };
 
-/**
- * Populated inbox — 4 beta-video-like notifications, 2 unread (unread dot
- * visible on rows 1 and 3) and 2 read. Mirrors AC-055 / AC-058 inbox layout.
- */
+/** Populated inbox — 4 notifications, 2 unread (dot visible) and 2 read. */
 export const Populated: Story = {
   decorators: [
     (Story) => {
@@ -145,9 +113,7 @@ export const Populated: Story = {
   ),
 };
 
-/**
- * Empty inbox — no notifications received yet (AC-055 empty state).
- */
+/** Empty inbox — no notifications (empty-state UI). */
 export const Empty: Story = {
   decorators: [
     (Story) => {
