@@ -2,6 +2,12 @@
 
 ## Engineering Progress
 
+### Off-spec design work (page-review v2.3) pending PR review — 2026-10-23
+
+Branch `design/page-templates`. RL-1 (RouteCard `variant="compact"` default, 80pt), HD-1/ST-1 (AppHeader nested = back + title + one `trailing`; bell/gear on tab roots only; changes AC-184), H-1 (Home order banner, Following, Saved Gyms, Projecting; 72pt rows, latest 3 + 「顯示全部 (n)」, 52pt empty row with 「找攀岩者」; changes AC-111), H-2 (`mediaScrimStrong`, 52pt placeholder, header gap 16), H-3 (64pt gym tiles), R0 (scroll container owns margin + gaps). Stories updated. PRD follow-ups go to Leon via the PR.
+
+---
+
 ### Integration Fix — INT-030 — 2026-10-22
 
 **Task**: Wrap `setThemeUserId` in `useCallback` with empty deps so AppShell's `useEffect([session.user.id, setThemeUserId])` does not re-run its cleanup on unrelated ThemeProvider re-renders.

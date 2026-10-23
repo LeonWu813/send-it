@@ -545,7 +545,7 @@ describe('HomeScreen (Rev 36)', () => {
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
       await waitFor(() => {
         expect(
-          screen.getByText('Follow climbers to see their new beta videos.'),
+          screen.getByText('Follow climbers to see new videos'),
         ).toBeTruthy();
       });
     });
@@ -566,7 +566,7 @@ describe('HomeScreen (Rev 36)', () => {
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
       await waitFor(() => {
         expect(
-          screen.getByText('Follow climbers to see their new beta videos.'),
+          screen.getByText('Follow climbers to see new videos'),
         ).toBeTruthy();
       });
     });
@@ -594,7 +594,7 @@ describe('HomeScreen (Rev 36)', () => {
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
       await waitFor(() => {
         expect(screen.getByText('Alice Chen')).toBeTruthy();
-        expect(screen.getByText('new video upload')).toBeTruthy();
+        expect(screen.getByText(/new video upload/)).toBeTruthy();
       });
     });
 
@@ -621,7 +621,7 @@ describe('HomeScreen (Rev 36)', () => {
         renderOptions(),
       );
       await waitFor(() => screen.getByText('Alice Chen'));
-      fireEvent.press(screen.getByLabelText('Alice Chen'));
+      fireEvent.press(screen.getByLabelText(/^Alice Chen, new video upload/));
       expect(mockOnSelectClimber).toHaveBeenCalledWith('user-002');
     });
 
@@ -635,14 +635,62 @@ describe('HomeScreen (Rev 36)', () => {
 
   // ── AC-111: Section ordering ───────────────────────────────────────────────
 
-  describe('Section ordering (AC-111)', () => {
-    it('renders all four section titles in order', async () => {
+  describe('Section ordering (AC-111, changed by page-review H-1)', () => {
+    it('renders the section titles in order: Following, Saved Gyms, Projecting', async () => {
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
       await waitFor(() => {
         expect(screen.getByText('Saved Gyms')).toBeTruthy();
         expect(screen.getByText('Projecting')).toBeTruthy();
         expect(screen.getByText('Following Activity')).toBeTruthy();
       });
+      const tree = JSON.stringify(screen.toJSON());
+      const at = (s: string): number => tree.indexOf(`"${s}"`);
+      expect(at('Following Activity')).toBeGreaterThan(-1);
+      expect(at('Following Activity')).toBeLessThan(at('Saved Gyms'));
+      expect(at('Saved Gyms')).toBeLessThan(at('Projecting'));
+    });
+  });
+
+  describe('Following rows (H-1)', () => {
+    function mockFour(): void {
+      mockFetchFollowing.mockResolvedValue(
+        ['A', 'B', 'C', 'D'].map((n, i) => ({ id: `user-10${i}`, display_name: `Climber ${n}`, avatar_url: null })),
+      );
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') return makeQueryBuilder({ data: null, error: null });
+        if (table === 'beta_videos') {
+          return makeQueryBuilder({
+            data: ['0', '1', '2', '3'].map((i) => ({ user_id: `user-10${i}`, updated_at: new Date().toISOString() })),
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+    }
+
+    it('shows the latest 3 plus an inline show-all row that expands in place', async () => {
+      mockFour();
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => screen.getByText('Climber A'));
+      expect(screen.getByText('Climber C')).toBeTruthy();
+      expect(screen.queryByText('Climber D')).toBeNull();
+      fireEvent.press(screen.getByLabelText('Show all (4)'));
+      expect(screen.getByText('Climber D')).toBeTruthy();
+      expect(screen.queryByLabelText('Show all (4)')).toBeNull();
+    });
+
+    it('reads each row as one element and shows the find-climbers action when empty', async () => {
+      mockFour();
+      const onFind = jest.fn();
+      const { unmount } = render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      await waitFor(() => screen.getByLabelText('Climber A, new video upload, today'));
+      unmount();
+
+      mockFetchFollowing.mockResolvedValue([]);
+      render(<HomeScreen {...DEFAULT_PROPS} onFindClimbers={onFind} />, renderOptions());
+      await waitFor(() => screen.getByText('Find climbers'));
+      fireEvent.press(screen.getByText('Find climbers'));
+      expect(onFind).toHaveBeenCalledTimes(1);
     });
   });
 

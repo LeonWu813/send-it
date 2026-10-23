@@ -62,7 +62,7 @@
     "title": "Settings",
     "back": "Back",
     "blockedAccounts": "Blocked Accounts",
-    "betaVideoPrivacy": "Beta Video Visibility",
+    "betaVideoPrivacy": "Followers-only beta videos",
     "betaVideoPrivacyPublic": "All Users",
     "betaVideoPrivacyFollowersOnly": "Followers Only",
     "betaVideoPrivacySubtextPublic": "All users can see your beta videos",
@@ -77,7 +77,11 @@
       "system": "System",
       "light": "Light",
       "dark": "Dark"
-    }
+    },
+    "notifications": "Notifications",
+    "betaVideoPrivacyOnEffect": "When on, only your followers can see your beta videos.",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmBody": "You will need to sign in again to use your account."
   },
   "gymDirectory": {
     "title": "Gyms",
@@ -308,10 +312,13 @@
       "title": "Following Activity",
       "newVideos": "{{count}} new beta video",
       "newVideos_other": "{{count}} new beta videos",
-      "empty": "Follow climbers to see their new beta videos.",
+      "empty": "Follow climbers to see new videos",
       "today": "today",
       "dayAgo": "1 day ago",
-      "daysAgo": "{{count}} days ago"
+      "daysAgo": "{{count}} days ago",
+      "showAll": "Show all ({{count}})",
+      "findClimbers": "Find climbers",
+      "rowA11y": "{{name}}, {{label}}, {{time}}"
     },
     "routeCard": {
       "thumbnailAlt": "Route photo for {{name}}"
@@ -447,6 +454,7 @@
       "heroA11y": "Top grade {{grade}}, {{count}} send",
       "sendsA11y": "{{count}} send",
       "daysA11y": "Days climbed, {{count}} day",
+      "compactHint": "Opens full stats",
       "promptEyebrow": "First record",
       "promptTitle": "Which route did you climb? Log it.",
       "promptBody": "Find the route at the gym and tap Log send. Your top grade and stats start from here.",
@@ -454,7 +462,6 @@
       "heroSends_other": "{{count}} sends",
       "sendsA11y_other": "{{count}} sends",
       "heroA11y_other": "Top grade {{grade}}, {{count}} sends",
-      "compactHint": "Opens full stats",
       "daysA11y_other": "Days climbed, {{count}} days"
     },
     "filter": {
@@ -519,7 +526,9 @@
       "blocked": "User blocked.",
       "unblocked": "User unblocked.",
       "error": "Action failed. Please try again.",
-      "confirmBody": "You'll stop seeing each other's content. You can unblock any time."
+      "confirmBody": "You'll stop seeing each other's content. You can unblock any time.",
+      "confirmUnblock": "Unblock this user?",
+      "confirmUnblockBody": "You will see each other's content again. You can block them again any time."
     },
     "sheetReportHint": "We'll review this account, and you'll stop seeing each other's content right away."
   },

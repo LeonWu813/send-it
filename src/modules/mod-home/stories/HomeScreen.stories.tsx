@@ -37,14 +37,22 @@ function setupStubs(state: StubState): void {
       { id: 'r1', gym_id: 'g1', grade: 'V4', color_tag: 'red', photo_url: null, section_label: 'Cave', gyms: { name: '紅石攀岩館' }, status: 'active' },
       { id: 'r2', gym_id: 'g2', grade: 'V6', color_tag: 'blue', photo_url: null, section_label: null, gyms: { name: 'B-Pump 台北店' }, status: 'active' },
     ]);
-    setStubData('follows', [
-      { followee_id: 'u1', users: { id: 'u1', display_name: 'Alex Chen', avatar_url: null } },
-      { followee_id: 'u2', users: { id: 'u2', display_name: 'Jessica Wang', avatar_url: null } },
-    ]);
-    setStubData('beta_videos', [
-      { user_id: 'u1', updated_at: new Date(Date.now() - 86_400_000).toISOString() },
-      { user_id: 'u2', updated_at: new Date(Date.now() - 2 * 86_400_000).toISOString() },
-    ]);
+    // Five followed climbers: Following shows the latest 3 + 「顯示全部 (5)」 (H-1).
+    const FOLLOWED = [
+      ['u1', 'Alex Chen'],
+      ['u2', 'Jessica Wang'],
+      ['u3', '林小岩'],
+      ['u4', 'Sam Rivera'],
+      ['u5', '王大攀'],
+    ];
+    setStubData(
+      'follows',
+      FOLLOWED.map(([id, name]) => ({ followee_id: id, users: { id, display_name: name, avatar_url: null } })),
+    );
+    setStubData(
+      'beta_videos',
+      FOLLOWED.map(([id], i) => ({ user_id: id, updated_at: new Date(Date.now() - (i + 1) * 86_400_000).toISOString() })),
+    );
   }
   // empty: all tables return [] (stub default), banner shows placeholder card (AC-112 Rev 38).
   setStubData('user_route_visits', []);
@@ -82,6 +90,7 @@ const meta: Meta<Args> = {
       onSelectGym={() => {}}
       onSelectRoute={() => {}}
       onSelectClimber={() => {}}
+      onFindClimbers={() => {}}
     />
   ),
 };
@@ -89,10 +98,13 @@ export default meta;
 
 type Story = StoryObj<Args>;
 
-/** All four sections populated: banner, two gyms, two projecting routes, two following-activity rows. */
+/**
+ * Order (AC-111 change): banner, Following, Saved Gyms, Projecting. Following heading at y318, three 72pt
+ * rows end at y570, then the inline 「顯示全部 (5)」 row (tap to expand in place). Compact 80pt route cards.
+ */
 export const Populated: Story = { args: { state: 'populated' } };
 
-/** New-user state: no data. Events Banner shows the "No active events" placeholder; other sections show inline empty prompts. */
+/** New-user state: no data. 52pt "No active events" placeholder; Following is one 52pt row with 「找攀岩者」; other sections show inline empty prompts. */
 export const Empty: Story = { args: { state: 'empty' } };
 
 /** Every section still fetching (queries never resolve). */

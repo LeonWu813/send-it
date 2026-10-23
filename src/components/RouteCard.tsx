@@ -4,6 +4,9 @@
  * Owned by MOD-012. Consumed by HomeScreen (Projecting Routes), RouteListScreen (MOD-003) and
  * the send-history section. Import path (all consumers): `src/components/RouteCard`.
  *
+ * `variant="compact"` (DEFAULT, page-review RL-1): thumb 64, card 80pt, grade badge row + ONE meta line
+ * (colour・section・gym, beta count right-aligned on that line). `variant="regular"` = the layout below.
+ *
  * Layout (thumbnail + three lines; AC-191 / AC-192 overridden by the human decision):
  *   Card (surface, radius 20, padding 8, minHeight 104)
  *     ├── text column (flex-1, paddingLeft 8, vertically centred)
@@ -69,6 +72,11 @@ export interface RouteCardProps {
   isSaved?: boolean;
   /** Called when the bookmark is tapped (AC-046/047). */
   onBookmarkToggle?: () => void;
+  /**
+   * 'compact' (default, page-review RL-1 / AC-192): 64 thumb + 2 x routeCardPadding = 80pt, ONE meta line
+   * (colour・section・gym + beta count). 'regular': the previous 104pt card (88 thumb, separate beta row).
+   */
+  variant?: 'compact' | 'regular';
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -96,6 +104,7 @@ export default function RouteCard({
   sendStyle = null,
   isSaved = false,
   onBookmarkToggle,
+  variant = 'compact',
 }: RouteCardProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -103,8 +112,9 @@ export default function RouteCard({
   const { fontScale, width } = useWindowDimensions();
   const c = theme.colors;
   const isAx = fontScale >= AX_FONT_SCALE;
-  const compact = width < theme.layout.compactWidthBreakpoint;
-  const thumbSize = compact ? theme.componentSize.routeThumbCompact : theme.componentSize.routeThumb;
+  const isCompact = variant === 'compact';
+  const narrow = width < theme.layout.compactWidthBreakpoint;
+  const thumbSize = isCompact || narrow ? theme.componentSize.routeThumbCompact : theme.componentSize.routeThumb;
   const pad = theme.layout.routeCardPadding;
 
   const [signedPhotoUrl, setSignedPhotoUrl] = useState<string | null>(null);
@@ -265,6 +275,15 @@ export default function RouteCard({
     </Animated.View>
   );
 
+  const betaCount = (
+    <View style={[styles.betaRow, { columnGap: theme.layout.iconTextGap, marginLeft: isCompact ? theme.spacing.sm : 0 }]}>
+      <Ionicons name={ICON.betaCount.outline} size={BETA_ICON} color={c.textSecondary} />
+      <AppText variant="footnote" color="textSecondary" numberOfLines={1}>
+        {t('routeCard.betaCount', { count: betaVideoCount })}
+      </AppText>
+    </View>
+  );
+
   const textBlock = (
     <View
       style={[
@@ -286,8 +305,8 @@ export default function RouteCard({
         <View style={styles.flex} pointerEvents="none" />
         {bookmark}
       </View>
-      <View pointerEvents="none" {...hiddenFromAx}>
-        <AppText variant="subhead" weight="600" numberOfLines={1}>
+      <View style={isCompact ? styles.betaRow : null} pointerEvents="none" {...hiddenFromAx}>
+        <AppText variant="subhead" weight="600" numberOfLines={1} style={isCompact ? styles.flex : undefined}>
           {titleLine}
           {route.gymName ? (
             <AppText variant="subhead" weight="400" color="textSecondary">
@@ -295,20 +314,18 @@ export default function RouteCard({
             </AppText>
           ) : null}
         </AppText>
+        {isCompact && betaVideoCount > 0 ? betaCount : null}
       </View>
-      {betaVideoCount > 0 ? (
-        <View style={[styles.betaRow, { columnGap: theme.layout.iconTextGap }]} pointerEvents="none" {...hiddenFromAx}>
-          <Ionicons name={ICON.betaCount.outline} size={BETA_ICON} color={c.textSecondary} />
-          <AppText variant="footnote" color="textSecondary" numberOfLines={1}>
-            {t('routeCard.betaCount', { count: betaVideoCount })}
-          </AppText>
+      {!isCompact && betaVideoCount > 0 ? (
+        <View pointerEvents="none" {...hiddenFromAx}>
+          {betaCount}
         </View>
       ) : null}
     </View>
   );
 
   return (
-    <Card variant="static" padding={pad} style={{ minHeight: theme.componentSize.routeThumb + 2 * pad }}>
+    <Card variant="static" padding={pad} style={{ minHeight: (isCompact ? thumbSize : theme.componentSize.routeThumb) + 2 * pad }}>
       {/* Card body: a full-card pressable. Siblings (text, bookmark, thumbnail) are layered above. */}
       <PressableScale
         feedback="row"

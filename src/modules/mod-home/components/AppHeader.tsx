@@ -8,8 +8,10 @@
  *            With `scrollY`: the title scrolls away with the content and a 44pt small-title bar fades in
  *            (opacity bound to scroll [38, 50] -> [0, 1], clamped; kept under Reduce Motion — it is
  *            direct manipulation). The capsule stays put (it slides 6pt into the small bar row).
- *   nested — every nested screen: ONE 44pt row = back (float IconButton) + centred `headline` title +
- *            optional `trailing` control + the action capsule. Screens do not draw their own back row.
+ *   nested — every pushed screen: ONE 44pt row = back (float IconButton) + centred `headline` title +
+ *            at most one `trailing` contextual action. NO bell / gear (HD-1, AC-184 change): they live on
+ *            the three tab roots only, so no screen ever shows an icon that links to itself (ST-1).
+ *            Screens do not draw their own back row.
  *
  * Nested screens and tab roots drive the header through `useAppHeader` / `useAppHeaderRoot`
  * (./AppHeaderContext); AppShell renders this component from that store.
@@ -41,7 +43,7 @@ export interface AppHeaderProps {
   title: string;
   /** nested: back handler. */
   onBack?: () => void;
-  /** nested: a control (44pt) left of the capsule, e.g. a bookmark `IconButton variant="float"`. */
+  /** nested: the ONE contextual action (44pt) on the right, e.g. a bookmark `IconButton variant="float"`. */
   trailing?: React.ReactNode;
   /** root: scroll offset of the screen's list. Enables the large-title collapse; the header then overlays the list. */
   scrollY?: Animated.Value;
@@ -170,7 +172,9 @@ export default function AppHeader({
 
   // ── nested: one 44pt row ───────────────────────────────────────────────────
   if (variant === 'nested') {
-    const side = screenMargin + capsule.width + theme.spacing.sm + (trailing ? ROW + theme.spacing.sm : 0);
+    // HD-1 / ST-1: no bell or gear on pushed screens (so never an icon that links to the current
+    // screen). Back + title + at most one contextual action. The title is centred between two 44pt slots.
+    const side = screenMargin + ROW + theme.spacing.sm;
     const hairline = scrollY
       ? scrollY.interpolate({ inputRange: [0, 8], outputRange: [0, 1], extrapolate: 'clamp' })
       : 0;
@@ -197,10 +201,7 @@ export default function AppHeader({
           ) : (
             <View style={{ width: ROW }} />
           )}
-          <View style={[styles.nestedRight, { columnGap: theme.spacing.sm }]}>
-            {trailing}
-            {actionCapsule}
-          </View>
+          <View style={[styles.nestedRight, { minWidth: ROW }]}>{trailing}</View>
         </View>
         <Animated.View
           pointerEvents="none"

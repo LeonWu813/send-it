@@ -77,7 +77,11 @@
       "system": "跟隨系統",
       "light": "淺色",
       "dark": "深色"
-    }
+    },
+    "notifications": "通知",
+    "betaVideoPrivacyOnEffect": "開啟後，僅限追蹤者可觀看你的 Beta 影片",
+    "logoutConfirmTitle": "要登出嗎？",
+    "logoutConfirmBody": "之後需要重新登入才能使用你的帳號。"
   },
   "gymDirectory": {
     "title": "岩館",
@@ -308,10 +312,13 @@
       "title": "追蹤動態",
       "newVideos": "{{count}} 支新 Beta 影片",
       "newVideos_other": "{{count}} 支新 Beta 影片",
-      "empty": "追蹤攀岩者以查看他們的新 Beta 影片。",
+      "empty": "追蹤攀岩者，查看新影片",
       "today": "今天",
       "dayAgo": "1 天前",
-      "daysAgo": "{{count}} 天前"
+      "daysAgo": "{{count}} 天前",
+      "showAll": "顯示全部 ({{count}})",
+      "findClimbers": "找攀岩者",
+      "rowA11y": "{{name}}，{{label}}，{{time}}"
     },
     "routeCard": {
       "thumbnailAlt": "{{name}} 的路線照片"
@@ -447,6 +454,7 @@
       "heroA11y": "最高難度 {{grade}}，完攀 {{count}} 次",
       "sendsA11y": "完攀 {{count}} 次",
       "daysA11y": "完攀天數 {{count}} 天",
+      "compactHint": "查看完整統計",
       "promptEyebrow": "第一筆紀錄",
       "promptTitle": "爬了哪條？記下來。",
       "promptBody": "到岩館找到那條路線，點「記錄完攀」。最高難度和統計會從這裡開始。",
@@ -454,7 +462,6 @@
       "heroSends_other": "完攀 {{count}} 次",
       "sendsA11y_other": "完攀 {{count}} 次",
       "heroA11y_other": "最高難度 {{grade}}，完攀 {{count}} 次",
-      "compactHint": "查看完整統計",
       "daysA11y_other": "完攀天數 {{count}} 天"
     },
     "filter": {
@@ -519,7 +526,9 @@
       "blocked": "已封鎖此用戶。",
       "unblocked": "已解除封鎖。",
       "error": "操作失敗，請再試一次。",
-      "confirmBody": "你們會互相看不到對方的內容，隨時可以解除封鎖。"
+      "confirmBody": "你們會互相看不到對方的內容，隨時可以解除封鎖。",
+      "confirmUnblock": "解除封鎖此用戶？",
+      "confirmUnblockBody": "你們會再次看到對方的內容，隨時可以重新封鎖。"
     },
     "sheetReportHint": "我們會審查這個帳號，你們也會立刻互相看不到對方的內容。"
   },

@@ -313,4 +313,17 @@ describe('RouteCard (AC-183, v2.2)', () => {
     // The card body reads grade + name (the grade is hidden on screen but spoken, AC-191).
     expect(screen.getByLabelText(/Crimson Tide/)).toBeTruthy();
   });
+
+  it('is the 80pt compact card by default and 104pt with variant="regular" (RL-1)', () => {
+    const minHeightOf = (variant?: 'compact' | 'regular'): number[] => {
+      const { toJSON, unmount } = render(<RouteCard route={BASE_ROUTE} onPress={jest.fn()} variant={variant} />, {
+        wrapper: TestProviders,
+      });
+      const found = [...JSON.stringify(toJSON()).matchAll(/"minHeight":(\d+)/g)].map((m) => Number(m[1]));
+      unmount();
+      return found;
+    };
+    expect(minHeightOf()).toContain(80);
+    expect(minHeightOf('regular')).toContain(104);
+  });
 });

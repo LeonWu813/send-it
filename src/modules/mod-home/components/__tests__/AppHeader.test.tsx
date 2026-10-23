@@ -101,15 +101,15 @@ describe('AppHeader (AC-184)', () => {
     expect(screen.queryByText('5', HIDDEN)).toBeNull();
   });
 
-  it('nested variant: one row with back, title, bell and settings; back calls onBack', () => {
+  it('nested variant: back + title only, no bell or gear (HD-1, ST-1); back calls onBack', () => {
     const onBack = jest.fn();
     render(
       <AppHeader variant="nested" title="V4 Red (A)" onBack={onBack} onNavigateToNotifications={jest.fn()} onNavigateToSettings={jest.fn()} topInset={0} />,
       { wrapper: TestProviders },
     );
     expect(screen.getByText('V4 Red (A)')).toBeTruthy();
-    expect(screen.getByLabelText('Notifications')).toBeTruthy();
-    expect(screen.getByLabelText('Settings')).toBeTruthy();
+    expect(screen.queryByLabelText('Notifications')).toBeNull();
+    expect(screen.queryByLabelText('Settings')).toBeNull();
     fireEvent.press(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalledTimes(1);
   });
