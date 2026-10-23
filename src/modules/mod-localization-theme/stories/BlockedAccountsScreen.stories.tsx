@@ -4,8 +4,9 @@
  * States:
  *   Loading   — ActivityIndicator is shown while fetching blocked users.
  *               The blocks query never resolves (STUB_PENDING).
- *   Populated — List of 3 blocked users, each with avatar placeholder, display
- *               name, and secondary Unblock button (capsule).
+ *   Populated — List of 3 blocked users (52pt rows, Avatar sm 32, display name,
+ *               vertically centred secondary Unblock button).
+ *   Confirm Unblock — Unblock pressed on the first row: confirm sheet is open.
  *   Empty     — No blocked users; "No blocked accounts" message centred.
  *
  * Supabase is replaced by the Storybook stub (no network). Auth session and
@@ -39,6 +40,21 @@ function WithBlocks({ blocks }: { blocks: unknown }): React.JSX.Element {
   return <BlockedAccountsScreen onBack={() => {}} />;
 }
 
+/** Presses the first Unblock button after mount to open the confirm sheet. */
+function ConfirmUnblockWrapper(): React.JSX.Element {
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      const btn = Array.from(document.querySelectorAll('[role="button"]')).find((el) => {
+        const label = el.getAttribute('aria-label') ?? '';
+        return label === 'Unblock' || label === '解除封鎖';
+      });
+      (btn as HTMLElement | undefined)?.click();
+    }, 300);
+    return () => { clearTimeout(timer); };
+  }, []);
+  return <WithBlocks blocks={BLOCKED} />;
+}
+
 // ── Meta ───────────────────────────────────────────────────────────────────────
 
 const meta: Meta = {
@@ -55,6 +71,12 @@ type Story = StoryObj;
 /** Three blocked users with avatar placeholder, display name, and Unblock button. */
 export const Populated: Story = {
   render: () => <WithBlocks blocks={BLOCKED} />,
+};
+
+/** Unblock pressed: the confirm sheet asks before unblocking. */
+export const ConfirmUnblock: Story = {
+  name: 'Confirm Unblock',
+  render: () => <ConfirmUnblockWrapper />,
 };
 
 /** Current user has blocked no one: empty state message shown. */

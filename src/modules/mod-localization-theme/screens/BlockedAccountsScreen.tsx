@@ -6,9 +6,9 @@
  * On mount: fetches fetchMyBlockedUsers() from mod-moderation.
  * Loading state: ActivityIndicator centered.
  * Error state: error text with retry.
- * Each row: circular 48×48 avatar + display_name + "Unblock" outlined button.
- * Unblock tap: calls unblockUser(), removes entry optimistically, re-fetches
- *              on error.
+ * Each row (L-2): listRowMinHeight 52, Avatar sm 32, display_name, "Unblock" button centred.
+ * Unblock tap: opens a confirm sheet; on confirm calls unblockUser(), removes the
+ *              entry optimistically, re-fetches on error.
  * Empty state: "No blocked accounts" / "沒有已封鎖的帳號".
  *
  * useSafeAreaInsets() + useTheme() — no hardcoded hex.
@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   StyleSheet,
   View,
 } from 'react-native';
@@ -30,8 +29,10 @@ import {
 } from '../../mod-moderation';
 import type { BlockedUser } from '../../mod-moderation';
 import { AppText } from '../../../components/ui/AppText';
+import { Avatar } from '../../../components/ui/Avatar';
+import { BottomSheet } from '../../../components/ui/BottomSheet';
 import { Button } from '../../../components/ui/Button';
-import { useTheme } from '../../../lib/theme';
+import { useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 
@@ -45,8 +46,9 @@ export interface BlockedAccountsScreenProps {
 
 interface BlockedUserRowProps {
   item: BlockedUser;
-  onUnblock: (userId: string) => void;
+  onUnblock: (user: BlockedUser) => void;
   theme: ReturnType<typeof useTheme>['theme'];
+  screenMargin: number;
   unblockLabel: string;
 }
 
@@ -54,63 +56,52 @@ function BlockedUserRow({
   item,
   onUnblock,
   theme,
+  screenMargin,
   unblockLabel,
 }: BlockedUserRowProps): React.JSX.Element {
-  const styles = makeRowStyles(theme);
+  const styles = makeRowStyles(theme, screenMargin);
 
   return (
     <View style={styles.row}>
-      {/* Circular avatar — same 48×48 pattern as FollowersListScreen */}
-      {item.avatarUrl !== null ? (
-        <Image
-          source={{ uri: item.avatarUrl }}
-          style={styles.avatar}
-          accessibilityLabel={item.displayName}
-        />
-      ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder]} />
-      )}
+      <Avatar size="sm" uri={item.avatarUrl} name={item.displayName} decorative />
 
       {/* Display name */}
       <AppText variant="body" weight="600" style={styles.displayNameFlex} numberOfLines={1}>
         {item.displayName}
       </AppText>
 
-      {/* Unblock button — capsule secondary button */}
+      {/* Unblock button: alignSelf centre overrides Button's flex-start so it is vertically centred */}
       <Button
         variant="secondary"
         size="sm"
         label={unblockLabel}
-        onPress={() => { onUnblock(item.userId); }}
+        onPress={() => { onUnblock(item); }}
+        style={styles.unblock}
       />
     </View>
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
+function makeRowStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      minHeight: theme.layout.listRowMinHeight,
+      paddingVertical: theme.spacing.smd,
+      paddingHorizontal: screenMargin,
       // card-less list: rows sit on surface, not directly on the sand background
       backgroundColor: theme.colors.surface,
       borderBottomWidth: theme.stroke.hairline,
       borderBottomColor: theme.colors.divider,
     },
-    avatar: {
-      width: 48,
-      height: 48,
-      borderRadius: theme.radius.full,
-      marginRight: theme.spacing.md,
-    },
-    avatarPlaceholder: {
-      backgroundColor: theme.colors.surfaceAlt,
-    },
     displayNameFlex: {
       flex: 1,
+      marginHorizontal: theme.spacing.smd,
+    },
+    unblock: {
+      alignSelf: 'center',
     },
   });
 }
@@ -122,6 +113,7 @@ export default function BlockedAccountsScreen({
 }: BlockedAccountsScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
+  const { screenMargin } = useLayout();
   const tabInset = useTabBarInset();
   const headerTop = useHeaderContentInset();
   const styles = makeStyles(theme);
@@ -130,6 +122,7 @@ export default function BlockedAccountsScreen({
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingUnblock, setPendingUnblock] = useState<BlockedUser | null>(null);
 
   const loadBlockedUsers = useCallback(async (): Promise<void> => {
     setError(null);
@@ -197,8 +190,9 @@ export default function BlockedAccountsScreen({
         renderItem={({ item }) => (
           <BlockedUserRow
             item={item}
-            onUnblock={(userId) => { void handleUnblock(userId); }}
+            onUnblock={setPendingUnblock}
             theme={theme}
+            screenMargin={screenMargin}
             unblockLabel={t('moderation.unblock')}
           />
         )}
@@ -208,7 +202,7 @@ export default function BlockedAccountsScreen({
           </View>
         }
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingTop: headerTop, paddingBottom: tabInset.contentBottom }}
+        contentContainerStyle={{ paddingTop: headerTop + theme.spacing.md, paddingBottom: tabInset.contentBottom }}
         scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       />
     );
@@ -217,6 +211,21 @@ export default function BlockedAccountsScreen({
   return (
     <SwipeBackWrapper onBack={onBack}>
       {renderContent()}
+      <BottomSheet
+        variant="confirm"
+        visible={pendingUnblock !== null}
+        onClose={() => { setPendingUnblock(null); }}
+        title={t('moderation.block.confirmUnblock')}
+        description={t('moderation.block.confirmUnblockBody')}
+        confirmLabel={t('moderation.unblock')}
+        onConfirm={() => {
+          const target = pendingUnblock;
+          setPendingUnblock(null);
+          if (target !== null) {
+            void handleUnblock(target.userId);
+          }
+        }}
+      />
     </SwipeBackWrapper>
   );
 }

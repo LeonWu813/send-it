@@ -3,10 +3,12 @@
  *
  * States:
  *   Populated  — all controls visible: language picker, appearance picker,
- *                Blocked Accounts row, Beta Video Privacy toggle, Logout button.
- *   Logging Out — Logout button shows spinner (disabled/loading state). Achieved by
+ *                Notifications + Blocked Accounts rows, Beta Video Privacy toggle (subtitle
+ *                states the ON effect), destructive Logout row.
+ *   Confirm Logout — Logout row pressed: the confirm sheet is open (destructive + cancel).
+ *   Logging Out — Logout confirmed: the row shows a spinner (disabled/loading state). Achieved by
  *                patching supabase.auth.signOut to never resolve, then
- *                programmatically clicking the button after mount.
+ *                programmatically clicking the row and the sheet's confirm after mount.
  *
  * Supabase is replaced by the Storybook stub (no network). Auth session and
  * user data are seeded synchronously during render so the component's effects
@@ -20,6 +22,15 @@ import { supabase } from '../../../lib/supabase';
 import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
 import SettingsScreen from '../screens/SettingsScreen';
+
+/** Clicks the last Log Out / 登出 button on the page: the row first, then the sheet's confirm. */
+function clickLogout(): void {
+  const all = Array.from(document.querySelectorAll('[role="button"]')).filter((el) => {
+    const label = el.getAttribute('aria-label') ?? el.textContent ?? '';
+    return label === 'Log Out' || label === '登出';
+  });
+  (all[all.length - 1] as HTMLElement | undefined)?.click();
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -36,7 +47,7 @@ function seedPopulated(): void {
 
 function PopulatedWrapper(): React.JSX.Element {
   seedPopulated();
-  return <SettingsScreen onBack={() => {}} />;
+  return <SettingsScreen onBack={() => {}} onNavigateToNotificationPreferences={() => {}} />;
 }
 
 /**
@@ -53,20 +64,27 @@ function LoggingOutWrapper(): React.JSX.Element {
     (supabase.auth as Record<string, any>).signOut = (): Promise<never> =>
       new Promise<never>(() => {});
 
-    const timer = setTimeout(() => {
-      // Logout button is the last [role="button"] element on the page.
-      const allButtons = document.querySelectorAll('[role="button"]');
-      const logoutBtn = allButtons[allButtons.length - 1] as HTMLElement | undefined;
-      logoutBtn?.click();
-    }, 200);
+    const timer = setTimeout(() => { clickLogout(); }, 200);
+    const confirmTimer = setTimeout(() => { clickLogout(); }, 1200);
 
     return () => {
       clearTimeout(timer);
+      clearTimeout(confirmTimer);
       supabase.auth.signOut = origSignOut;
     };
   }, []);
 
-  return <SettingsScreen onBack={() => {}} />;
+  return <SettingsScreen onBack={() => {}} onNavigateToNotificationPreferences={() => {}} />;
+}
+
+/** Opens the confirm sheet by pressing the Logout row after mount. */
+function ConfirmLogoutWrapper(): React.JSX.Element {
+  seedPopulated();
+  React.useEffect(() => {
+    const timer = setTimeout(() => { clickLogout(); }, 200);
+    return () => { clearTimeout(timer); };
+  }, []);
+  return <SettingsScreen onBack={() => {}} onNavigateToNotificationPreferences={() => {}} />;
 }
 
 // ── Meta ───────────────────────────────────────────────────────────────────────
@@ -82,12 +100,18 @@ export default meta;
 
 type Story = StoryObj;
 
-/** All controls visible: language picker, appearance picker, Blocked Accounts row, Beta Video Privacy toggle, Logout button. */
+/** All controls visible: language, appearance, Notifications + Blocked Accounts rows, Beta Video Privacy toggle, destructive Logout row. */
 export const Populated: Story = {
   render: () => <PopulatedWrapper />,
 };
 
-/** Logout button is disabled and shows a loading spinner: the state while signOut is in flight. */
+/** Logout row pressed: confirm sheet with destructive Log Out and Cancel. */
+export const ConfirmLogout: Story = {
+  name: 'Confirm Logout',
+  render: () => <ConfirmLogoutWrapper />,
+};
+
+/** Logout row is disabled and shows a loading spinner: the state while signOut is in flight. */
 export const LoggingOut: Story = {
   name: 'Logging Out',
   render: () => <LoggingOutWrapper />,

@@ -131,6 +131,13 @@ function TestWrapper({ children }: { children: React.ReactNode }): React.JSX.Ele
   return React.createElement(ThemeProvider, null, children);
 }
 
+// Logout is a destructive row: the first press opens a confirm sheet, the last 'Log Out' button confirms.
+function pressLogoutAndConfirm(): void {
+  fireEvent.press(screen.getByRole('button', { name: 'Log Out' }));
+  const buttons = screen.getAllByRole('button', { name: 'Log Out' });
+  fireEvent.press(buttons[buttons.length - 1]);
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 describe('SettingsScreen — handleLogout (INT-031)', () => {
   beforeEach(() => {
@@ -143,7 +150,7 @@ describe('SettingsScreen — handleLogout (INT-031)', () => {
   it('calls signOut after both device-preference saves succeed', async () => {
     render(<SettingsScreen onBack={jest.fn()} />, { wrapper: TestWrapper });
 
-    fireEvent.press(screen.getByRole('button', { name: 'Log Out' }));
+    pressLogoutAndConfirm();
 
     await waitFor(() => {
       expect(mockSignOut).toHaveBeenCalledTimes(1);
@@ -157,7 +164,7 @@ describe('SettingsScreen — handleLogout (INT-031)', () => {
 
     render(<SettingsScreen onBack={jest.fn()} />, { wrapper: TestWrapper });
 
-    fireEvent.press(screen.getByRole('button', { name: 'Log Out' }));
+    pressLogoutAndConfirm();
 
     await waitFor(() => {
       expect(mockSignOut).toHaveBeenCalledTimes(1);
@@ -169,7 +176,7 @@ describe('SettingsScreen — handleLogout (INT-031)', () => {
 
     render(<SettingsScreen onBack={jest.fn()} />, { wrapper: TestWrapper });
 
-    fireEvent.press(screen.getByRole('button', { name: 'Log Out' }));
+    pressLogoutAndConfirm();
 
     await waitFor(() => {
       expect(mockSignOut).toHaveBeenCalledTimes(1);
@@ -182,7 +189,7 @@ describe('SettingsScreen — handleLogout (INT-031)', () => {
 
     render(<SettingsScreen onBack={jest.fn()} />, { wrapper: TestWrapper });
 
-    fireEvent.press(screen.getByRole('button', { name: 'Log Out' }));
+    pressLogoutAndConfirm();
 
     await waitFor(() => {
       expect(mockSignOut).toHaveBeenCalledTimes(1);
@@ -194,7 +201,7 @@ describe('SettingsScreen — handleLogout (INT-031)', () => {
 
     render(<SettingsScreen onBack={jest.fn()} />, { wrapper: TestWrapper });
 
-    fireEvent.press(screen.getByRole('button', { name: 'Log Out' }));
+    pressLogoutAndConfirm();
 
     // Assert: error text is surfaced to the user.
     await waitFor(() => {

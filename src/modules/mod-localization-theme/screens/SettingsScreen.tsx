@@ -17,7 +17,11 @@
  * AC-157: "Beta Video Privacy" toggle reads and updates users.beta_video_privacy
  *   via MOD-001's updateBetaVideoPrivacy() public service.
  *
- * AC-168: Logout button at the very bottom calls signOut() from MOD-001.
+ * AC-168: Logout destructive row at the very bottom asks for confirmation (BottomSheet
+ *   confirm), then calls signOut() from MOD-001.
+ *
+ * N-1 (page-review): "Notifications" row pushes Notification Preferences through the
+ *   onNavigateToNotificationPreferences prop (wired in AppShell).
  *
  * AC-202 / AC-203: Just before signOut(), the current language (AC-091) and
  *   theme override (AC-092) are saved to device-level storage via
@@ -44,6 +48,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -56,13 +61,13 @@ import { AppText } from '../../../components/ui/AppText';
 import i18n from '../../../lib/i18n';
 import type { SupportedLanguage } from '../../../lib/i18n';
 import { supabase } from '../../../lib/supabase';
-import { useTheme } from '../../../lib/theme';
+import { useLayout, useTheme } from '../../../lib/theme';
 import type { ThemeOverride } from '../../../lib/theme';
 import { saveLanguage as saveDeviceLanguage, saveTheme as saveDeviceTheme } from '../../../lib/devicePrefs';
 import { signOut, updateBetaVideoPrivacy } from '../../mod-auth-profile';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { Button } from '../../../components/ui/Button';
+import { BottomSheet } from '../../../components/ui/BottomSheet';
 import {
   loadLanguage,
   loadThemeOverride,
@@ -73,17 +78,20 @@ import BlockedAccountsScreen from './BlockedAccountsScreen';
 
 export interface SettingsScreenProps {
   onBack: () => void;
+  /** Push Notification Preferences (N-1). When omitted the Notifications row is hidden. */
+  onNavigateToNotificationPreferences?: () => void;
 }
 
 type SettingsView = 'settings' | 'blockedAccounts';
 
-export default function SettingsScreen({ onBack }: SettingsScreenProps): React.JSX.Element {
+export default function SettingsScreen({ onBack, onNavigateToNotificationPreferences }: SettingsScreenProps): React.JSX.Element {
   const [view, setView] = useState<SettingsView>('settings');
   const { t } = useTranslation('common');
   const { theme, override, setOverride } = useTheme();
   const tabInset = useTabBarInset();
   const headerTop = useHeaderContentInset();
-  const styles = makeStyles(theme, headerTop, tabInset.contentBottom);
+  const { screenMargin } = useLayout();
+  const styles = makeStyles(theme, headerTop, tabInset.contentBottom, screenMargin);
   useAppHeader({ title: t('settings.title'), onBack });
 
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(
@@ -103,6 +111,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
   // AC-168: Logout state
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
 
   // On mount: resolve userId then load persisted preferences and apply them.
   // If userId cannot be resolved (unauthenticated), skip AsyncStorage reads —
@@ -248,7 +257,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
         scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
         {/* Language section (AC-091) */}
-        <View style={styles.section}>
+        <View>
           <AppText variant="groupHeader" style={styles.sectionTitle}>{t('settings.language.title')}</AppText>
           <View style={styles.optionGroup}>
             {languageOptions.map(({ value, label }) => {
@@ -282,7 +291,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
         </View>
 
         {/* Appearance section (AC-092) */}
-        <View style={styles.section}>
+        <View>
           <AppText variant="groupHeader" style={styles.sectionTitle}>{t('settings.appearance.title')}</AppText>
           <View style={styles.optionGroup}>
             {appearanceOptions.map(({ value, label }) => {
@@ -315,83 +324,120 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
           </View>
         </View>
 
-        {/* Account section — Blocked Accounts navigation row (AC-155) */}
-        <View style={styles.section}>
-          <View style={styles.optionGroup}>
+        {/* Account section: Notifications (N-1) + Blocked Accounts navigation rows (AC-155) */}
+        <View style={styles.optionGroup}>
+          {onNavigateToNotificationPreferences ? (
             <Pressable
               style={({ pressed }) => [
                 styles.optionRow,
                 pressed && styles.optionRowPressed,
               ]}
-              onPress={() => { setView('blockedAccounts'); }}
+              onPress={onNavigateToNotificationPreferences}
               accessibilityRole="button"
-              accessibilityLabel={t('settings.blockedAccounts')}
+              accessibilityLabel={t('settings.notifications')}
             >
-              <AppText variant="body">{t('settings.blockedAccounts')}</AppText>
+              <AppText variant="body">{t('settings.notifications')}</AppText>
               <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
             </Pressable>
-          </View>
+          ) : null}
+          <Pressable
+            style={({ pressed }) => [
+              styles.optionRow,
+              styles.optionRowLast,
+              pressed && styles.optionRowPressed,
+            ]}
+            onPress={() => { setView('blockedAccounts'); }}
+            accessibilityRole="button"
+            accessibilityLabel={t('settings.blockedAccounts')}
+          >
+            <AppText variant="body">{t('settings.blockedAccounts')}</AppText>
+            <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
+          </Pressable>
         </View>
 
-        {/* Privacy section — Beta Video Privacy toggle (AC-157) */}
-        <View style={styles.section}>
-          <View style={styles.optionGroup}>
-            <View style={styles.settingRow}>
-              <View style={styles.settingRowContent}>
-                <AppText variant="body">{t('settings.betaVideoPrivacy')}</AppText>
-                <AppText variant="footnote" color="textSecondary" style={styles.settingRowSubtext}>
-                  {betaVideoPrivacy === 'followers_only'
-                    ? t('settings.betaVideoPrivacyFollowersOnly')
-                    : t('settings.betaVideoPrivacyPublic')}
-                </AppText>
-              </View>
-              <Switch
-                value={betaVideoPrivacy === 'followers_only'}
-                onValueChange={(value) => { void handleBetaVideoPrivacyToggle(value); }}
-                disabled={!privacyFetched || privacyLoading}
-                trackColor={{ false: theme.colors.surfaceAlt, true: theme.colors.primary }}
-                thumbColor={theme.colors.surface}
-              />
+        {/* Privacy section: Beta Video Privacy toggle (AC-157). The subtitle always states the ON effect. */}
+        <View style={styles.optionGroup}>
+          <View style={styles.settingRow}>
+            <View style={styles.settingRowContent}>
+              <AppText variant="body">{t('settings.betaVideoPrivacy')}</AppText>
+              <AppText variant="footnote" color="textSecondary" style={styles.settingRowSubtext}>
+                {t('settings.betaVideoPrivacyOnEffect')}
+              </AppText>
             </View>
+            <Switch
+              value={betaVideoPrivacy === 'followers_only'}
+              onValueChange={(value) => { void handleBetaVideoPrivacyToggle(value); }}
+              disabled={!privacyFetched || privacyLoading}
+              trackColor={{ false: theme.colors.surfaceAlt, true: theme.colors.primary }}
+              thumbColor={theme.colors.surface}
+              accessibilityLabel={t('settings.betaVideoPrivacy')}
+            />
           </View>
         </View>
 
-        {/* Logout (AC-168) */}
-        {logoutError ? (
-          <AppText variant="footnote" color="error" style={styles.logoutError}>{logoutError}</AppText>
-        ) : null}
-        <View style={styles.logoutWrap}>
-          <Button
-            variant="destructive"
-            icon="log-out-outline"
-            label={t('profile.logout')}
-            loading={isSigningOut}
-            fullWidth
-            onPress={() => { void handleLogout(); }}
-          />
+        {/* Logout (AC-168): destructive row, confirmed in a sheet */}
+        <View>
+          <View style={styles.optionGroup}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.optionRow,
+                styles.optionRowLast,
+                styles.logoutRow,
+                pressed && styles.optionRowPressed,
+              ]}
+              onPress={() => { setLogoutConfirmOpen(true); }}
+              disabled={isSigningOut}
+              accessibilityRole="button"
+              accessibilityLabel={t('profile.logout')}
+              accessibilityState={{ disabled: isSigningOut, busy: isSigningOut }}
+            >
+              {isSigningOut ? (
+                <ActivityIndicator size="small" color={theme.colors.error} />
+              ) : (
+                <>
+                  <Ionicons name="log-out-outline" size={theme.iconSize.md} color={theme.colors.error} />
+                  <AppText variant="body" color="error">{t('profile.logout')}</AppText>
+                </>
+              )}
+            </Pressable>
+          </View>
+          {logoutError ? (
+            <AppText variant="footnote" color="error" style={styles.logoutError}>{logoutError}</AppText>
+          ) : null}
         </View>
       </ScrollView>
+      <BottomSheet
+        variant="confirm"
+        visible={logoutConfirmOpen}
+        onClose={() => { setLogoutConfirmOpen(false); }}
+        title={t('settings.logoutConfirmTitle')}
+        description={t('settings.logoutConfirmBody')}
+        confirmLabel={t('profile.logout')}
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          void handleLogout();
+        }}
+      />
     </SwipeBackWrapper>
   );
 }
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: number, bottomInset: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: number, bottomInset: number, screenMargin: number) {
   return StyleSheet.create({
     scrollView: {
       flex: 1,
       backgroundColor: theme.colors.background,
     },
     scrollContent: {
-      paddingHorizontal: theme.spacing.lg,
-      paddingTop: headerTop + theme.spacing.lg,
+      // R0/R1/R3: the container owns the margin (screenMargin) and the gap (sectionGap); sections set none.
+      paddingHorizontal: screenMargin,
+      paddingTop: headerTop + theme.spacing.md,
       paddingBottom: theme.spacing.xl + bottomInset,
-    },
-    section: {
-      marginBottom: theme.spacing.xl,
+      gap: theme.layout.sectionGap,
     },
     sectionTitle: {
-      marginBottom: theme.spacing.sm,
+      marginBottom: theme.layout.sectionHeaderGap,
     },
     optionGroup: {
       backgroundColor: theme.colors.surface,
@@ -402,11 +448,18 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      minHeight: theme.layout.minTouchTarget,
-      paddingVertical: theme.layout.listRowPaddingV,
-      paddingHorizontal: theme.spacing.lg,
+      minHeight: theme.layout.listRowMinHeight,
+      paddingVertical: theme.spacing.smd,
+      paddingHorizontal: theme.spacing.md,
       borderBottomWidth: theme.stroke.hairline,
       borderBottomColor: theme.colors.divider,
+    },
+    optionRowLast: {
+      borderBottomWidth: 0,
+    },
+    logoutRow: {
+      justifyContent: 'flex-start',
+      gap: theme.spacing.sm,
     },
     optionRowPressed: {
       backgroundColor: theme.colors.surfacePressed,
@@ -434,8 +487,9 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingVertical: theme.spacing.md,
-      paddingHorizontal: theme.spacing.lg,
+      minHeight: theme.layout.listRowMinHeight,
+      paddingVertical: theme.spacing.smd,
+      paddingHorizontal: theme.spacing.md,
     },
     settingRowContent: {
       flex: 1,
@@ -444,14 +498,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
     settingRowSubtext: {
       marginTop: 2,
     },
-    // AC-168: Logout button wrapper (shared destructive Button)
-    logoutWrap: {
-      marginTop: theme.spacing.lg,
-      marginBottom: theme.spacing.xl,
-    },
     logoutError: {
-      marginHorizontal: theme.spacing.lg,
-      marginTop: theme.spacing.md,
+      marginTop: theme.spacing.sm,
     },
   });
 }

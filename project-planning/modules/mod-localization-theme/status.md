@@ -2,6 +2,15 @@
 
 ## Engineering Progress
 
+### Off-spec design work (page-review v2.3) pending PR review — 2026-10-23
+
+Branch `design/page-templates`, not part of the PRD/spec; reviewed via PR.
+- ST-1 Settings: Logout is a destructive row with a confirm sheet (BottomSheet confirm); the privacy toggle subtitle always states the ON effect; R0/R1/R3 spacing (container owns `screenMargin` + `sectionGap`, rows 52 / padding 12x16).
+- N-1: new Notifications row; `onNavigateToNotificationPreferences` prop wired through AppShell (opens the notifications overlay on `preferences`).
+- L-2 Blocked Accounts: 52pt rows, Avatar sm 32, Unblock centred, padding screenMargin, confirm sheet before unblocking.
+- Shared (`src/components/ui`): `ButtonGroup` (B-1) and T-1 (no content text below footnote 13).
+- Stories: Settings `Confirm Logout`, Blocked `Confirm Unblock`; `Components/ButtonGroup`. Tests updated for the logout confirm step.
+
 ### Stories + design-fix — 2026-10-22 (Storybook screen stories + Priority-1 design token migration)
 
 **Scope**: Two tasks in one pass:
