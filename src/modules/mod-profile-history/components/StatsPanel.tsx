@@ -16,6 +16,17 @@
  * stagger 30, at most 7 steps (<= 510ms), top row last with `settle`. Once per session. Reduce
  * Motion: bars are final, the distribution card fades in over `short`.
  *
+ * COMPACT variant (page-review P-1/P-2, spec §32.5 v2.3): `variant="compact"` renders ONE row of three
+ * tiles (total sends, days climbed, highest grade) with gap `inlineGap` 8. Numerals are `title3` 20
+ * `numeric`, labels `footnote` 13; no 11/12pt text. It is the entry point for the full panel, which
+ * lives on Profile History.
+ *   <StatsPanel variant="compact" stats={stats} onOpenDetails={openProfileHistory} />
+ * Props for compact: `stats` (required), `onOpenDetails` (optional; when set every tile is one
+ * pressable card, hint "Opens full stats"; omitted -> static tiles). `hasRecords` / `onLogSend` are
+ * ignored. Adopted by Profile (auth-profile) and User Profile (social-feed) in phase 2.
+ *
+ * Margins: the panel never pads horizontally; the parent owns screenMargin (R0), so content sits at 16.
+ *
  * Tokens only: no hex, font sizes or radii.
  */
 
@@ -25,7 +36,7 @@ import { Animated, StyleSheet, useWindowDimensions, View } from 'react-native';
 
 import { AppText, Card, EmptyState } from '../../../components/ui';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { useTheme } from '../../../lib/theme';
 import type { ProfileStats } from '../types';
 import { GRADE_ORDER } from '../types';
 
@@ -147,6 +158,10 @@ function NumberUnit({ value, unit }: { value: number; unit: string }): React.JSX
 
 interface StatsPanelProps {
   stats: ProfileStats;
+  /** `full` (default): hero + tiles + distribution. `compact`: one row of three small tiles. */
+  variant?: 'full' | 'compact';
+  /** Compact only: tap target that opens the full StatsPanel (Profile History). */
+  onOpenDetails?: () => void;
   /**
    * False when the user has no ascent records at all (not even attempts): the whole panel becomes one
    * EmptyState `prompt`. Default true (total_sends = 0 then means "attempts only").
@@ -158,6 +173,8 @@ interface StatsPanelProps {
 
 export default function StatsPanel({
   stats,
+  variant = 'full',
+  onOpenDetails,
   hasRecords = true,
   onLogSend,
 }: StatsPanelProps): React.JSX.Element {
@@ -165,8 +182,7 @@ export default function StatsPanel({
   const { theme } = useTheme();
   const { fontScale, width } = useWindowDimensions();
   const { duration, reduceMotion } = useMotion();
-  const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, screenMargin);
+  const styles = makeStyles(theme);
   const ax = fontScale >= AX_FONT_SCALE;
   const narrow = width < theme.layout.compactWidthBreakpoint;
   const c = theme.colors;
@@ -189,6 +205,51 @@ export default function StatsPanel({
     }).start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion]);
+
+  if (variant === 'compact') {
+    const items = [
+      {
+        key: 'sends',
+        label: t('profileHistory.stats.totalSends'),
+        value: String(stats.total_sends),
+        a11y: t('profileHistory.stats.sendsA11y', { count: stats.total_sends }),
+      },
+      {
+        key: 'days',
+        label: t('profileHistory.stats.accumulatedDays'),
+        value: String(stats.accumulated_days),
+        a11y: t('profileHistory.stats.daysA11y', { count: stats.accumulated_days }),
+      },
+      {
+        key: 'highest',
+        label: t('profileHistory.stats.highestGrade'),
+        value: stats.highest_grade ?? t('profileHistory.stats.noGrade'),
+        a11y: `${t('profileHistory.stats.highestGrade')}, ${stats.highest_grade ?? t('profileHistory.stats.noGrade')}`,
+      },
+    ];
+    return (
+      <View style={styles.compactRow}>
+        {items.map(({ key, label, value, a11y }) => (
+          <Card
+            key={key}
+            variant={onOpenDetails ? 'pressable' : 'static'}
+            onPress={onOpenDetails}
+            padding={theme.spacing.smd}
+            accessibilityLabel={`${label}, ${a11y}`}
+            accessibilityHint={onOpenDetails ? t('profileHistory.stats.compactHint') : undefined}
+            style={styles.compactTile}
+          >
+            <AppText variant="footnote" weight="600" color="textSecondary">
+              {label}
+            </AppText>
+            <AppText variant="title3" numeric>
+              {value}
+            </AppText>
+          </Card>
+        ))}
+      </View>
+    );
+  }
 
   if (!hasRecords) {
     return (
@@ -376,13 +437,21 @@ export default function StatsPanel({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     // Cards never carry their own margin: the parent gaps them (cardGap 8).
     container: {
       gap: theme.spacing.sm,
       marginBottom: theme.layout.sectionGap,
-      paddingHorizontal: screenMargin,
+    },
+    compactRow: {
+      flexDirection: 'row',
+      gap: theme.layout.inlineGap,
+    },
+    compactTile: {
+      flex: 1,
+      minWidth: 0,
+      gap: theme.spacing.xs,
     },
     row: {
       flexDirection: 'row',

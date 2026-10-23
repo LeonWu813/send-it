@@ -454,6 +454,7 @@
       "heroSends_other": "完攀 {{count}} 次",
       "sendsA11y_other": "完攀 {{count}} 次",
       "heroA11y_other": "最高難度 {{grade}}，完攀 {{count}} 次",
+      "compactHint": "查看完整統計",
       "daysA11y_other": "完攀天數 {{count}} 天"
     },
     "filter": {

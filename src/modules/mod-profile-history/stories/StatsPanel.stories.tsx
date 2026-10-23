@@ -32,7 +32,7 @@ function buildStats({ state, totalSends, accumulatedDays, highestGrade, counts }
 const meta: Meta<Args> = {
   title: 'Patterns/StatsPanel',
   render: (args) => (
-    <View style={{ paddingVertical: 16, maxWidth: 420 }}>
+    <View style={{ paddingVertical: 16, paddingHorizontal: 16, width: 393 }}>
       <StatsPanel stats={buildStats(args)} hasRecords={args.state !== 'noRecords'} onLogSend={() => undefined} />
     </View>
   ),
@@ -55,3 +55,15 @@ export default meta;
 
 /** Change the numbers or counts (try "310,1450,2210,2980,2600,1800,940,430,110,38,4,1"); switch `state`; raise font scale (>= 1.6) for the full-width hero with the small tiles below. */
 export const Playground: StoryObj<Args> = {};
+
+/**
+ * Compact variant (page-review P-1/P-2): three tiles, gap `inlineGap` 8, `title3` numerals and `footnote` labels.
+ * Tapping opens the full panel on Profile History (`onOpenDetails`).
+ */
+export const Compact: StoryObj<Args> = {
+  render: (args) => (
+    <View style={{ paddingVertical: 16, paddingHorizontal: 16, width: 393 }}>
+      <StatsPanel variant="compact" stats={buildStats(args)} onOpenDetails={() => undefined} />
+    </View>
+  ),
+};

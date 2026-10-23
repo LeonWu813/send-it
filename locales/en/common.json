@@ -454,6 +454,7 @@
       "heroSends_other": "{{count}} sends",
       "sendsA11y_other": "{{count}} sends",
       "heroA11y_other": "Top grade {{grade}}, {{count}} sends",
+      "compactHint": "Opens full stats",
       "daysA11y_other": "Days climbed, {{count}} days"
     },
     "filter": {

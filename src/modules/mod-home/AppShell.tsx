@@ -74,6 +74,7 @@ import { UnreadCountProvider, NotificationsNavigator } from '../mod-notification
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
 import { GymNavigator } from '../mod-gym-directory';
 import { UserProfileScreen } from '../mod-social-feed';
+import { ProfileHistoryNavProvider, ProfileHistoryView } from '../mod-profile-history';
 import SettingsScreen from '../mod-localization-theme/SettingsScreen';
 import AppHeader from './components/AppHeader';
 import {
@@ -208,6 +209,9 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   /** Non-null while a climber profile overlay is open (AC-182). */
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
 
+  /** Non-null while the Profile History pushed view is open (page-review P-1). */
+  const [historyTarget, setHistoryTarget] = useState<{ userId: string; isOwnProfile: boolean } | null>(null);
+
   /** Non-null while the notifications overlay is open (AC-184). */
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
@@ -295,7 +299,12 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   return (
     <UnreadCountProvider session={session}>
       <AppHeaderProvider value={headerStore}>
+  const handleOpenHistory = useCallback((userId: string, isOwnProfile: boolean): void => {
+    setHistoryTarget({ userId, isOwnProfile });
+  }, []);
+
       <ToastProvider bottomOffset={toastBottomOffset}>
+    setHistoryTarget(null); // leaving Profile History for the route's gym
         <CelebrationHost>
           <View style={styles.root}>
             {/* Global app-level header (AC-184) — above tab content on all non-exempt screens */}
@@ -305,6 +314,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
               onNavigateToNotifications={handleNavigateToNotifications}
               onNavigateToSettings={handleNavigateToSettings}
             />
+      <ProfileHistoryNavProvider open={handleOpenHistory}>
 
             <View style={styles.tabContentArea}>
               {/* Tab 1 — Home */}
@@ -389,6 +399,25 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   onNavigateToSettings={handleNavigateToSettings}
                 >
                 <NotificationsNavigator
+            {/* Profile History pushed view (page-review P-1) */}
+            {historyTarget !== null && (
+              <View style={styles.overlayContainer}>
+                <AppHeaderOverlayScope
+                  topInset={insets.top}
+                  bottomInset={insets.bottom}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                >
+                <ProfileHistoryView
+                  userId={historyTarget.userId}
+                  isOwnProfile={historyTarget.isOwnProfile}
+                  onBack={() => setHistoryTarget(null)}
+                  onNavigateToRoute={handleNavigateToRoute}
+                />
+                </AppHeaderOverlayScope>
+              </View>
+            )}
+
                   session={session}
                   initialView="inbox"
                   isActive={notificationsOpen}
@@ -419,3 +448,4 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     </UnreadCountProvider>
   );
 }
+      </ProfileHistoryNavProvider>

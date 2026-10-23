@@ -1,7 +1,7 @@
 /**
- * Pages/Profile/Profile History (MOD-008): the history + stats list that the Profile tab embeds.
- * Fake data only; the Supabase stub intercepts the RPCs. Wired like ProfileScreen: the list is bound to
- * the AppShell header and TabBar insets through `useAppHeaderRoot()`.
+ * Pages/Profile/Profile History (MOD-008): the pushed view opened from the compact StatsPanel
+ * (page-review P-1): nested header (back + title), the full StatsPanel and the sends list.
+ * Fake data only; the Supabase stub intercepts the RPCs. Rendered as an AppShell overlay.
  * No Error story: the stub cannot make an RPC fail.
  */
 
@@ -10,8 +10,7 @@ import React from 'react';
 
 import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
 import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
-import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
-import ProfileHistoryScreen from '../screens/ProfileHistoryScreen';
+import ProfileHistoryView from '../screens/ProfileHistoryView';
 import { GRADE_ORDER } from '../types';
 
 const ME = 'story-user-me';
@@ -88,34 +87,18 @@ function WithStubs({ state, children }: { state: StubState; children: React.Reac
   return <>{children}</>;
 }
 
-/** Mirrors ProfileScreen: binds the list to the shell header and TabBar insets. */
+/** The pushed view, as AppShell mounts it from the compact StatsPanel. */
 function Host(): React.JSX.Element {
-  const h = useAppHeaderRoot();
-  return (
-    <ProfileHistoryScreen
-      userId={ME}
-      isOwnProfile
-      onNavigateToRoute={() => {}}
-      onLogSend={() => {}}
-      scrollProps={{
-        onScroll: h.onScroll,
-        onContentSizeChange: h.onContentSizeChange,
-        onLayout: h.onLayout,
-        scrollEventThrottle: h.scrollEventThrottle,
-        contentContainerStyle: { paddingTop: h.contentTopInset, paddingBottom: h.contentBottomInset },
-        scrollIndicatorInsets: { top: h.contentTopInset, bottom: h.indicatorBottomInset },
-      }}
-    />
-  );
+  return <ProfileHistoryView userId={ME} isOwnProfile onBack={() => {}} onNavigateToRoute={() => {}} onLogSend={() => {}} />;
 }
 
 type Args = { state: StubState };
 
 const meta: Meta<Args> = {
   title: 'Pages/Profile/Profile History',
-  component: ProfileHistoryScreen as never, // real component; story args only drive the stub data
+  component: ProfileHistoryView as never, // real component; story args only drive the stub data
   tags: ['!autodocs'],
-  parameters: { layout: 'centered', page: { tab: 'profile' } },
+  parameters: { layout: 'centered', page: { tab: 'profile', overlay: true } },
   decorators: [
     (Story, ctx) => (
       <WithStubs state={(ctx.args as Args).state}>

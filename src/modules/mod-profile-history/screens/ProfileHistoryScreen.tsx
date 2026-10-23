@@ -83,6 +83,8 @@ interface ProfileHistoryScreenProps {
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
   /** Primary action of the zero-records prompt ("Find routes"). Omitted -> the prompt has no button. */
   onLogSend?: () => void;
+  /** True when a nested AppHeader already owns the top safe area (pushed view): no top inset padding. */
+  headerHandled?: boolean;
   /** Optional pass-through scroll props. Caller padding in contentContainerStyle overrides the TabBar inset. */
   scrollProps?: ForwardedScrollProps;
 }
@@ -97,6 +99,7 @@ export default function ProfileHistoryScreen({
   extraListFooter,
   onNavigateToRoute,
   onLogSend,
+  headerHandled = false,
   scrollProps,
 }: ProfileHistoryScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
@@ -106,7 +109,7 @@ export default function ProfileHistoryScreen({
   const tabInset = useTabBarInset();
   // When extraListHeader is provided, the host element already applies the
   // top-inset padding inside its container. Pass 0 so we don't double-pad.
-  const topInsetForStyles = extraListHeader !== undefined ? 0 : insets.top;
+  const topInsetForStyles = extraListHeader !== undefined || headerHandled ? 0 : insets.top;
   const styles = makeStyles(theme, topInsetForStyles, screenMargin);
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -320,12 +323,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: topInset + theme.spacing.md,
       paddingHorizontal: screenMargin,
     },
+    // R0: the list's contentContainer owns the screenMargin (16); sections never add their own.
     sectionTitle: {
-      paddingHorizontal: screenMargin,
       marginBottom: theme.layout.sectionHeaderGap,
     },
     tabRow: {
       flexGrow: 0,
+      marginHorizontal: -screenMargin, // chips scroll edge to edge, start aligned at the margin
       marginBottom: theme.spacing.md,
     },
     tabRowContent: {
@@ -333,9 +337,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: screenMargin,
       paddingVertical: theme.spacing.xs,
     },
-    emptyContainer: {
-      paddingHorizontal: screenMargin,
-    },
+    emptyContainer: {},
     hiddenContainer: {
       flex: 1,
       alignItems: 'center',
