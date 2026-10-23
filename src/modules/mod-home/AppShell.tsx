@@ -299,7 +299,12 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     setSettingsOpen(false);
   }
 
+  const handleOpenHistory = useCallback((userId: string, isOwnProfile: boolean): void => {
+    setHistoryTarget({ userId, isOwnProfile });
+  }, []);
+
   const handleNavigateToRoute = useCallback((routeId: string, gymId: string): void => {
+    setHistoryTarget(null); // leaving Profile History for the route's gym
     setRouteDeepLinkId(routeId);
     setGymDeepLinkId(gymId);
     setRouteNavKey((k) => k + 1);
@@ -309,12 +314,8 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   return (
     <UnreadCountProvider session={session}>
       <AppHeaderProvider value={headerStore}>
-  const handleOpenHistory = useCallback((userId: string, isOwnProfile: boolean): void => {
-    setHistoryTarget({ userId, isOwnProfile });
-  }, []);
-
+      <ProfileHistoryNavProvider open={handleOpenHistory}>
       <ToastProvider bottomOffset={toastBottomOffset}>
-    setHistoryTarget(null); // leaving Profile History for the route's gym
         <CelebrationHost>
           <View style={styles.root}>
             {/* Global app-level header (AC-184) — above tab content on all non-exempt screens */}
@@ -324,7 +325,6 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
               onNavigateToNotifications={handleNavigateToNotifications}
               onNavigateToSettings={handleNavigateToSettings}
             />
-      <ProfileHistoryNavProvider open={handleOpenHistory}>
 
             <View style={styles.tabContentArea}>
               {/* Tab 1 — Home */}
@@ -399,16 +399,6 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
               </View>
             )}
 
-            {/* Notifications overlay (AC-184) */}
-            {notificationsOpen && (
-              <View style={styles.overlayContainer}>
-                <AppHeaderOverlayScope
-                  topInset={insets.top}
-                  bottomInset={insets.bottom}
-                  onNavigateToNotifications={handleNavigateToNotifications}
-                  onNavigateToSettings={handleNavigateToSettings}
-                >
-                <NotificationsNavigator
             {/* Profile History pushed view (page-review P-1) */}
             {historyTarget !== null && (
               <View style={styles.overlayContainer}>
@@ -428,6 +418,16 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
               </View>
             )}
 
+            {/* Notifications overlay (AC-184) */}
+            {notificationsOpen && (
+              <View style={styles.overlayContainer}>
+                <AppHeaderOverlayScope
+                  topInset={insets.top}
+                  bottomInset={insets.bottom}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                >
+                <NotificationsNavigator
                   session={session}
                   initialView={notificationsView}
                   isActive={notificationsOpen}
@@ -457,8 +457,8 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
           </View>
         </CelebrationHost>
       </ToastProvider>
+      </ProfileHistoryNavProvider>
       </AppHeaderProvider>
     </UnreadCountProvider>
   );
 }
-      </ProfileHistoryNavProvider>
