@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-localization-theme
-mode: verify
-module: MOD-010
-result: pass
-summary: QA Run 6 — AC-202/AC-203 sign-out save. saveDeviceLanguage(selectedLanguage) and saveDeviceTheme(selectedOverride) confirmed inside try block before signOut() in handleLogout(). Types directly compatible (SupportedLanguage=DeviceLanguage, ThemeOverride=DeviceTheme), no casting. tsc exit 0. 654/655 tests pass (1 pre-existing AscentList failure in mod-send-logging, not introduced by this change). Git scope clean — only SettingsScreen.tsx changed. Known gap: applySignedOutLanguage() not wired in AppShell (MOD-012 responsibility, noted, not blocking). All prior ACs (AC-090 through AC-199/AC-200) carry forward as PASS.
-next: coordinator — QA PASS for MOD-010 AC-202/AC-203. MOD-012 applySignedOutLanguage() wiring gap is being tracked separately under qa-mod-home. No further action needed for this verification.
+agent: engineer-mod-home
+mode: bugfix
+module: MOD-012
+result: done
+summary: AC-202/AC-203 sign-out wiring gaps fixed. (1) applySignedOutLanguage() imported and called in AppShell useEffect cleanup — fires on unmount (sign-out) to restore device-level language. (2) setThemeUserId signature widened to string | null in src/lib/theme.ts interface and implementation; AppShell cleanup now calls setThemeUserId(null) to trigger ThemeProvider device-level theme reload immediately after sign-out. tsc 0 errors. 654/655 tests pass (1 pre-existing mod-send-logging flaky failure confirmed on base commit). Commit 1fc7cde.
+next: qa-mod-home — re-verify AC-202 and AC-203 sign-out path (QA Run 24). Scope: applySignedOutLanguage() wiring (AppShell.tsx) and setThemeUserId(null) reset (theme.ts + AppShell.tsx). All prior ACs carry forward as PASS.
 timestamp: 2026-10-22
 
 ## PM Updates
