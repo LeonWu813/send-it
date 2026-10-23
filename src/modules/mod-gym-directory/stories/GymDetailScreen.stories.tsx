@@ -37,7 +37,7 @@ const GYM_FIXTURE: Gym = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-type StubState = 'populated' | 'loading' | 'error';
+type StubState = 'populated' | 'noPhoto' | 'loading' | 'error';
 
 function setupStubs(state: StubState): void {
   resetStubData();
@@ -45,9 +45,9 @@ function setupStubs(state: StubState): void {
   if (state === 'loading') {
     setStubData('gyms', STUB_PENDING);
     setStubData('saved_gyms', STUB_PENDING);
-  } else if (state === 'populated') {
+  } else if (state === 'populated' || state === 'noPhoto') {
     // loadGym uses .single(): the stub returns the first element
-    setStubData('gyms', [GYM_FIXTURE]);
+    setStubData('gyms', [state === 'noPhoto' ? { ...GYM_FIXTURE, cover_photo_url: null, branch_label: '新莊店' } : GYM_FIXTURE]);
     setStubData('saved_gyms', [{ gym_id: 'gym-001' }]);
   }
   // error: no gym row -> the screen's not-found block error
@@ -87,8 +87,11 @@ export default meta;
 
 type Story = StoryObj<Args>;
 
-/** Full gym record, saved bookmark, "View Routes" CTA. */
+/** Gym with a cover photo (+ Google attribution at 13pt); "View Routes" pinned at the bottom. */
 export const Populated: Story = { args: { state: 'populated' } };
+
+/** No cover photo: the photo area collapses (no placeholder); title starts at the top. */
+export const NoPhoto: Story = { args: { state: 'noPhoto' } };
 
 /** Initial fetch never resolves: detail skeleton. */
 export const Loading: Story = { args: { state: 'loading' } };

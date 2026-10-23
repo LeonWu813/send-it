@@ -42,6 +42,10 @@ import { fetchSavedGymIds, listGyms } from '../gym-service';
 import type { GymSummary } from '../types';
 import { getGymInitials } from '../gym-initials';
 
+/** Fixed gym row: 12 padding + 48 thumbnail + 12 padding (R14, G-1). */
+const THUMB = 48;
+const ROW_HEIGHT = 72;
+
 interface GymListScreenProps {
   onSelectGym: (gymId: string) => void;
   onRequestGym: () => void;
@@ -155,12 +159,20 @@ export default function GymListScreen({
     [sortedGyms],
   );
 
+  const Separator = useCallback(
+    (): React.JSX.Element => <View style={styles.separator} />,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [theme.layout.cardGap],
+  );
+
   function renderGymCard({ item }: { item: GymSummary }): React.JSX.Element {
     const isItemSaved = savedGymIds.has(item.id);
     return (
       <Card
         variant="pressable"
         inScroll
+        padding={theme.spacing.smd}
+        style={styles.card}
         onPress={() => onSelectGym(item.id)}
         accessibilityLabel={`${item.name}, ${localizedDistrict(item)}`}
       >
@@ -176,38 +188,32 @@ export default function GymListScreen({
             />
           ) : (
             <View style={styles.initialsAvatar}>
-              <AppText variant="headline" color="textSecondary">
+              <AppText variant="callout" color="textSecondary">
                 {getGymInitials(item.name ?? '')}
               </AppText>
             </View>
           )}
 
           <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardTitleBlock}>
-                <AppText variant="headline" numberOfLines={2}>
-                  {item.name}
-                </AppText>
-                {item.branch_label ? (
-                  <AppText variant="footnote" color="textSecondary">
-                    {item.branch_label}
-                  </AppText>
-                ) : null}
-              </View>
-              {/* AC-122: filled bookmark status marker for saved gyms only (read-only, not pressable) */}
-              {isItemSaved ? (
-                <Ionicons
-                  name={ICON.bookmark.filled}
-                  size={theme.iconSize.sm}
-                  color={theme.colors.textSecondary}
-                  accessibilityLabel={t('gymDirectory.bookmark.saved')}
-                />
-              ) : null}
-            </View>
-            <AppText variant="subhead" color="textSecondary" style={styles.district}>
-              {localizedCity(item)} · {localizedDistrict(item)}
+            <AppText variant="headline" numberOfLines={1}>
+              {item.name}
+            </AppText>
+            {/* R14: one meta line, stackTight gap below the name (fixed 72pt row) */}
+            <AppText variant="footnote" color="textSecondary" numberOfLines={1} style={styles.meta}>
+              {[item.branch_label, localizedCity(item), localizedDistrict(item)]
+                .filter(Boolean)
+                .join(' · ')}
             </AppText>
           </View>
+          {/* AC-122: filled bookmark status marker for saved gyms only (read-only, not pressable) */}
+          {isItemSaved ? (
+            <Ionicons
+              name={ICON.bookmark.filled}
+              size={theme.iconSize.sm}
+              color={theme.colors.textSecondary}
+              accessibilityLabel={t('gymDirectory.bookmark.saved')}
+            />
+          ) : null}
         </View>
       </Card>
     );
@@ -219,12 +225,9 @@ export default function GymListScreen({
         {skeletonPhase !== 'idle' ? (
           <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonList}>
             {[0, 1, 2, 3].map((i) => (
-              <Card key={i}>
+              <Card key={i} padding={theme.spacing.smd} style={styles.card}>
                 <Skeleton shape="text" textVariant="headline" width="60%" />
-                <Skeleton shape="text" textVariant="footnote" width="30%" />
-                <View style={styles.skeletonDistrict}>
-                  <Skeleton shape="text" textVariant="subhead" width="45%" />
-                </View>
+                <Skeleton shape="text" textVariant="footnote" width="40%" />
               </Card>
             ))}
           </SkeletonGroup>
@@ -287,20 +290,22 @@ export default function GymListScreen({
     <View>
       {/* AC-197: Google Maps Platform ToS — show attribution when any card has a Google photo */}
       {hasGooglePhotos ? (
-        <AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
+        <AppText variant="footnote" color="textSecondary" style={styles.googleAttribution}>
           {t('gymDirectory.googlePhotosAttribution')}
         </AppText>
       ) : null}
-      <View style={styles.requestRow}>
-        <Button
-          variant="ghost"
-          size="md"
-          on="background"
-          label={t('gymDirectory.requestGym.cta')}
-          trailingIcon={ICON.forward.outline}
-          onPress={onRequestGym}
-        />
-      </View>
+      {sortedGyms.length > 0 ? (
+        <View style={styles.requestRow}>
+          <Button
+            variant="ghost"
+            size="md"
+            on="background"
+            label={t('gymDirectory.requestGym.cta')}
+            trailingIcon={ICON.forward.outline}
+            onPress={onRequestGym}
+          />
+        </View>
+      ) : null}
     </View>
   );
 
@@ -318,10 +323,16 @@ export default function GymListScreen({
         onLayout={header.onLayout}
         scrollEventThrottle={header.scrollEventThrottle}
         keyboardShouldPersistTaps="handled"
+        ItemSeparatorComponent={Separator}
         ListHeaderComponent={listHeader}
         ListFooterComponent={listFooter}
         ListEmptyComponent={
-          <EmptyState variant="filtered" title={t('gymDirectory.noResults')} />
+          <EmptyState
+            variant="filtered"
+            title={t('gymDirectory.noResults')}
+            secondaryLabel={t('gymDirectory.requestGym.cta')}
+            onSecondary={onRequestGym}
+          />
         }
       />
     </View>
@@ -347,9 +358,6 @@ function makeStyles(
     skeletonList: {
       gap: theme.layout.cardGap,
     },
-    skeletonDistrict: {
-      marginTop: theme.spacing.xs,
-    },
     searchWrap: {
       marginBottom: theme.spacing.smd,
     },
@@ -360,10 +368,16 @@ function makeStyles(
       rowGap: theme.spacing.smd,
       marginBottom: theme.spacing.md,
     },
+    separator: {
+      height: theme.layout.cardGap,
+    },
     listContent: {
-      gap: theme.layout.cardGap,
       paddingTop: topPad,
       paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.lg,
+    },
+    card: {
+      height: ROW_HEIGHT,
+      justifyContent: 'center',
     },
     cardRow: {
       flexDirection: 'row',
@@ -371,15 +385,15 @@ function makeStyles(
       gap: theme.spacing.sm,
     },
     thumbnail: {
-      width: 56,
-      height: 56,
+      width: THUMB,
+      height: THUMB,
       borderRadius: theme.radius.media,
       backgroundColor: theme.colors.surfaceAlt,
       flexShrink: 0,
     },
     initialsAvatar: {
-      width: 56,
-      height: 56,
+      width: THUMB,
+      height: THUMB,
       borderRadius: theme.radius.media,
       backgroundColor: theme.colors.surfaceAlt,
       alignItems: 'center',
@@ -389,17 +403,8 @@ function makeStyles(
     cardContent: {
       flex: 1,
     },
-    cardHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      gap: theme.spacing.sm,
-    },
-    cardTitleBlock: {
-      flex: 1,
-    },
-    district: {
-      marginTop: theme.spacing.xs,
+    meta: {
+      marginTop: theme.layout.stackTight,
     },
     googleAttribution: {
       textAlign: 'center',

@@ -15,11 +15,12 @@
  * Tappable address: pressing the address row opens Google Maps via Linking.openURL.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
@@ -38,7 +39,6 @@ import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
 import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import type { Gym } from '../types';
-import { getGymInitials } from '../gym-initials';
 
 interface GymDetailScreenProps {
   gymId: string;
@@ -71,6 +71,17 @@ export default function GymDetailScreen({
 
   // AC-120, AC-121: saved-gym bookmark state
   const [isSaved, setIsSaved] = useState(false);
+
+  // G-2: the header title appears only once the in-body title has scrolled off.
+  const [titleScrolledOff, setTitleScrolledOff] = useState(false);
+  const titleBottom = useRef(Number.POSITIVE_INFINITY);
+  const handleTitleLayout = useCallback((e: LayoutChangeEvent): void => {
+    const { y, height } = e.nativeEvent.layout;
+    titleBottom.current = y + height;
+  }, []);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>): void => {
+    setTitleScrolledOff(e.nativeEvent.contentOffset.y >= titleBottom.current);
+  }, []);
 
   const fetchGym = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -119,7 +130,7 @@ export default function GymDetailScreen({
 
   // v2.2: AppShell header owns back + title; the bookmark toggle is its trailing control.
   useAppHeader({
-    title: gym?.name ?? '',
+    title: titleScrolledOff ? (gym?.name ?? '') : '',
     onBack,
     trailing: gym ? (
       <IconButton
@@ -179,77 +190,78 @@ export default function GymDetailScreen({
 
   return (
     <SwipeBackWrapper onBack={onBack}>
-      <ScrollView
-        style={styles.root}
-        contentContainerStyle={styles.contentContainer}
-        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
-      >
-        {/* AC-196: cover photo from Places API seeder (when present) */}
-        {gym.cover_photo_url ? (
-          <>
-            <Image
-              source={{ uri: gym.cover_photo_url }}
-              style={styles.coverPhoto}
-              accessibilityLabel={gym.name ?? ''}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-            />
-            {/* AC-196: Google Maps Platform ToS — attribution required */}
-            <AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
-              {t('gymDirectory.googlePhotosAttribution')}
-            </AppText>
-          </>
-        ) : (
-          /* AC-198: initials avatar fallback when cover_photo_url is null */
-          <View style={styles.initialsAvatar} accessibilityLabel={gym.name ?? ''}>
-            <AppText variant="title1" color="textSecondary">
-              {getGymInitials(gym.name ?? '')}
-            </AppText>
-          </View>
-        )}
-
-        {/* Name + branch */}
-        <AppText variant="title1">{gym.name}</AppText>
-        <AppText variant="title3" color="textSecondary">
-          {gym.name_zh}
-        </AppText>
-        {gym.branch_label ? (
-          <AppText variant="callout" color="textSecondary" style={styles.branchLabel}>
-            {gym.branch_label}
-          </AppText>
-        ) : null}
-
-        {/* Location section */}
-        <AppText variant="pageSection" style={styles.sectionLabel}>
-          {t('gymDirectory.detail.location')}
-        </AppText>
-        <AppText variant="body">
-          {localizedCity(gym)} · {localizedDistrict(gym)}
-        </AppText>
-        <TouchableOpacity
-          accessibilityRole="link"
-          accessibilityLabel={gym.address_text}
-          onPress={() => {
-            const mapsUrl =
-              gym.lat != null && gym.lng != null
-                ? `https://maps.google.com/?q=${gym.lat},${gym.lng}`
-                : `https://maps.google.com/?q=${encodeURIComponent(gym.address_text)}`;
-            void Linking.openURL(mapsUrl);
-          }}
-          style={styles.addressRow}
+      <View style={styles.root}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.contentContainer}
+          scrollIndicatorInsets={{ bottom: 0 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
-          <AppText variant="body" color="primary" style={styles.addressText}>
-            {gym.address_text}
-          </AppText>
-          <Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />
-        </TouchableOpacity>
+          {/* AC-196: cover photo from Places API seeder. G-2: no photo => no photo area at all. */}
+          {gym.cover_photo_url ? (
+            <View style={styles.photoBlock}>
+              <Image
+                source={{ uri: gym.cover_photo_url }}
+                style={styles.coverPhoto}
+                accessibilityLabel={gym.name ?? ''}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+              {/* AC-196: Google Maps Platform ToS — attribution required */}
+              <AppText variant="footnote" color="textSecondary" style={styles.googleAttribution}>
+                {t('gymDirectory.googlePhotosAttribution')}
+              </AppText>
+            </View>
+          ) : null}
 
-        {/* Mixed gym note */}
-        {isMixed && gym.bouldering_only_note ? (
-          <NoticeBox message={gym.bouldering_only_note} style={styles.noteBox} />
-        ) : null}
+          {/* Name + branch */}
+          <View onLayout={handleTitleLayout}>
+            <AppText variant="title1">{gym.name}</AppText>
+            <AppText variant="title3" color="textSecondary" style={styles.nameZh}>
+              {gym.name_zh}
+            </AppText>
+            {gym.branch_label ? (
+              <AppText variant="callout" color="textSecondary" style={styles.branchLabel}>
+                {gym.branch_label}
+              </AppText>
+            ) : null}
+          </View>
 
-        {/* View Routes CTA */}
+          {/* Location section */}
+          <View>
+            <AppText variant="pageSection" style={styles.sectionLabel}>
+              {t('gymDirectory.detail.location')}
+            </AppText>
+            <AppText variant="body">
+              {localizedCity(gym)} · {localizedDistrict(gym)}
+            </AppText>
+            <TouchableOpacity
+              accessibilityRole="link"
+              accessibilityLabel={gym.address_text}
+              onPress={() => {
+                const mapsUrl =
+                  gym.lat != null && gym.lng != null
+                    ? `https://maps.google.com/?q=${gym.lat},${gym.lng}`
+                    : `https://maps.google.com/?q=${encodeURIComponent(gym.address_text)}`;
+                void Linking.openURL(mapsUrl);
+              }}
+              style={styles.addressRow}
+            >
+              <AppText variant="body" color="primary" style={styles.addressText}>
+                {gym.address_text}
+              </AppText>
+              <Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Mixed gym note */}
+          {isMixed && gym.bouldering_only_note ? (
+            <NoticeBox message={gym.bouldering_only_note} />
+          ) : null}
+        </ScrollView>
+
+        {/* G-2: View Routes CTA pinned at the bottom (AC-005) */}
         <View style={styles.cta}>
           <Button
             variant="primary"
@@ -258,7 +270,7 @@ export default function GymDetailScreen({
             onPress={() => onViewRoutes(gym.id, gym.name)}
           />
         </View>
-      </ScrollView>
+      </View>
     </SwipeBackWrapper>
   );
 }
@@ -274,13 +286,21 @@ function makeStyles(
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    scroll: {
+      flex: 1,
+    },
+    // R0: the gap between sections is set once, here.
     contentContainer: {
-      paddingTop: theme.spacing.sm,
+      paddingTop: theme.spacing.md,
       paddingHorizontal: screenMargin,
-      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.xxl,
+      paddingBottom: theme.spacing.md,
+      gap: theme.layout.sectionGap,
     },
     skeletonGroup: {
       gap: theme.layout.cardGap,
+    },
+    photoBlock: {
+      gap: theme.layout.iconTextGap,
     },
     coverPhoto: {
       width: '100%',
@@ -291,19 +311,10 @@ function makeStyles(
       backgroundColor: theme.colors.surfaceAlt,
     },
     googleAttribution: {
-      marginTop: theme.spacing.xs,
-      marginBottom: theme.spacing.md,
       textAlign: 'right',
     },
-    initialsAvatar: {
-      width: '100%',
-      height: 200,
-      borderRadius: RADIUS.card,
-      ...CONTINUOUS,
-      backgroundColor: theme.colors.surfaceAlt,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: theme.spacing.md,
+    nameZh: {
+      marginTop: theme.layout.stackTight,
     },
     addressRow: {
       flexDirection: 'row',
@@ -314,17 +325,16 @@ function makeStyles(
       flex: 1,
     },
     branchLabel: {
-      marginTop: theme.spacing.xxs,
+      marginTop: theme.layout.stackTight,
     },
     sectionLabel: {
-      marginTop: theme.layout.sectionGap,
       marginBottom: theme.layout.sectionHeaderGap,
     },
-    noteBox: {
-      marginTop: theme.layout.sectionGap,
-    },
     cta: {
-      marginTop: theme.spacing.xl,
+      paddingHorizontal: screenMargin,
+      paddingTop: theme.spacing.smd,
+      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.md,
+      backgroundColor: theme.colors.background,
     },
   });
 }

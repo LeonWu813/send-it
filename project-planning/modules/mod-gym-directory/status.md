@@ -2,6 +2,12 @@
 
 ## Engineering Progress
 
+### Page review G-1 + G-2 + R0/T-1 — 2026-10-23 (off-spec design implementation, design/page-templates)
+
+- GymListScreen: fixed 72pt rows (padding smd 12 + 48 thumbnail), one footnote meta line (branch · city · district) at stackTight 2 below the name (R14); cardGap via ItemSeparator instead of gap + header margin (R0); 「申請加入」 stays at the end of results and is the secondary action of the no-results EmptyState; attribution 13pt.
+- GymDetailScreen: no photo => photo area collapsed (initials placeholder removed); header title appears only after the in-body title scrolls off; 「查看路線」 pinned below the ScrollView; credit footnote 13; section gap set once (sectionGap), paddingTop md.
+- Stories: Gym Detail adds NoPhoto (Populated = with photo). Test updated for header-title-on-scroll.
+
 ### Stories + Design fix — 2026-10-22 (Issue 5 — borderRadius semantic token fix + Storybook screen stories)
 
 **Files modified:**
