@@ -5,6 +5,8 @@
 **Status**: Complete — ready for QA.
 **Completed**: 2026-09-29
 
+**Storybook screen story (2026-10-22)**: Added `ProfileHistoryScreen.stories.tsx` covering 4 states: Loading (static Spinner matching `visibility === 'loading'`), Populated (4 route cards, StatsPanel with sends, grade tabs), Empty (zero-records prompt), FilteredEmpty (attempt-only ascents — hasRecords=true, no route cards, inline empty state). Stub data seeded via `setStubData('rpc:get_profile_history', ...)` and `setStubData('rpc:get_profile_stats', ...)` in per-story decorators following the `NotificationInboxScreen.stories.tsx` pattern. No component source changed. tsc: 0 errors in module. 29/29 tests pass.
+
 **Off-spec design tooling (2026-10-16)**: Added Storybook stories for StatsPanel, FilterBar and AscentHistoryItem in `src/modules/mod-profile-history/stories/` on branch `design/storybook`. Not part of the spec; no component source changed. Pending PR review.
 
 ### Integration-fix — 2026-10-21: INT-009 and INT-013 set to FIXED – AWAITING QA
