@@ -26,6 +26,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
 
 import { supabase } from '../../lib/supabase';
+import { copyGoogleAvatarToBucket } from './avatarSync';
 import type { UserProfile } from './types';
 
 // Ensure the auth session redirect can close the browser tab on iOS
@@ -120,7 +121,7 @@ export async function signInWithApple(): Promise<void> {
     throw new Error('Apple Sign-In failed. Please try again.');
   }
 
-  const { error } = await supabase.auth.signInWithIdToken({
+  const { data: idTokenData, error } = await supabase.auth.signInWithIdToken({
     provider: 'apple',
     token: credential.identityToken,
     nonce: credential.authorizationCode ?? undefined,
@@ -134,13 +135,16 @@ export async function signInWithApple(): Promise<void> {
   // Apple sends PersonNameComponents to the native SDK only on the very first
   // sign-in; on later sign-ins credential.fullName is nil and composedName
   // will be empty, so the update is skipped automatically.
+  // userId is derived from the signInWithIdToken response already in hand —
+  // no second getSession() call needed (INT-032a).
   const givenName = credential.fullName?.givenName?.trim() ?? '';
   const familyName = credential.fullName?.familyName?.trim() ?? '';
   const composedName = [givenName, familyName].filter(Boolean).join(' ');
-  if (composedName) {
+  const appleUserId = idTokenData.user?.id ?? idTokenData.session?.user?.id;
+  if (composedName && appleUserId) {
     // Errors are non-fatal — sign-in already succeeded; the user can edit their
     // name in Edit Profile if the prefill is missed.
-    await fillDisplayNameIfEmpty(composedName).catch((err: unknown) => {
+    await fillDisplayNameIfEmpty(composedName, appleUserId).catch((err: unknown) => {
       console.error('[signInWithApple] display_name prefill error:', err);
     });
   }
@@ -217,7 +221,7 @@ export async function signInWithGoogle(): Promise<void> {
     throw new Error('Google Sign-In failed. Please try again.');
   }
 
-  const { error: sessionError } = await supabase.auth.setSession({
+  const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
     access_token: accessToken,
     refresh_token: refreshToken ?? '',
   });
@@ -230,9 +234,15 @@ export async function signInWithGoogle(): Promise<void> {
   // Storage bucket. The trigger set avatar_url to a Google CDN URL; we copy it
   // so the app is not permanently dependent on Google's CDN.
   // Errors are swallowed — the Google URL stays as the accepted fallback.
-  await copyGoogleAvatarToBucket().catch((err: unknown) => {
-    console.error('[signInWithGoogle] avatar copy error:', err);
-  });
+  // userId is derived from the setSession response already in hand — no second
+  // getSession() call needed (INT-032a); copyGoogleAvatarToBucket lives in
+  // avatarSync.ts (INT-032a).
+  const googleUserId = sessionData.session?.user?.id;
+  if (googleUserId) {
+    await copyGoogleAvatarToBucket(googleUserId).catch((err: unknown) => {
+      console.error('[signInWithGoogle] avatar copy error:', err);
+    });
+  }
 }
 
 // ─── Sign out ─────────────────────────────────────────────────────────────────
@@ -346,22 +356,21 @@ export async function uploadAvatar(
 }
 
 // ─── AC-201 helpers (internal — not exported) ────────────────────────────────
+// copyGoogleAvatarToBucket was extracted to avatarSync.ts (INT-032a) so that
+// auth-service.ts stays focused on Supabase Auth calls.
 
 /**
  * Fill `users.display_name` from `name` only when the field is currently
  * null or blank (trim-empty). Used after Apple Sign-In to capture the
  * PersonNameComponents that Apple provides only on the very first sign-in.
  *
+ * @param userId - The authenticated user's UUID. The caller (signInWithApple)
+ *                 already holds the session and passes the id directly to avoid
+ *                 a redundant getSession() call here (INT-032a).
+ *
  * Not exported — callers go through signInWithApple().
  */
-async function fillDisplayNameIfEmpty(name: string): Promise<void> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return;
-
-  const userId = session.user.id;
-
+async function fillDisplayNameIfEmpty(name: string, userId: string): Promise<void> {
   const { data: profileRow, error: selectError } = await supabase
     .from('users')
     .select('display_name')
@@ -385,113 +394,6 @@ async function fillDisplayNameIfEmpty(name: string): Promise<void> {
 
   if (updateError) {
     console.error('[fillDisplayNameIfEmpty] update error:', updateError);
-  }
-}
-
-/**
- * Copy the Google profile photo from its Google CDN URL to the Supabase
- * avatars Storage bucket and update `users.avatar_url` to the bucket URL.
- *
- * Conditions:
- *  - Only runs when `avatar_url` is a Google URL (lh3.googleusercontent.com).
- *  - Content-type must be jpeg, png, or webp; other types are skipped.
- *  - If the download or upload fails, `avatar_url` stays on the Google URL
- *    (the Avatar component handles broken URLs by showing the user's initial).
- *
- * Uses fetch + arrayBuffer() — NOT fetch + blob(). The blob() approach is
- * prohibited by the production.md convention because it routes data through
- * the native blob store via base64 encoding. arrayBuffer() returns raw bytes
- * and does not share that limitation.
- *
- * Not exported — callers go through signInWithGoogle().
- */
-async function copyGoogleAvatarToBucket(): Promise<void> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session) return;
-
-  const userId = session.user.id;
-
-  const { data: profileRow, error: selectError } = await supabase
-    .from('users')
-    .select('avatar_url')
-    .eq('id', userId)
-    .single();
-
-  if (selectError) {
-    console.error('[copyGoogleAvatarToBucket] select error:', selectError);
-    return;
-  }
-
-  const currentUrl = (profileRow as { avatar_url: string | null } | null)
-    ?.avatar_url;
-  if (!currentUrl) return;
-
-  // Only copy Google CDN URLs — skip if already a bucket URL or other provider.
-  if (!currentUrl.startsWith('https://lh3.googleusercontent.com')) return;
-
-  // Download the image via fetch. Use arrayBuffer() (NOT blob()) so we get
-  // raw bytes without the base64 detour the React Native native blob store adds.
-  const response = await fetch(currentUrl);
-  if (!response.ok) {
-    console.error(
-      '[copyGoogleAvatarToBucket] download failed, status:',
-      response.status,
-    );
-    return;
-  }
-
-  const contentType = response.headers.get('content-type') ?? '';
-  const isValidType =
-    contentType.includes('image/jpeg') ||
-    contentType.includes('image/png') ||
-    contentType.includes('image/webp');
-  if (!isValidType) {
-    console.error(
-      '[copyGoogleAvatarToBucket] unexpected content-type:',
-      contentType,
-    );
-    return;
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  const uint8Array = new Uint8Array(arrayBuffer);
-
-  const fileExtension = contentType.includes('png')
-    ? 'png'
-    : contentType.includes('webp')
-      ? 'webp'
-      : 'jpg';
-  const storagePath = `avatars/${userId}.${fileExtension}`;
-  // Strip charset or boundary directives (e.g. "image/jpeg; charset=utf-8").
-  const exactContentType = contentType.split(';')[0].trim();
-
-  const { error: uploadError } = await supabase.storage
-    .from('avatars')
-    .upload(storagePath, uint8Array, {
-      contentType: exactContentType,
-      cacheControl: '3600',
-      upsert: true,
-    });
-
-  if (uploadError) {
-    console.error('[copyGoogleAvatarToBucket] upload error:', uploadError);
-    return; // Leave avatar_url as Google URL (accepted fallback per AC-201 Q-B)
-  }
-
-  const { data: urlData } = supabase.storage
-    .from('avatars')
-    .getPublicUrl(storagePath);
-  const bucketUrl = `${urlData.publicUrl}?v=${Date.now()}`;
-
-  const { error: updateError } = await supabase
-    .from('users')
-    .update({ avatar_url: bucketUrl })
-    .eq('id', userId);
-
-  if (updateError) {
-    console.error('[copyGoogleAvatarToBucket] DB update error:', updateError);
   }
 }
 

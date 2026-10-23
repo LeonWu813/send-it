@@ -14,7 +14,7 @@ jest.mock('../../../lib/supabase', () => {
     signInWithOAuth: jest.fn(),
     setSession: jest.fn(),
     signOut: jest.fn(),
-    // AC-201: getSession used by fillDisplayNameIfEmpty and copyGoogleAvatarToBucket
+    // AC-157: getSession used by updateBetaVideoPrivacy
     getSession: jest.fn(),
   };
   const mockStorageBucket = {
@@ -309,11 +309,10 @@ describe('signInWithApple AC-201 display_name prefill', () => {
       realUserStatus: 1,
       state: null,
     });
+    // signInWithIdToken returns user data; fillDisplayNameIfEmpty receives userId
+    // from that response directly — no getSession() call needed (INT-032a).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.signInWithIdToken.mockResolvedValueOnce({ data: { user: null, session: null }, error: null } as any);
-    // fillDisplayNameIfEmpty: getSession → select → update
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-apple-123' } } } } as any);
+    mockAuth.signInWithIdToken.mockResolvedValueOnce({ data: { user: { id: 'user-apple-123' }, session: { user: { id: 'user-apple-123' } } }, error: null } as any);
     // select display_name → empty
     const selectQb = makeQueryBuilder({ data: { display_name: '' }, error: null });
     const updateQb = makeQueryBuilder({ data: null, error: null });
@@ -366,10 +365,10 @@ describe('signInWithApple AC-201 display_name prefill', () => {
       realUserStatus: 1,
       state: null,
     });
+    // signInWithIdToken returns user data; fillDisplayNameIfEmpty receives userId
+    // from that response directly — no getSession() call needed (INT-032a).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.signInWithIdToken.mockResolvedValueOnce({ data: { user: null, session: null }, error: null } as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-apple-123' } } } } as any);
+    mockAuth.signInWithIdToken.mockResolvedValueOnce({ data: { user: { id: 'user-apple-123' }, session: { user: { id: 'user-apple-123' } } }, error: null } as any);
     // display_name is already set — update must NOT be called
     const selectQb = makeQueryBuilder({ data: { display_name: 'Existing Name' }, error: null });
     mockFrom.mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>);
@@ -391,8 +390,9 @@ describe('signInWithGoogle AC-201 Q-B: avatar copy to bucket', () => {
     (mockAuth.signInWithOAuth as jest.Mock).mockResolvedValueOnce({ data: { url: 'https://oauth.google.com/auth' }, error: null } as any);
     const fakeRedirectUrl = 'projectday://auth#access_token=tok&refresh_token=ref&token_type=bearer';
     (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValueOnce({ type: 'success', url: fakeRedirectUrl });
+    // signInWithGoogle extracts userId from setSession response (INT-032a — no getSession call)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (mockAuth.setSession as jest.Mock).mockResolvedValueOnce({ data: { session: null, user: null }, error: null } as any);
+    (mockAuth.setSession as jest.Mock).mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } }, user: { id: 'user-g-1' } }, error: null } as any);
   }
 
   beforeEach(() => {
@@ -402,10 +402,7 @@ describe('signInWithGoogle AC-201 Q-B: avatar copy to bucket', () => {
   it('copies Google avatar to bucket when avatar_url is a Google URL', async () => {
     setupGoogleOAuthMocks();
 
-    // copyGoogleAvatarToBucket: getSession → select → fetch → storage upload → storage getPublicUrl → update
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
-
+    // copyGoogleAvatarToBucket: userId from setSession → select → fetch → storage upload → getPublicUrl → update
     const selectQb = makeQueryBuilder({
       data: { avatar_url: 'https://lh3.googleusercontent.com/a-/photo.jpg' },
       error: null,
@@ -437,9 +434,6 @@ describe('signInWithGoogle AC-201 Q-B: avatar copy to bucket', () => {
   it('skips avatar copy when avatar_url is not a Google URL', async () => {
     setupGoogleOAuthMocks();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
-
     const selectQb = makeQueryBuilder({
       data: { avatar_url: 'https://example.supabase.co/storage/v1/object/public/avatars/user-g-1.jpg' },
       error: null,
@@ -457,9 +451,6 @@ describe('signInWithGoogle AC-201 Q-B: avatar copy to bucket', () => {
   it('skips avatar copy when avatar_url is null', async () => {
     setupGoogleOAuthMocks();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
-
     const selectQb = makeQueryBuilder({ data: { avatar_url: null }, error: null });
     mockFrom.mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>);
 
@@ -472,9 +463,6 @@ describe('signInWithGoogle AC-201 Q-B: avatar copy to bucket', () => {
 
   it('does not throw when the download fails — Google URL stays as fallback', async () => {
     setupGoogleOAuthMocks();
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
 
     const selectQb = makeQueryBuilder({
       data: { avatar_url: 'https://lh3.googleusercontent.com/a-/photo.jpg' },

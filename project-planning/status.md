@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-home
+agent: engineer-mod-auth-profile
 mode: integration-fix
-module: mod-home
-next: claude --agent qa-mod-home "integration-fix-qa INT-030 — verify setThemeUserId useCallback fix; device check: changing theme in Settings does not flash language when device and account languages differ"
+module: mod-auth-profile (MOD-001)
+next: claude --agent qa-mod-auth-profile "regression AC-201 for INT-032a — copyGoogleAvatarToBucket extracted to avatarSync.ts, userId passed as parameter to both copyGoogleAvatarToBucket and fillDisplayNameIfEmpty, getSession() removed from both; 30/30 tests pass; see Engineering Progress INT-032a in project-planning/modules/mod-auth-profile/status.md"
 result: success
-timestamp: 2026-10-22T13:00:00Z
+timestamp: 2026-10-22T14:00:00Z
 
 ## PM Updates
 

@@ -2872,3 +2872,56 @@ This matches the FlatList path's `contentContainerStyle: { paddingTop: h.content
 **Device-test items: 1 (Apple first-sign-in fullName delivery — static verification complete, runtime confirmation requires a real device + fresh Apple ID)**
 
 **AC-201 — QA PASS (static). Apple first-sign-in device confirmation is a known prerequisite per prior QA runs and the Native Build Gate convention.**
+
+---
+
+## Engineering Progress — Integration Fix INT-032a — 2026-10-22
+
+**Finding**: INT-032a (approved 2026-10-22). Move `copyGoogleAvatarToBucket` out of `auth-service.ts` into a new `avatarSync.ts`, and pass `userId` as a parameter to both `copyGoogleAvatarToBucket` and `fillDisplayNameIfEmpty` instead of calling `getSession()` again inside each one. No behavior change.
+
+### Changes Implemented
+
+**New file: `src/modules/mod-auth-profile/avatarSync.ts`**
+- `copyGoogleAvatarToBucket(userId: string): Promise<void>` — exported.
+- Moved verbatim from `auth-service.ts` (lines 408–497), except: removed `supabase.auth.getSession()` call, removed `if (!session) return` guard, removed `const userId = session.user.id`. `userId` now accepted as parameter.
+- Same queries, same `console.error` logging on all error paths, same early-return best-effort behavior.
+- Imports only `supabase` from `../../lib/supabase`.
+
+**Modified: `src/modules/mod-auth-profile/auth-service.ts`** (525 → 426 lines)
+- Added `import { copyGoogleAvatarToBucket } from './avatarSync'`.
+- `signInWithApple()`: destructured `data: idTokenData` from `signInWithIdToken` response. Derived `appleUserId = idTokenData.user?.id ?? idTokenData.session?.user?.id`. Calls `fillDisplayNameIfEmpty(composedName, appleUserId)` only when both `composedName` and `appleUserId` are truthy.
+- `signInWithGoogle()`: destructured `data: sessionData` from `setSession` response. Derived `googleUserId = sessionData.session?.user?.id`. Calls `copyGoogleAvatarToBucket(googleUserId)` only when `googleUserId` is truthy.
+- `fillDisplayNameIfEmpty`: signature changed from `(name: string)` to `(name: string, userId: string)`. Removed internal `getSession()` call, `if (!session) return`, and `const userId = session.user.id`. JSDoc updated with `@param userId` note and INT-032a reference.
+- Entire `copyGoogleAvatarToBucket` function body and JSDoc removed (moved to `avatarSync.ts`).
+- Section comment updated: `// copyGoogleAvatarToBucket was extracted to avatarSync.ts (INT-032a)`.
+- `getSession()` at line 411 retained — used only by `updateBetaVideoPrivacy` (AC-157).
+
+**Modified: `src/modules/mod-auth-profile/__tests__/auth-service.test.ts`** (setup changes only, no assertion changes)
+- Global mock comment updated: `// AC-157: getSession used by updateBetaVideoPrivacy` (removed reference to `fillDisplayNameIfEmpty` and `copyGoogleAvatarToBucket`).
+- Apple test 1 ("fills display_name") and test 3 ("skips when display_name already non-empty"): removed `mockAuth.getSession.mockResolvedValueOnce(...)`. Updated `signInWithIdToken` mock to return `{ data: { user: { id: 'user-apple-123' }, session: { user: { id: 'user-apple-123' } } }, error: null }`.
+- `setupGoogleOAuthMocks()`: updated `setSession` mock to return `{ data: { session: { user: { id: 'user-g-1' } }, user: { id: 'user-g-1' } }, error: null }`.
+- Google tests 1–4: removed `mockAuth.getSession.mockResolvedValueOnce(...)` from each (userId now derived from `setSession` response).
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm run lint` (tsc --noEmit) | PASS |
+| `npx jest --testPathPattern="mod-auth-profile" --watchAll=false` | PASS — 30 tests, 3 suites |
+| `auth-service.test.ts` (22 tests, all AC-201 prefill + avatar copy paths) | PASS |
+| `useSession.test.ts` | PASS (pre-existing act() warnings, not introduced here) |
+| `ProfileScreen.test.tsx` | PASS (pre-existing act() warnings, not introduced here) |
+| `getSession()` removed from `fillDisplayNameIfEmpty` | PASS |
+| `getSession()` removed from `copyGoogleAvatarToBucket` (now in avatarSync.ts) | PASS |
+| `getSession()` retained in `updateBetaVideoPrivacy` (correct, AC-157) | PASS |
+| No behavior change — same queries, logging, best-effort `.catch` at call sites | PASS |
+| `fillDisplayNameIfEmpty` still skips update when display_name is already non-empty | PASS |
+| `copyGoogleAvatarToBucket` still skips when avatar_url is not a Google URL or null | PASS |
+| No new cross-module imports | PASS |
+| No new dependencies | PASS |
+| TypeScript strict mode — no `any` without comment | PASS |
+| Files changed: all within `src/modules/mod-auth-profile/` | PASS |
+| Test assertions unchanged (only setup changed) | PASS |
+
+**Result: READY FOR QA**
