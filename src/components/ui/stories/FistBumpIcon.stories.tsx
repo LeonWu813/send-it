@@ -42,7 +42,7 @@ function Matrix(): React.JSX.Element {
         ))}
       </View>
       <AppText variant="footnote" color="textSecondary">
-        Sizes 16 / 28 / 44. Minimum 16pt. Fist always faces left.
+        Sizes 16 / 28 / 44. Minimum 16pt. Front-view fist (v4); never flipped or rotated.
       </AppText>
     </View>
   );
