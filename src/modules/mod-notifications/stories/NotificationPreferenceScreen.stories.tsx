@@ -42,7 +42,7 @@ const meta: Meta<Args> = {
     withPhoneFrame,
   ],
   argTypes: { state: { control: false } },
-  render: () => <NotificationPreferenceScreen session={session} />,
+  render: () => <NotificationPreferenceScreen session={session} onBack={() => {}} />,
 };
 
 export default meta;

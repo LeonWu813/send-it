@@ -112,6 +112,8 @@ describe('registerDeviceToken', () => {
 
 // ── fetchNotifications ────────────────────────────────────────────────────────
 
+const VIDEOS = [{ id: 'video-001', routes: { grade: 'V4', color_tag: 'red' } }];
+
 describe('fetchNotifications', () => {
   beforeEach(() => jest.resetAllMocks());
 
@@ -135,9 +137,11 @@ describe('fetchNotifications', () => {
     const mockActorData = [{ id: 'user-002', display_name: 'Alice', avatar_url: null }];
     const usersQb = makeQueryBuilder({ data: mockActorData, error: null });
 
+    const videosQb = makeQueryBuilder({ data: VIDEOS, error: null });
     mockFrom
       .mockReturnValueOnce(notifQb as unknown as ReturnType<typeof supabase.from>)
-      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>);
+      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(videosQb as unknown as ReturnType<typeof supabase.from>);
 
     const result = await fetchNotifications();
 
@@ -148,6 +152,8 @@ describe('fetchNotifications', () => {
       actor_avatar_url: null,
       type: 'beta_video_like',
       is_read: false,
+      route_grade: 'V4',
+      route_color: 'red',
     });
     expect(mockFrom).toHaveBeenCalledWith('notifications');
     expect(mockFrom).toHaveBeenCalledWith('users');
@@ -193,9 +199,11 @@ describe('fetchNotifications', () => {
     // Users query returns empty (actor not found / deleted)
     const usersQb = makeQueryBuilder({ data: [], error: null });
 
+    const videosQb = makeQueryBuilder({ data: VIDEOS, error: null });
     mockFrom
       .mockReturnValueOnce(notifQb as unknown as ReturnType<typeof supabase.from>)
-      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>);
+      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(videosQb as unknown as ReturnType<typeof supabase.from>);
 
     const result = await fetchNotifications();
 
@@ -221,9 +229,11 @@ describe('fetchNotifications', () => {
     // Users query fails — should be non-fatal, rows still returned without actor info
     const usersQb = makeQueryBuilder({ data: null, error: { code: 'PGRST500' } });
 
+    const videosQb = makeQueryBuilder({ data: VIDEOS, error: null });
     mockFrom
       .mockReturnValueOnce(notifQb as unknown as ReturnType<typeof supabase.from>)
-      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>);
+      .mockReturnValueOnce(usersQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(videosQb as unknown as ReturnType<typeof supabase.from>);
 
     const result = await fetchNotifications();
 

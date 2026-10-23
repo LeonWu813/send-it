@@ -556,6 +556,13 @@ Visual-only migration; no behaviour or service changes (UnreadCountProvider unto
 - Not done: the inbox's own back/title row is KEPT because the v2.2 nested AppHeader (single 44pt row) is not yet in AppShell (notifications overlay renders without it); remove the navBar once engineer-mod-home ships it.
 - No behaviour changes; tsc, check:i18n, `npx jest src/modules/mod-notifications` (46 tests) pass.
 
+
+### 2026-10-23 — Off-spec design pass (page-review N-1, L-1, ST-1, R0, T-1)
+- N-1 (AC-057 fix): NotificationPreferenceScreen takes onBack and registers a nested header via useAppHeader; NotificationsNavigator passes onBack for the 'preferences' view (TODO removed); description wraps to 2 lines (ListRow density="content").
+- L-1: Inbox rows fixed 72pt (Avatar md 48), line 2 footnote "V4 紅色 · 10月20日" (fetchNotifications batch-reads beta_videos.routes grade/color_tag, non-fatal), 今天/本週/更早 sections, chip replaced by FistBumpIcon outline 16. New i18n keys notifications.section.*; notifications.badgeBetaVideoLike now unused.
+- ST-1: verified AppHeader nested variant has no bell/gear.
+- R0/T-1: no double top padding under the nested header; no text below 13pt (caption1 removed). Stories updated. 48/48 tests, tsc clean, check:i18n OK.
+
 ## QA Results
 
 **QA run: 2026-09-24 — workflow: functional-test**

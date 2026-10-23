@@ -10,7 +10,9 @@ import NotificationInboxScreen from '../screens/NotificationInboxScreen';
 
 const session = { user: { id: 'story-user-me' } } as unknown as Session;
 
-// Four beta-video-like notifications: rows 0 and 2 unread, rows 1 and 3 read.
+const daysAgo = (n: number): string => new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+
+// Five beta-video-like notifications spread over 今天 / 本週 / 更早 (L-1): rows 0 and 2 unread.
 const FAKE_NOTIFICATIONS = [
   {
     id: 'n1',
@@ -20,7 +22,7 @@ const FAKE_NOTIFICATIONS = [
     target_type: 'beta_video',
     target_id: 'vid-001',
     is_read: false,
-    created_at: '2026-10-20T10:00:00Z',
+    created_at: daysAgo(0),
   },
   {
     id: 'n2',
@@ -30,7 +32,7 @@ const FAKE_NOTIFICATIONS = [
     target_type: 'beta_video',
     target_id: 'vid-002',
     is_read: true,
-    created_at: '2026-10-19T10:00:00Z',
+    created_at: daysAgo(2),
   },
   {
     id: 'n3',
@@ -40,7 +42,7 @@ const FAKE_NOTIFICATIONS = [
     target_type: 'beta_video',
     target_id: 'vid-003',
     is_read: false,
-    created_at: '2026-10-18T10:00:00Z',
+    created_at: daysAgo(4),
   },
   {
     id: 'n4',
@@ -50,8 +52,26 @@ const FAKE_NOTIFICATIONS = [
     target_type: 'beta_video',
     target_id: 'vid-004',
     is_read: true,
-    created_at: '2026-10-17T10:00:00Z',
+    created_at: daysAgo(12),
   },
+  {
+    id: 'n5',
+    recipient_user_id: 'story-user-me',
+    actor_user_id: 'u-alice',
+    type: 'beta_video_like',
+    target_type: 'beta_video',
+    target_id: 'vid-005',
+    is_read: true,
+    created_at: daysAgo(30),
+  },
+];
+
+const FAKE_VIDEOS = [
+  { id: 'vid-001', routes: { grade: 'V4', color_tag: 'red' } },
+  { id: 'vid-002', routes: { grade: 'V2', color_tag: 'blue' } },
+  { id: 'vid-003', routes: { grade: 'V5', color_tag: 'green' } },
+  { id: 'vid-004', routes: { grade: 'V3', color_tag: 'yellow' } },
+  { id: 'vid-005', routes: { grade: 'V6', color_tag: 'black' } },
 ];
 
 const FAKE_ACTORS = [
@@ -70,6 +90,7 @@ function WithStubs({ state, children }: { state: StubState; children: React.Reac
   if (state === 'populated') {
     setStubData('notifications', FAKE_NOTIFICATIONS);
     setStubData('users', FAKE_ACTORS);
+    setStubData('beta_videos', FAKE_VIDEOS);
   } else if (state === 'loading') {
     setStubData('notifications', STUB_PENDING);
   }
@@ -100,7 +121,7 @@ const meta: Meta<Args> = {
 export default meta;
 type Story = StoryObj<Args>;
 
-/** 4 notifications, 2 unread (dot visible) and 2 read. */
+/** 5 notifications in 今天 / 本週 / 更早 sections, 2 unread (dot visible). */
 export const Populated: Story = { args: { state: 'populated' } };
 
 /** No notifications: empty-state UI. */

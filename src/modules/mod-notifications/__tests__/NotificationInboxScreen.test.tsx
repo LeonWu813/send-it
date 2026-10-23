@@ -39,7 +39,7 @@ import {
   fetchNotifications,
   markNotificationsRead,
 } from '../notification-service';
-import NotificationInboxScreen from '../screens/NotificationInboxScreen';
+import NotificationInboxScreen, { groupNotifications } from '../screens/NotificationInboxScreen';
 import { renderOptions } from '../test-utils';
 import type { Notification } from '../types';
 
@@ -259,5 +259,37 @@ describe('NotificationInboxScreen', () => {
     fireEvent.press(screen.getAllByRole('button')[0]);
 
     expect(mockOnNavigateToUser).not.toHaveBeenCalled();
+  });
+
+  it('groups rows into today / this week / earlier sections and shows route context (L-1)', async () => {
+    const now = new Date();
+    const iso = (days: number): string => new Date(now.getTime() - days * 86400000).toISOString();
+    mockFetchNotifications.mockResolvedValueOnce([
+      { ...MOCK_NOTIFICATION, id: 'a', created_at: iso(0), route_grade: 'V4', route_color: 'red' },
+      { ...MOCK_NOTIFICATION, id: 'b', created_at: iso(3) },
+      { ...MOCK_NOTIFICATION, id: 'c', created_at: iso(20) },
+    ]);
+
+    render(
+      <NotificationInboxScreen session={MOCK_SESSION} isActive />,
+      renderOptions(),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Today')).toBeTruthy();
+      expect(screen.getByText('This week')).toBeTruthy();
+      expect(screen.getByText('Earlier')).toBeTruthy();
+      expect(screen.getByText(/^V4 Red · /)).toBeTruthy();
+      expect(screen.queryByText('Like')).toBeNull();
+    });
+  });
+
+  it('groupNotifications omits empty sections', () => {
+    const now = new Date(2026, 9, 23, 12);
+    const groups = groupNotifications(
+      [{ ...MOCK_NOTIFICATION, created_at: new Date(2026, 9, 23, 9).toISOString() }],
+      now,
+    );
+    expect(groups.map((g) => g.key)).toEqual(['today']);
   });
 });
