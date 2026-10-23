@@ -169,7 +169,17 @@
       "recordSend": "Record Send",
       "uploadBeta": "Upload Beta Video",
       "sendHistoryTitle": "Send History",
-      "noSends": "No sends recorded yet"
+      "noSends": "No sends recorded yet",
+      "attemptsShort": "Attempts",
+      "moreActions": "More actions"
+    },
+    "filter": {
+      "button": "Filter",
+      "sheetTitle": "Filter routes",
+      "grade": "Grade",
+      "color": "Hold colour",
+      "clearAll": "Clear filters",
+      "removeChip": "Remove filter: {{label}}"
     }
   },
   "routes": {
@@ -294,7 +304,8 @@
     "savedGyms": {
       "title": "Saved Gyms",
       "viewAll": "View All",
-      "empty": "Tap the bookmark on any gym to save it."
+      "empty": "Tap the bookmark on any gym to save it.",
+      "explore": "Explore gyms"
     },
     "following": {
       "title": "Following",
@@ -306,17 +317,19 @@
       "allGrades": "All",
       "empty": "Save a route to track your projects.",
       "emptyFiltered": "No projecting routes at this grade.",
+      "browse": "Browse routes",
       "bookmarkFailed": "Couldn't update your saved routes. Try again."
     },
     "followingActivity": {
-      "title": "Following Activity",
+      "title": "New beta videos",
       "newVideos": "{{count}} new beta video",
       "newVideos_other": "{{count}} new beta videos",
-      "empty": "Follow climbers to see new videos",
+      "empty": "Follow climbers to see their new beta videos",
       "today": "today",
       "dayAgo": "1 day ago",
       "daysAgo": "{{count}} days ago",
-      "showAll": "Show all ({{count}})",
+      "viewAll": "View All",
+      "openProfileHint": "Opens profile",
       "findClimbers": "Find climbers",
       "rowA11y": "{{name}}, {{label}}, {{time}}"
     },
@@ -342,7 +355,7 @@
     "unsaveAction": "Remove from saved"
   },
   "betaVideo": {
-    "sectionTitle": "BETA VIDEOS",
+    "sectionTitle": "Beta videos",
     "addVideo": "Add Beta Video",
     "noVideos": "No one has shared beta yet.",
     "myVideos": "My Beta Videos",
@@ -383,6 +396,7 @@
       "videoTooLargeForStorage": "Video is too large. Please trim it and try again."
     },
     "emptyUpload": "Upload beta",
+    "replaceMine": "Replace my beta",
     "loadingVideos": "Loading beta videos",
     "uploadingHint": "Please stay on this screen until the upload finishes.",
     "uploadFailedTitle": "Upload failed",
@@ -417,6 +431,7 @@
   "notifications": {
     "title": "Notifications",
     "empty": "No notifications yet. Like activity from others will appear here.",
+    "section": { "today": "Today", "thisWeek": "This week", "earlier": "Earlier" },
     "badgeBetaVideoLike": "Like",
     "betaVideoLikedBody": "liked your beta video.",
     "betaVideoLikeA11y": "Beta video like notification",

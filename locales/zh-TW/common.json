@@ -169,7 +169,17 @@
       "recordSend": "記錄攀登",
       "uploadBeta": "上傳 Beta 影片",
       "sendHistoryTitle": "攀登紀錄",
-      "noSends": "尚無紀錄"
+      "noSends": "尚無紀錄",
+      "attemptsShort": "嘗試",
+      "moreActions": "更多操作"
+    },
+    "filter": {
+      "button": "篩選",
+      "sheetTitle": "篩選路線",
+      "grade": "難度",
+      "color": "岩點顏色",
+      "clearAll": "清除篩選",
+      "removeChip": "移除篩選：{{label}}"
     }
   },
   "routes": {
@@ -294,7 +304,8 @@
     "savedGyms": {
       "title": "已收藏岩館",
       "viewAll": "查看全部",
-      "empty": "點擊岩館的書籤圖示來收藏"
+      "empty": "點擊岩館的書籤圖示來收藏",
+      "explore": "探索岩館"
     },
     "following": {
       "title": "追蹤中",
@@ -306,17 +317,19 @@
       "allGrades": "全部",
       "empty": "收藏一條路線來追蹤你的目標。",
       "emptyFiltered": "此難度沒有目標路線。",
+      "browse": "瀏覽路線",
       "bookmarkFailed": "無法更新收藏路線，請再試一次。"
     },
     "followingActivity": {
-      "title": "追蹤動態",
+      "title": "新 Beta 影片",
       "newVideos": "{{count}} 支新 Beta 影片",
       "newVideos_other": "{{count}} 支新 Beta 影片",
-      "empty": "追蹤攀岩者，查看新影片",
+      "empty": "追蹤攀岩者，查看他們的新 Beta 影片",
       "today": "今天",
       "dayAgo": "1 天前",
       "daysAgo": "{{count}} 天前",
-      "showAll": "顯示全部 ({{count}})",
+      "viewAll": "查看全部",
+      "openProfileHint": "開啟個人頁面",
       "findClimbers": "找攀岩者",
       "rowA11y": "{{name}}，{{label}}，{{time}}"
     },
@@ -342,7 +355,7 @@
     "unsaveAction": "取消收藏"
   },
   "betaVideo": {
-    "sectionTitle": "BETA 影片",
+    "sectionTitle": "Beta 影片",
     "addVideo": "新增 Beta 影片",
     "noVideos": "還沒人分享 Beta。",
     "myVideos": "我的 Beta 影片",
@@ -383,6 +396,7 @@
       "videoTooLargeForStorage": "影片超過上限，請修剪影片後再試。"
     },
     "emptyUpload": "上傳 Beta",
+    "replaceMine": "更換我的 Beta",
     "loadingVideos": "Beta 影片載入中",
     "uploadingHint": "上傳完成前請不要離開這個畫面。",
     "uploadFailedTitle": "上傳失敗",
@@ -417,6 +431,7 @@
   "notifications": {
     "title": "通知",
     "empty": "目前沒有通知，別人對你的 Beta 影片按讚後會顯示在這裡。",
+    "section": { "today": "今天", "thisWeek": "本週", "earlier": "更早" },
     "badgeBetaVideoLike": "按讚",
     "betaVideoLikedBody": "對你的 Beta 影片按讚了。",
     "betaVideoLikeA11y": "Beta 影片按讚通知",
