@@ -851,8 +851,10 @@ function makeStyles(
       right: 0,
       // mediaScrimStrong keeps onMedia text at 6.85:1 (H-2).
       backgroundColor: c.mediaScrimStrong,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.spacing.sm,
+      // C1 row band: listRowPaddingV 12 top/bottom, cardPadding 16 left/right; C3 xs between lines.
+      paddingHorizontal: theme.layout.cardPadding,
+      paddingVertical: theme.layout.listRowPaddingV,
+      rowGap: theme.spacing.xs,
     },
     // ── Saved Gyms ──────────────────────────────────────────────────────────
     gymStripRow: {

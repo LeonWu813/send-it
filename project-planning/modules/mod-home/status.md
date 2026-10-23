@@ -2,6 +2,12 @@
 
 ## Engineering Progress
 
+### Off-spec design round 4 (flat-alignment audit §6 C1/C3) pending PR review — 2026-10-24
+
+Home banner caption is a C1 row band: `listRowPaddingV` 12 top/bottom, `cardPadding` 16 left/right (was 8/16), `xs` 4 between title and body (C3). Measured on :6006 Populated: padding 12/16, gap 4, caption 74pt. Test added in HomeScreen.test.tsx. Shared `src/components/ui` rows handled by another engineer. `npm test` mod-home 72/72; `tsc` shows one error in mod-send-logging test (not mine).
+
+---
+
 ### Off-spec design round 3 (home-v2, flat-alignment audit #1/#4) pending PR review — 2026-10-23
 
 Reverses H-1. Order restored to AC-111 (banner, Saved Gyms, Projecting, Following). Following is a 64pt avatar strip (108pt, name + time caption, no marker, `onSelectClimber`; 「查看全部」 -> FollowingListScreen via new `onViewAllFollowing` prop, AppShell overlay rendered below the profile overlay; vertical 52pt rows at fontScale >= 1.6; skeleton while loading). All three sections share one inline empty state (sentence + ghost `sm` action 8pt below, glyph x16 via `marginLeft: -14`); 「查看全部」 hidden when a section is empty. Projecting chips only with >= 2 grades (AC-177 flag); selected grade resets to 「全部」. Section headers 28pt, link `subhead` 600 baseline-aligned with hitSlop 11/11/8. RouteCard (#4/A4/A5): badge + name block, bookmark and thumbnail share one centre; beta count moved onto the thumbnail as a 「play n」 chip (text line only in the AX layout). Gray-tape Profile bug: RouteCard maps colorTag correctly; cause was the caller (ProfileScreen passed a pre-formatted name and no colorTag), fixed in mod-auth-profile. Tests and stories (`Pages/Home/Home`, `Patterns/RouteCard`) updated. i18n keys added/changed: savedGyms.explore, projectingRoutes.browse, followingActivity.{title,empty,viewAll,openProfileHint}; showAll removed. AppShell.tsx and locales/*/common.json are NOT yet committed (integration commit pending).

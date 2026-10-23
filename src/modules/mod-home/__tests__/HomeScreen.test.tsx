@@ -55,6 +55,7 @@ jest.mock('../../../components/RouteCard', () => {
 });
 
 // ── Imports ───────────────────────────────────────────────────────────────────
+import { StyleSheet } from 'react-native';
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
 import type { Session } from '@supabase/supabase-js';
@@ -225,6 +226,29 @@ describe('HomeScreen (Rev 36)', () => {
       await waitFor(() => {
         expect(screen.getByText('Summer Comp')).toBeTruthy();
       });
+    });
+
+    it('banner caption is a C1 row band: 12 vertical, 16 horizontal', async () => {
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'admin_banners') {
+          return makeQueryBuilder({
+            data: { id: 'banner-1', title: 'Summer Comp', body: 'Sign up now!', image_url: null },
+            error: null,
+          });
+        }
+        return makeQueryBuilder({ data: [], error: null });
+      });
+
+      render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
+      const title = await screen.findByText('Summer Comp');
+      let node = title.parent;
+      let found: Record<string, unknown> | null = null;
+      while (node && !found) {
+        const flat = StyleSheet.flatten(node.props.style) as Record<string, unknown> | undefined;
+        if (flat && flat.position === 'absolute') found = flat;
+        node = node.parent;
+      }
+      expect(found).toMatchObject({ paddingVertical: 12, paddingHorizontal: 16 });
     });
 
     it('renders the banner body text (AC-112)', async () => {
