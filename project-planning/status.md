@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-home
-mode: bugfix
-module: MOD-012
-result: done
-summary: AC-202/AC-203 sign-out wiring gaps fixed. (1) applySignedOutLanguage() imported and called in AppShell useEffect cleanup — fires on unmount (sign-out) to restore device-level language. (2) setThemeUserId signature widened to string | null in src/lib/theme.ts interface and implementation; AppShell cleanup now calls setThemeUserId(null) to trigger ThemeProvider device-level theme reload immediately after sign-out. tsc 0 errors. 654/655 tests pass (1 pre-existing mod-send-logging flaky failure confirmed on base commit). Commit 1fc7cde.
-next: qa-mod-home — re-verify AC-202 and AC-203 sign-out path (QA Run 24). Scope: applySignedOutLanguage() wiring (AppShell.tsx) and setThemeUserId(null) reset (theme.ts + AppShell.tsx). All prior ACs carry forward as PASS.
+agent: qa-mod-auth-profile
+mode: verify
+module: MOD-001
+result: pass
+summary: QA Run 9 — AC-201 (Google/Apple profile prefill on new account creation) + ProfileScreen layout bug fix. Migration SQL verified: ON CONFLICT DO NOTHING, NULLIF/TRIM guards, correct fallback chains for display_name and avatar_url. Apple in-app prefill (fillDisplayNameIfEmpty) verified: queries before updating, skips on non-empty and on nil fullName. Google avatar bucket copy (copyGoogleAvatarToBucket) verified: lh3 URL check, fetch+arrayBuffer+Uint8Array, content-type validation, errors swallowed. uploadAvatar remote URL guard verified. ProfileScreen fallback branch wraps contentTopInset/contentBottomInset. 8 new AC-201 tests pass (21 total in auth-service.test.ts). tsc 0 errors. 655 total tests, 654 pass (1 pre-existing flaky failure in mod-send-logging — not in scope). Apple first-sign-in fullName delivery noted as needs-device-test; does not block static pass.
+next: coordinator — AC-201 QA PASS (static). Apple first-sign-in device confirmation is a known prerequisite per the Native Build Gate convention. Resume coordinator flow from previous next step (qa-mod-home re-verify AC-202/AC-203, QA Run 24).
 timestamp: 2026-10-22
 
 ## PM Updates

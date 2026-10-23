@@ -2693,3 +2693,182 @@ The fallback branch (when `profile?.id` is falsy, shown during initial load) ren
 | Apple fullName first-sign-in device verification | NOTED — requires device build |
 
 **Overall verdict: PASS — ready for QA**
+
+---
+
+## QA Run 9 — AC-201 + ProfileScreen Layout Bug Fix — 2026-10-22
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: regression (re-verification — AC-201 new implementation + layout bug fix)
+**Scope**: AC-201 (Google/Apple profile prefill on new account creation), ProfileScreen fallback-branch layout bug fix, and regression of all in-scope ACs
+
+---
+
+### Automated Test Suite
+
+Command: `npm test -- --watchAll=false`
+Result: 655 total tests — 654 pass, 1 fail
+Exit code: 1
+
+The 1 failure is in `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — confirmed pre-existing, non-deterministic (Engineering Notes: "passes in isolation and on repeat run; not introduced by this session"). It is outside `mod-auth-profile` scope and does not affect the AC-201 verification.
+
+auth-service-only run (21 tests, 1 suite — all PASS):
+- `signUpWithEmail` (2 tests) — PASS
+- `signInWithEmail` (2 tests) — PASS
+- `signOut` (2 tests) — PASS
+- `loadProfile` (3 tests) — PASS
+- `upsertProfile` (2 tests) — PASS
+- `uploadAvatar` (3 tests incl. new AC-201 Q-B guard test) — PASS
+- `signInWithApple AC-201 display_name prefill` (3 tests — new) — PASS
+- `signInWithGoogle AC-201 Q-B: avatar copy to bucket` (4 tests — new) — PASS
+
+8 new AC-201 tests confirmed (21 total vs. 13 prior to this implementation).
+
+### TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: 0 errors — PASS
+Exit code: 0
+
+---
+
+### AC-201 Acceptance Criteria Verification
+
+**Spec requirement: Fill `display_name` and `avatar_url` from provider values if field is currently null or empty (blank after trimming); never overwrite existing values.**
+
+**Google — DB trigger (migration `20261022000001_mod_001_ac201_google_prefill.sql`)**
+
+PASS. `CREATE OR REPLACE FUNCTION public.handle_new_auth_user()` correctly extends the trigger. Key behaviors verified:
+
+- `ON CONFLICT (id) DO NOTHING` on the INSERT — if a row already exists for this user (any re-execution or retry), the existing profile is never touched. Satisfies "a field that already holds a value is never overwritten." ✓
+- Trigger fires only on INSERT into auth.users — new accounts only. Existing accounts are not changed. ✓
+- `NULLIF(TRIM(NEW.raw_user_meta_data->>'full_name'), '')` / `NULLIF(TRIM(...->>'name'), '')` / `NULLIF(TRIM(...->>'display_name'), '')` — whitespace-only or empty values are treated as no-value, satisfying "null or empty (blank after trimming)" guard. ✓
+- `display_name` fallback chain: `full_name` → `name` → `display_name` → `''`. Correct per spec (Google supplies full name). ✓
+- `avatar_url` fallback chain: `avatar_url` → `picture`. Correct (avatar_url is Supabase-normalised key; picture is the raw OIDC claim). ✓
+- Non-Google path (including Apple): `v_avatar_url := NULL`. Apple provides no photo via DB trigger. ✓
+
+**Apple — in-app prefill (`signInWithApple` in auth-service.ts)**
+
+PASS. After `signInWithIdToken` succeeds, `credential.fullName.givenName` and `.familyName` are read, trimmed, filtered, and joined. Verified behaviors:
+
+- `if (composedName)` guard: no call to `fillDisplayNameIfEmpty` if name is empty — handles subsequent Apple sign-ins where `credential.fullName` is nil. ✓
+- `fillDisplayNameIfEmpty(name)` queries the current `display_name` before updating; only updates when `existing?.trim()` is falsy (empty or null). Satisfies "only fill if currently null or empty." ✓
+- `avatar_url` is never set in the Apple path — Apple supplies no photo. ✓
+- `.catch()` wraps the prefill call — sign-in resolves normally even if the prefill fails. ✓
+- Test "skips display_name update when display_name is already non-empty" confirms overwrite protection at the in-app layer. ✓
+- Test "skips display_name update when credential.fullName is nil (subsequent sign-ins)" confirms nil handling. ✓
+
+**NEEDS-DEVICE-TEST (Apple)**: Apple delivers `credential.fullName` only on the very first sign-in with a fresh Apple ID. Static verification (code inspection + unit tests with mocked credential) passes, but confirming first-sign-in `fullName` delivery requires a real device with a fresh Apple ID. Per coordinator instructions, this does not block the static pass.
+
+**Google avatar copy to bucket (`copyGoogleAvatarToBucket` in auth-service.ts)**
+
+PASS. Called (wrapped in `.catch()`) after `setSession` succeeds in `signInWithGoogle()`. Verified behaviors:
+
+- Queries `users.avatar_url` first; only proceeds if `currentUrl.startsWith('https://lh3.googleusercontent.com')`. Skips if already a bucket URL or any other provider. ✓
+- `fetch()` + `arrayBuffer()` + `new Uint8Array(arrayBuffer)` — not `blob()`. Satisfies production.md convention against base64 React Native upload failures. ✓
+- Content-type validation: jpeg/png/webp accepted; any other type triggers an early return. ✓
+- Errors swallowed at each stage (download fail, upload fail, DB update fail) — Google CDN URL stays as accepted fallback on any error. ✓
+- Appends `?v=${Date.now()}` cache-buster to the bucket URL. ✓
+- Tests: "copies Google avatar to bucket when avatar_url is a Google URL" PASS; "skips avatar copy when avatar_url is not a Google URL" PASS; "skips avatar copy when avatar_url is null" PASS; "does not throw when the download fails — Google URL stays as fallback" PASS. ✓
+
+**Remote URL guard (`uploadAvatar` in auth-service.ts)**
+
+PASS. Lines 308–312: `if (imageUri.startsWith('https://') || imageUri.startsWith('http://'))` throws an error with the message "uploadAvatar requires a local file URI, not a remote URL." Test "throws when a remote https:// URL is passed (AC-201 Q-B guard)" confirms this behavior. ✓
+
+**Spec compliance — gold-plating check**
+
+PASS. All AC-201 implementation elements map directly to spec requirements or the coordinator-described implementation (Google DB trigger, Apple in-app prefill, Google avatar bucket copy, remote URL guard). No extra behavior detected.
+
+---
+
+### ProfileScreen Layout Bug Fix Verification
+
+PASS. The fallback branch (rendered when `profile?.id` is falsy — profile not yet loaded) is wrapped in:
+
+```
+<View style={{ paddingTop: h.contentTopInset, paddingBottom: h.contentBottomInset }}>
+  {profileHeader}
+  {profileFooter}
+</View>
+```
+
+This matches the FlatList path's `contentContainerStyle: { paddingTop: h.contentTopInset, paddingBottom: h.contentBottomInset }` (line 251 of ProfileScreen.tsx). The avatar will no longer overlap the navigation bar during initial profile load. ✓
+
+---
+
+### Regression — All In-Scope ACs
+
+**AC-001 (revised)** — PASS. `AuthNavigator.tsx` unchanged; session → children directly, no gym selection gate.
+
+**AC-063** — PASS. `privacy_setting` column and `EditProfileScreen.tsx` unchanged.
+
+**AC-116** — PASS. Avatar, display name, bio still rendered from `useSession().profile` in `profileHeader`.
+
+**AC-117** — PASS. Edit Profile entry point unchanged.
+
+**AC-118** — PASS. Send history section unchanged (TODO placeholder + MOD-008 integration).
+
+**AC-145** — PASS. Follower/following count links and navigation unchanged.
+
+**AC-156 / AC-157** — PASS. `updateBetaVideoPrivacy` service unchanged.
+
+**AC-164** — PASS. `BetaVideoGrid` and `BetaVideoReelViewer` with `reelContext="profile"` unchanged.
+
+**AC-167** — PASS. Logout control absent from `ProfileScreen`. Unchanged.
+
+**AC-184** — PASS. No notification bell or settings icon in ProfileScreen header. Unchanged.
+
+**AC-200** — PASS. `makeRedirectUri({ scheme: 'projectday' })` and test mock `'projectday://auth'` unchanged.
+
+**Supabase singleton** — PASS. No new `createClient()` call sites.
+
+**No service_role key in client code** — PASS. No new env var reads.
+
+**No hardcoded hex colors** — PASS. New AC-201 code in auth-service.ts contains no hex literals.
+
+**All user-facing strings through i18n** — PASS. auth-service.ts is not a UI component — no i18n obligation. ProfileScreen.tsx is unchanged; all strings still go through `t()`.
+
+**TypeScript strict mode** — PASS. `npx tsc --noEmit` exits 0.
+
+---
+
+### Summary
+
+| Item | Result |
+|------|--------|
+| AC-201: Google DB trigger fills display_name (NULLIF/TRIM guards, fallback chain) | PASS |
+| AC-201: Google DB trigger fills avatar_url (avatar_url → picture fallback) | PASS |
+| AC-201: ON CONFLICT DO NOTHING — existing profiles never touched | PASS |
+| AC-201: Apple in-app prefill — fillDisplayNameIfEmpty after signInWithIdToken | PASS |
+| AC-201: Apple — no avatar_url fill (photo never from Apple) | PASS |
+| AC-201: Apple — nil fullName on subsequent sign-ins skips update | PASS |
+| AC-201: Apple — existing non-empty display_name not overwritten | PASS |
+| AC-201: Google avatar copy — lh3.googleusercontent.com check | PASS |
+| AC-201: Google avatar copy — fetch+arrayBuffer+Uint8Array (not blob) | PASS |
+| AC-201: Google avatar copy — content-type validation (jpeg/png/webp) | PASS |
+| AC-201: Google avatar copy — errors swallowed, Google URL stays as fallback | PASS |
+| AC-201: uploadAvatar remote URL guard throws on https:// input | PASS |
+| AC-201: 8 new tests all pass (21 total in auth-service.test.ts) | PASS |
+| ProfileScreen layout bug: fallback branch applies contentTopInset/contentBottomInset | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS |
+| Full test suite (655 total, 654 pass) | PASS (1 pre-existing flaky failure in mod-send-logging, not in scope) |
+| AC-001 (revised) regression | PASS |
+| AC-063 regression | PASS |
+| AC-116 regression | PASS |
+| AC-117 regression | PASS |
+| AC-118 regression | PASS |
+| AC-145 regression | PASS |
+| AC-156 / AC-157 regression | PASS |
+| AC-164 regression | PASS |
+| AC-167 regression | PASS |
+| AC-184 regression | PASS |
+| AC-200 regression | PASS |
+| Apple first-sign-in fullName delivery | NEEDS-DEVICE-TEST — does not block static pass |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+**Device-test items: 1 (Apple first-sign-in fullName delivery — static verification complete, runtime confirmation requires a real device + fresh Apple ID)**
+
+**AC-201 — QA PASS (static). Apple first-sign-in device confirmation is a known prerequisite per prior QA runs and the Native Build Gate convention.**
