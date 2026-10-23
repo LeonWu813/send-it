@@ -2,6 +2,21 @@
 
 ## Engineering Progress
 
+### Page review P1/P2 (off-spec design implementation, 2026-10-23)
+
+Source: `send-it-design/ux-team/page-review/page-review.md`. Branch `design/page-templates`. Changes AC-130 (RD-1) and AC-127 wording (RD-4); needs PRD follow-up by Leon.
+
+- RD-1: Route Detail has one full-width primary Record Send. Upload button removed from the screen; it still passes `onRegisterUploadLauncher` / `onUploadError` so BetaVideoSection renders the upload entry (header + empty tile) itself.
+- RD-2: large title "{Colour} - {Section}" (no grade; badge carries it). Header title (AC-045 name) appears only after the large title scrolls off. "Section" block dropped.
+- RD-4: inline summary line "Sends N - Attempts M" (subhead numerals, 44pt hit area), tap -> Send History Detail. testID `send-summary-line`.
+- RL-2: one Filter chip row opening a BottomSheet (grade + colour choices, Done / Clear filters); active filters are removable chips; "+" in header trailing slot; filter -> card gap 16 (R10); cards spaced by list separator `cardGap` (R6). Grade stays single-select (no range) because the filter model/service is single-grade. Empty state: Clear filters (when active) + Add route.
+- RS-1: grade chips are a wrapped grid; photo field shows the required hint; Add Route CTA disabled until a photo is chosen.
+- SH-1: route summary card on top (new optional `gymName` prop, passed by RouteNavigator); per-card "..." opens a confirm BottomSheet (replaces trash icon + Alert).
+- R0/T-1: containers own margin + gap; no content text below 13pt.
+- Story-only optional props: `initialFilterSheetOpen` (RouteListScreen), `initialDeleteAscentId` (SendHistoryDetailScreen). New stories: Active Filters, Filter Sheet Open, Delete Confirm.
+- Locale keys added (shared files, uncommitted): `routeCatalog.detail.attemptsShort`, `routeCatalog.detail.moreActions`, `routeCatalog.filter.*`.
+- Verified: `npm run lint` 0 errors, `npm run check:i18n` OK, `npx jest src/modules/mod-route-catalog` 118/118. Light/dark screenshots reviewed. Route Detail Beta heading at y~400 in the 393 frame; Route List ~6.3 visible cards.
+
 ### Design-system fixes + Storybook screen stories (2026-10-22)
 
 **Design fixes (Issues 8 and 11):**

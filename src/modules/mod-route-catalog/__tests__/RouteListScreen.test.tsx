@@ -156,7 +156,7 @@ describe('RouteListScreen', () => {
     await waitFor(() => {
       // RouteCard renders the name as a Text node — find by text content.
       // V3 Red route: formatted name "V3 Red" or "V3 紅色".
-      const v3Cards = screen.queryAllByText(/^V3/);
+      const v3Cards = screen.queryAllByText(/^V3/, { includeHiddenElements: true });
       expect(v3Cards.length).toBeGreaterThan(0);
     });
   });
@@ -252,32 +252,27 @@ describe('RouteListScreen', () => {
     }
   });
 
-  it('shows the always-visible add-route CTA and calls onSubmitRoute when pressed', async () => {
+  it('RL-2: shows ONE filter row (no inline grade/colour chip rows) and add-route CTA only in the empty state', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    // Wait for routes to render before looking for the CTA button.
     await waitFor(() => {
-      const routeCards = screen.queryAllByRole('button').filter(
-        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
-      );
-      expect(routeCards.length).toBeGreaterThan(0);
+      expect(screen.getByTestId('filter-row')).toBeTruthy();
     });
+    // Only the single Filter chip; grade chips live in the sheet.
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    expect(screen.queryAllByLabelText(/Can't find it|找不到路線/)).toHaveLength(0);
+  });
 
-    // CTA uses routeCatalog.addRoute i18n key
-    const submitButtons = screen.queryAllByRole('button');
-    const ctaButton = submitButtons.find(
-      (el) =>
-        el.props.accessibilityLabel?.includes('Add a new route') ||
-        el.props.accessibilityLabel?.includes('新增一條') ||
-        el.props.accessibilityLabel?.includes('find') ||
-        el.props.accessibilityLabel?.includes('找不到'),
-    );
-    if (ctaButton) {
-      fireEvent.press(ctaButton);
-      expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
-    }
+  it('RL-2: empty list offers add-route and calls onSubmitRoute', async () => {
+    mockListRoutes.mockResolvedValueOnce([]);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    const cta = await screen.findByLabelText(/Can't find it|找不到路線/);
+    fireEvent.press(cta);
+    expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
   });
 
   it('shows a no-routes message when the list is empty', async () => {
@@ -433,34 +428,22 @@ describe('RouteListScreen', () => {
     }
   });
 
-  it('applies grade filter when a grade chip is pressed', async () => {
+  it('RL-2: grade chip in the filter sheet applies the filter and shows a removable chip', async () => {
     mockListRoutes
       .mockResolvedValueOnce(ACTIVE_ROUTES)
-      .mockResolvedValueOnce([ACTIVE_ROUTES[0]]);
+      .mockResolvedValueOnce([ACTIVE_ROUTES[0]])
+      .mockResolvedValue([ACTIVE_ROUTES[0]]);
 
-    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+    render(<RouteListScreen {...DEFAULT_PROPS} initialFilterSheetOpen />, renderOptions());
 
-    // Wait for initial routes to render via RouteCard.
+    const gradeChip = await screen.findByRole('radio', { name: 'V3' });
+    fireEvent.press(gradeChip);
+
     await waitFor(() => {
-      const routeCards = screen.queryAllByRole('button').filter(
-        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
+      expect(mockListRoutes).toHaveBeenCalledWith(
+        'gym-001',
+        expect.objectContaining({ grade: 'V3' }),
       );
-      expect(routeCards.length).toBeGreaterThan(0);
     });
-
-    // The grade chips appear in the header — press V3 chip (not card grade text)
-    const checkboxes = screen.queryAllByRole('radio');
-    const gradeChip = checkboxes.find(
-      (el) => el.props.accessibilityLabel === 'V3',
-    );
-    if (gradeChip) {
-      fireEvent.press(gradeChip);
-      await waitFor(() => {
-        expect(mockListRoutes).toHaveBeenCalledWith(
-          'gym-001',
-          expect.objectContaining({ grade: 'V3' }),
-        );
-      });
-    }
   });
 });

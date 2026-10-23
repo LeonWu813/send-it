@@ -2,7 +2,7 @@
  * RouteSubmitScreen — single-page route submit flow (AC-020 revised, AC-021 revised, AC-043).
  *
  * Single page containing:
- *   - Grade chips (all ROUTE_GRADES, horizontally scrollable)
+ *   - Grade chips (all ROUTE_GRADES, wrapped grid: RS-1, nothing hides off-screen)
  *   - Hold-color chips (all ROUTE_COLORS, with color dots)
  *   - Inline photo picker (Take Photo / Choose from Library); after selection
  *     shows a preview image and a "Change Photo" option instead of the buttons
@@ -12,7 +12,8 @@
  * No match-check step. No multi-step flow.
  *
  * AC-020 (revised): single-page submit, no client-side match-check step.
- * AC-021 (revised): block submission without photo; show inline validation error.
+ * AC-021 (revised): block submission without photo; RS-1: the CTA is disabled until a photo is
+ *   chosen and the photo field says why (inline, at the field).
  * AC-022: color selector restricted to fixed enum.
  * AC-023: grade selector restricted to V-scale only.
  * AC-043: pre-fill grade + color from RouteListScreen filter state via optional props.
@@ -279,17 +280,12 @@ export default function RouteSubmitScreen({
       contentContainerStyle={styles.contentContainer}
       keyboardShouldPersistTaps="handled"
     >
-      <AppText variant="body" color="textSecondary" style={styles.gymNameSubtitle}>{gymName}</AppText>
+      <AppText variant="body" color="textSecondary">{gymName}</AppText>
 
       {/* Grade chips — AC-023: V-scale only */}
-      <View style={styles.section}>
+      <View>
         <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.gradeLabel')}</AppText>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-          accessibilityRole="radiogroup"
-        >
+        <View style={styles.gradeGrid} accessibilityRole="radiogroup">
           {ROUTE_GRADES.map((grade) => (
             <Chip
               key={grade}
@@ -302,14 +298,14 @@ export default function RouteSubmitScreen({
               }}
             />
           ))}
-        </ScrollView>
+        </View>
         {gradeError ? (
           <InlineFieldError message={gradeError} />
         ) : null}
       </View>
 
       {/* Hold-color picker — AC-022: fixed enum, tape swatches */}
-      <View style={styles.section}>
+      <View>
         <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</AppText>
         <ScrollView
           horizontal
@@ -335,7 +331,7 @@ export default function RouteSubmitScreen({
       </View>
 
       {/* Inline photo picker — AC-021 */}
-      <View style={styles.section}>
+      <View>
         <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.photo.title')}</AppText>
 
         {photoUri ? (
@@ -380,14 +376,19 @@ export default function RouteSubmitScreen({
           </View>
         )}
 
-        {/* AC-021: inline photo-required error */}
+        {/* AC-021 / RS-1: inline validation at the photo field. Permission errors in red; otherwise a
+             neutral "required" line while no photo is chosen (the CTA below is disabled for that reason). */}
         {photoError ? (
           <InlineFieldError message={photoError} />
+        ) : !photoUri ? (
+          <AppText variant="footnote" color="textSecondary" style={styles.photoRequiredHint} testID="photo-required-hint">
+            {t('routeCatalog.submit.photoRequired')}
+          </AppText>
         ) : null}
       </View>
 
       {/* Optional section label */}
-      <View style={styles.section}>
+      <View>
         <TextField
           label={t('routes.submit.sectionLabel')}
           value={sectionLabel}
@@ -398,16 +399,9 @@ export default function RouteSubmitScreen({
         />
       </View>
 
-      {/* AC-021: inline validation message when photo is absent and user has not yet selected one */}
-      {!photoUri && !photoError ? (
-        <AppText variant="footnote" color="textSecondary" align="center" style={styles.photoRequiredHint}>
-          {t('routeCatalog.submit.photoRequired')}
-        </AppText>
-      ) : null}
-
       {/* AC-187 Layer 1: neutral-colored inline notice — reactive to grade/color selection */}
       {duplicateCandidates.length > 0 ? (
-        <View style={styles.duplicateNotice}>
+        <View>
           <NoticeBox
             message={`${t('routes.duplicateNotice.title')}. ${t('routes.duplicateNotice.body', {
               grade: selectedGrade,
@@ -418,15 +412,15 @@ export default function RouteSubmitScreen({
         </View>
       ) : null}
 
-      {/* Add Route button — always enabled (AC-187); disabled only while submitting */}
-      <View style={styles.primaryAction}>
+      {/* Add Route button — disabled while submitting or until a photo is chosen (RS-1) */}
+      <View>
         <Button
           variant="primary"
           fullWidth
           label={t('routeCatalog.submit.addRoute')}
           onPress={() => void handleAddRoute()}
           loading={isSubmitting}
-          disabled={isSubmitting}
+          disabled={isSubmitting || !photoUri}
         />
       </View>
     </ScrollView>
@@ -531,24 +525,25 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flex: 1,
       backgroundColor: theme.colors.background,
     },
+    // R0: the scroll container owns the margin and the gaps; sections set none.
     contentContainer: {
       paddingTop: theme.spacing.md,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
-    },
-    gymNameSubtitle: {
-      marginBottom: theme.layout.sectionGap,
-    },
-    section: {
-      marginBottom: theme.layout.sectionGap,
+      gap: theme.layout.sectionGap,
     },
     sectionLabel: {
-      marginBottom: theme.spacing.sm,
+      marginBottom: theme.layout.sectionHeaderGap,
     },
     chipRow: {
-      columnGap: theme.spacing.sm,
-      paddingVertical: theme.spacing.xs,
+      columnGap: theme.layout.inlineGap,
       paddingRight: theme.spacing.sm,
+    },
+    gradeGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      columnGap: theme.layout.inlineGap,
+      rowGap: theme.layout.inlineGap,
     },
     photoBlock: {
       gap: theme.spacing.sm,
@@ -562,19 +557,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     },
     photoButtonRow: {
       flexDirection: 'row',
-      gap: theme.spacing.sm,
+      gap: theme.layout.inlineGap,
     },
     photoButtonFlex: {
       flex: 1,
     },
     photoRequiredHint: {
-      marginBottom: theme.spacing.xs,
-    },
-    duplicateNotice: {
-      marginBottom: theme.spacing.sm,
-    },
-    primaryAction: {
-      marginTop: theme.spacing.md,
+      marginTop: theme.spacing.xs,
     },
   });
 }

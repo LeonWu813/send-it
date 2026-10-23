@@ -47,11 +47,34 @@ const MIXED_ASCENTS: AscentRow[] = [
   ascent(4, { style: 'attempt', attempts: 4, note: '下次試試看左側起手' }),
 ];
 
-function Seeded({ ascents }: { ascents: AscentRow[] | typeof STUB_PENDING }): React.JSX.Element {
+const ROUTE = {
+  id: ROUTE_ID,
+  gym_id: 'gym-1',
+  grade: 'V4',
+  color_tag: 'red',
+  section_label: 'Cave',
+  photo_url: '',
+  status: 'active',
+  submitted_by_user_id: ME,
+  created_at: new Date(2026, 7, 15).toISOString(),
+  retired_at: null,
+  retired_by_user_id: null,
+};
+
+function Seeded({ ascents, deleteId }: { ascents: AscentRow[] | typeof STUB_PENDING; deleteId?: string }): React.JSX.Element {
   resetStubData();
   setStubData('auth:session', { user: { id: ME } });
+  setStubData('routes', [ROUTE]);
   setStubData('ascents', ascents);
-  return <SendHistoryDetailScreen routeId={ROUTE_ID} session={session} onBack={() => {}} />;
+  return (
+    <SendHistoryDetailScreen
+      routeId={ROUTE_ID}
+      session={session}
+      gymName="紅石攀岩館"
+      onBack={() => {}}
+      initialDeleteAscentId={deleteId}
+    />
+  );
 }
 
 const meta: Meta = {
@@ -64,8 +87,14 @@ const meta: Meta = {
 export default meta;
 type Story = StoryObj;
 
-/** Five ascents: flash, top, private top, two attempts; with style badges, attempt counts, dates, delete buttons and notes. */
+/** Route summary card on top, then five ascents (flash, top, private top, two attempts) with badges, attempt counts, dates, notes and a "..." action each. */
 export const Populated: Story = { render: () => <Seeded ascents={MIXED_ASCENTS} /> };
+
+/** SH-1: the "..." action was tapped on the first ascent; the delete confirmation sheet is open. */
+export const DeleteConfirm: Story = {
+  name: 'Delete Confirm',
+  render: () => <Seeded ascents={MIXED_ASCENTS} deleteId="ascent-0" />,
+};
 
 /** No sends for this route. */
 export const Empty: Story = { render: () => <Seeded ascents={[]} /> };

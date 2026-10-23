@@ -90,7 +90,7 @@ const meta: Meta = {
 export default meta;
 type Story = StoryObj;
 
-/** Active route: grade, color badge, gym subtitle, send summary (1 flash + 1 top), action row, beta section, added-date footer. */
+/** Active route: large title "紅色 · Cave", grade badge + gym subtitle, inline summary "完攀 · 嘗試", one full-width Record Send button, beta section, added-date footer. */
 export const Populated: Story = { render: () => <Seeded state="populated" /> };
 
 /** The route is bookmarked, so the header bookmark icon is filled. */

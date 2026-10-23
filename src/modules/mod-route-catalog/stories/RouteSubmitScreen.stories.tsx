@@ -70,7 +70,7 @@ const meta: Meta = {
 export default meta;
 type Story = StoryObj;
 
-/** Empty form: no pre-fills, no duplicates at the gym. Grade and color chips are unselected. */
+/** Empty form: no pre-fills, no duplicates. Grade chips wrap into a grid (VB-V10 all visible); the photo field says a photo is required and Add Route is disabled. */
 export const Default: Story = { render: () => <Screen /> };
 
 /** Grade V4 and Red are pre-filled; two matching routes exist, so the AC-187 duplicate notice shows. */

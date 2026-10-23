@@ -3,7 +3,8 @@
  *
  * Shows the active routes at a gym with grade + hold-color filter chips.
  *
- * AC-040: filterable by grade and hold color chip selectors.
+ * AC-040: filterable by grade and hold color. RL-2: one "Filter" row opens a sheet (grade + colour);
+ *         active filters show as removable chips; "+" (add route) sits in the header trailing slot.
  *         No free-text search. No status filter for normal users.
  * AC-041: shows active routes only for normal users.
  * AC-045: route display name composed as "{grade} {LocalizedColor} ({section_label}?)".
@@ -25,9 +26,12 @@ import RouteCard from '../../../components/RouteCard';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import type { RouteCardRoute } from '../../../components/RouteCard';
 import {
-  Button,
+  AppText,
+  BottomSheet,
+  ButtonGroup,
   Chip,
   EmptyState,
+  IconButton,
   InlineError,
   Spinner,
 } from '../../../components/ui';
@@ -109,6 +113,8 @@ interface RouteListScreenProps {
   colorFilter?: RouteColor | null;
   onGradeFilterChange?: (grade: RouteGrade | null) => void;
   onColorFilterChange?: (color: RouteColor | null) => void;
+  /** Stories / tests only: open the filter sheet on mount. */
+  initialFilterSheetOpen?: boolean;
 }
 
 export default function RouteListScreen({
@@ -121,13 +127,13 @@ export default function RouteListScreen({
   colorFilter: controlledColorFilter,
   onGradeFilterChange,
   onColorFilterChange,
+  initialFilterSheetOpen = false,
 }: RouteListScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, screenMargin);
   const tabInset = useTabBarInset();
-  useAppHeader({ title: gymName, onBack });
 
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -145,6 +151,24 @@ export default function RouteListScreen({
 
   const gradeFilter = controlledGradeFilter !== undefined ? controlledGradeFilter : internalGradeFilter;
   const colorFilter = controlledColorFilter !== undefined ? controlledColorFilter : internalColorFilter;
+
+  // RL-2: filter sheet (grade + colour)
+  const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(initialFilterSheetOpen);
+
+  // RL-2: "+" in the header trailing slot (AC-043: forwards the current filters to the submit screen)
+  useAppHeader({
+    title: gymName,
+    onBack,
+    trailing: (
+      <IconButton
+        variant="float"
+        name={ICON.add.outline}
+        size={24}
+        onPress={() => onSubmitRoute(gradeFilter ?? undefined, colorFilter ?? undefined)}
+        accessibilityLabel={t('routes.submit.title')}
+      />
+    ),
+  });
 
   // AC-046/190: achievement map (route_id → best ascent style for the current user)
   const [achievements, setAchievements] = useState<Record<string, AchievementStyle>>({});
@@ -354,7 +378,7 @@ export default function RouteListScreen({
     // RouteCard (Rev 39/40) handles bookmark icon and send badge natively via props.
     // No overlay Views needed — the card is fully presentational and wired here.
     return (
-      <View style={styles.cardWrapper}>
+      <View>
         <RouteCard
           route={cardRoute}
           onPress={() => onSelectRoute(item.id)}
@@ -368,67 +392,115 @@ export default function RouteListScreen({
     );
   }
 
-  function renderGradeChip(grade: RouteGrade): React.JSX.Element {
-    return (
-      <Chip
-        key={grade}
-        variant="choice"
-        label={grade}
-        selected={gradeFilter === grade}
-        onPress={() => toggleGradeFilter(grade)}
-      />
-    );
+  function clearGradeFilter(): void {
+    if (onGradeFilterChange) onGradeFilterChange(null);
+    else setInternalGradeFilter(null);
   }
 
-  function renderColorChip(color: RouteColor): React.JSX.Element {
-    return (
-      <ColorFilterChip
-        key={color}
-        color={color}
-        selected={colorFilter === color}
-        onPress={() => toggleColorFilter(color)}
-      />
-    );
+  function clearColorFilter(): void {
+    if (onColorFilterChange) onColorFilterChange(null);
+    else setInternalColorFilter(null);
   }
 
+  const hasActiveFilters = gradeFilter !== null || colorFilter !== null;
+
+  function clearAllFilters(): void {
+    clearGradeFilter();
+    clearColorFilter();
+  }
+
+  function addRoute(): void {
+    onSubmitRoute(gradeFilter ?? undefined, colorFilter ?? undefined);
+  }
+
+  /** RL-2: one row. "Filter" opens the sheet; each active filter is a removable chip after it. */
   const listHeader = (
-    <View style={styles.filterBlock}>
-      {/* Grade filter chips — all grades always shown */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-        accessibilityRole="radiogroup"
-      >
-        {ROUTE_GRADES.map(renderGradeChip)}
-      </ScrollView>
-
-      {/* Hold-color filter chips — all 9 colors always shown */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterRow}
-        accessibilityRole="radiogroup"
-      >
-        {ROUTE_COLORS.map(renderColorChip)}
-      </ScrollView>
-    </View>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterRow}
+      testID="filter-row"
+    >
+      <Chip
+        variant="filter"
+        icon={ICON.filter.outline}
+        label={t('routeCatalog.filter.button')}
+        onPress={() => setIsFilterSheetOpen(true)}
+      />
+      {gradeFilter !== null ? (
+        <Chip
+          variant="filter"
+          selected
+          label={gradeFilter}
+          onPress={() => setIsFilterSheetOpen(true)}
+          onClear={clearGradeFilter}
+          clearAccessibilityLabel={t('routeCatalog.filter.removeChip', { label: gradeFilter })}
+        />
+      ) : null}
+      {colorFilter !== null ? (
+        <ActiveColorChip
+          color={colorFilter}
+          onPress={() => setIsFilterSheetOpen(true)}
+          onClear={clearColorFilter}
+        />
+      ) : null}
+    </ScrollView>
   );
 
-  /** Always-visible "Can't find it? Add a new route" CTA at the bottom. */
-  const addRouteCta = (
-    <View style={styles.addRouteCta}>
-      <Button
-        variant="secondary"
-        size="md"
-        fullWidth
-        icon={ICON.add.outline}
-        label={t('routeCatalog.addRoute')}
-        onPress={() =>
-          onSubmitRoute(gradeFilter ?? undefined, colorFilter ?? undefined)
-        }
-      />
-    </View>
+  const filterSheet = (
+    <BottomSheet
+      visible={isFilterSheetOpen}
+      onClose={() => setIsFilterSheetOpen(false)}
+      title={t('routeCatalog.filter.sheetTitle')}
+      variant="content"
+      footer={
+        <ButtonGroup
+          buttons={
+            hasActiveFilters
+              ? [
+                  { label: t('common.done'), onPress: () => setIsFilterSheetOpen(false) },
+                  {
+                    label: t('routeCatalog.filter.clearAll'),
+                    variant: 'secondary',
+                    onPress: clearAllFilters,
+                  },
+                ]
+              : [{ label: t('common.done'), onPress: () => setIsFilterSheetOpen(false) }]
+          }
+        />
+      }
+    >
+      <View style={styles.sheetBody}>
+        <View style={styles.sheetGroup}>
+          <AppText variant="headline">{t('routeCatalog.filter.grade')}</AppText>
+          <View style={styles.chipWrap} accessibilityRole="radiogroup">
+            {ROUTE_GRADES.map((grade) => (
+              <Chip
+                key={grade}
+                variant="choice"
+                label={grade}
+                on="surface"
+                selected={gradeFilter === grade}
+                onPress={() => toggleGradeFilter(grade)}
+              />
+            ))}
+          </View>
+        </View>
+        <View style={styles.sheetGroup}>
+          <AppText variant="headline">{t('routeCatalog.filter.color')}</AppText>
+          <View style={styles.chipWrap} accessibilityRole="radiogroup">
+            {ROUTE_COLORS.map((color) => (
+              <ColorFilterChip
+                key={color}
+                color={color}
+                selected={colorFilter === color}
+                onPress={() => toggleColorFilter(color)}
+              />
+            ))}
+          </View>
+        </View>
+      </View>
+    </BottomSheet>
   );
 
   if (isLoading) {
@@ -460,14 +532,23 @@ export default function RouteListScreen({
           keyExtractor={(item) => item.id}
           renderItem={renderRouteCard}
           ListHeaderComponent={listHeader}
-          ListFooterComponent={addRouteCta}
+          ListHeaderComponentStyle={styles.listHeader}
+          ItemSeparatorComponent={CardSeparator}
           contentContainerStyle={[styles.listContent, { paddingBottom: tabInset.contentBottom || theme.spacing.md }]}
           scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
-            <EmptyState variant="filtered" title={t('routeCatalog.noResults')} />
+            <EmptyState
+              variant="filtered"
+              title={t('routeCatalog.noResults')}
+              primaryLabel={hasActiveFilters ? t('routeCatalog.filter.clearAll') : t('routeCatalog.addRoute')}
+              onPrimary={hasActiveFilters ? clearAllFilters : addRoute}
+              secondaryLabel={hasActiveFilters ? t('routeCatalog.addRoute') : undefined}
+              onSecondary={hasActiveFilters ? addRoute : undefined}
+            />
           }
         />
+        {filterSheet}
       </View>
     </SwipeBackWrapper>
   );
@@ -497,6 +578,39 @@ function ColorFilterChip({
   );
 }
 
+/** RL-2: an applied colour filter as a removable chip (swatch + name + separate clear button). */
+function ActiveColorChip({
+  color,
+  onPress,
+  onClear,
+}: {
+  color: RouteColor;
+  onPress: () => void;
+  onClear: () => void;
+}): React.JSX.Element {
+  const { t } = useTranslation('common');
+  const swatch = useTapeSwatch(color);
+  const label = t(`routeCatalog.colors.${color}`);
+  return (
+    <Chip
+      variant="filter"
+      selected
+      label={label}
+      swatch={swatch.fill}
+      swatchHair={swatch.hair}
+      onPress={onPress}
+      onClear={onClear}
+      clearAccessibilityLabel={t('routeCatalog.filter.removeChip', { label })}
+    />
+  );
+}
+
+/** R6: card ↔ card gap `cardGap`, owned by the list (not a per-card margin). */
+function CardSeparator(): React.JSX.Element {
+  const { theme } = useTheme();
+  return <View style={{ height: theme.layout.cardGap }} />;
+}
+
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
   return StyleSheet.create({
@@ -511,25 +625,32 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       justifyContent: 'center',
       paddingHorizontal: screenMargin,
     },
-    filterBlock: {
-      paddingBottom: theme.spacing.xs,
+    // R0/R10: the list owns the margin; the chip row adds no vertical padding of its own.
+    listContent: {
+      paddingHorizontal: screenMargin,
+      paddingTop: theme.spacing.md,
+    },
+    // Filter row -> first card = md (R10)
+    listHeader: {
+      marginBottom: theme.spacing.md,
+      marginHorizontal: -screenMargin,
     },
     filterRow: {
       paddingHorizontal: screenMargin,
-      paddingVertical: theme.spacing.xs,
-      columnGap: theme.spacing.sm,
+      columnGap: theme.layout.inlineGap,
+      alignItems: 'center',
     },
-    listContent: {
-      paddingBottom: theme.spacing.md,
+    sheetBody: {
+      gap: theme.layout.sectionGap,
     },
-    cardWrapper: {
-      marginHorizontal: screenMargin,
-      marginBottom: theme.layout.cardGap,
+    sheetGroup: {
+      gap: theme.layout.sectionHeaderGap,
     },
-    addRouteCta: {
-      marginHorizontal: screenMargin,
-      marginTop: theme.layout.sectionGap,
-      marginBottom: theme.spacing.xxl,
+    chipWrap: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      columnGap: theme.layout.inlineGap,
+      rowGap: theme.layout.inlineGap,
     },
   });
 }

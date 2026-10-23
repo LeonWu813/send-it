@@ -4,7 +4,7 @@ import React from 'react';
 import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
 import RouteListScreen from '../screens/RouteListScreen';
-import type { RouteGrade, RouteSummary } from '../types';
+import type { RouteColor, RouteGrade, RouteSummary } from '../types';
 
 // Off-spec design tooling. Fake data only; the supabase stub resolves all queries.
 
@@ -40,8 +40,17 @@ function seed(routes: RouteSummary[] | typeof STUB_PENDING): void {
   setStubData('rpc:routes_with_new_beta', []);
 }
 
-function Screen({ routes, gradeFilter }: { routes: RouteSummary[] | typeof STUB_PENDING; gradeFilter?: RouteGrade }): React.JSX.Element {
+interface ScreenProps {
+  routes: RouteSummary[] | typeof STUB_PENDING;
+  grade?: RouteGrade;
+  color?: RouteColor;
+  sheetOpen?: boolean;
+}
+
+function Screen({ routes, grade, color, sheetOpen }: ScreenProps): React.JSX.Element {
   seed(routes);
+  const [gradeFilter, setGradeFilter] = React.useState<RouteGrade | null>(grade ?? null);
+  const [colorFilter, setColorFilter] = React.useState<RouteColor | null>(color ?? null);
   return (
     <RouteListScreen
       gymId={GYM_ID}
@@ -50,6 +59,10 @@ function Screen({ routes, gradeFilter }: { routes: RouteSummary[] | typeof STUB_
       onSubmitRoute={() => {}}
       onBack={() => {}}
       gradeFilter={gradeFilter}
+      colorFilter={colorFilter}
+      onGradeFilterChange={setGradeFilter}
+      onColorFilterChange={setColorFilter}
+      initialFilterSheetOpen={sheetOpen}
     />
   );
 }
@@ -64,18 +77,30 @@ const meta: Meta = {
 export default meta;
 type Story = StoryObj;
 
-/** Eight active routes across grades and colors; routes 0 and 3 are bookmarked, routes 0 and 2 have beta videos. */
-export const Populated: Story = {
-  render: () => <Screen routes={Array.from({ length: 8 }, (_, i) => makeRoute(i))} />,
+const EIGHT = Array.from({ length: 8 }, (_, i) => makeRoute(i));
+
+/** Eight active routes; one "Filter" row, 80pt compact cards (about 6 visible), "+" in the header; routes 0 and 3 are bookmarked, routes 0 and 2 have beta videos. */
+export const Populated: Story = { render: () => <Screen routes={EIGHT} /> };
+
+/** RL-2: grade V0 and colour red are active; each shows as a removable chip after "Filter". */
+export const ActiveFilters: Story = {
+  name: 'Active Filters',
+  render: () => <Screen routes={EIGHT.slice(0, 1)} grade="V0" color="red" />,
 };
 
-/** No routes at this gym: empty state with the "Add a route" CTA. */
+/** RL-2: the filter sheet is open (grade + colour choices, Done / Clear filters). */
+export const FilterSheetOpen: Story = {
+  name: 'Filter Sheet Open',
+  render: () => <Screen routes={EIGHT} grade="V2" sheetOpen />,
+};
+
+/** No routes at this gym: empty state with the "Add a route" action. */
 export const Empty: Story = { render: () => <Screen routes={[]} /> };
 
 /** Route query never resolves. */
 export const Loading: Story = { render: () => <Screen routes={STUB_PENDING} /> };
 
-/** Grade filter V9 is active and nothing matches; the "Add a route" CTA remains. */
-export const FilteredEmpty: Story = { name: 'Filtered Empty', render: () => <Screen routes={[]} gradeFilter="V9" /> };
+/** Grade filter V9 is active and nothing matches: "Clear filters" primary, "Add a route" secondary. */
+export const FilteredEmpty: Story = { name: 'Filtered Empty', render: () => <Screen routes={[]} grade="V9" /> };
 
 // No Error story: the stub cannot return query errors.

@@ -11,7 +11,7 @@
  * AC-126: added date footer at the bottom.
  * AC-127: two-column send summary (Sends / Attempts).
  * AC-128: tapping summary card calls onViewSendHistory.
- * AC-130: Record Send and Upload Beta Video action buttons present.
+ * AC-130 (RD-1): one full-width Record Send button; the upload entry is owned by BetaVideoSection.
  */
 
 jest.mock('../../../lib/supabase', () => ({
@@ -134,30 +134,36 @@ describe('RouteDetailScreen', () => {
     mockSummarizeAscents.mockReturnValue({ sends: 0, attempts: 0 });
   });
 
-  it('shows grade, color, and section for an active route', async () => {
+  it('RD-2: large title is "{Colour} · {Section}" and the grade appears once (badge)', async () => {
     mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
 
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // Grade appears in the composed route name ("V5 Purple (Main Wall)" or "V5 紫色 (Main Wall)")
-      const gradeMatches = screen.queryAllByText(/V5/);
-      expect(gradeMatches.length).toBeGreaterThan(0);
-      // Section label appears as a standalone info text element
-      expect(screen.getByText('Main Wall')).toBeTruthy();
+      expect(screen.getByText('Purple · Main Wall')).toBeTruthy();
     });
+    // Grade only in the badge; no separate "區域"/Section block.
+    expect(screen.queryAllByText(/V5/, { includeHiddenElements: true })).toHaveLength(1);
+    expect(screen.queryByText('Section')).toBeNull();
+    expect(screen.queryByText('區域')).toBeNull();
   });
 
-  it('AC-045: shows formatted route name in header (grade + localized color + section)', async () => {
+  it('RD-2 / AC-045: header title ("V5 Purple (Main Wall)") appears only after the large title scrolls off', async () => {
     mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
 
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // "V5 Purple (Main Wall)" or "V5 紫色 (Main Wall)"
-      const nameElements = screen.queryAllByText(/V5.*Main Wall/);
-      const nameElementsZh = screen.queryAllByText(/V5.*Main Wall/);
-      expect(nameElements.length + nameElementsZh.length).toBeGreaterThan(0);
+      expect(screen.getByText('Purple · Main Wall')).toBeTruthy();
+    });
+    expect(screen.queryByText(/V5 .*\(Main Wall\)/)).toBeNull();
+
+    fireEvent.scroll(screen.getByTestId('route-detail-scroll'), {
+      nativeEvent: { contentOffset: { y: 400 } },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/V5 .*\(Main Wall\)/)).toBeTruthy();
     });
   });
 
@@ -187,43 +193,24 @@ describe('RouteDetailScreen', () => {
     });
   });
 
-  it('AC-127: shows two summary cards (Sends and Attempts)', async () => {
+  it('RD-4 / AC-127: shows one inline summary line "Sends N · Attempts M"', async () => {
     mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
     mockSummarizeAscents.mockReturnValue({ sends: 3, attempts: 7 });
 
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    await waitFor(() => {
-      const sendCards = screen.queryAllByTestId('sends-summary-card');
-      const attemptCards = screen.queryAllByTestId('attempts-summary-card');
-      expect(sendCards.length).toBeGreaterThan(0);
-      expect(attemptCards.length).toBeGreaterThan(0);
-    });
+    const line = await screen.findByTestId('send-summary-line');
+    expect(line.props.accessibilityLabel).toBe('Sends 3, Attempts 7');
+    expect(screen.queryByTestId('sends-summary-card')).toBeNull();
+    expect(screen.queryByTestId('attempts-summary-card')).toBeNull();
   });
 
-  it('AC-128: tapping the Sends card calls onViewSendHistory with route id', async () => {
+  it('AC-128: tapping the summary line calls onViewSendHistory with route id', async () => {
     mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
 
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    await waitFor(() => {
-      expect(screen.queryByTestId('sends-summary-card')).toBeTruthy();
-    });
-
-    fireEvent.press(screen.getByTestId('sends-summary-card'));
-    expect(mockOnViewSendHistory).toHaveBeenCalledWith('route-001');
-  });
-
-  it('AC-128: tapping the Attempts card calls onViewSendHistory with route id', async () => {
-    mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
-
-    render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
-
-    await waitFor(() => {
-      expect(screen.queryByTestId('attempts-summary-card')).toBeTruthy();
-    });
-
-    fireEvent.press(screen.getByTestId('attempts-summary-card'));
+    fireEvent.press(await screen.findByTestId('send-summary-line'));
     expect(mockOnViewSendHistory).toHaveBeenCalledWith('route-001');
   });
 
@@ -242,19 +229,18 @@ describe('RouteDetailScreen', () => {
     });
   });
 
-  it('AC-130: shows Upload Beta Video action button', async () => {
+  it('RD-1: Route Detail has no upload button of its own (BetaVideoSection owns the entry)', async () => {
     mockLoadRoute.mockResolvedValueOnce(MOCK_ACTIVE_ROUTE);
 
     render(<RouteDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    await waitFor(() => {
-      const uploadBtn = screen.queryAllByRole('button').find(
-        (el) =>
-          el.props.accessibilityLabel === 'Upload Beta Video' ||
-          el.props.accessibilityLabel === '上傳 Beta 影片',
-      );
-      expect(uploadBtn).toBeTruthy();
-    });
+    await screen.findByTestId('beta-video-section');
+    const uploadBtn = screen.queryAllByRole('button').find(
+      (el) =>
+        el.props.accessibilityLabel === 'Upload Beta Video' ||
+        el.props.accessibilityLabel === '上傳 Beta 影片',
+    );
+    expect(uploadBtn).toBeUndefined();
   });
 
   it('AC-046: shows outline bookmark icon when route is not saved', async () => {

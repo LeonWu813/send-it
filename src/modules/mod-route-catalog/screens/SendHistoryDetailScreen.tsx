@@ -10,6 +10,10 @@
  * - Back button returns to the route detail screen (not to the list) per AC-129.
  *   The RouteNavigator sets onBack to navigate to { name: 'detail', routeId }.
  *
+ * SH-1: a route summary card sits on top (thumbnail, tape badge, colour · section, gym name; same
+ * layout as the LogSend summary card, which is not exported). Delete is a "..." action per card that
+ * opens a confirm sheet (replaces the trash icon and the system Alert).
+ *
  * Each ascent row shows at minimum:
  * - Style (flash/top/attempt) with a colored badge
  * - Attempts count
@@ -21,10 +25,11 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
+  BottomSheet,
   Card,
   IconButton,
   InlineError,
@@ -32,20 +37,29 @@ import {
   Spinner,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, RADIUS, innerRadius, useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import type { AscentWithProfile } from '../../mod-send-logging';
+import RouteColorBadge from '../components/RouteColorBadge';
+import { getPhotoSignedUrl, loadRoute } from '../route-service';
+import type { Route } from '../types';
 
 interface SendHistoryDetailScreenProps {
   routeId: string;
   session: Session;
   onBack: () => void;
+  /** Gym name shown in the route summary card. */
+  gymName?: string;
+  /** Stories / tests only: open the delete confirmation for this ascent on mount. */
+  initialDeleteAscentId?: string;
 }
 
 export default function SendHistoryDetailScreen({
   routeId,
   onBack,
+  gymName,
+  initialDeleteAscentId,
 }: SendHistoryDetailScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -57,6 +71,33 @@ export default function SendHistoryDetailScreen({
   const [ascents, setAscents] = useState<AscentWithProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // SH-1: route summary (best-effort; the card is omitted if the route cannot be loaded)
+  const [route, setRoute] = useState<Route | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  // SH-1: ascent awaiting delete confirmation
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(initialDeleteAscentId ?? null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async (): Promise<void> => {
+      try {
+        const data = await loadRoute(routeId);
+        if (cancelled || !data) return;
+        setRoute(data);
+        if (data.photo_url) {
+          try {
+            const signed = await getPhotoSignedUrl(data.photo_url);
+            if (!cancelled) setPhotoUri(signed);
+          } catch {
+            // Non-fatal: the thumbnail stays empty.
+          }
+        }
+      } catch {
+        // Non-fatal: the summary card is simply omitted.
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [routeId]);
 
   const loadAscents = useCallback(async (): Promise<void> => {
     setIsLoading(true);
@@ -75,33 +116,16 @@ export default function SendHistoryDetailScreen({
    * Optimistically remove the ascent from local state, then call deleteAscent.
    * On failure, re-fetch the list to restore accurate state.
    */
-  const handleDeleteAscent = useCallback(
-    (ascentId: string): void => {
-      Alert.alert(
-        t('sendLogging.delete.confirm'),
-        undefined,
-        [
-          {
-            text: t('sendLogging.delete.cancel'),
-            style: 'cancel',
-          },
-          {
-            text: t('sendLogging.delete.delete'),
-            style: 'destructive',
-            onPress: () => {
-              // Optimistic remove
-              setAscents((prev) => prev.filter((a) => a.id !== ascentId));
-              void deleteAscent(ascentId).catch(() => {
-                // Revert on failure by re-fetching
-                void loadAscents();
-              });
-            },
-          },
-        ],
-      );
-    },
-    [t, loadAscents],
-  );
+  const confirmDelete = useCallback((): void => {
+    const ascentId = pendingDeleteId;
+    setPendingDeleteId(null);
+    if (ascentId === null) return;
+    setAscents((prev) => prev.filter((a) => a.id !== ascentId));
+    void deleteAscent(ascentId).catch(() => {
+      // Revert on failure by re-fetching
+      void loadAscents();
+    });
+  }, [pendingDeleteId, loadAscents]);
 
   useEffect(() => {
     void loadAscents();
@@ -129,6 +153,9 @@ export default function SendHistoryDetailScreen({
           contentContainerStyle={[styles.contentContainer, { paddingBottom: theme.spacing.xxl + tabInset.contentBottom }]}
           scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
         >
+          {route ? (
+            <RouteSummaryCard route={route} gymName={gymName} photoUri={photoUri} />
+          ) : null}
           {ascents.length === 0 ? (
             <AppText variant="body" color="textSecondary" align="center" style={styles.emptyText}>
               {t('routeCatalog.detail.noSends')}
@@ -142,13 +169,13 @@ export default function SendHistoryDetailScreen({
                     <SendStatus sendStyle={ascent.style} variant="tag" />
                     <View style={styles.ascentRowHeaderRight}>
                       <AppText variant="footnote" color="textSecondary">{displayDate}</AppText>
-                      {/* Delete button — all rows in this screen are the current user's own ascents */}
+                      {/* SH-1: "..." opens the delete confirmation — all rows are the user's own ascents */}
                       <IconButton
-                        name={ICON.delete.outline}
+                        name={ICON.more.outline}
                         size={20}
                         color="textSecondary"
-                        onPress={() => { handleDeleteAscent(ascent.id); }}
-                        accessibilityLabel={t('sendLogging.delete.delete')}
+                        onPress={() => { setPendingDeleteId(ascent.id); }}
+                        accessibilityLabel={t('routeCatalog.detail.moreActions')}
                       />
                     </View>
                   </View>
@@ -157,7 +184,7 @@ export default function SendHistoryDetailScreen({
                       {t('sends.attemptsCount', { count: ascent.attempts })}
                     </AppText>
                     {ascent.is_private && (
-                      <AppText variant="caption1" color="textSecondary">{t('sends.privateLabel')}</AppText>
+                      <AppText variant="footnote" color="textSecondary">{t('sends.privateLabel')}</AppText>
                     )}
                   </View>
                   {ascent.note !== null && (
@@ -171,8 +198,68 @@ export default function SendHistoryDetailScreen({
           )}
         </ScrollView>
       )}
+      {/* SH-1: delete confirmation (destructive + cancel) */}
+      <BottomSheet
+        visible={pendingDeleteId !== null}
+        onClose={() => setPendingDeleteId(null)}
+        variant="confirm"
+        title={t('sendLogging.delete.confirm')}
+        confirmLabel={t('sendLogging.delete.delete')}
+        confirmIcon={ICON.delete.outline}
+        cancelLabel={t('sendLogging.delete.cancel')}
+        onConfirm={confirmDelete}
+      />
     </View>
     </SwipeBackWrapper>
+  );
+}
+
+/** SH-1: compact route summary (card 20, padding 8, thumbnail 64) — mirrors the LogSend summary card. */
+function RouteSummaryCard({
+  route,
+  gymName,
+  photoUri,
+}: {
+  route: Route;
+  gymName?: string;
+  photoUri: string | null;
+}): React.JSX.Element {
+  const { t } = useTranslation('common');
+  const { theme } = useTheme();
+  const thumb = theme.componentSize.routeThumbCompact;
+  const colour = t(`routeCatalog.colors.${route.color_tag}`);
+  const title = route.section_label ? `${colour} · ${route.section_label}` : colour;
+  return (
+    <Card variant="static" padding={theme.layout.routeCardPadding}>
+      <View
+        accessible
+        testID="route-summary-card"
+        accessibilityLabel={[route.grade, title, gymName].filter((p): p is string => !!p).join(', ')}
+        style={{ flexDirection: 'row', alignItems: 'center', columnGap: theme.spacing.smd }}
+      >
+        <View
+          style={{
+            width: thumb,
+            height: thumb,
+            borderRadius: innerRadius(RADIUS.card, theme.layout.routeCardPadding),
+            ...CONTINUOUS,
+            overflow: 'hidden',
+            backgroundColor: theme.colors.surfaceAlt,
+          }}
+        >
+          {photoUri ? (
+            <Image source={{ uri: photoUri }} style={{ width: thumb, height: thumb }} accessibilityIgnoresInvertColors />
+          ) : null}
+        </View>
+        <RouteColorBadge color={route.color_tag} grade={route.grade} size="lg" />
+        <View style={{ flex: 1 }}>
+          <AppText variant="headline" numberOfLines={1}>{title}</AppText>
+          {gymName ? (
+            <AppText variant="footnote" color="textSecondary" numberOfLines={1}>{gymName}</AppText>
+          ) : null}
+        </View>
+      </View>
+    </Card>
   );
 }
 

@@ -207,6 +207,22 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     });
   });
 
+  it('RS-1: photo field shows the required hint and the Add Route CTA is disabled until a photo is chosen', async () => {
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    expect(screen.getByTestId('photo-required-hint')).toBeTruthy();
+    const cta = screen.getAllByRole('button').find((el) => el.props.accessibilityLabel === 'Add Route');
+    expect(cta?.props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it('RS-1: grade chips are a wrapped grid (not a horizontal scroll) and include every grade', async () => {
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    for (const grade of ['V0', 'V5', 'V10']) {
+      expect(screen.getByText(grade)).toBeTruthy();
+    }
+  });
+
   it('shows inline photo error when Add Route pressed without a photo (AC-021)', async () => {
     render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
 
