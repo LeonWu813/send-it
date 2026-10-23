@@ -3054,3 +3054,49 @@ Exit code: 0 (empty output)
 **New regressions: 0**
 
 **INT-032a — QA PASS. No behavior change confirmed. `getSession()` removed from both helper functions; `userId` passed as parameter from the session responses already in hand.**
+
+---
+
+## Engineering Progress — Stories + Design Fix — 2026-10-22
+
+### Changes Implemented
+
+**Design fix — ProfileScreen.tsx (Issue 4 from design-lead audit)**
+- Lines 171 and 187: changed `color="primary"` to `color="textSecondary"` on both `<AppText variant="footnote">` follower/following label elements.
+- `primary` is reserved for interactive CTAs; static count labels use `textSecondary`. The numeric headline (`variant="headline"`) continues to use `textPrimary` (unchanged).
+
+**Storybook stories — all four module screens**
+- Created `src/modules/mod-auth-profile/stories/SignInScreen.stories.tsx`
+  - `Demo` controlled component (loading, errorMessage args) with `Playground`, `Loading`, `WithError`, and `Interactive` stories.
+  - Title: `'AuthProfile/SignInScreen'`.
+- Created `src/modules/mod-auth-profile/stories/SignUpScreen.stories.tsx`
+  - Same Demo/arg pattern; four fields (displayName, email, password, confirmPassword).
+  - Stories: `Playground`, `Loading`, `WithError`, `Interactive`.
+  - Title: `'AuthProfile/SignUpScreen'`.
+- Created `src/modules/mod-auth-profile/stories/ProfileScreen.stories.tsx`
+  - Uses real `ProfileScreen` component with Storybook `loaders` to seed supabase stub data via `setStubData`/`resetStubData`.
+  - Stories: `Skeleton` (null session), `Populated` (42 followers, 17 following, 85 sends, highest grade V6), `EmptyAscents` (all zeroed stats).
+  - Title: `'AuthProfile/ProfileScreen'`.
+- Created `src/modules/mod-auth-profile/stories/EditProfileScreen.stories.tsx`
+  - `Demo` controlled component (saving arg) with `STUB_PROFILE` fixture; `Loaded`, `Saving`, `Interactive` stories.
+  - Title: `'AuthProfile/EditProfileScreen'`.
+
+### Self-Check Results
+
+| Check | Result |
+|-------|--------|
+| `npx tsc --noEmit` | PASS — 0 errors |
+| `npm test -- --watchAll=false` | PASS — 47 suites, 662 tests, all pass |
+| No `@react-navigation/native` hooks in any story file | PASS |
+| No hardcoded hex colors (all use theme tokens) | PASS |
+| All user-facing strings in demo components via `useTranslation('common')` | PASS |
+| No `any` casts in production code; `as unknown as Session` in stories only (test fixture — follows project pattern) | PASS |
+| `theme.layout.fieldGap` valid (value: 16 per `src/lib/theme.ts`) | PASS |
+| Design fix: both line 171 and line 187 now use `color="textSecondary"` for footnote labels | PASS |
+| No remaining `color="primary"` on static label footnotes | PASS |
+| All changes within `src/modules/mod-auth-profile/` (Source Path for MOD-001) | PASS |
+| Pre-existing uncommitted changes to `mod-localization-theme`, `README.md` — not staged | PASS |
+| pstack:typescript-best-practices reviewed — `as unknown as Session` accepted for test fixtures | PASS |
+| pstack:deslop reviewed — no slop identified | PASS |
+
+**Result: READY FOR QA**

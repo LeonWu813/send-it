@@ -168,7 +168,7 @@ export default function ProfileScreen({
           <AppText variant="headline" numeric>
             {followerCount}
           </AppText>
-          <AppText variant="footnote" color="primary">
+          <AppText variant="footnote" color="textSecondary">
             {t('socialFeed.followers')}
           </AppText>
         </PressableScale>
@@ -184,7 +184,7 @@ export default function ProfileScreen({
           <AppText variant="headline" numeric>
             {followingCount}
           </AppText>
-          <AppText variant="footnote" color="primary">
+          <AppText variant="footnote" color="textSecondary">
             {t('socialFeed.following')}
           </AppText>
         </PressableScale>
