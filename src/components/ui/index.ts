@@ -4,6 +4,8 @@ export { PressableScale } from './PressableScale';
 export type { PressableScaleProps } from './PressableScale';
 export { Button } from './Button';
 export type { ButtonProps, ButtonSize, ButtonVariant, OnSurface } from './Button';
+export { ButtonGroup, BUTTON_GROUP_STACK_FONT_SCALE } from './ButtonGroup';
+export type { ButtonGroupItem, ButtonGroupProps } from './ButtonGroup';
 export { IconButton, IconButtonGroup } from './IconButton';
 export type { IconButtonProps, IconButtonVariant, IconButtonGroupItem } from './IconButton';
 export { Badge } from './Badge';

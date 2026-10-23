@@ -40,6 +40,8 @@ export interface ButtonProps {
   minHeight?: number;
   accessibilityLabel?: string;
   accessibilityHint?: string;
+  /** Max label lines. Default 2; 0 = unlimited (never truncate). ButtonGroup sets 1 side by side, 0 stacked. */
+  labelLines?: number;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -58,6 +60,20 @@ const GHOST_PRESSED: Record<OnSurface, PaletteKey | null> = {
   tinted: null,
 };
 
+/** Per-size metrics; shared with ButtonGroup so its fit test matches what Button renders. */
+export function buttonDims(theme: ReturnType<typeof useTheme>['theme'], size: ButtonSize): {
+  minHeight: number;
+  padH: number;
+  text: 'headline' | 'callout' | 'footnote';
+  icon: number;
+} {
+  return {
+    lg: { minHeight: theme.componentSize.buttonPrimaryMinHeight, padH: theme.spacing.lg, text: 'headline' as const, icon: theme.iconSize.md },
+    md: { minHeight: theme.componentSize.buttonMinHeight, padH: theme.spacing.mdl, text: 'callout' as const, icon: theme.iconSize.md },
+    sm: { minHeight: theme.componentSize.buttonSmMinHeight, padH: 14, text: 'footnote' as const, icon: theme.iconSize.sm },
+  }[size];
+}
+
 export function Button({
   label,
   onPress,
@@ -72,6 +88,7 @@ export function Button({
   minHeight,
   accessibilityLabel,
   accessibilityHint,
+  labelLines = 2,
   style,
 }: ButtonProps): React.JSX.Element {
   const { theme } = useTheme();
@@ -92,11 +109,7 @@ export function Button({
   }, [loading, spin, duration.short]);
 
   const resolvedSize: ButtonSize = size ?? (variant === 'primary' ? 'lg' : 'md');
-  const dims = {
-    lg: { minHeight: theme.componentSize.buttonPrimaryMinHeight, padH: theme.spacing.lg, text: 'headline' as const, icon: theme.iconSize.md },
-    md: { minHeight: theme.componentSize.buttonMinHeight, padH: theme.spacing.mdl, text: 'callout' as const, icon: theme.iconSize.md },
-    sm: { minHeight: theme.componentSize.buttonSmMinHeight, padH: 14, text: 'footnote' as const, icon: theme.iconSize.sm },
-  }[resolvedSize];
+  const dims = buttonDims(theme, resolvedSize);
 
   const iconName = icon;
 
@@ -143,7 +156,7 @@ export function Button({
         {iconName ? (
           <Ionicons name={iconName} size={dims.icon} color={fg} style={{ marginRight: theme.layout.iconTextGapInButton }} />
         ) : null}
-        <AppText variant={dims.text} weight="600" style={{ color: fg, flexShrink: 1, textAlign: 'center' }} numberOfLines={2}>
+        <AppText variant={dims.text} weight="600" style={{ color: fg, flexShrink: 1, textAlign: 'center' }} numberOfLines={labelLines}>
           {label}
         </AppText>
         {trailingIcon ? (

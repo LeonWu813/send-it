@@ -214,6 +214,8 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
 
   /** Non-null while the notifications overlay is open (AC-184). */
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  /** View the notifications overlay opens on: inbox from the bell, preferences from Settings (N-1). */
+  const [notificationsView, setNotificationsView] = useState<'inbox' | 'preferences'>('inbox');
 
   /** Non-null while the settings overlay is open (AC-184). */
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -272,6 +274,14 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     // This gives replace-semantics: the back button always returns to PagePrev,
     // never to a stacked Settings screen.
     setSettingsOpen(false);
+    setNotificationsView('inbox');
+    setNotificationsOpen(true);
+  }
+
+  /** N-1: Settings > Notifications pushes Notification Preferences. */
+  function handleNavigateToNotificationPreferences(): void {
+    setSettingsOpen(false);
+    setNotificationsView('preferences');
     setNotificationsOpen(true);
   }
 
@@ -419,7 +429,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
             )}
 
                   session={session}
-                  initialView="inbox"
+                  initialView={notificationsView}
                   isActive={notificationsOpen}
                   onBack={handleNotificationsBack}
                   onNavigateToUser={handleSelectClimber}
@@ -437,7 +447,10 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   onNavigateToNotifications={handleNavigateToNotifications}
                   onNavigateToSettings={handleNavigateToSettings}
                 >
-                <SettingsScreen onBack={handleSettingsBack} />
+                <SettingsScreen
+                  onBack={handleSettingsBack}
+                  onNavigateToNotificationPreferences={handleNavigateToNotificationPreferences}
+                />
                 </AppHeaderOverlayScope>
               </View>
             )}
