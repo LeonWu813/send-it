@@ -73,12 +73,8 @@ export const ICON = {
   uploaded: { outline: 'cloud-done-outline', filled: 'cloud-done' },
   library: { outline: 'images-outline' },
   camera: { outline: 'camera-outline' },
-  /**
-   * Custom fist bump (§9.12): use `<FistBumpIcon variant={liked ? 'filled' : 'outline'} />`.
-   * TEMPORARY: `outline`/`filled` Ionicons below are a compile alias for call sites not yet migrated
-   * (IconButton in FeedScreen, ReelOverlay, NotificationInboxScreen). Delete them once those swap.
-   */
-  like: { custom: 'fistbump', outline: 'thumbs-up-outline', filled: 'thumbs-up' },
+  /** Custom fist bump (§9.12): use `<FistBumpIcon variant={liked ? 'filled' : 'outline'} />`. No Ionicon. */
+  like: { custom: 'fistbump' },
   report: { outline: 'flag-outline', filled: 'flag' },
   // E. Social
   follow: { outline: 'person-add-outline' },
