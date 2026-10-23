@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-home
-mode: verify
-module: MOD-012
-result: fail
-summary: QA Run 23 — AC-202/AC-203 src/lib/ helpers. devicePrefs.ts save/load helpers pass (13 tests); i18n.ts app-start behavior pass; ThemeProvider app-start behavior pass; AC-090/signed-in regressions pass; 655 tests, 0 failures; tsc clean. Two wiring failures found: (1) AC-202 BLOCKER — applySignedOutLanguage() is exported but never called anywhere; sign-out language restoration is not wired in. (2) AC-203 FAIL — ThemeProvider.setThemeUserId() accepts only string, not string|null; no mechanism to reset userId to null after sign-out; device-level stored theme is not reloaded in the same session after sign-out. Both route to engineer-mod-home.
-next: claude --agent engineer-mod-home "bugfix AC-202 AC-203 sign-out wiring — see QA Run 23 in project-planning/modules/mod-home/status.md for exact failures and routing"
+agent: engineer-mod-auth-profile
+mode: implement
+module: MOD-001
+result: done
+summary: AC-201 (Google/Apple profile prefill on new account creation) implemented and self-check passed. New migration extends handle_new_auth_user() for Google DB-level prefill. Apple in-app prefill added to signInWithApple(). Google avatar bucket copy added to signInWithGoogle() using fetch()+arrayBuffer()+Uint8Array. Remote URL guard added to uploadAvatar(). ProfileScreen fallback branch layout bug fixed (contentTopInset applied). 21 auth-service tests pass (8 new); 655 full-suite tests pass; tsc clean. Ready for QA.
+next: claude --agent qa-mod-auth-profile "verify AC-201 — Google and Apple profile prefill on new account creation — see Engineering Progress 2026-10-22 in project-planning/modules/mod-auth-profile/status.md"
 timestamp: 2026-10-22
 
 ## PM Updates

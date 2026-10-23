@@ -254,10 +254,20 @@ export default function ProfileScreen({
         />
       ) : (
         // Profile not yet loaded — show header and footer without history list.
-        <>
+        // Wrap in a View that applies contentTopInset and contentBottomInset so
+        // the avatar clears the navigation bar (matches the FlatList path which
+        // applies these insets via contentContainerStyle on line 251). Without
+        // this, the loading-state avatar overlaps the navigation bar on every
+        // provider. Layout bug fix — not provider-specific.
+        <View
+          style={{
+            paddingTop: h.contentTopInset,
+            paddingBottom: h.contentBottomInset,
+          }}
+        >
           {profileHeader}
           {profileFooter}
-        </>
+        </View>
       )}
 
       {/* AC-164: Beta video reel viewer — rendered as a fullscreen Modal overlay */}

@@ -4,6 +4,18 @@
  * All Supabase Auth calls go through here — never call supabase.auth directly
  * from components. Error messages are kept generic (never expose raw Supabase
  * errors to the UI) and surfaced via thrown Error instances.
+ *
+ * AC-201 profile prefill (Q-A hybrid / Q-B):
+ *   Google: The Supabase trigger (handle_new_auth_user) fills display_name and
+ *           avatar_url from raw_user_meta_data on new-account creation. After
+ *           sign-in the app also copies the Google photo to the avatars Storage
+ *           bucket so the app is not dependent on Google's CDN for the avatar.
+ *   Apple:  The trigger does not receive the Apple-provided name (Apple sends
+ *           PersonNameComponents only to the native SDK, not in the JWT). After
+ *           signInWithIdToken succeeds, the app reads credential.fullName and
+ *           fills display_name in the users row if the field is currently empty.
+ *           Apple sends fullName only on the very first sign-in; on later
+ *           sign-ins credential.fullName is nil and the in-app update is skipped.
  */
 
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -117,6 +129,21 @@ export async function signInWithApple(): Promise<void> {
   if (error) {
     throw new Error('Apple Sign-In failed. Please try again.');
   }
+
+  // AC-201 Q-A (Apple): Best-effort display_name prefill on first sign-in.
+  // Apple sends PersonNameComponents to the native SDK only on the very first
+  // sign-in; on later sign-ins credential.fullName is nil and composedName
+  // will be empty, so the update is skipped automatically.
+  const givenName = credential.fullName?.givenName?.trim() ?? '';
+  const familyName = credential.fullName?.familyName?.trim() ?? '';
+  const composedName = [givenName, familyName].filter(Boolean).join(' ');
+  if (composedName) {
+    // Errors are non-fatal — sign-in already succeeded; the user can edit their
+    // name in Edit Profile if the prefill is missed.
+    await fillDisplayNameIfEmpty(composedName).catch((err: unknown) => {
+      console.error('[signInWithApple] display_name prefill error:', err);
+    });
+  }
 }
 
 // ─── Google Sign-In (OAuth via Supabase) ─────────────────────────────────────
@@ -198,6 +225,14 @@ export async function signInWithGoogle(): Promise<void> {
   if (sessionError) {
     throw new Error('Google Sign-In failed. Please try again.');
   }
+
+  // AC-201 Q-B: Best-effort copy of the Google profile photo to the avatars
+  // Storage bucket. The trigger set avatar_url to a Google CDN URL; we copy it
+  // so the app is not permanently dependent on Google's CDN.
+  // Errors are swallowed — the Google URL stays as the accepted fallback.
+  await copyGoogleAvatarToBucket().catch((err: unknown) => {
+    console.error('[signInWithGoogle] avatar copy error:', err);
+  });
 }
 
 // ─── Sign out ─────────────────────────────────────────────────────────────────
@@ -260,12 +295,23 @@ export async function upsertProfile(
 
 /**
  * Upload an avatar image to Supabase Storage and return the public URL.
- * The file must be a JPEG or PNG obtained from expo-image-picker.
+ * The file must be a local URI obtained from expo-image-picker (JPEG, PNG, or
+ * WebP). Passing a remote https:// URL is not supported and will throw — only
+ * local device file URIs are valid here. This guard prevents
+ * EditProfileScreen.tsx from accidentally uploading a remote Google/Apple URL
+ * as a local file (AC-201 Q-B).
  */
 export async function uploadAvatar(
   userId: string,
   imageUri: string,
 ): Promise<string> {
+  if (imageUri.startsWith('https://') || imageUri.startsWith('http://')) {
+    throw new Error(
+      'uploadAvatar requires a local file URI, not a remote URL. ' +
+        'Use copyGoogleAvatarToBucket for remote-to-bucket copies.',
+    );
+  }
+
   const fileExtension = imageUri.split('.').pop() ?? 'jpg';
   const fileName = `${userId}.${fileExtension}`;
   const storagePath = `avatars/${fileName}`;
@@ -297,6 +343,156 @@ export async function uploadAvatar(
   // value changes on each upload, so all consumers (ProfileScreen, reel viewer,
   // feed cards, etc.) pick up the new image without requiring a cache expiry.
   return `${data.publicUrl}?v=${Date.now()}`;
+}
+
+// ─── AC-201 helpers (internal — not exported) ────────────────────────────────
+
+/**
+ * Fill `users.display_name` from `name` only when the field is currently
+ * null or blank (trim-empty). Used after Apple Sign-In to capture the
+ * PersonNameComponents that Apple provides only on the very first sign-in.
+ *
+ * Not exported — callers go through signInWithApple().
+ */
+async function fillDisplayNameIfEmpty(name: string): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const userId = session.user.id;
+
+  const { data: profileRow, error: selectError } = await supabase
+    .from('users')
+    .select('display_name')
+    .eq('id', userId)
+    .single();
+
+  if (selectError) {
+    console.error('[fillDisplayNameIfEmpty] select error:', selectError);
+    return;
+  }
+
+  // Only fill when the field is currently empty (trim-blank or null).
+  const existing = (profileRow as { display_name: string | null } | null)
+    ?.display_name;
+  if (existing?.trim()) return;
+
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({ display_name: name })
+    .eq('id', userId);
+
+  if (updateError) {
+    console.error('[fillDisplayNameIfEmpty] update error:', updateError);
+  }
+}
+
+/**
+ * Copy the Google profile photo from its Google CDN URL to the Supabase
+ * avatars Storage bucket and update `users.avatar_url` to the bucket URL.
+ *
+ * Conditions:
+ *  - Only runs when `avatar_url` is a Google URL (lh3.googleusercontent.com).
+ *  - Content-type must be jpeg, png, or webp; other types are skipped.
+ *  - If the download or upload fails, `avatar_url` stays on the Google URL
+ *    (the Avatar component handles broken URLs by showing the user's initial).
+ *
+ * Uses fetch + arrayBuffer() — NOT fetch + blob(). The blob() approach is
+ * prohibited by the production.md convention because it routes data through
+ * the native blob store via base64 encoding. arrayBuffer() returns raw bytes
+ * and does not share that limitation.
+ *
+ * Not exported — callers go through signInWithGoogle().
+ */
+async function copyGoogleAvatarToBucket(): Promise<void> {
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session) return;
+
+  const userId = session.user.id;
+
+  const { data: profileRow, error: selectError } = await supabase
+    .from('users')
+    .select('avatar_url')
+    .eq('id', userId)
+    .single();
+
+  if (selectError) {
+    console.error('[copyGoogleAvatarToBucket] select error:', selectError);
+    return;
+  }
+
+  const currentUrl = (profileRow as { avatar_url: string | null } | null)
+    ?.avatar_url;
+  if (!currentUrl) return;
+
+  // Only copy Google CDN URLs — skip if already a bucket URL or other provider.
+  if (!currentUrl.startsWith('https://lh3.googleusercontent.com')) return;
+
+  // Download the image via fetch. Use arrayBuffer() (NOT blob()) so we get
+  // raw bytes without the base64 detour the React Native native blob store adds.
+  const response = await fetch(currentUrl);
+  if (!response.ok) {
+    console.error(
+      '[copyGoogleAvatarToBucket] download failed, status:',
+      response.status,
+    );
+    return;
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  const isValidType =
+    contentType.includes('image/jpeg') ||
+    contentType.includes('image/png') ||
+    contentType.includes('image/webp');
+  if (!isValidType) {
+    console.error(
+      '[copyGoogleAvatarToBucket] unexpected content-type:',
+      contentType,
+    );
+    return;
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const uint8Array = new Uint8Array(arrayBuffer);
+
+  const fileExtension = contentType.includes('png')
+    ? 'png'
+    : contentType.includes('webp')
+      ? 'webp'
+      : 'jpg';
+  const storagePath = `avatars/${userId}.${fileExtension}`;
+  // Strip charset or boundary directives (e.g. "image/jpeg; charset=utf-8").
+  const exactContentType = contentType.split(';')[0].trim();
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(storagePath, uint8Array, {
+      contentType: exactContentType,
+      cacheControl: '3600',
+      upsert: true,
+    });
+
+  if (uploadError) {
+    console.error('[copyGoogleAvatarToBucket] upload error:', uploadError);
+    return; // Leave avatar_url as Google URL (accepted fallback per AC-201 Q-B)
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('avatars')
+    .getPublicUrl(storagePath);
+  const bucketUrl = `${urlData.publicUrl}?v=${Date.now()}`;
+
+  const { error: updateError } = await supabase
+    .from('users')
+    .update({ avatar_url: bucketUrl })
+    .eq('id', userId);
+
+  if (updateError) {
+    console.error('[copyGoogleAvatarToBucket] DB update error:', updateError);
+  }
 }
 
 /**

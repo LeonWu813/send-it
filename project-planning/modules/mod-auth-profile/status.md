@@ -2619,3 +2619,77 @@ No new regressions found.
 **New regressions: 0**
 
 **AC-200 MOD-001 ownership row verified. Native build gate recorded as Leon's next step.**
+
+---
+
+### Implementation — 2026-10-22 — AC-201 (Google/Apple profile prefill) + ProfileScreen layout bug fix
+
+**AC-201: Provider profile prefill on new account creation**
+
+AC-201 requires that on account creation, the user's profile `display_name` and `avatar_url` are prefilled from their OAuth provider's data. Two sub-tasks:
+
+**Q-A Google (DB trigger):** New migration `supabase/migrations/20261022000001_mod_001_ac201_google_prefill.sql` extends `handle_new_auth_user()` via `CREATE OR REPLACE FUNCTION`. When `raw_app_meta_data->>'provider' = 'google'`, the function fills `display_name` (full_name → name → display_name fallback chain, NULLIF TRIM) and `avatar_url` (avatar_url → picture). Non-Google path retains email/other provider behavior with `display_name` from `raw_user_meta_data->>'display_name'` and `avatar_url = NULL`. INSERT uses `ON CONFLICT (id) DO NOTHING` — never overwrites existing values.
+
+**Q-A Apple (in-app):** After `signInWithIdToken` succeeds in `signInWithApple()`, `credential.fullName` (PersonNameComponents) is read. `givenName` and `familyName` are composed and, if non-empty, `fillDisplayNameIfEmpty(composedName)` is called (wrapped in `.catch()` to swallow errors). Apple sends `fullName` only on first sign-in — nil on subsequent sign-ins. The code handles both cases gracefully (checks `composedName` before proceeding). `fillDisplayNameIfEmpty` queries `users.display_name` and updates only if empty.
+
+**Q-B Google avatar bucket copy:** After `signInWithGoogle()` → `setSession` succeeds, `copyGoogleAvatarToBucket()` is called (wrapped in `.catch()`, awaited for testability). It: queries `users.avatar_url`, checks if it starts with `https://lh3.googleusercontent.com`, fetches via `fetch()` + `arrayBuffer()` (NOT `blob()` per production.md convention against base64 React Native upload failures), validates content-type (jpeg/png/webp only), uploads as `Uint8Array` to the `avatars` bucket, updates `users.avatar_url` with a `?v=<timestamp>` cache-buster. Errors are swallowed — Google URL stays as accepted fallback.
+
+**EditProfileScreen guard:** `uploadAvatar()` now throws if passed an `https://` or `http://` URI (remote URL guard). The existing code only calls `uploadAvatar()` with local URIs from `ImagePicker`; the guard is belt-and-suspenders protection. Verified `handlePickAvatar()` only passes local URIs and `handleSave()` does not call `uploadAvatar()`.
+
+**Files modified:**
+- `supabase/migrations/20261022000001_mod_001_ac201_google_prefill.sql` (new)
+- `src/modules/mod-auth-profile/auth-service.ts` — `signInWithApple` prefill, `signInWithGoogle` bucket copy, `uploadAvatar` remote URL guard, `fillDisplayNameIfEmpty`, `copyGoogleAvatarToBucket`
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — 8 new tests covering all AC-201 paths
+
+**ProfileScreen layout bug fix:**
+The fallback branch (when `profile?.id` is falsy, shown during initial load) rendered `profileHeader` and `profileFooter` without applying `h.contentTopInset`, causing the avatar to overlap the navigation bar. Fixed by wrapping the fallback `<>...</>` fragment in a `<View style={{ paddingTop: h.contentTopInset, paddingBottom: h.contentBottomInset }}>`. This matches the FlatList path which applies these insets via `contentContainerStyle`.
+
+---
+
+### Self-Check — 2026-10-22 — AC-201 + layout bug fix
+
+**Automated checks**
+- [SKIP] `scripts/self-check.sh` — script not present at project root (pre-existing; noted in prior runs)
+- [PASS] `npx tsc --noEmit` — 0 errors
+- [PASS] `npm test -- --watchAll=false --testPathPattern="auth-service.test"` — 21 tests, 1 suite, all PASS
+- [PASS] `npm test -- --watchAll=false` (full suite) — 655 tests, 45 suites, all PASS (one flaky failure in mod-send-logging/AscentList.test.tsx confirmed pre-existing and non-deterministic — passes in isolation and on repeat run; not introduced by this session)
+
+**Judgment-based items**
+- [PASS] All AC-201 acceptance criteria addressed: Google DB trigger (new migration), Apple in-app prefill (signInWithApple), Google avatar bucket copy (signInWithGoogle + copyGoogleAvatarToBucket), no-overwrite guard (ON CONFLICT DO NOTHING + fillDisplayNameIfEmpty queries before updating)
+- [PASS] ProfileScreen fallback branch layout bug fixed — matches FlatList path's inset application
+- [PASS] Remote URL guard in uploadAvatar — throws if https:// or http:// URI passed
+- [PASS] Apple fullName nil case handled — composedName check before calling fillDisplayNameIfEmpty
+- [PASS] Google avatar copy errors swallowed — signInWithGoogle resolves normally on download failure
+- [PASS] No new createClient() call sites — singleton only
+- [PASS] No service_role key in client code
+- [PASS] No sensitive data logged
+- [PASS] fetch() + arrayBuffer() + Uint8Array used (not blob()) per production.md convention
+- [PASS] content-type validation before bucket upload (jpeg/png/webp only)
+- [PASS] cache-buster appended to bucket URL (?v=<timestamp>)
+- [PASS] No new dependencies outside production.md Tech Stack
+- [PASS] TypeScript strict mode — 0 errors
+- [PASS] All prior ACs (AC-001 revised, AC-063, AC-116–AC-119, AC-145, AC-156–AC-157, AC-164, AC-167, AC-184) unaffected — regression tests pass
+- [NOTED] Apple fullName delivery on first sign-in only — confirmed well-documented Apple behavior; device testing required to verify first-sign-in path; code handles both nil and non-nil cases
+- [NOTED] Pre-existing uncommitted change in `src/modules/mod-localization-theme/screens/SettingsScreen.tsx` (AC-202/AC-203 work from MOD-010/MOD-012 engineer) — not introduced by this session, not in mod-auth-profile scope, not committed here
+
+**Out-of-scope pre-existing change:**
+`src/modules/mod-localization-theme/screens/SettingsScreen.tsx` — modified by MOD-010/MOD-012 engineer for AC-202/AC-203 before this session. This engineer did not touch it. Noted for the record only.
+
+| Item | Result |
+|------|--------|
+| TypeScript strict mode (tsc --noEmit) | PASS |
+| Full test suite (655 tests, 45 suites) | PASS |
+| auth-service tests (21 tests — 8 new for AC-201) | PASS |
+| Google DB trigger migration (new migration file) | PASS |
+| Apple in-app display_name prefill | PASS |
+| Google avatar bucket copy (fetch+arrayBuffer+Uint8Array) | PASS |
+| No-overwrite guard (ON CONFLICT DO NOTHING + query-before-update) | PASS |
+| Remote URL guard in uploadAvatar | PASS |
+| ProfileScreen fallback layout bug fix | PASS |
+| Supabase singleton — no new createClient() | PASS |
+| No service_role key in client code | PASS |
+| No sensitive data logged | PASS |
+| All prior ACs regression | PASS |
+| Apple fullName first-sign-in device verification | NOTED — requires device build |
+
+**Overall verdict: PASS — ready for QA**

@@ -14,6 +14,8 @@ jest.mock('../../../lib/supabase', () => {
     signInWithOAuth: jest.fn(),
     setSession: jest.fn(),
     signOut: jest.fn(),
+    // AC-201: getSession used by fillDisplayNameIfEmpty and copyGoogleAvatarToBucket
+    getSession: jest.fn(),
   };
   const mockStorageBucket = {
     upload: jest.fn().mockResolvedValue({ error: null }),
@@ -34,6 +36,7 @@ jest.mock('../../../lib/supabase', () => {
 
 jest.mock('expo-apple-authentication', () => ({
   signInAsync: jest.fn(),
+  isAvailableAsync: jest.fn().mockResolvedValue(true),
   AppleAuthenticationScope: { FULL_NAME: 0, EMAIL: 1 },
 }));
 
@@ -53,10 +56,14 @@ jest.mock('expo-crypto', () => ({
 }));
 
 // ── Imports after mocks ───────────────────────────────────────────────────────
+import * as AppleAuthentication from 'expo-apple-authentication';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../../../lib/supabase';
 import {
   loadProfile,
+  signInWithApple,
   signInWithEmail,
+  signInWithGoogle,
   signOut,
   signUpWithEmail,
   uploadAvatar,
@@ -268,5 +275,217 @@ describe('uploadAvatar', () => {
     await expect(uploadAvatar('user-123', 'file:///tmp/photo.jpg')).rejects.toThrow(
       'Failed to upload photo. Please try again.',
     );
+  });
+
+  it('throws when a remote https:// URL is passed (AC-201 Q-B guard)', async () => {
+    // uploadAvatar must only accept local file URIs. Passing a remote URL
+    // (e.g. a Google CDN URL) must be rejected immediately so EditProfileScreen
+    // cannot accidentally upload a remote avatar_url as a local file.
+    await expect(
+      uploadAvatar('user-123', 'https://lh3.googleusercontent.com/photo.jpg'),
+    ).rejects.toThrow('uploadAvatar requires a local file URI');
+  });
+});
+
+// ── AC-201: Apple Sign-In display_name prefill ────────────────────────────────
+
+describe('signInWithApple AC-201 display_name prefill', () => {
+  const mockAppleAuth = AppleAuthentication as jest.Mocked<typeof AppleAuthentication>;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('fills display_name when credential.fullName is provided and display_name is currently empty', async () => {
+    // Arrange
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockAppleAuth.isAvailableAsync as jest.Mock).mockResolvedValueOnce(true);
+    (mockAppleAuth.signInAsync as jest.Mock).mockResolvedValueOnce({
+      identityToken: 'mock-token',
+      authorizationCode: 'mock-code',
+      fullName: { givenName: 'Leon', familyName: 'Wu', middleName: null, namePrefix: null, nameSuffix: null, nickname: null },
+      email: 'leon@example.com',
+      user: 'user-apple-123',
+      realUserStatus: 1,
+      state: null,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.signInWithIdToken.mockResolvedValueOnce({ data: { user: null, session: null }, error: null } as any);
+    // fillDisplayNameIfEmpty: getSession → select → update
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-apple-123' } } } } as any);
+    // select display_name → empty
+    const selectQb = makeQueryBuilder({ data: { display_name: '' }, error: null });
+    const updateQb = makeQueryBuilder({ data: null, error: null });
+    mockFrom
+      .mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(updateQb as unknown as ReturnType<typeof supabase.from>);
+
+    // Act
+    await signInWithApple();
+
+    // Assert — select was called to read display_name, update was called to write it
+    expect(mockFrom).toHaveBeenCalledTimes(2);
+    expect(selectQb.select).toHaveBeenCalledWith('display_name');
+    expect(updateQb.update).toHaveBeenCalledWith({ display_name: 'Leon Wu' });
+  });
+
+  it('skips display_name update when credential.fullName is nil (subsequent sign-ins)', async () => {
+    // Apple sends fullName only on the very first sign-in. On later sign-ins it
+    // is null, so no in-app update should be attempted.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockAppleAuth.isAvailableAsync as jest.Mock).mockResolvedValueOnce(true);
+    (mockAppleAuth.signInAsync as jest.Mock).mockResolvedValueOnce({
+      identityToken: 'mock-token',
+      authorizationCode: null,
+      fullName: null,
+      email: null,
+      user: 'user-apple-123',
+      realUserStatus: 1,
+      state: null,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.signInWithIdToken.mockResolvedValueOnce({ data: { user: null, session: null }, error: null } as any);
+
+    await signInWithApple();
+
+    // No from() calls — composedName is empty, update is skipped
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockAuth.getSession).not.toHaveBeenCalled();
+  });
+
+  it('skips display_name update when display_name is already non-empty (existing profile)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockAppleAuth.isAvailableAsync as jest.Mock).mockResolvedValueOnce(true);
+    (mockAppleAuth.signInAsync as jest.Mock).mockResolvedValueOnce({
+      identityToken: 'mock-token',
+      authorizationCode: null,
+      fullName: { givenName: 'Leon', familyName: 'Wu', middleName: null, namePrefix: null, nameSuffix: null, nickname: null },
+      email: null,
+      user: 'user-apple-123',
+      realUserStatus: 1,
+      state: null,
+    });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.signInWithIdToken.mockResolvedValueOnce({ data: { user: null, session: null }, error: null } as any);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-apple-123' } } } } as any);
+    // display_name is already set — update must NOT be called
+    const selectQb = makeQueryBuilder({ data: { display_name: 'Existing Name' }, error: null });
+    mockFrom.mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>);
+
+    await signInWithApple();
+
+    // Only one from() call (the select); no second from() call for update
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+    expect(selectQb.update).not.toHaveBeenCalled();
+  });
+});
+
+// ── AC-201 Q-B: Google Sign-In avatar bucket copy ────────────────────────────
+
+describe('signInWithGoogle AC-201 Q-B: avatar copy to bucket', () => {
+  /** Helper: mock the OAuth redirect part so signInWithGoogle reaches setSession */
+  function setupGoogleOAuthMocks(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockAuth.signInWithOAuth as jest.Mock).mockResolvedValueOnce({ data: { url: 'https://oauth.google.com/auth' }, error: null } as any);
+    const fakeRedirectUrl = 'projectday://auth#access_token=tok&refresh_token=ref&token_type=bearer';
+    (WebBrowser.openAuthSessionAsync as jest.Mock).mockResolvedValueOnce({ type: 'success', url: fakeRedirectUrl });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (mockAuth.setSession as jest.Mock).mockResolvedValueOnce({ data: { session: null, user: null }, error: null } as any);
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('copies Google avatar to bucket when avatar_url is a Google URL', async () => {
+    setupGoogleOAuthMocks();
+
+    // copyGoogleAvatarToBucket: getSession → select → fetch → storage upload → storage getPublicUrl → update
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
+
+    const selectQb = makeQueryBuilder({
+      data: { avatar_url: 'https://lh3.googleusercontent.com/a-/photo.jpg' },
+      error: null,
+    });
+    const updateQb = makeQueryBuilder({ data: null, error: null });
+    mockFrom
+      .mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>)
+      .mockReturnValueOnce(updateQb as unknown as ReturnType<typeof supabase.from>);
+
+    // Mock global.fetch for image download
+    const mockFetchResponse = {
+      ok: true,
+      status: 200,
+      headers: { get: (h: string) => (h === 'content-type' ? 'image/jpeg' : null) },
+      arrayBuffer: jest.fn().mockResolvedValue(new ArrayBuffer(8)),
+    };
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce(mockFetchResponse as unknown as Response);
+
+    await signInWithGoogle();
+
+    // Verify the copy chain ran
+    expect(global.fetch).toHaveBeenCalledWith('https://lh3.googleusercontent.com/a-/photo.jpg');
+    expect(supabase.storage.from).toHaveBeenCalledWith('avatars');
+    expect(updateQb.update).toHaveBeenCalledWith(
+      expect.objectContaining({ avatar_url: expect.stringMatching(/^https:\/\/example\.com\/avatar\.jpg\?v=\d+$/) }),
+    );
+  });
+
+  it('skips avatar copy when avatar_url is not a Google URL', async () => {
+    setupGoogleOAuthMocks();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
+
+    const selectQb = makeQueryBuilder({
+      data: { avatar_url: 'https://example.supabase.co/storage/v1/object/public/avatars/user-g-1.jpg' },
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>);
+
+    const fetchSpy = jest.spyOn(global, 'fetch');
+
+    await signInWithGoogle();
+
+    // avatar_url is not a Google URL — fetch must not be called
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('skips avatar copy when avatar_url is null', async () => {
+    setupGoogleOAuthMocks();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
+
+    const selectQb = makeQueryBuilder({ data: { avatar_url: null }, error: null });
+    mockFrom.mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>);
+
+    const fetchSpy = jest.spyOn(global, 'fetch');
+
+    await signInWithGoogle();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not throw when the download fails — Google URL stays as fallback', async () => {
+    setupGoogleOAuthMocks();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockAuth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-g-1' } } } } as any);
+
+    const selectQb = makeQueryBuilder({
+      data: { avatar_url: 'https://lh3.googleusercontent.com/a-/photo.jpg' },
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(selectQb as unknown as ReturnType<typeof supabase.from>);
+
+    // Simulate a network failure during download
+    jest.spyOn(global, 'fetch').mockResolvedValueOnce({ ok: false, status: 503 } as unknown as Response);
+
+    // signInWithGoogle must resolve without throwing even though the copy failed
+    await expect(signInWithGoogle()).resolves.toBeUndefined();
   });
 });
