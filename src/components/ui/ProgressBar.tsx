@@ -167,17 +167,17 @@ export function UploadProgressCard({
         >
           {thumbnailUri ? <Image source={{ uri: thumbnailUri }} resizeMode="cover" accessibilityIgnoresInvertColors style={{ width, height }} /> : null}
         </View>
-        <View style={{ flex: 1, marginLeft: theme.spacing.md, justifyContent: 'center' }}>
+        <View style={{ flex: 1, marginLeft: theme.spacing.smd, justifyContent: 'center' }}>
           <AppText variant="headline" accessibilityRole="header">
             {title}
           </AppText>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: theme.spacing.xs }}>
             <AppText variant="footnote" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
               {routeName}
             </AppText>
             <AppText variant="footnote" numeric color="textSecondary" style={{ marginLeft: theme.spacing.sm }}>{`${pct}%`}</AppText>
           </View>
-          <ProgressBar value={pct} failed={failed} accessibilityLabel={progressLabel} style={{ marginTop: 6 }} />
+          <ProgressBar value={pct} failed={failed} accessibilityLabel={progressLabel} style={{ marginTop: theme.spacing.sm }} />
           {failed ? (
             errorCaption ? (
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: theme.spacing.sm }}>

@@ -2,6 +2,14 @@
 
 ## Engineering Progress
 
+### Off-spec design round 4: shared ui card rules C1-C4 (flat-alignment audit rev 3 §6) — 2026-10-24
+
+Branch `design/page-templates`, approved by the human designer, reviewed via PR. Only `src/components/ui/*`.
+- InlineError: block-in-sheet and page block 16 all sides; notice/warning 12 vertical / 16 horizontal; ghost action glyph on the padding line (`marginRight -14`, `marginLeft -14` when stacked); title to description 4.
+- UploadProgressCard (ProgressBar.tsx): thumbnail to text 12, title to meta 4, meta to bar 8.
+- BottomSheet: sheet padding stays 20; title to first content 16 (title box no longer pads to 44 below the text); confirm sheet description to actions 16.
+- Tests: `src/components/ui/__tests__/cardRules.test.tsx`. Stories unchanged (they render the components). On-device check still needed for the ghost action and sheet close hit areas (RN-web drops `hitSlop`).
+
 ### Off-spec: custom like icon (fist bump) in the icon library — 2026-10-23
 
 Branch `design/page-templates`, approved by the human designer, reviewed via PR (design system v2.3 §9.12).

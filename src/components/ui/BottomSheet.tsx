@@ -302,7 +302,7 @@ export function BottomSheet({
 
   const actions =
     variant === 'confirm' ? (
-      <View style={{ marginTop: theme.layout.sectionGap }}>
+      <View style={{ marginTop: children ? theme.layout.sectionGap : theme.spacing.md }}>
         <Button
           variant="destructive"
           size="lg"
@@ -387,7 +387,7 @@ export function BottomSheet({
             ref={titleRef}
             accessible
             accessibilityRole="header"
-            style={{ minHeight: closeBox, justifyContent: 'center', paddingRight: showClose ? closeBox : 0 }}
+            style={{ paddingTop: (closeBox - theme.typeScale.title2.lineHeight) / 2, paddingRight: showClose ? closeBox : 0 }}
           >
             <AppText variant="title2" numberOfLines={fontScale >= 1.6 ? undefined : 2}>
               {title}
@@ -402,15 +402,17 @@ export function BottomSheet({
           {description}
         </AppText>
       ) : null}
-      <ScrollView
-        style={{ flexShrink: 1, marginTop: theme.spacing.sm }}
+      {children ? (
+        <ScrollView
+        style={{ flexShrink: 1, marginTop: description ? theme.spacing.sm : theme.spacing.md }}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
         {children}
-      </ScrollView>
+        </ScrollView>
+      ) : null}
       {error ? (
         <InlineError
           variant="block"

@@ -98,6 +98,8 @@ export function InlineError({
   const radius = page ? theme.radius.card : theme.radius.control;
   const textColor = warn ? 'onNoticeContainer' : 'textPrimary';
   const iconTop = ((notice ? theme.typeScale.subhead.lineHeight : theme.typeScale.headline.lineHeight) - iconSize) / 2;
+  const ghostAction = notice || !page;
+  const ghostPad = 14; // Button sm side padding (14): glyph lands on the padding line (C4/A8)
   const action = actionLabel ? (
     <Button variant={notice || !page ? 'ghost' : 'secondary'} size="sm" on="tinted" label={actionLabel} icon={actionIcon} loading={actionLoading} onPress={() => onAction?.()} />
   ) : null;
@@ -112,8 +114,8 @@ export function InlineError({
           borderCurve: 'continuous',
           borderWidth: theme.isDark && page ? theme.stroke.thin : 0,
           borderColor: c.border,
-          paddingVertical: page ? theme.layout.cardPadding : notice ? 12 : 14,
-          paddingHorizontal: page ? theme.layout.cardPadding : 14,
+          paddingVertical: notice ? theme.layout.listRowPaddingV : theme.layout.cardPadding,
+          paddingHorizontal: theme.layout.cardPadding,
           opacity: appear,
         },
         style,
@@ -136,13 +138,13 @@ export function InlineError({
           <AppText
             variant={notice || !title ? 'subhead' : 'footnote'}
             color={notice ? textColor : title ? 'textSecondary' : 'textPrimary'}
-            style={{ marginTop: title ? 2 : 0 }}
+            style={{ marginTop: title ? theme.spacing.xs : 0 }}
           >
             {message}
           </AppText>
-          {action && stacked ? <View style={{ marginTop: theme.spacing.sm, alignItems: 'flex-start' }}>{action}</View> : null}
+          {action && stacked ? <View style={{ marginTop: theme.spacing.sm, alignItems: 'flex-start', marginLeft: ghostAction ? -ghostPad : 0 }}>{action}</View> : null}
         </View>
-        {action && !stacked ? <View style={{ marginLeft: theme.spacing.smd, alignSelf: 'center' }}>{action}</View> : null}
+        {action && !stacked ? <View style={{ marginLeft: theme.spacing.smd, alignSelf: 'center', marginRight: ghostAction ? -ghostPad : 0 }}>{action}</View> : null}
       </View>
     </Animated.View>
   );
