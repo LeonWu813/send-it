@@ -20,9 +20,7 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 
@@ -31,6 +29,8 @@ import {
   unblockUser,
 } from '../../mod-moderation';
 import type { BlockedUser } from '../../mod-moderation';
+import { AppText } from '../../../components/ui/AppText';
+import { Button } from '../../../components/ui/Button';
 import { useTheme } from '../../../lib/theme';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
@@ -72,22 +72,17 @@ function BlockedUserRow({
       )}
 
       {/* Display name */}
-      <Text style={styles.displayName} numberOfLines={1}>
+      <AppText variant="body" weight="600" style={styles.displayNameFlex} numberOfLines={1}>
         {item.displayName}
-      </Text>
+      </AppText>
 
-      {/* Unblock button — outlined, primary color */}
-      <Pressable
-        style={({ pressed }) => [
-          styles.unblockButton,
-          pressed && styles.unblockButtonPressed,
-        ]}
+      {/* Unblock button — capsule secondary button */}
+      <Button
+        variant="secondary"
+        size="sm"
+        label={unblockLabel}
         onPress={() => { onUnblock(item.userId); }}
-        accessibilityRole="button"
-        accessibilityLabel={unblockLabel}
-      >
-        <Text style={styles.unblockButtonText}>{unblockLabel}</Text>
-      </Pressable>
+      />
     </View>
   );
 }
@@ -102,39 +97,20 @@ function makeRowStyles(theme: ReturnType<typeof useTheme>['theme']) {
       paddingHorizontal: theme.spacing.lg,
       // card-less list: rows sit on surface, not directly on the sand background
       backgroundColor: theme.colors.surface,
-      borderBottomWidth: 1,
+      borderBottomWidth: theme.stroke.hairline,
       borderBottomColor: theme.colors.divider,
     },
     avatar: {
       width: 48,
       height: 48,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       marginRight: theme.spacing.md,
     },
     avatarPlaceholder: {
       backgroundColor: theme.colors.surfaceAlt,
     },
-    displayName: {
+    displayNameFlex: {
       flex: 1,
-      fontSize: theme.fontSize.md,
-      fontWeight: theme.fontWeight.bold,
-      color: theme.colors.textPrimary,
-    },
-    unblockButton: {
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-      borderRadius: theme.borderRadius.md,
-      minHeight: theme.layout.minTouchTarget,
-      justifyContent: 'center',
-      paddingHorizontal: theme.spacing.md,
-    },
-    unblockButtonPressed: {
-      backgroundColor: theme.colors.surfacePressed,
-    },
-    unblockButtonText: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
     },
   });
 }
@@ -148,7 +124,7 @@ export default function BlockedAccountsScreen({
   const { theme } = useTheme();
   const tabInset = useTabBarInset();
   const headerTop = useHeaderContentInset();
-  const styles = makeStyles(theme, headerTop);
+  const styles = makeStyles(theme);
   useAppHeader({ title: t('settings.blockedAccounts'), onBack });
 
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
@@ -200,20 +176,16 @@ export default function BlockedAccountsScreen({
     if (error !== null) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable
-            style={({ pressed }) => [
-              styles.retryButton,
-              pressed && styles.retryButtonPressed,
-            ]}
+          <AppText variant="body" color="error" align="center" style={styles.errorText}>{error}</AppText>
+          <Button
+            variant="secondary"
+            size="sm"
+            label={t('common.retry')}
             onPress={() => {
               setLoading(true);
               void loadBlockedUsers().finally(() => { setLoading(false); });
             }}
-            accessibilityRole="button"
-          >
-            <Text style={styles.retryButtonText}>{t('common.retry')}</Text>
-          </Pressable>
+          />
         </View>
       );
     }
@@ -232,7 +204,7 @@ export default function BlockedAccountsScreen({
         )}
         ListEmptyComponent={
           <View style={styles.centered}>
-            <Text style={styles.emptyText}>{t('moderation.noBlockedAccounts')}</Text>
+            <AppText variant="body" color="textSecondary" align="center">{t('moderation.noBlockedAccounts')}</AppText>
           </View>
         }
         showsVerticalScrollIndicator={false}
@@ -252,7 +224,7 @@ export default function BlockedAccountsScreen({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     centered: {
       flex: 1,
@@ -260,31 +232,8 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
       alignItems: 'center',
       padding: theme.spacing.xl,
     },
-    emptyText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textSecondary,
-      textAlign: 'center',
-    },
     errorText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.error,
-      textAlign: 'center',
       marginBottom: theme.spacing.md,
-    },
-    retryButton: {
-      paddingVertical: theme.spacing.sm,
-      paddingHorizontal: theme.spacing.lg,
-      borderRadius: theme.borderRadius.md,
-      borderWidth: 1,
-      borderColor: theme.colors.primary,
-    },
-    retryButtonPressed: {
-      backgroundColor: theme.colors.surfacePressed,
-    },
-    retryButtonText: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.primary,
-      fontWeight: theme.fontWeight.medium,
     },
   });
 }

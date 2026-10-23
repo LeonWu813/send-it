@@ -2,6 +2,55 @@
 
 ## Engineering Progress
 
+### Stories + design-fix — 2026-10-22 (Storybook screen stories + Priority-1 design token migration)
+
+**Scope**: Two tasks in one pass:
+1. Design-system fixes for SettingsScreen.tsx and BlockedAccountsScreen.tsx — replace all deprecated `theme.borderRadius.*`, `theme.fontSize.*`, `theme.fontWeight.*`, `RN.Text` and raw `Pressable` usage with `AppText`, `Button`, and canonical design tokens.
+2. Add Storybook screen stories for both screens.
+
+**Design fixes applied — SettingsScreen.tsx**:
+- `Text` (RN) → `AppText` for all text nodes: section titles (`variant="groupHeader"`), option labels (`variant="body"` with `color`/`weight` for selected state), blocked-accounts row label, beta-video-privacy label, subtext (`variant="footnote" color="textSecondary"`), logout error (`variant="footnote" color="error"`).
+- `theme.borderRadius.lg` → `theme.radius.card` (optionGroup); `theme.borderRadius.full` → `theme.radius.full` (radioOuter, radioInner); `borderBottomWidth: 1` → `theme.stroke.hairline`; Switch `trackColor.false: theme.colors.border` → `theme.colors.surfaceAlt`.
+- Removed style entries that are now owned by AppText: `sectionTitle` (kept only `marginBottom`), `optionLabel`, `optionLabelSelected`, `settingRowSubtext` (kept only `marginTop: 2`), `logoutError` (kept only `marginHorizontal`/`marginTop`).
+
+**Design fixes applied — BlockedAccountsScreen.tsx**:
+- `Text` → `AppText variant="body" weight="600"` for display name (style `displayNameFlex: { flex: 1 }` kept for layout).
+- `Pressable`+`Text` Unblock button → `Button variant="secondary" size="sm"`.
+- `Pressable`+`Text` retry button in error state → `Button variant="secondary" size="sm"`.
+- `Text` in error state → `AppText variant="body" color="error" align="center"`.
+- `Text` in empty state → `AppText variant="body" color="textSecondary" align="center"`.
+- `theme.borderRadius.full` → `theme.radius.full` (avatar); `borderBottomWidth: 1` → `theme.stroke.hairline`.
+- Removed unused `headerTop` param from `makeStyles` signature; removed style entries now owned by AppText/Button: `displayName`, `unblockButton`, `unblockButtonPressed`, `unblockButtonText`, `emptyText`, `retryButton`, `retryButtonPressed`, `retryButtonText`.
+
+**Stories added**:
+- `src/modules/mod-localization-theme/stories/SettingsScreen.stories.tsx` — two stories: `Loaded` (all controls visible) and `LoggingOut` (logout button in loading/spinner state, achieved by patching `supabase.auth.signOut` to never resolve + DOM click after 200 ms).
+- `src/modules/mod-localization-theme/stories/BlockedAccountsScreen.stories.tsx` — three stories: `Loading` (ActivityIndicator, via hanging Proxy on `supabase.from('blocks')`), `Populated` (3 blocked users), `Empty` (no blocked accounts).
+- Both files seed Storybook stub data synchronously during render. All stories restore stub patches on unmount.
+
+**Self-check**:
+- [pass] `npx tsc --noEmit` — exit 0, 0 TypeScript errors
+- [pass] `npm test -- --watchAll=false --silent --testPathPattern="mod-localization-theme"` — 5/5 pass
+- [pass] `npm test -- --watchAll=false --silent` — 662 tests, 47 suites, all pass
+- [pass] No deprecated `theme.borderRadius.*`, `theme.fontSize.*`, `theme.fontWeight.*` tokens remaining in SettingsScreen or BlockedAccountsScreen
+- [pass] No `RN.Text` usage remaining in either screen
+- [pass] No hardcoded hex colors introduced
+- [pass] No inline string literals introduced
+- [pass] No new dependencies (AppText, Button already in the project; supabase stub already in .storybook/)
+- [pass] pstack:deslop run — two minor slop items removed: verbose hangingBuilder `.then()` params simplified; redundant inline comment removed from LoggingOutWrapper
+- [skip] Integration tests — no integration test command configured in production.md
+- [skip] DB/PostgREST embed verification — no database queries changed
+- [skip] Spring Boot, LLM, container, CORS, native dependency checks — not applicable
+
+**Pre-existing working-tree changes outside module scope**: `src/modules/mod-auth-profile/screens/ProfileScreen.tsx` has two pre-existing lines (`color="primary"` → `color="textSecondary"`) and `src/modules/mod-auth-profile/stories/` has 4 untracked story files from a parallel agent session. This agent did NOT touch those files; they are confirmed outside MOD-010's write scope.
+
+**Files modified/created**:
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx` (modified)
+- `src/modules/mod-localization-theme/screens/BlockedAccountsScreen.tsx` (modified)
+- `src/modules/mod-localization-theme/stories/SettingsScreen.stories.tsx` (new)
+- `src/modules/mod-localization-theme/stories/BlockedAccountsScreen.stories.tsx` (new)
+
+---
+
 ### Integration fix — 2026-10-22 (INT-031: save-failure should not block sign-out)
 
 **Scope**: Fix `handleLogout()` in `SettingsScreen.tsx` so that a failure in `saveDeviceLanguage` or `saveDeviceTheme` does not keep the user signed in. Previously, both saves and `signOut()` were all inside a single `try/catch`; any save error was caught and `signOut()` was never called.

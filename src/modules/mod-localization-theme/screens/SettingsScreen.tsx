@@ -48,9 +48,10 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from 'react-native';
+
+import { AppText } from '../../../components/ui/AppText';
 
 import i18n from '../../../lib/i18n';
 import type { SupportedLanguage } from '../../../lib/i18n';
@@ -248,7 +249,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
       >
         {/* Language section (AC-091) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings.language.title')}</Text>
+          <AppText variant="groupHeader" style={styles.sectionTitle}>{t('settings.language.title')}</AppText>
           <View style={styles.optionGroup}>
             {languageOptions.map(({ value, label }) => {
               const isSelected = selectedLanguage === value;
@@ -264,9 +265,13 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
                   accessibilityState={{ checked: isSelected }}
                   accessibilityLabel={label}
                 >
-                  <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
+                  <AppText
+                    variant="body"
+                    color={isSelected ? 'primary' : undefined}
+                    weight={isSelected ? '500' : undefined}
+                  >
                     {label}
-                  </Text>
+                  </AppText>
                   <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                     {isSelected ? <View style={styles.radioInner} /> : null}
                   </View>
@@ -278,7 +283,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
 
         {/* Appearance section (AC-092) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>{t('settings.appearance.title')}</Text>
+          <AppText variant="groupHeader" style={styles.sectionTitle}>{t('settings.appearance.title')}</AppText>
           <View style={styles.optionGroup}>
             {appearanceOptions.map(({ value, label }) => {
               const isSelected = selectedOverride === value;
@@ -294,9 +299,13 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
                   accessibilityState={{ checked: isSelected }}
                   accessibilityLabel={label}
                 >
-                  <Text style={[styles.optionLabel, isSelected && styles.optionLabelSelected]}>
+                  <AppText
+                    variant="body"
+                    color={isSelected ? 'primary' : undefined}
+                    weight={isSelected ? '500' : undefined}
+                  >
                     {label}
-                  </Text>
+                  </AppText>
                   <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
                     {isSelected ? <View style={styles.radioInner} /> : null}
                   </View>
@@ -318,7 +327,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
               accessibilityRole="button"
               accessibilityLabel={t('settings.blockedAccounts')}
             >
-              <Text style={styles.optionLabel}>{t('settings.blockedAccounts')}</Text>
+              <AppText variant="body">{t('settings.blockedAccounts')}</AppText>
               <Ionicons name="chevron-forward" size={18} color={theme.colors.textSecondary} />
             </Pressable>
           </View>
@@ -329,18 +338,18 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
           <View style={styles.optionGroup}>
             <View style={styles.settingRow}>
               <View style={styles.settingRowContent}>
-                <Text style={styles.optionLabel}>{t('settings.betaVideoPrivacy')}</Text>
-                <Text style={styles.settingRowSubtext}>
+                <AppText variant="body">{t('settings.betaVideoPrivacy')}</AppText>
+                <AppText variant="footnote" color="textSecondary" style={styles.settingRowSubtext}>
                   {betaVideoPrivacy === 'followers_only'
                     ? t('settings.betaVideoPrivacyFollowersOnly')
                     : t('settings.betaVideoPrivacyPublic')}
-                </Text>
+                </AppText>
               </View>
               <Switch
                 value={betaVideoPrivacy === 'followers_only'}
                 onValueChange={(value) => { void handleBetaVideoPrivacyToggle(value); }}
                 disabled={!privacyFetched || privacyLoading}
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                trackColor={{ false: theme.colors.surfaceAlt, true: theme.colors.primary }}
                 thumbColor={theme.colors.surface}
               />
             </View>
@@ -349,7 +358,7 @@ export default function SettingsScreen({ onBack }: SettingsScreenProps): React.J
 
         {/* Logout (AC-168) */}
         {logoutError ? (
-          <Text style={styles.logoutError}>{logoutError}</Text>
+          <AppText variant="footnote" color="error" style={styles.logoutError}>{logoutError}</AppText>
         ) : null}
         <View style={styles.logoutWrap}>
           <Button
@@ -382,16 +391,11 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
       marginBottom: theme.spacing.xl,
     },
     sectionTitle: {
-      fontSize: theme.fontSize.sm,
-      fontWeight: theme.fontWeight.semibold,
-      color: theme.colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.8,
       marginBottom: theme.spacing.sm,
     },
     optionGroup: {
       backgroundColor: theme.colors.surface,
-      borderRadius: theme.borderRadius.lg,
+      borderRadius: theme.radius.card,
       overflow: 'hidden',
     },
     optionRow: {
@@ -401,24 +405,16 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
       minHeight: theme.layout.minTouchTarget,
       paddingVertical: theme.layout.listRowPaddingV,
       paddingHorizontal: theme.spacing.lg,
-      borderBottomWidth: 1,
+      borderBottomWidth: theme.stroke.hairline,
       borderBottomColor: theme.colors.divider,
     },
     optionRowPressed: {
       backgroundColor: theme.colors.surfacePressed,
     },
-    optionLabel: {
-      fontSize: theme.fontSize.md,
-      color: theme.colors.textPrimary,
-    },
-    optionLabelSelected: {
-      fontWeight: theme.fontWeight.medium,
-      color: theme.colors.primary,
-    },
     radioOuter: {
       width: 20,
       height: 20,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       borderWidth: 2,
       borderColor: theme.colors.outline,
       alignItems: 'center',
@@ -430,7 +426,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
     radioInner: {
       width: 10,
       height: 10,
-      borderRadius: theme.borderRadius.full,
+      borderRadius: theme.radius.full,
       backgroundColor: theme.colors.primary,
     },
     // AC-157: Beta Video Privacy toggle row
@@ -446,8 +442,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
       marginRight: theme.spacing.md,
     },
     settingRowSubtext: {
-      fontSize: theme.fontSize.xs,
-      color: theme.colors.textSecondary,
       marginTop: 2,
     },
     // AC-168: Logout button wrapper (shared destructive Button)
@@ -456,8 +450,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], headerTop: numb
       marginBottom: theme.spacing.xl,
     },
     logoutError: {
-      fontSize: theme.fontSize.sm,
-      color: theme.colors.error,
       marginHorizontal: theme.spacing.lg,
       marginTop: theme.spacing.md,
     },
