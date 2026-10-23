@@ -3108,3 +3108,10 @@ Off-spec design implementation (human-approved, reviewed via PR on design/page-t
 - Story-data bug fixed: `ProfileScreen.stories.tsx` seeds `rpc:get_profile_history` (5 ascents) so the populated story shows a sends list. Populated / Empty / Loading kept.
 - Tests updated (`ProfileScreen.test.tsx`) for the new barrel mock and compact-stats tap.
 - Measured: sends list starts ~490pt in-frame (was ~1080). `npm run lint` clean, 31 module tests pass, `check:i18n` OK.
+
+### Off-spec design round 3 — flat + alignment (2026-10-23)
+- Gray tapes: `ProfileScreen` built `route={{name:'V6 紫色 (Cave)', grade, ...}}` and never passed `colorTag` / `section`, so `RouteCard` fell back to `TapeBadge color='other'` (gray) and printed `route.name` (with the grade) as the meta. Fixed in ProfileScreen only: pass `colorTag: item.color_tag`, `section: item.section_label`, `name: item.grade`. `groupToRouteCards` / `fetchProfileHistory` / story data were correct. Same bug in `mod-profile-history/ProfileHistoryScreen.tsx` (~line 275-290).
+- #7 header: `followCountItem` `minHeight 44` inflated the text block below the avatar centre; replaced with `hitSlop`.
+- #10 Edit Profile: `Button` is `alignSelf:flex-start`, overriding the parent centring; wrapped in an `alignSelf:center` View.
+- #17 Sign In / Sign Up / Edit Profile: wrapper `Card` replaced with a flat `View`; labels now at the 16 keyline.
+- Checks: 31 module tests pass; `npm run lint` shows no errors in this module (remaining tsc errors are other modules). Verified in Storybook screenshots.

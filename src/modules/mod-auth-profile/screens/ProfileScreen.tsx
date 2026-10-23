@@ -51,6 +51,9 @@ import { fetchFollowerCounts } from '../../mod-social-feed';
 import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
 import { useSession } from '../hooks/useSession';
 
+/** Grows the follower / following target to 44pt without changing layout (A4). */
+const FOLLOW_HIT_SLOP = { top: 12, bottom: 12, left: 8, right: 8 };
+
 interface ProfileScreenProps {
   session: Session;
   onNavigateEditProfile: () => void;
@@ -168,6 +171,7 @@ export default function ProfileScreen({
                 feedback="row"
                 pressedColor={theme.colors.surfaceAltPressed}
                 style={styles.followCountItem}
+                hitSlop={FOLLOW_HIT_SLOP}
                 onPress={onNavigateToFollowers}
                 accessibilityRole="button"
                 accessibilityLabel={`${followerCount} ${t('socialFeed.followers')}`}
@@ -183,6 +187,7 @@ export default function ProfileScreen({
                 feedback="row"
                 pressedColor={theme.colors.surfaceAltPressed}
                 style={styles.followCountItem}
+                hitSlop={FOLLOW_HIT_SLOP}
                 onPress={onNavigateToFollowing}
                 accessibilityRole="button"
                 accessibilityLabel={`${followingCount} ${t('socialFeed.following')}`}
@@ -273,17 +278,16 @@ export default function ProfileScreen({
         data={routeCards}
         keyExtractor={(item) => item.route_id}
         renderItem={({ item }) => {
-          const colorLabel = item.color_tag ? t(`routeCatalog.colors.${item.color_tag}`) : '';
-          const sectionSuffix = item.section_label ? ` (${item.section_label})` : '';
-          const routeName = `${item.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionSuffix}`;
           return (
             <SharedRouteCard
               route={{
                 id: item.route_id,
-                name: routeName,
+                name: item.grade,
                 grade: item.grade,
                 photo_url: item.photo_url,
                 gymName: item.gym_name,
+                colorTag: item.color_tag ?? undefined,
+                section: item.section_label,
               }}
               onPress={() => onNavigateToRoute?.(item.route_id, item.gym_id)}
             />
@@ -354,11 +358,12 @@ function makeStyles(
       flexDirection: 'row',
       gap: theme.spacing.lg,
     },
+    // A4: no minHeight here (it inflated the text block below the avatar's centre);
+    // the 44pt target comes from hitSlop on the Pressable instead.
     followCountItem: {
       flexDirection: 'row',
       alignItems: 'baseline',
       gap: theme.spacing.xs,
-      minHeight: theme.layout.minTouchTarget,
     },
     // AC-164: beta-video grid section (listFooterComponent)
     videoSectionContainer: {

@@ -24,7 +24,6 @@ import {
   AppText,
   Avatar,
   Button,
-  Card,
   InlineError,
   TextField,
 } from '../../../components/ui';
@@ -138,19 +137,22 @@ export default function EditProfileScreen({
         {/* Avatar */}
         <View style={styles.avatarContainer}>
           <Avatar size="xl" uri={avatarUri} name={displayName} />
-          <Button
-            label={t('profile.changeAvatar')}
-            onPress={handlePickAvatar}
-            variant="ghost"
-            on="background"
-            loading={isUploadingAvatar}
-            disabled={isUploadingAvatar || isSaving}
-            accessibilityLabel={t('profile.changeAvatar')}
-          />
+          {/* Button is alignSelf flex-start; wrap so the link centres on the avatar (A6) */}
+          <View style={styles.changeAvatarSlot}>
+            <Button
+              label={t('profile.changeAvatar')}
+              onPress={handlePickAvatar}
+              variant="ghost"
+              on="background"
+              loading={isUploadingAvatar}
+              disabled={isUploadingAvatar || isSaving}
+              accessibilityLabel={t('profile.changeAvatar')}
+            />
+          </View>
         </View>
 
-        {/* Grouped form card: one Card, fields keep their own 1pt border */}
-        <Card style={styles.formCard}>
+        {/* Flat form on the page background (F4): labels on the 16 keyline */}
+        <View style={styles.form}>
         {/* Display name */}
         <TextField
           label={t('profile.displayName')}
@@ -170,7 +172,7 @@ export default function EditProfileScreen({
           placeholder={t('profile.bioPlaceholder')}
           disabled={isSaving}
         />
-        </Card>
+        </View>
 
         {/* Error */}
         {errorMessage ? (
@@ -229,7 +231,10 @@ function makeStyles(
       alignItems: 'center',
       gap: theme.spacing.sm,
     },
-    formCard: {
+    changeAvatarSlot: {
+      alignSelf: 'center',
+    },
+    form: {
       gap: theme.layout.fieldGap,
     },
     actionsRow: {
