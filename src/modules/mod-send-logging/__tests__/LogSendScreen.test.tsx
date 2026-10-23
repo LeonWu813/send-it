@@ -13,6 +13,7 @@ jest.mock('../send-service', () => ({
   logAscent: jest.fn(),
 }));
 
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
@@ -134,6 +135,13 @@ describe('LogSendScreen', () => {
 
     fireEvent(stepper, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     expect(screen.getByLabelText(/^Attempts$|^嘗試次數$/).props.accessibilityValue.now).toBe(2);
+  });
+
+  it('pads the attempts field as a C1 row band (12 top/bottom, 16 left/right)', () => {
+    render(<LogSendScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    const style = StyleSheet.flatten(screen.getByLabelText(/^Attempts$|^嘗試次數$/).props.style);
+    expect(style).toMatchObject({ paddingTop: 12, paddingBottom: 12, paddingLeft: 16, paddingRight: 16 });
   });
 
   it('locks attempts to 1 for flash and restores the previous count when switching away', async () => {

@@ -226,7 +226,7 @@ export default function LogSendScreen({
           <SendStylePicker value={style} onChange={handleStyleSelect} />
         </View>
 
-        {/* Attempts — locked to 1 for flash; the previous count returns on unlock. */}
+        {/* Attempts — C1 row band (12 top/bottom, 16 left/right); the -/+ discs sit on the right padding line (C4). Locked to 1 for flash; the previous count returns on unlock. */}
         <Stepper
           label={attemptsLabel}
           description={t('sends.attemptsDescription')}
@@ -241,6 +241,11 @@ export default function LogSendScreen({
           })}
           doneLabel={t('ui.stepper.done')}
           hapticSource="stepper-attempts"
+          style={{
+            paddingVertical: theme.layout.listRowPaddingV,
+            paddingLeft: theme.spacing.md,
+            paddingRight: theme.spacing.md,
+          }}
         />
 
         {/* Date input (ISO date string YYYY-MM-DD). No date picker exists today. */}
