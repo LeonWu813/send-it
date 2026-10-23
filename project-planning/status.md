@@ -3,11 +3,11 @@
 ## Last Action
 
 agent: tech-lead
-mode: integration-review
+mode: record-decisions
 module: n/a
-next: Leon decides INT-030, INT-031, INT-032 (approve / reject / defer each), then: claude --agent tech-lead "decisions: INT-030 <decision>, INT-031 <decision>, INT-032 <decision>"
-result: issues-found
-timestamp: 2026-10-22T00:00:00Z
+next: claude --agent engineer-mod-localization-theme "integration-fix INT-031" and claude --agent engineer-mod-auth-profile "integration-fix INT-032a" (no prerequisite, any order); for INT-030 the coordinator first runs /pstack:blast-radius on the planned fix (save to project-planning/pstack-findings/2026-10-22-blast-radius-INT-030.md), then claude --agent engineer-mod-home "integration-fix INT-030" (or claude --agent tech-lead "on-demand review of INT-030 blast-radius" if it changes the plan)
+result: success
+timestamp: 2026-10-22T12:00:00Z
 
 ## PM Updates
 
