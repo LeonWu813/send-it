@@ -35,8 +35,8 @@ export interface IconButtonProps {
   color?: PaletteKey;
   /** toggle ON colour. Default `primary`. */
   colorOn?: PaletteKey;
-  /** tonal only: disc diameter, 44 (default) or 52 (next to an `lg` Button). */
-  diameter?: 44 | 52;
+  /** tonal only: disc diameter, 44 (default), 52 (next to an `lg` Button) or 32 (inside a row: layout stays 32, touch 44 via hitSlop). */
+  diameter?: 32 | 44 | 52;
   /** tonal only: disc colour. `surface` when the button sits inside a `surfaceAlt` container (stepper). */
   tonalBase?: 'surfaceAlt' | 'surface';
   /** Glyph size: md 20 (in-card), lg 24 (header, nav, sheet), xl 28 (Reel). Default lg. */

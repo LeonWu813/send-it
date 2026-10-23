@@ -159,6 +159,7 @@ export function Stepper({
     if (String(fixed) !== draft) AccessibilityInfo.announceForAccessibility(valueText ? valueText(fixed) : String(fixed));
   };
 
+  const slop = Math.max(0, (theme.layout.minTouchTarget - theme.typeScale.title2.lineHeight) / 2);
   const text = valueText ? valueText(value) : String(value);
   const accessoryId = Platform.OS === 'ios' ? ACCESSORY_ID : undefined;
 
@@ -206,9 +207,8 @@ export function Stepper({
           borderCurve: 'continuous',
           borderWidth: theme.stroke.thin,
           borderColor: locked ? c.border : c.outline,
-          paddingLeft: 14,
-          paddingRight: 6,
-          paddingVertical: 6,
+          paddingHorizontal: theme.layout.cardPadding,
+          paddingVertical: theme.layout.listRowPaddingV,
         },
         style,
       ]}
@@ -261,7 +261,8 @@ export function Stepper({
               setDraft(String(value));
               setEditing(true);
             }}
-            style={{ minWidth: 36, minHeight: theme.layout.minTouchTarget, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+            hitSlop={{ top: slop, bottom: slop }}
+            style={{ minWidth: 36, minHeight: theme.typeScale.title2.lineHeight, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
           >
             <Animated.View
               style={{
@@ -332,7 +333,7 @@ function StepButton({
   if (locked) {
     // no disc, glyph textDisabled
     return (
-      <View style={{ width: theme.layout.minTouchTarget, height: theme.layout.minTouchTarget, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ width: 32, height: 32, alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name={name} size={theme.iconSize.md} color={c.textDisabled} />
       </View>
     );
@@ -341,6 +342,7 @@ function StepButton({
     <IconButton
       variant="tonal"
       tonalBase="surface"
+      diameter={32}
       name={name}
       accessibilityLabel={label}
       disabled={disabled}

@@ -30,8 +30,6 @@ export interface ChipProps {
   clearAccessibilityLabel?: string;
   /** Tape swatch fill (14x14, radius `minor`) for colour filters. Pops when the chip becomes selected. */
   swatch?: string;
-  /** Hairline colour for swatches that need one (white / yellow / pink / black tape). */
-  swatchHair?: string;
   /** Surface the chip sits on: `background` (default, chip = surface) or `surface` (chip = surfaceAlt). */
   on?: 'background' | 'surface';
   /** Leading glyph (sm 16; md 20 for size="large"). */
@@ -66,7 +64,6 @@ export function Chip({
   onClear,
   clearAccessibilityLabel,
   swatch,
-  swatchHair,
   on = 'background',
   icon,
   iconSelected,
@@ -166,8 +163,6 @@ export function Chip({
               height: tapeSwatch,
               borderRadius: theme.radius.minor,
               backgroundColor: swatch,
-              borderWidth: swatchHair ? theme.stroke.thin : 0,
-              borderColor: swatchHair,
               marginRight: 6,
               transform: [{ scale: pop }],
             }}

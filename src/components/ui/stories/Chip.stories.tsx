@@ -34,7 +34,6 @@ const meta: Meta<ChipProps> = {
     size: { control: 'inline-radio', options: ['default', 'large'] },
     swatch: { control: 'color', description: 'Tape colour swatch (14x14, radius minor 4); pops on select' },
     on: { control: 'inline-radio', options: ['background', 'surface'], description: 'Surface under the chip (unselected fill: surface / surfaceAlt)' },
-    swatchHair: { control: 'color' },
     icon: { control: 'select', options: Object.keys(glyphs), mapping: glyphs },
   },
 };
@@ -71,7 +70,7 @@ export const AllStates: StoryObj<ChipProps> = {
         <View style={{ flexDirection: 'row', columnGap: 8 }}>
           <Chip label="紅色" swatch="#E5483B" selected onPress={() => {}} />
           <Chip label="藍色" swatch="#2F6FDB" onPress={() => {}} />
-          <Chip label="白色" swatch="#FFFFFF" swatchHair="#B3AA9D" onPress={() => {}} />
+          <Chip label="白色" swatch="#FFFFFF" onPress={() => {}} />
         </View>
       </Row>
     </View>
