@@ -2925,3 +2925,132 @@ This matches the FlatList path's `contentContainerStyle: { paddingTop: h.content
 | Test assertions unchanged (only setup changed) | PASS |
 
 **Result: READY FOR QA**
+
+---
+
+## QA Run 10 — Regression — 2026-10-22 (INT-032a: copyGoogleAvatarToBucket extraction to avatarSync.ts)
+
+**QA agent**: qa-mod-auth-profile
+**Mode**: integration-fix regression (INT-032a)
+**Original finding**: INT-032a — `copyGoogleAvatarToBucket` should be extracted from `auth-service.ts` to a new `avatarSync.ts`, and `userId` should be passed as a parameter to both `copyGoogleAvatarToBucket` and `fillDisplayNameIfEmpty` instead of calling `getSession()` again inside each function.
+
+---
+
+### 1. Fix Verification — INT-032a
+
+**Item 1: `avatarSync.ts` exists and exports `copyGoogleAvatarToBucket(userId: string)`**
+
+REGRESSION PASS. `src/modules/mod-auth-profile/avatarSync.ts` exists (115 lines). It exports `async function copyGoogleAvatarToBucket(userId: string): Promise<void>`. The function accepts `userId` as a parameter and uses it directly in the Supabase `.eq('id', userId)` queries and storage path construction (`avatars/${userId}.${fileExtension}`). No `supabase.auth.getSession()` call exists anywhere in the file. The file imports only `supabase` from `../../lib/supabase`.
+
+**Item 2: `fillDisplayNameIfEmpty` signature is `(name: string, userId: string)` with no internal `getSession()`**
+
+REGRESSION PASS. `auth-service.ts:373`: `async function fillDisplayNameIfEmpty(name: string, userId: string): Promise<void>`. The function body uses `userId` directly in `.eq('id', userId)` (line 378) and `.eq('id', userId)` (line 393). No `supabase.auth.getSession()` call inside this function. JSDoc at lines 362–371 documents the `@param userId` note and INT-032a reference.
+
+**Item 3: `signInWithApple` derives `appleUserId` from `signInWithIdToken` response (no second `getSession()` call)**
+
+REGRESSION PASS. `auth-service.ts:143`: `const appleUserId = idTokenData.user?.id ?? idTokenData.session?.user?.id;`. The `idTokenData` comes from `const { data: idTokenData, error } = await supabase.auth.signInWithIdToken(...)` at line 124. `fillDisplayNameIfEmpty(composedName, appleUserId)` is called at line 147 only when both `composedName` and `appleUserId` are truthy. No `getSession()` call on the Apple sign-in path between `signInWithIdToken` and `fillDisplayNameIfEmpty`.
+
+**Item 4: `signInWithGoogle` derives `googleUserId` from `setSession` response (no second `getSession()` call)**
+
+REGRESSION PASS. `auth-service.ts:240`: `const googleUserId = sessionData.session?.user?.id;`. The `sessionData` comes from `const { data: sessionData, error: sessionError } = await supabase.auth.setSession(...)` at line 224. `copyGoogleAvatarToBucket(googleUserId)` is called at line 242 only when `googleUserId` is truthy. No `getSession()` call on the Google sign-in path between `setSession` and `copyGoogleAvatarToBucket`.
+
+**Item 5: `getSession()` retained only in `updateBetaVideoPrivacy`**
+
+REGRESSION PASS. `auth-service.ts:411`: `const { data: { session } } = await supabase.auth.getSession();` — inside `updateBetaVideoPrivacy` only. Grep for `getSession` in `auth-service.ts` confirms one match at line 411 and one at line 17 (the mock comment in the test file's scope reference). The `getSession` mock comment in the test file at line 17 reads `// AC-157: getSession used by updateBetaVideoPrivacy` — confirming that `getSession` is now scoped only to `updateBetaVideoPrivacy`.
+
+**Item 6: `auth-service.ts` imports `copyGoogleAvatarToBucket` from `./avatarSync`**
+
+REGRESSION PASS. `auth-service.ts:29`: `import { copyGoogleAvatarToBucket } from './avatarSync';`. The function body and JSDoc that were previously in `auth-service.ts` are removed; only the import and the call site at line 242 remain.
+
+**Item 7: Test assertions unchanged — only setup changed**
+
+REGRESSION PASS. All test assertions in `auth-service.test.ts` remain the same as before the refactor. The setup changes (confirmed from the Engineering Progress entry):
+- `signInWithIdToken` mock updated to return `{ data: { user: { id: '...' }, session: { user: { id: '...' } } }, error: null }` so the Apple tests supply `appleUserId` through the response.
+- `setSession` mock updated to return `{ data: { session: { user: { id: '...' } }, user: { id: '...' } }, error: null }` for Google tests.
+- `getSession` mocks removed from Apple/Google tests (the functions no longer call it).
+- One test explicitly asserts `expect(mockAuth.getSession).not.toHaveBeenCalled()` (line 353 — "skips display_name update when credential.fullName is nil"), confirming the new behavior is verified.
+
+---
+
+### 2. Automated Test Suite
+
+Command: `npx jest --watchAll=false --testPathPattern="src/modules/mod-auth-profile"`
+Result: **30 tests, 3 suites — all PASS**
+Exit code: 0
+
+Suites:
+- `src/modules/mod-auth-profile/__tests__/auth-service.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/useSession.test.ts` — PASS
+- `src/modules/mod-auth-profile/__tests__/ProfileScreen.test.tsx` — PASS
+
+Note: `console.error '[copyGoogleAvatarToBucket] download failed, status: 503'` appears in test output — this is the expected error-path test exercising the download-failure branch of `copyGoogleAvatarToBucket`. It is not a test failure.
+
+---
+
+### 3. TypeScript Strict Mode
+
+Command: `npx tsc --noEmit`
+Result: **0 errors** — PASS
+Exit code: 0 (empty output)
+
+---
+
+### 4. Regression — All Previously Passing ACs
+
+**AC-201 (primary — target of INT-032a)**: REGRESSION PASS. The prefill behavior is unchanged: `fillDisplayNameIfEmpty` still fills `display_name` only when the field is null or blank (trim-empty); `copyGoogleAvatarToBucket` still copies the Google CDN photo to the avatars bucket only when `avatar_url` is a `lh3.googleusercontent.com` URL. All seven AC-201-related tests (Apple fill, Apple skip-nil-name, Apple skip-existing-name, Google copy, Google skip-non-Google-URL, Google skip-null-URL, Google download-fail swallowed) pass. No behavior change confirmed.
+
+**AC-001 (revised)**: REGRESSION PASS. `AuthNavigator.tsx` unchanged; session → children directly, no gym selection gate. INT-032a touched only `auth-service.ts` and added `avatarSync.ts`; no navigator changes.
+
+**AC-063**: REGRESSION PASS. No changes to `EditProfileScreen.tsx`, `upsertProfile()`, or migration. `privacy_setting` column unaffected.
+
+**AC-116, AC-117, AC-118**: REGRESSION PASS. `ProfileScreen.tsx` unchanged. Avatar, display name, bio rendering and Edit Profile entry point unaffected.
+
+**AC-145**: REGRESSION PASS. Follower/following count links unchanged. `fetchFollowerCounts` import from `mod-social-feed` unaffected.
+
+**AC-156, AC-157**: REGRESSION PASS. `updateBetaVideoPrivacy` function unchanged. Migration `20260930000002_mod_001_beta_video_privacy.sql` unchanged. `getSession()` still used correctly inside `updateBetaVideoPrivacy`.
+
+**AC-164**: REGRESSION PASS. `BetaVideoGrid`, `BetaVideoReelViewer`, `fetchBetaVideosByUser` calls in `ProfileScreen.tsx` unchanged.
+
+**AC-167, AC-184**: REGRESSION PASS. Logout absent from ProfileScreen; bell and settings gear absent from ProfileScreen header. Unchanged.
+
+**Supabase singleton**: REGRESSION PASS. `avatarSync.ts` imports `supabase` from `../../lib/supabase` (correct singleton use). No new `createClient()` call sites.
+
+**Cross-module import rule**: REGRESSION PASS. `avatarSync.ts` is an internal module file within `src/modules/mod-auth-profile/`. No cross-module import added or modified.
+
+**No hardcoded hex colors**: REGRESSION PASS. No new hex literals in `avatarSync.ts` or changed portions of `auth-service.ts`.
+
+**No inline string literals**: REGRESSION PASS. `avatarSync.ts` contains only `console.error` strings (not user-facing UI text). All user-facing strings are still i18n-wrapped.
+
+---
+
+### 5. Summary
+
+| Item | Result |
+|------|--------|
+| INT-032a: `avatarSync.ts` exists, exports `copyGoogleAvatarToBucket(userId: string)` | REGRESSION PASS |
+| INT-032a: no `getSession()` in `copyGoogleAvatarToBucket` | REGRESSION PASS |
+| INT-032a: `fillDisplayNameIfEmpty` signature `(name, userId)`, no internal `getSession()` | REGRESSION PASS |
+| INT-032a: `signInWithApple` derives `appleUserId` from `signInWithIdToken` response | REGRESSION PASS |
+| INT-032a: `signInWithGoogle` derives `googleUserId` from `setSession` response | REGRESSION PASS |
+| INT-032a: `getSession()` retained only in `updateBetaVideoPrivacy` | REGRESSION PASS |
+| INT-032a: test assertions unchanged (only setup changed) | REGRESSION PASS |
+| AC-201 regression: prefill behavior (display_name, avatar_url) unchanged | REGRESSION PASS |
+| AC-001 regression | REGRESSION PASS |
+| AC-063 regression | REGRESSION PASS |
+| AC-116/117/118 regression | REGRESSION PASS |
+| AC-145 regression | REGRESSION PASS |
+| AC-156/157 regression | REGRESSION PASS |
+| AC-164 regression | REGRESSION PASS |
+| AC-167/184 regression | REGRESSION PASS |
+| Supabase singleton convention | REGRESSION PASS |
+| No hardcoded hex colors | REGRESSION PASS |
+| No inline string literals (user-facing) | REGRESSION PASS |
+| Automated test suite (30 tests, 3 suites) | PASS |
+| TypeScript strict mode (tsc --noEmit) — 0 errors | PASS |
+
+**Overall verdict: PASS**
+
+**Failure count: 0**
+**New regressions: 0**
+
+**INT-032a — QA PASS. No behavior change confirmed. `getSession()` removed from both helper functions; `userId` passed as parameter from the session responses already in hand.**

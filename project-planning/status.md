@@ -2,12 +2,14 @@
 
 ## Last Action
 
-agent: qa-mod-home
-mode: integration-fix-qa
-module: mod-home (MOD-012)
-result: needs-signoff
-timestamp: 2026-10-22T16:00:00Z
-next: Show Leon the device test script below and wait for his reply. When the reply arrives, restart qa-mod-home with: ui-results: "<Leon's exact words>"
+agent: qa-mod-auth-profile
+mode: integration-fix-verify INT-032a
+module: mod-auth-profile (MOD-001)
+result: pass
+timestamp: 2026-10-22T17:00:00Z
+next: claude --agent tech-lead "confirm-fix INT-032a — QA VERIFIED; 30/30 tests pass, tsc 0 errors, copyGoogleAvatarToBucket extracted to avatarSync.ts with userId param, getSession() removed from both helpers; see QA Run 10 in project-planning/modules/mod-auth-profile/status.md and INT-032a row in project-planning/integration-review.md"
+
+Note: qa-mod-home had a prior needs-signoff for INT-030 device test (see Device test script below). Resume that after INT-032a is confirmed closed.
 
 Device test script (show to Leon word for word):
 Prerequisites: device language set to a language different from the account's stored language (e.g., device = Japanese, account = English). Sign in to ProjectDay.
