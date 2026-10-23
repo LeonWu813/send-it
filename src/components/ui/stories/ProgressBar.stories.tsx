@@ -24,7 +24,7 @@ function Demo(props: ProgressBarProps): React.JSX.Element {
 }
 
 const meta: Meta<ProgressBarProps> = {
-  title: 'UI/ProgressBar',
+  title: 'Components/ProgressBar',
   component: Demo,
   args: { value: 62, tone: 'default', failed: false, showPercent: true, accessibilityLabel: '上傳中' },
   argTypes: {

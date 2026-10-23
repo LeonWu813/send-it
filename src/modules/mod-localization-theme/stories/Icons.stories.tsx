@@ -55,6 +55,7 @@ function GlyphColored({ name, size, caption, color }: { name?: IoniconName; size
 
 const meta: Meta<typeof Icons> = {
   title: 'Foundations/Icons',
+  tags: ['!autodocs'],
   component: Icons,
   args: { size: 'lg', color: 'textPrimary' },
   argTypes: {

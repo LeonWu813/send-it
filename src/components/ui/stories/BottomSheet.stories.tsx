@@ -65,7 +65,7 @@ function Demo(props: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'UI/BottomSheet',
+  title: 'Components/BottomSheet',
   component: Demo,
   args: {
     title: '封鎖小明？',

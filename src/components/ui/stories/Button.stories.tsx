@@ -20,7 +20,7 @@ function Demo(props: ButtonProps): React.JSX.Element {
 }
 
 const meta: Meta<ButtonProps> = {
-  title: 'UI/Button',
+  title: 'Components/Button',
   component: Demo,
   args: { label: '記錄完攀', variant: 'primary', size: 'lg', on: 'surface', loading: false, disabled: false, fullWidth: false },
   argTypes: {

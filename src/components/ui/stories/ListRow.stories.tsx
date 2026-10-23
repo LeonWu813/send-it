@@ -39,7 +39,7 @@ function Demo({ selected: sel, toggleValue: tv, ...rest }: ListRowProps & { with
 }
 
 const meta: Meta<ListRowProps & { withLeadingIcon: boolean; withAvatar: boolean }> = {
-  title: 'UI/ListRow',
+  title: 'Components/ListRow',
   component: Demo,
   args: {
     variant: 'navigation',

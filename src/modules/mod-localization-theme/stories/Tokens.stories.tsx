@@ -242,6 +242,7 @@ function Tokens(): React.JSX.Element {
 
 const meta: Meta<typeof Tokens> = {
   title: 'Foundations/Tokens',
+  tags: ['!autodocs'],
   component: Tokens,
 };
 export default meta;

@@ -29,7 +29,7 @@ function Demo({ picker, ...props }: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'UI/SendStatus',
+  title: 'Components/SendStatus',
   component: Demo,
   args: { sendStyle: 'flash', variant: 'tag', attempts: 3, burst: false, picker: false },
   argTypes: {

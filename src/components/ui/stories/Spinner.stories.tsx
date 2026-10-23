@@ -18,7 +18,7 @@ function Demo(props: SpinnerProps): React.JSX.Element {
 }
 
 const meta: Meta<SpinnerProps> = {
-  title: 'UI/Spinner',
+  title: 'Components/Spinner',
   component: Demo,
   args: { color: 'textSecondary', size: 'small' },
   argTypes: {

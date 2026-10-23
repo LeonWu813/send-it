@@ -40,7 +40,7 @@ function Demo({ glyph, selected, ...rest }: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'UI/IconButton',
+  title: 'Components/IconButton',
   component: Demo,
   args: { glyph: 'notifications', variant: 'plain', on: 'surface', color: 'textPrimary', selected: false, disabled: false, badge: 0 },
   argTypes: {

@@ -26,7 +26,7 @@ function Demo({ selected: initial, ...rest }: ChipProps): React.JSX.Element {
 }
 
 const meta: Meta<ChipProps> = {
-  title: 'UI/Chip',
+  title: 'Components/Chip',
   component: Demo,
   args: { label: 'V4', variant: 'choice', selected: false, disabled: false, size: 'default', on: 'background' },
   argTypes: {

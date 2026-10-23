@@ -22,7 +22,7 @@ function Demo(props: CardProps): React.JSX.Element {
 }
 
 const meta: Meta<CardProps> = {
-  title: 'UI/Card',
+  title: 'Components/Card',
   component: Demo,
   args: { variant: 'static', padding: 16 },
   argTypes: {

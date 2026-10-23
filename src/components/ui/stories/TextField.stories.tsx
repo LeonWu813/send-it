@@ -18,7 +18,7 @@ function Demo({ value: initial, ...rest }: TextFieldProps): React.JSX.Element {
 }
 
 const meta: Meta<TextFieldProps> = {
-  title: 'UI/TextField',
+  title: 'Components/TextField',
   component: Demo,
   args: {
     variant: 'singleLine',
@@ -41,6 +41,9 @@ const meta: Meta<TextFieldProps> = {
   },
 };
 export default meta;
+
+/** Focus the field to see the 1.5pt primary outline. search: type to get the clear button; secureTextEntry: eye toggle. */
+export const Playground: StoryObj<TextFieldProps> = {};
 
 /** Grouped form (one Card, fields keep their own 1pt border + radius 12), search capsule and every state. */
 export const AllStates: StoryObj<TextFieldProps> = {
@@ -66,6 +69,3 @@ export const AllStates: StoryObj<TextFieldProps> = {
     </View>
   ),
 };
-
-/** Focus the field to see the 1.5pt primary outline. search: type to get the clear button; secureTextEntry: eye toggle. */
-export const Playground: StoryObj<TextFieldProps> = {};

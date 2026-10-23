@@ -7,7 +7,7 @@ import { Row } from './_helpers';
 import type { InlineErrorProps } from '../InlineError';
 
 const meta: Meta<InlineErrorProps> = {
-  title: 'UI/InlineError',
+  title: 'Components/InlineError',
   component: (props: InlineErrorProps) => (
     <View style={{ padding: 16, width: 375 }}>
       <InlineError {...props} />

@@ -24,7 +24,7 @@ function Demo(props: EmptyStateProps): React.JSX.Element {
 }
 
 const meta: Meta<EmptyStateProps> = {
-  title: 'UI/EmptyState',
+  title: 'Components/EmptyState',
   component: Demo,
   args: {
     variant: 'prompt',
@@ -44,6 +44,9 @@ const meta: Meta<EmptyStateProps> = {
 };
 export default meta;
 
+/** inline: only `description` + `secondaryLabel` (ghost) are used. No illustrations, ever. */
+export const Playground: StoryObj<EmptyStateProps> = {};
+
 /** The five variants. */
 export const AllVariants: StoryObj<EmptyStateProps> = {
   render: () => (
@@ -56,6 +59,3 @@ export const AllVariants: StoryObj<EmptyStateProps> = {
     </View>
   ),
 };
-
-/** inline: only `description` + `secondaryLabel` (ghost) are used. No illustrations, ever. */
-export const Playground: StoryObj<EmptyStateProps> = {};

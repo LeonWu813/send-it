@@ -35,7 +35,7 @@ function Demo({ value: initial, locked, min, max }: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'UI/Stepper',
+  title: 'Components/Stepper',
   component: Demo,
   args: { value: 3, locked: false, min: 1, max: 9999 },
   argTypes: {
