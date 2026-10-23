@@ -2,16 +2,12 @@
 
 ## Last Action
 
-agent: tech-lead
-mode: record-decisions
+agent: pm
+mode: change
 module: n/a
-result: success
-next: claude --agent pm "change" — proposal pass for a [TRIVIAL] change adding MOD-012's part of AC-202/AC-203 (device-level language/theme save/load helpers in src/lib/; i18n.ts and ThemeProvider read them when nobody is signed in) to the PRD so it reaches the MOD-012 spec; show the proposal to Leon, then the apply pass with his quoted approval. Then, in order: (2) claude --agent doc-sync (sync the [TRIVIAL] change into the MOD-012 spec); (3) claude --agent engineer-mod-auth-profile "implement" — AC-201 per Q-A hybrid (Google: new *_mod_001_* migration extending handle_new_auth_user() for display_name + avatar_url; Apple: in-app display_name fill from credential.fullName when still empty) and Q-B (B) (copy Google photo into the avatars bucket in the app after sign-in, via uploadAvatar() or equivalent), plus the ProfileScreen.tsx:238-260 loading-branch inset bug fix — see Tech Lead Reviews "Record-decisions — 2026-10-22 (Rev 49 Q-A, Q-B, Q-C)"; (4) claude --agent qa-mod-auth-profile "verify"; (5) claude --agent engineer-mod-home "implement" — AC-202/AC-203 src/lib/ helpers (only after step 2); (6) claude --agent engineer-mod-localization-theme "spec-update" — AC-202/AC-203 helper call before signOut() in SettingsScreen.tsx (only after step 5); (7) claude --agent qa-mod-home "verify" and claude --agent qa-mod-localization-theme "verify"; (8) coordinator runs /pstack:thermos on the combined delta; (9) claude --agent tech-lead integration review; (10) claude --agent pm "checkpoint". Check the Required pstack steps table at each handoff (blast-radius may apply after fixes on depended-on modules).
-timestamp: 2026-10-22T22:00:00Z
-summary: |
-  Recorded Leon's answers to Q-A (hybrid), Q-B (B: copy into avatars bucket, in-app) and Q-C (B: MOD-012 helpers
-  first, MOD-010 sign-out call second), and the assignment of the ProfileScreen loading-branch inset bug to
-  engineer-mod-auth-profile. Q-C (B) carries the condition of a [TRIVIAL] PM change + Doc-Sync before engineer-mod-home.
+result: needs-human
+next: show project-planning/pm-proposals/2026-10-22-ac-202-203-mod-012-scope.md to Leon (4 questions: Q1 [TRIVIAL] vs [SUBSTANTIVE] — PM recommends [SUBSTANTIVE]; Q2 architectural; Q3 PRD text 1a-1c; Q4 Decisions line); on approval run claude --agent pm "apply project-planning/pm-proposals/2026-10-22-ac-202-203-mod-012-scope.md" with his exact words quoted. After the apply pass: claude --agent doc-sync, then the Tech Lead record-decisions sequence from step (3) onward (engineer-mod-auth-profile "implement" ... engineer-mod-home "implement" only after Doc-Sync, then engineer-mod-localization-theme "spec-update").
+timestamp: 2026-10-22T22:30:00Z
 
 ## PM Updates
 
