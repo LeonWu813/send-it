@@ -2,12 +2,12 @@
 
 ## Last Action
 
-agent: engineer-mod-auth-profile
-mode: implement
-module: MOD-001
-result: done
-summary: AC-201 (Google/Apple profile prefill on new account creation) implemented and self-check passed. New migration extends handle_new_auth_user() for Google DB-level prefill. Apple in-app prefill added to signInWithApple(). Google avatar bucket copy added to signInWithGoogle() using fetch()+arrayBuffer()+Uint8Array. Remote URL guard added to uploadAvatar(). ProfileScreen fallback branch layout bug fixed (contentTopInset applied). 21 auth-service tests pass (8 new); 655 full-suite tests pass; tsc clean. Ready for QA.
-next: claude --agent qa-mod-auth-profile "verify AC-201 — Google and Apple profile prefill on new account creation — see Engineering Progress 2026-10-22 in project-planning/modules/mod-auth-profile/status.md"
+agent: qa-mod-localization-theme
+mode: verify
+module: MOD-010
+result: pass
+summary: QA Run 6 — AC-202/AC-203 sign-out save. saveDeviceLanguage(selectedLanguage) and saveDeviceTheme(selectedOverride) confirmed inside try block before signOut() in handleLogout(). Types directly compatible (SupportedLanguage=DeviceLanguage, ThemeOverride=DeviceTheme), no casting. tsc exit 0. 654/655 tests pass (1 pre-existing AscentList failure in mod-send-logging, not introduced by this change). Git scope clean — only SettingsScreen.tsx changed. Known gap: applySignedOutLanguage() not wired in AppShell (MOD-012 responsibility, noted, not blocking). All prior ACs (AC-090 through AC-199/AC-200) carry forward as PASS.
+next: coordinator — QA PASS for MOD-010 AC-202/AC-203. MOD-012 applySignedOutLanguage() wiring gap is being tracked separately under qa-mod-home. No further action needed for this verification.
 timestamp: 2026-10-22
 
 ## PM Updates

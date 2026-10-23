@@ -1327,3 +1327,156 @@ All ACs verified in QA Run 4 (2026-10-18) are unaffected by this change. The spe
 **Overall verdict: QA PASS**
 
 All six specific items assigned for verification pass. Commit 3472786 correctly renames "Send It" to "ProjectDay" in exactly the three MOD-010-owned files specified by AC-200. No climbing-verb identifiers were changed. Catalogs remain symmetric. No regressions introduced. Module is ready for handoff.
+
+---
+
+### QA Run 6 — Regression — 2026-10-22
+
+**Workflow**: regression-test (re-verification after engineer spec-update — commit b5a7de5 — AC-202/AC-203: save device language and theme just before signOut() in SettingsScreen.handleLogout())
+
+**Change being verified**:
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx`: added `await saveDeviceLanguage(selectedLanguage)` and `await saveDeviceTheme(selectedOverride)` inside `handleLogout()` `try` block, before `await signOut()`. Imports `saveLanguage as saveDeviceLanguage` and `saveTheme as saveDeviceTheme` from `../../../lib/devicePrefs` (built by MOD-012 in commit e76e9d2).
+
+**Automated test run**
+- `npx tsc --noEmit` — exit 0. 0 TypeScript errors. PASS.
+- `npm test -- --watchAll=false` — 654 passed, 1 failed, 45 suites. Exit 0. The 1 failure is `src/modules/mod-send-logging/__tests__/AscentList.test.tsx` — pre-existing failure introduced by commit `adbd128` (2026-10-16, engineer-mod-send-logging design system v2.2), which predates commit `b5a7de5` (2026-10-22) by 6 days. `git diff HEAD -- src/modules/mod-send-logging/__tests__/AscentList.test.tsx` returns no diff — the test file has no uncommitted modifications. Out of scope for MOD-010. Note: the engineer's self-check reported 655 passing, 0 failures; the 1-test discrepancy is the pre-existing AscentList failure, not introduced by this change. PASS with note.
+
+---
+
+**AC-202: Save current language to device at sign-out**
+
+PASS AC-202
+
+Verification method: code inspection of `SettingsScreen.tsx` `handleLogout()` (lines 194–207) and `src/lib/devicePrefs.ts`.
+
+`handleLogout()` structure:
+- Line 195: `setIsSigningOut(true)`
+- Line 196: `setLogoutError(null)`
+- Line 197: `try {`
+- Line 198: `await saveDeviceLanguage(selectedLanguage);`
+- Line 199: `await saveDeviceTheme(selectedOverride);`
+- Line 200: `await signOut();`
+- Lines 201–207: `} catch ...`
+
+`saveDeviceLanguage` is imported as `saveLanguage as saveDeviceLanguage` from `'../../../lib/devicePrefs'`. In `src/lib/devicePrefs.ts`, `saveLanguage(lang: DeviceLanguage): Promise<void>` stores `lang` to AsyncStorage under key `'device_language'`. `DeviceLanguage = 'en' | 'zh-TW'`.
+
+`selectedLanguage` type: `SupportedLanguage = 'en' | 'zh-TW'` (from `src/lib/i18n`). This is the same union as `DeviceLanguage = 'en' | 'zh-TW'`. The types are directly compatible — no casting required. TypeScript confirms this (exit 0 above).
+
+The call is inside the `try` block, before `signOut()` — the save executes before any sign-out attempt. Per spec AC-202: "when the user signs out, it [the current Settings language] is stored on this device as the device's language setting." PASS.
+
+Input=user taps Logout; Expected per spec=current Settings language (AC-091) stored on device before sign-out completes; Actual=`saveDeviceLanguage(selectedLanguage)` called at line 198, inside the try block before `signOut()` at line 200. PASS.
+
+**Known gap (not a blocker — MOD-012 responsibility)**: `applySignedOutLanguage()` (exported from `src/lib/i18n.ts`) is not called in AppShell (MOD-012) when auth state changes to signed-out. Consequence: within the same app session, the i18n language does not immediately switch to the device-stored language after sign-out — it only applies on next app launch. The save itself (MOD-010's responsibility) is correct. MOD-012's engineer is handling this separately. Per task instructions, this gap does not block the AC-202 pass.
+
+---
+
+**AC-203: Save current theme override to device at sign-out**
+
+PASS AC-203
+
+Verification method: code inspection of `SettingsScreen.tsx` `handleLogout()` (lines 194–207) and `src/lib/devicePrefs.ts`.
+
+`saveDeviceTheme` is imported as `saveTheme as saveDeviceTheme` from `'../../../lib/devicePrefs'`. In `src/lib/devicePrefs.ts`, `saveTheme(theme: DeviceTheme): Promise<void>` stores `theme` to AsyncStorage under key `'device_theme'`. `DeviceTheme = 'system' | 'light' | 'dark'`.
+
+`selectedOverride` type: `ThemeOverride = 'system' | 'light' | 'dark'` (from `src/lib/theme`). This is the same union as `DeviceTheme = 'system' | 'light' | 'dark'`. Directly compatible — no casting required. TypeScript confirms this (exit 0 above).
+
+The call is at line 199, inside the `try` block, before `signOut()` at line 200. Per spec AC-203: "when the user signs out, it [the current Settings theme override] is stored on this device as the device's theme setting." PASS.
+
+Input=user taps Logout; Expected per spec=current Settings theme override (AC-092) stored on device before sign-out completes; Actual=`saveDeviceTheme(selectedOverride)` called at line 199, inside the try block before `signOut()` at line 200. PASS.
+
+The theme side is handled correctly without the same-session gap (ThemeProvider reads the stored device theme at startup and when userId is null, per MOD-012's commit e76e9d2). PASS.
+
+---
+
+**If signOut() fails — saves have already happened**
+
+PASS (acceptable behavior, per spec and per task instructions)
+
+Structurally, `saveDeviceLanguage` and `saveDeviceTheme` are awaited sequentially before `signOut()` in the same try block. If `signOut()` throws, it is caught by the catch block (lines 202–206), which sets `logoutError` and clears `isSigningOut`. The saves at lines 198–199 have already completed by the time `signOut()` is called. This is correct behavior and is explicitly noted as acceptable in the spec.
+
+---
+
+**Type compatibility**
+
+PASS
+
+- `selectedLanguage: SupportedLanguage = 'en' | 'zh-TW'` → `DeviceLanguage = 'en' | 'zh-TW'` — identical union. No casting.
+- `selectedOverride: ThemeOverride = 'system' | 'light' | 'dark'` → `DeviceTheme = 'system' | 'light' | 'dark'` — identical union. No casting.
+- Confirmed by `npx tsc --noEmit` exit 0.
+
+---
+
+**Git scope check**
+
+PASS
+
+`git show --name-only b5a7de5` lists exactly:
+- `project-planning/modules/mod-localization-theme/status.md` (engineering progress — write-allowed for engineer)
+- `project-planning/status.md` (last action — write-allowed for engineer)
+- `src/modules/mod-localization-theme/screens/SettingsScreen.tsx` (within MOD-010's source path)
+
+No files outside MOD-010's source path were modified by this commit. PASS.
+
+---
+
+**Regression — previously passing ACs**
+
+**AC-090** — PASS. `src/lib/i18n.ts` unchanged. `detectDeviceLanguage()` logic unchanged. PASS carries forward from QA Run 5.
+
+**AC-091** — PASS. `handleLanguageSelect` (lines 157–164) unchanged. Language section (lines 234–261) unchanged. PASS carries forward.
+
+**AC-092** — PASS. `handleOverrideSelect` (lines 166–173) unchanged. Appearance section (lines 263–291) unchanged. `src/lib/theme.ts` unchanged. PASS carries forward.
+
+**AC-155** — PASS. Early return at lines 221–223 unchanged. Blocked Accounts row (lines 293–309) unchanged. `BlockedAccountsScreen.tsx` unchanged. PASS carries forward.
+
+**AC-157** — PASS. Beta Video Privacy toggle (lines 311–332) unchanged. Row order: AC-155 (lines 293–309) before AC-157 (lines 311–332) before AC-168 (lines 334–348). Short labels `t('settings.betaVideoPrivacyPublic')` / `t('settings.betaVideoPrivacyFollowersOnly')` unchanged. `updateBetaVideoPrivacy` called via MOD-001 import. PASS carries forward.
+
+**AC-168** — PASS. `handleLogout()` still calls `signOut()` from `mod-auth-profile` (line 200). Error handling and `isSigningOut` state unchanged. Logout button (lines 334–348) is the last element in the ScrollView. Styling unchanged (`variant="destructive"` on the shared Button component). The additions at lines 198–199 do not change the Logout button behavior other than adding the pre-sign-out saves. PASS.
+
+**AC-199 / AC-200** — PASS. Locale files and Tokens.stories.tsx unchanged. PASS carries forward.
+
+**REQ-CI** — PASS. `.github/workflows/i18n-check.yml` unchanged. `npm run check:i18n` exits 0. PASS carries forward.
+
+**All strings via i18n hook** — PASS. No inline string literals introduced. `saveDeviceLanguage` and `saveDeviceTheme` are data calls, not user-visible strings. PASS.
+
+**No hardcoded hex colors** — PASS. No color literals introduced. PASS.
+
+**Safe area insets** — PASS. `useHeaderContentInset()` + `useTabBarInset()` + `makeStyles(theme, headerTop, tabInset.contentBottom)` unchanged. PASS.
+
+**i18n catalog completeness** — PASS. No new i18n keys introduced. `npm run check:i18n` exits 0. PASS.
+
+**No gold-plating** — PASS. Change adds exactly two await calls and one import line to `SettingsScreen.tsx`, plus updated JSDoc. All additions map to AC-202/AC-203 requirements. No extra features introduced. PASS.
+
+---
+
+**Summary**
+
+| AC / Requirement | Result | Notes |
+|---|---|---|
+| AC-202: saveDeviceLanguage(selectedLanguage) called before signOut() | PASS | Line 198 in try block before signOut() at line 200 |
+| AC-202: selectedLanguage type matches DeviceLanguage | PASS | SupportedLanguage = 'en'\|'zh-TW' = DeviceLanguage; no casting |
+| AC-202: Known gap — applySignedOutLanguage() not wired in AppShell | NOTED (not blocking) | MOD-012's responsibility; save itself is correct |
+| AC-203: saveDeviceTheme(selectedOverride) called before signOut() | PASS | Line 199 in try block before signOut() at line 200 |
+| AC-203: selectedOverride type matches DeviceTheme | PASS | ThemeOverride = 'system'\|'light'\|'dark' = DeviceTheme; no casting |
+| Saves are inside try block, before signOut() | PASS | Lines 198–199 inside try block; signOut at line 200 |
+| If signOut() fails, saves have already completed | PASS | Sequential awaits; saves run first; acceptable per spec |
+| TypeScript — npx tsc --noEmit | PASS | Exit 0; 0 errors |
+| Test suite — 655 tests passing | PASS (with note) | 654 pass; 1 pre-existing failure in mod-send-logging AscentList (not introduced by this change) |
+| Git scope — no changes outside MOD-010 source path | PASS | Only SettingsScreen.tsx + planning docs changed |
+| AC-090 regression | PASS | No regression |
+| AC-091 regression | PASS | No regression |
+| AC-092 regression | PASS | No regression |
+| AC-155 regression | PASS | No regression |
+| AC-157 regression | PASS | No regression |
+| AC-168 regression | PASS | No regression |
+| AC-199 / AC-200 regression | PASS | No regression |
+| REQ-CI regression | PASS | No regression |
+| All strings via i18n hook | PASS | No inline literals introduced |
+| No hardcoded hex colors | PASS | All colors from theme.colors.* tokens |
+| Safe area insets | PASS | useHeaderContentInset + useTabBarInset pattern unchanged |
+| i18n catalog completeness | PASS | npm run check:i18n exits 0 |
+| No gold-plating | PASS | Two await calls + import + JSDoc only; all map to spec requirements |
+
+**Overall verdict: QA PASS**
+
+AC-202 and AC-203 save calls are correctly placed: inside the try block, before signOut(), with directly compatible types (no casting). TypeScript passes. The pre-existing AscentList test failure in mod-send-logging does not affect this verdict. The known applySignedOutLanguage() wiring gap is in MOD-012's source path and is being addressed separately — the save itself (MOD-010's scope) is correct and complete.
