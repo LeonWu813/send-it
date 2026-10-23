@@ -2,13 +2,12 @@
 
 ## Last Action
 
-agent: qa-mod-home
-mode: regression
-module: MOD-012
-result: pass
-summary: QA Run 24 — AC-202 (applySignedOutLanguage wired in AppShell cleanup) and AC-203 (setThemeUserId accepts string|null; setThemeUserId(null) called in AppShell cleanup; ThemeProvider userId===null branch fires) both verified. setThemeUserId callers type-check. tsc 0 errors. 655 tests, 45 suites, 0 failures. No new regressions. All QA Run 23 passing items confirmed intact.
-next: coordinator — MOD-012 QA Run 24 PASS. AC-202/AC-203 sign-out wiring verified. Resume coordinator flow.
-timestamp: 2026-10-22
+agent: tech-lead
+mode: integration-review
+module: n/a
+next: Leon decides INT-030, INT-031, INT-032 (approve / reject / defer each), then: claude --agent tech-lead "decisions: INT-030 <decision>, INT-031 <decision>, INT-032 <decision>"
+result: issues-found
+timestamp: 2026-10-22T00:00:00Z
 
 ## PM Updates
 
@@ -336,6 +335,13 @@ timestamp: 2026-10-22
   - Approved by Leon: "1. substantive 2. no 3. yes 4. yes"
 
 ## Tech Lead Reviews
+
+### Integration & Optimization Review — Phase 1 — 2026-10-22 (AC-201/AC-202/AC-203 delta, thermos)
+pstack input: `project-planning/pstack-findings/2026-10-22-thermos-phase-1-AC201-202-203.md`. Accepted: F-1 → INT-030 (`src/lib/theme.ts:634`, `AppShell.tsx:198`), F-2 → INT-031 (`SettingsScreen.tsx:197–200`), F-4 as optional scope of INT-031. Logged for decision with a REJECT recommendation: F-3 → INT-032 (a), with F-7 as INT-032 (b) (DEFER or REJECT). Rejected, no row: F-5 (naming preference; Leon may add it to INT-030), F-6 (informational; iOS AsyncStorage runs reads in order).
+Reviewed: MOD-001 (`handle_new_auth_user()` Google branch, `copyGoogleAvatarToBucket`, `fillDisplayNameIfEmpty`), MOD-010 (`SettingsScreen` sign-out path), MOD-012 (`src/lib/theme.ts`, `src/lib/i18n.ts`, `src/lib/devicePrefs.ts`, `AppShell.tsx`), and the `avatar_url` consumers in MOD-005/006/007/009/010/012.
+Findings: 2 Concerns (INT-030 HIGH, INT-031 MEDIUM), 1 Recommendation (INT-032 LOW) (see project-planning/integration-review.md). The trigger change adds no new risk: it cannot raise, the email/Apple path is unchanged, and every `avatar_url` consumer renders an external URL correctly.
+INT-030 is wider than thermos says: the sign-out cleanup also runs at every sign-in and cold start, not only on theme changes. INT-031 changes behavior on the error path. I judge it a defect fix inside the spec, but Leon confirms that.
+Sequencing if approved: INT-030 (`engineer-mod-home`) and INT-031 (`engineer-mod-localization-theme`) are independent and can run in either order. INT-030 first by severity. Neither needs a blast-radius-first step.
 
 ### Record-decisions — 2026-10-22 (Rev 49 Q-A, Q-B, Q-C; ProfileScreen inset bug)
 
