@@ -13,6 +13,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Appearance, ColorSchemeName, StyleSheet, useWindowDimensions } from 'react-native';
 
+import { loadTheme } from './devicePrefs';
+
 // ─── Color palettes ───────────────────────────────────────────────────────────
 //
 // Source of truth: send-it-design/ux-team/design-system/send-it-design-system.md (v1.1+,
@@ -585,11 +587,25 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
   const [userId, setUserId] = useState<string | null>(null);
 
   // When userId becomes known, load the user-scoped theme override preference.
-  // Falls back to 'system' (already the default) when nothing is stored or on error.
+  // When userId is null (signed-out / app start), load the device-level stored
+  // theme so the signed-out experience respects the user's last chosen theme
+  // (AC-203). Falls back to 'system' (device appearance) when nothing is stored.
   useEffect(() => {
     if (userId === null) {
-      // Unauthenticated — reset to system default and skip all AsyncStorage I/O.
-      setOverride('system');
+      // Unauthenticated — apply device-level stored theme preference (AC-203).
+      // If stored is 'light' or 'dark', use it. 'system' or null → follow device.
+      async function loadSignedOutTheme(): Promise<void> {
+        try {
+          const stored = await loadTheme();
+          const themeToApply: ThemeOverride =
+            stored === 'light' || stored === 'dark' ? stored : 'system';
+          setOverride(themeToApply);
+        } catch {
+          // Non-fatal — default to system (device appearance)
+          setOverride('system');
+        }
+      }
+      void loadSignedOutTheme();
       return;
     }
 

@@ -2,12 +2,13 @@
 
 ## Last Action
 
-agent: doc-sync
-mode: delta
-module: n/a
+agent: engineer-mod-home
+mode: implement
+module: MOD-012
 result: success
-next: claude --agent engineer-mod-home "implement" (MOD-012 now owns AC-202/AC-203 src/lib/ helpers; build first — MOD-010 depends on it). Then claude --agent engineer-mod-localization-theme "spec-update" (MOD-010 spec updated: MOD-012 dependency added, AC-202/AC-203 engineering notes resolved). claude --agent engineer-mod-auth-profile "implement" may run in parallel with engineer-mod-home.
-timestamp: 2026-10-22T23:30:00Z
+summary: Implemented AC-202/AC-203 src/lib/ scope. Created src/lib/devicePrefs.ts (saveLanguage, loadLanguage, saveTheme, loadTheme, DeviceLanguage type, DeviceTheme type). Updated src/lib/i18n.ts (applies stored device language after init; exports applySignedOutLanguage for AppShell sign-out). Updated src/lib/theme.ts ThemeProvider (loads stored device theme when userId is null instead of hard-resetting to system). Created src/lib/__tests__/devicePrefs.test.ts (14 tests). All 647 tests pass; tsc --noEmit passes.
+next: claude --agent qa-mod-home "verify" (AC-202/AC-203 src/lib/ helpers). Then claude --agent engineer-mod-localization-theme "spec-update" (MOD-010 spec updated: MOD-012 dependency added, AC-202/AC-203 engineering notes resolved). claude --agent engineer-mod-auth-profile "implement" may run in parallel.
+timestamp: 2026-10-22T23:45:00Z
 
 ## PM Updates
 
