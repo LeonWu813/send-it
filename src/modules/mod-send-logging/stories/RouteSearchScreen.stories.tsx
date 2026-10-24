@@ -126,5 +126,5 @@ export const Populated: Story = { args: { state: 'results' } };
 /** Search returned nothing: inline empty state. */
 export const Empty: Story = { args: { state: 'noResults' } };
 
-/** Request in flight: skeleton rows. */
+/** Request in flight: field spinner only, results area blank. */
 export const Loading: Story = { args: { state: 'loading' } };

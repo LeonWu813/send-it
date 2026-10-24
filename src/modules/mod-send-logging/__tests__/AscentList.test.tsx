@@ -91,10 +91,10 @@ describe('AscentList', () => {
     render(<AscentList {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // The slot empty state is ONE pressable card: its label is "<sentence>. <hint>".
-      expect(screen.getByLabelText(/No sends yet|還沒有紀錄/)).toBeTruthy();
+      // E2 section empty state: one sentence plus a ghost "Log Send" action.
+      expect(screen.getByText(/No sends yet|還沒有紀錄/)).toBeTruthy();
     });
-    fireEvent.press(screen.getByLabelText(/No sends yet|還沒有紀錄/));
+    fireEvent.press(screen.getByLabelText(/Log Send|記錄/));
     expect(DEFAULT_PROPS.onLogSend).toHaveBeenCalled();
   });
 

@@ -10,7 +10,7 @@
  * Design system v2.2 (§32.8): `pageSection` title, `surface` container (card 20), ListRow `content` rows
  * (Avatar + name `headline` + date/attempts `footnote`, SendStatus `disc` trailing, delete for own rows),
  * floating BottomSheet `confirm` for delete (failure shows inside the sheet, the row stays),
- * AscentRowSkeleton / EmptyState `slot` / InlineError states, and the new-row landing motion (D1).
+ * section Spinner / EmptyState `section` (E2) / InlineError states, and the new-row landing motion (D1).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -21,7 +21,6 @@ import { AccessibilityInfo, Animated, LayoutAnimation, Platform, UIManager, View
 import {
   AppText,
   Avatar,
-  AscentRowSkeleton,
   BottomSheet,
   Button,
   EmptyState,
@@ -29,8 +28,8 @@ import {
   InlineError,
   ListRow,
   SendStatus,
-  SkeletonGroup,
-  useSkeletonPhase,
+  Spinner,
+  useLoadingPhase,
   useToast,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
@@ -87,7 +86,7 @@ export default function AscentList({
 
   /** Ids seen by the previous successful load; null until the first load finishes. */
   const knownIds = useRef<Set<string> | null>(null);
-  const phase = useSkeletonPhase(isLoading && ascents.length === 0);
+  const phase = useLoadingPhase(isLoading && ascents.length === 0);
 
   const animateLayout = useCallback(
     (ms: number): void => {
@@ -181,7 +180,7 @@ export default function AscentList({
     overflow: 'hidden' as const,
   };
 
-  const showSkeleton = isLoading && ascents.length === 0 && phase === 'skeleton';
+  const showSpinner = isLoading && ascents.length === 0 && phase === 'loading';
   const showTimeout = isLoading && ascents.length === 0 && phase === 'timeout';
   const showError = errorMessage !== null && !isLoading;
   const isEmpty = !isLoading && errorMessage === null && ascents.length === 0;
@@ -206,17 +205,17 @@ export default function AscentList({
       </View>
 
       {/* Loading */}
-      {showSkeleton && (
-        <View style={groupStyle}>
-          <SkeletonGroup label={t('sends.loading')}>
-            {[0, 1, 2].map((i) => (
-              <AscentRowSkeleton key={i} />
-            ))}
-          </SkeletonGroup>
+      {showSpinner && (
+        <View
+          accessible
+          accessibilityLabel={t('sends.loading')}
+          style={{ minHeight: theme.layout.sectionLoadingSlot, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <Spinner context="section" />
         </View>
       )}
 
-      {/* Error (also the 10s skeleton timeout) */}
+      {/* Error (also the 10s loading timeout) */}
       {(showError || showTimeout) && (
         <InlineError
           variant="block"
@@ -231,11 +230,10 @@ export default function AscentList({
       {/* Empty */}
       {isEmpty && (
         <EmptyState
-          variant="slot"
-          icon={ICON.sendTop.outline}
+          variant="section"
           description={t('sends.noAscents')}
-          primaryLabel={t('sends.logSend')}
-          onPrimary={onLogSend}
+          secondaryLabel={t('sends.logSend')}
+          onSecondary={onLogSend}
         />
       )}
 

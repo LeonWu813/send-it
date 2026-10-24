@@ -7,7 +7,7 @@
  * After selection the caller navigates to LogSendScreen with the chosen route.
  *
  * Design system v2.2: capsule search field, grouped `surface` card 20 of ListRow `content` rows
- * (56 thumbnail = TapeBadge on `surfaceAlt`, `headline` title, `footnote` section), AscentRowSkeleton.
+ * (56 thumbnail = TapeBadge on `surfaceAlt`, `headline` title, `footnote` section).
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -22,11 +22,9 @@ import {
   EmptyState,
   InlineError,
   ListRow,
-  AscentRowSkeleton,
-  SkeletonGroup,
   TextField,
-  useSkeletonPhase,
 } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { listRoutes } from '../../mod-route-catalog';
 import { TapeBadge } from '@/lib/tape';
@@ -56,7 +54,7 @@ export default function RouteSearchScreen({
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState<boolean>(false);
-  const phase = useSkeletonPhase(isLoading);
+  const [searchedQuery, setSearchedQuery] = useState<string>('');
 
   const handleSearch = useCallback(async (): Promise<void> => {
     const trimmedGymId = gymIdInput.trim();
@@ -66,6 +64,7 @@ export default function RouteSearchScreen({
     setIsLoading(true);
     setErrorMessage(null);
     setHasSearched(true);
+    setSearchedQuery(trimmedGymId);
     try {
       const routes = await listRoutes(trimmedGymId, { grade: null, colorTag: null });
       setResults(routes);
@@ -140,16 +139,7 @@ export default function RouteSearchScreen({
           fullWidth
         />
 
-        {/* Loading */}
-        {isLoading && phase !== 'idle' && (
-          <SkeletonGroup label={t('sends.searching')}>
-            <View style={groupStyle}>
-              {[0, 1, 2].map((i) => (
-                <AscentRowSkeleton key={i} />
-              ))}
-            </View>
-          </SkeletonGroup>
-        )}
+        {/* Loading: field spinner only (TextField loading); results area stays blank */}
 
         {/* Error */}
         {errorMessage !== null && !isLoading && (
@@ -192,7 +182,12 @@ export default function RouteSearchScreen({
         )}
 
         {!isLoading && errorMessage === null && hasSearched && results.length === 0 && (
-          <EmptyState variant="inline" description={t('routes.noResults')} />
+          <EmptyState
+            variant="filtered"
+            icon={ICON.search.outline}
+            title={t('sends.noRoutesTitle', { query: searchedQuery })}
+            description={t('sends.noRoutesHint')}
+          />
         )}
       </ScrollView>
     </View>
