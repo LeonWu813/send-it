@@ -65,7 +65,7 @@ export default function GymListScreen({
   const { screenMargin } = useLayout();
   const header = useAppHeaderRoot();
   const topPad = header.contentTopInset > 0 ? header.contentTopInset : theme.spacing.md;
-  const styles = makeStyles(theme, screenMargin, topPad, header.contentTopInset + theme.spacing.md, header.contentBottomInset);
+  const styles = makeStyles(theme, screenMargin, topPad, header.contentTopInset + theme.spacing.md, header.contentTopInset, header.contentBottomInset);
 
   const [gyms, setGyms] = useState<GymSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -309,7 +309,7 @@ export default function GymListScreen({
         data={sortedGyms}
         keyExtractor={(item: GymSummary) => item.id}
         renderItem={renderGymCard}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, gyms.length === 0 && styles.listContentEmpty]}
         scrollIndicatorInsets={{ top: header.contentTopInset, bottom: header.indicatorBottomInset }}
         onScroll={header.onScroll}
         onContentSizeChange={header.onContentSizeChange}
@@ -354,6 +354,7 @@ function makeStyles(
   screenMargin: number,
   topPad: number,
   listTopPad: number,
+  emptyTopPad: number,
   bottomInset: number,
 ) {
   return StyleSheet.create({
@@ -385,6 +386,10 @@ function makeStyles(
       // R2: content starts 16 below the header, same as Home.
       paddingTop: listTopPad,
       paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.lg,
+    },
+    // E1 (directory empty): no search field above, so EmptyState alone sets the 48pt start.
+    listContentEmpty: {
+      paddingTop: emptyTopPad,
     },
     card: {
       height: ROW_HEIGHT,
