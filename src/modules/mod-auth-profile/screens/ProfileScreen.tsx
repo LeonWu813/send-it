@@ -38,6 +38,7 @@ import {
   EmptyState,
   PageLoading,
   PressableScale,
+  SectionHeader,
   useLoadingPhase,
 } from '../../../components/ui';
 import { useLayout, useTheme } from '../../../lib/theme';
@@ -76,7 +77,7 @@ interface ProfileScreenProps {
    * the correct gym's route list.
    */
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
-  /** Opens the Gyms tab (the ghost "Find routes" action of the empty send-history section). Hidden when omitted. */
+  /** Opens the Gyms tab (the T1 "Find routes" action in the send-history header of the empty send-history section). Hidden when omitted. */
   onFindRoutes?: () => void;
   /** Callback to navigate to the FollowersListScreen (AC-145). */
   onNavigateToFollowers?: () => void;
@@ -251,9 +252,14 @@ export default function ProfileScreen({
         />
       ) : null}
 
-      <AppText variant="pageSection" accessibilityRole="header">
-        {t('profile.sendHistory')}
-      </AppText>
+      <SectionHeader
+        title={t('profile.sendHistory')}
+        action={
+          !hasRecords && onFindRoutes
+            ? { label: t('profileHistory.stats.promptAction'), onPress: onFindRoutes }
+            : undefined
+        }
+      />
     </View>
   );
 
@@ -263,9 +269,7 @@ export default function ProfileScreen({
   // AC-167: Logout button removed from ProfileScreen (moved to MOD-010 SettingsScreen).
   const profileFooter = (
     <View style={styles.videoSectionContainer}>
-      <AppText variant="pageSection" style={styles.videoSectionTitle}>
-        {t('betaVideo.myVideos')}
-      </AppText>
+      <SectionHeader title={t('betaVideo.myVideos')} style={styles.videoSectionTitle} />
       <BetaVideoGrid
         videos={betaVideos}
         onPressVideo={(index) => {
@@ -281,12 +285,7 @@ export default function ProfileScreen({
   // ── Root: FlatList (sends list) is the sole scroll container ────────────────
   // Only reached once the first load has finished, so "empty" is certain (never shown while loading).
   const listEmpty = hasRecords ? null : (
-    <EmptyState
-      variant="section"
-      description={t('profile.noSendsYet')}
-      secondaryLabel={onFindRoutes ? t('profileHistory.stats.promptAction') : undefined}
-      onSecondary={onFindRoutes}
-    />
+    <EmptyState variant="section" description={t('profile.noSendsYet')} />
   );
 
   if (!loaded) {

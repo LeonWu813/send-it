@@ -185,18 +185,17 @@ export default function EditProfileScreen({
         {/* Avatar */}
         <View style={styles.avatarContainer}>
           <Avatar size="xl" uri={avatarUri} name={displayName} />
-          {/* Button is alignSelf flex-start; wrap so the link centres on the avatar (A6) */}
-          <View style={styles.changeAvatarSlot}>
-            <Button
-              label={t('profile.changeAvatar')}
-              onPress={handlePickAvatar}
-              variant="ghost"
-              on="background"
-              loading={isUploadingAvatar}
-              disabled={isUploadingAvatar || isSaving}
-              accessibilityLabel={t('profile.changeAvatar')}
-            />
-          </View>
+          {/* T3: centred under the avatar, no primary button above it (A6) */}
+          <Button
+            label={t('profile.changeAvatar')}
+            onPress={handlePickAvatar}
+            variant="text"
+            placement="centered"
+            afterPrimary={false}
+            loading={isUploadingAvatar}
+            disabled={isUploadingAvatar || isSaving}
+            accessibilityLabel={t('profile.changeAvatar')}
+          />
         </View>
 
         {/* Flat form on the page background (F4): labels on the 16 keyline */}
@@ -269,9 +268,6 @@ function makeStyles(
     avatarContainer: {
       alignItems: 'center',
       gap: theme.spacing.sm,
-    },
-    changeAvatarSlot: {
-      alignSelf: 'center',
     },
     form: {
       gap: theme.layout.fieldGap,

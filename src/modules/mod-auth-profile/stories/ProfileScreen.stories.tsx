@@ -95,7 +95,7 @@ const meta: Meta<Args> = {
     withPhoneFrame,
   ],
   argTypes: { state: { control: false } },
-  render: () => <ProfileScreen session={fakeSession} isActive onNavigateEditProfile={() => {}} />,
+  render: () => <ProfileScreen session={fakeSession} isActive onNavigateEditProfile={() => {}} onFindRoutes={() => {}} />,
 };
 export default meta;
 

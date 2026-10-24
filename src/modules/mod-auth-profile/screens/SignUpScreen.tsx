@@ -176,9 +176,8 @@ export default function SignUpScreen({
         <Button
           label={t('auth.haveAccount')}
           onPress={onNavigateSignIn}
-          variant="ghost"
-          on="background"
-          fullWidth
+          variant="text"
+          placement="centered"
           disabled={isLoading}
         />
 

@@ -238,9 +238,8 @@ export default function SignInScreen({
         <Button
           label={t('auth.noAccount')}
           onPress={onNavigateSignUp}
-          variant="ghost"
-          on="background"
-          fullWidth
+          variant="text"
+          placement="centered"
           disabled={isLoading}
         />
       </ScrollView>
