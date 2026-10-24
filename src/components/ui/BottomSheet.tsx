@@ -56,6 +56,7 @@ export interface BottomSheetProps {
   footer?: React.ReactNode;
   /** confirm: destructive button (top, lg, full width). */
   confirmLabel?: string;
+  /** confirm: optional leading icon on the button. No icon by default; pass ICON.delete only for deletes. */
   confirmIcon?: IoniconName;
   onConfirm?: () => void;
   /** confirm: secondary button under it. Defaults to common.cancel. */
@@ -308,7 +309,7 @@ export function BottomSheet({
           size="lg"
           fullWidth
           label={confirmLabel ?? ''}
-          icon={confirmIcon ?? ICON.delete.outline}
+          icon={confirmIcon}
           loading={loading}
           onPress={() => onConfirm?.()}
         />
