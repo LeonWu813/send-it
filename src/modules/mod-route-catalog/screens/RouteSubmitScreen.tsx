@@ -465,6 +465,7 @@ export default function RouteSubmitScreen({
       variant="confirm"
       loading={isSubmitting}
       confirmLabel={t('routes.duplicateSheet.confirm')}
+      confirmTone="primary"
       cancelLabel={t('routes.duplicateSheet.cancel')}
       onConfirm={() => {
         setShowDuplicateSheet(false);
