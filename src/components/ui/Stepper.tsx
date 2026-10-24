@@ -6,8 +6,9 @@ import type { AccessibilityActionEvent, StyleProp, ViewStyle } from 'react-nativ
 
 import { ICON } from '../../lib/icons';
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
-import { useTheme } from '../../lib/theme';
+import { innerRadius, useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
+import { FocusRing, NO_WEB_OUTLINE } from './FocusRing';
 import { IconButton } from './IconButton';
 
 export interface StepperProps {
@@ -38,7 +39,7 @@ export interface StepperProps {
 const ACCESSORY_ID = 'projectday-stepper-done';
 
 /**
- * Number stepper (design system 19.9): 56pt `surfaceAlt` row, 1pt `outline`, radius 12. The VoiceOver
+ * Number stepper (design system 19.9): 56pt `surfaceAlt` row, 1pt `outline`, radius 12 (typing: 1pt `primary` + inner 2pt FocusRing). The VoiceOver
  * element is the CONTAINER (`adjustable`, increment / decrement, extra "enter a number" action); the
  * -/+ buttons are hidden from it. Press-and-hold (`longPress` 500) repeats every `micro` 100, then every 50
  * after 10 steps, with no digit animation. A digit change slides +-`distance.stepperDigit` (opacity
@@ -159,6 +160,7 @@ export function Stepper({
     if (String(fixed) !== draft) AccessibilityInfo.announceForAccessibility(valueText ? valueText(fixed) : String(fixed));
   };
 
+  const focusOn = editing && !locked;
   const slop = Math.max(0, (theme.layout.minTouchTarget - theme.typeScale.title2.lineHeight) / 2);
   const text = valueText ? valueText(value) : String(value);
   const accessoryId = Platform.OS === 'ios' ? ACCESSORY_ID : undefined;
@@ -206,7 +208,7 @@ export function Stepper({
           borderRadius: theme.radius.control,
           borderCurve: 'continuous',
           borderWidth: theme.stroke.thin,
-          borderColor: locked ? c.border : c.outline,
+          borderColor: locked ? c.border : focusOn ? c.primary : c.outline,
           paddingHorizontal: theme.layout.cardPadding,
           paddingVertical: theme.layout.listRowPaddingV,
         },
@@ -241,7 +243,7 @@ export function Stepper({
           onPressIn={() => startHold(-1)}
           onPressOut={endHold}
         />
-        {editing && !locked ? (
+        {focusOn ? (
           <TextInput
             autoFocus
             value={draft}
@@ -251,8 +253,9 @@ export function Stepper({
             selectTextOnFocus
             inputAccessoryViewID={accessoryId}
             selectionColor={c.primary}
+            cursorColor={c.primary}
             maxFontSizeMultiplier={theme.typeScale.title2.maxFontSizeMultiplier}
-            style={{ ...numberStyle, minWidth: 48, color: c.textPrimary, fontSize: theme.typeScale.title2.fontSize, fontWeight: '700', paddingVertical: 0 }}
+            style={{ ...numberStyle, minWidth: 48, color: c.textPrimary, fontSize: theme.typeScale.title2.fontSize, fontWeight: '700', paddingVertical: 0, ...NO_WEB_OUTLINE }}
           />
         ) : (
           <Pressable
@@ -296,6 +299,7 @@ export function Stepper({
           onPressOut={endHold}
         />
       </View>
+      {focusOn ? <FocusRing color={c.primary} radius={innerRadius(theme.radius.control, theme.stroke.thin)} /> : null}
       {Platform.OS === 'ios' ? (
         <InputAccessoryView nativeID={ACCESSORY_ID}>
           <View style={{ backgroundColor: c.surfaceElevated, alignItems: 'flex-end', padding: theme.spacing.sm }}>

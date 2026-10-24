@@ -306,11 +306,12 @@ export const COMPONENT_SIZE = {
   likeBurst: 84,
 } as const;
 
-/** Line widths. Only these three are allowed. */
+/** Line widths. Only these four are allowed. focusRing: inner focus ring of text inputs / stepper only — never for selection or decoration. */
 export const STROKE = {
   hairline: StyleSheet.hairlineWidth,
   thin: 1,
   emphasis: 1.5,
+  focusRing: 2,
 } as const;
 
 export const AVATAR_SIZE = {

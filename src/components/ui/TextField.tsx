@@ -5,8 +5,9 @@ import { Pressable, TextInput, View } from 'react-native';
 import type { TextInputProps } from 'react-native';
 
 import { ICON } from '../../lib/icons';
-import { useTheme } from '../../lib/theme';
+import { innerRadius, useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
+import { FocusRing, NO_WEB_OUTLINE } from './FocusRing';
 import { IconButton } from './IconButton';
 import { InlineError } from './InlineError';
 import { Spinner } from './ProgressBar';
@@ -55,9 +56,10 @@ export interface TextFieldProps
 }
 
 /**
- * `surfaceAlt` field, radius `control` 12 (search: capsule), continuous curve, horizontal padding 14. Outline: 1pt `outline` (3:1) -> focused 1.5pt `primary` -> error 1.5pt
- * `error`; read-only / disabled 1pt `border`. Padding drops 0.5 when the outline thickens so nothing
- * jumps. The outline switches instantly (no animation). Text is `body` 17 so iOS never zooms in.
+ * `surfaceAlt` field, radius `control` 12 (search: capsule), continuous curve, horizontal padding 14. Outline: 1pt `outline` (3:1) -> error 1.5pt `error`;
+ * read-only / disabled 1pt `border`. focused: 1pt primary + inner 2pt ring (STROKE.focusRing), fill stays surfaceAlt; layout never shifts
+ * (the ring is an absolute overlay). Error + focus keeps the error colour on outline and ring. Padding drops 0.5 for the 1.5pt error outline.
+ * The outline and ring switch instantly (no animation). Text is `body` 17 so iOS never zooms in.
  * Tapping anywhere (label included) focuses. Keep the user's input on error.
  */
 export function TextField({
@@ -89,12 +91,13 @@ export function TextField({
   const search = variant === 'search';
   const locked = readOnly || disabled;
   const { thin, emphasis } = theme.stroke;
-  const borderW = error || (focused && !locked) ? emphasis : thin;
-  const borderColor = error ? c.error : locked ? c.border : focused ? c.primary : c.outline;
-  // The outline grows 1 -> 1.5, so the padding shrinks by 0.5: the outer size never changes.
+  const focusOn = focused && !locked;
+  const borderW = error ? emphasis : thin;
+  const borderColor = error ? c.error : locked ? c.border : focusOn ? c.primary : c.outline;
+  // The error outline is 1.5, so the padding shrinks by 0.5: the outer size never changes.
   const pad = (base: number): number => base - (borderW - thin);
   const minHeight = multiline ? 96 : search ? theme.componentSize.searchFieldHeight : theme.componentSize.textFieldMinHeight;
-  const maxLines = theme.typeScale.body.lineHeight * 5 + 2 * 14;
+  const maxLines = theme.typeScale.body.lineHeight * 5 + 2 * (14 + thin);
   const textColor = disabled ? c.textDisabled : readOnly ? c.textSecondary : c.textPrimary;
   const baseLabel = label ?? accessibilityLabel ?? '';
   const a11yLabel = readOnly
@@ -143,6 +146,7 @@ export function TextField({
           placeholder={placeholder}
           placeholderTextColor={c.textPlaceholder}
           selectionColor={c.primary}
+          cursorColor={c.primary}
           editable={!locked}
           multiline={multiline}
           secureTextEntry={secureTextEntry && !revealed}
@@ -167,6 +171,7 @@ export function TextField({
             paddingVertical: 0,
             minHeight: multiline ? 0 : undefined,
             letterSpacing: 0,
+            ...(focusOn ? NO_WEB_OUTLINE : null),
           }}
         />
         {loading && search ? (
@@ -204,6 +209,7 @@ export function TextField({
             }}
           />
         ) : null}
+        {focusOn ? <FocusRing color={borderColor} radius={search ? theme.radius.full : innerRadius(theme.radius.control, borderW)} /> : null}
       </Pressable>
       {error || helper || (showCount && maxLength) ? (
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: theme.spacing.xs }}>
