@@ -1,6 +1,6 @@
 /** Chip: disabled + selected keeps the inverted fill and `background` text; tile layout; outer gap ring. */
 import '../../../lib/i18n';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import React from 'react';
 import { StyleSheet, Text } from 'react-native';
 
@@ -53,5 +53,35 @@ describe('ChoiceGrid', () => {
       </ChoiceGrid>,
     );
     expect(UNSAFE_root.findAll((n: ReactTestInstance) => n.props?.accessibilityRole === 'radiogroup' && n.props?.accessibilityLabel === 'Colour').length).toBeGreaterThan(0);
+  });
+
+  it.each([357, 361, 377, 393])('lays 12 choices out as 2 rows of 6 equal flex cells at width %i', (w) => {
+    const labels = ['VB', 'V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'];
+    const { UNSAFE_root } = wrap(
+      <ChoiceGrid accessibilityLabel="Grade" fontScale={1}>
+        {labels.map((l) => (
+          <Chip key={l} label={l} size="large" />
+        ))}
+      </ChoiceGrid>,
+    );
+    const group = UNSAFE_root.findAll((n: ReactTestInstance) => n.props?.accessibilityRole === 'radiogroup')[0];
+    fireEvent(group, 'layout', { nativeEvent: { layout: { x: 0, y: 0, width: w, height: 100 } } });
+    const rows = UNSAFE_root.findAll((n: ReactTestInstance) => typeof n.type === 'string' && flat(n).flexDirection === 'row' && flat(n).columnGap === 8 && n.children.length === 6);
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      const cells = row.children as ReactTestInstance[];
+      expect(cells.every((c) => flat(c).flex === 1 && flat(c).width === undefined)).toBe(true);
+    }
+  });
+
+  it('gives grid chips tight side padding and a centred label', () => {
+    const { UNSAFE_root } = wrap(
+      <ChoiceGrid accessibilityLabel="Grade" fontScale={1}>
+        <Chip label="V10" size="large" />
+      </ChoiceGrid>,
+    );
+    const pad = UNSAFE_root.findAll((n: ReactTestInstance) => flat(n).paddingHorizontal !== undefined);
+    expect(pad.every((n: ReactTestInstance) => flat(n).paddingHorizontal <= 8)).toBe(true);
+    expect(UNSAFE_root.findAllByType(Text).every((t: ReactTestInstance) => flat(t).textAlign === 'center')).toBe(true);
   });
 });

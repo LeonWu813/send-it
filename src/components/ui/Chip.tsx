@@ -8,6 +8,7 @@ import type { IoniconName } from '../../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
 import { CONTINUOUS, useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
+import { ChoiceGridContext } from './ChoiceGrid';
 import { IconButton } from './IconButton';
 import { PressableScale } from './PressableScale';
 
@@ -129,7 +130,9 @@ export function Chip({
   }, [selected]);
 
   const { chipHeight, tapeSwatch, colorTile } = theme.componentSize;
+  const inGrid = React.useContext(ChoiceGridContext);
   const tile = layout === 'tile';
+  const fillCell = tile || inGrid;
   const large = size === 'large';
   const height = tile ? colorTile.minHeight : large ? theme.layout.minTouchTarget : chipHeight;
   const slop = large || tile ? 0 : Math.max(0, (theme.layout.minTouchTarget - chipHeight) / 2);
@@ -168,7 +171,7 @@ export function Chip({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          paddingHorizontal: tile ? 0 : 14,
+          paddingHorizontal: tile ? 0 : inGrid ? 8 : 14,
           ...(tile ? { flexDirection: 'column' as const, paddingVertical: colorTile.padV } : null),
         }}
       >
@@ -213,8 +216,8 @@ export function Chip({
             <Ionicons name={selected && iconSelected ? iconSelected : icon} size={glyph} color={c[textColor]} />
           </Animated.View>
         ) : null}
-        <View style={{ flexShrink: 1, alignSelf: tile ? 'stretch' : undefined }}>
-          <AppText variant={textVariant} weight="500" color={offText} numberOfLines={tile ? undefined : 1} style={tile ? { textAlign: 'center' } : undefined}>
+        <View style={{ flexShrink: 1, ...(tile ? { alignSelf: 'stretch' as const } : inGrid ? { flexGrow: 1 } : null) }}>
+          <AppText variant={textVariant} weight="500" color={offText} numberOfLines={tile ? undefined : 1} style={fillCell ? { textAlign: 'center' } : undefined}>
             {label}
           </AppText>
           <Animated.View
@@ -223,7 +226,7 @@ export function Chip({
             importantForAccessibility="no-hide-descendants"
             style={{ position: 'absolute', left: 0, right: 0, opacity: fill }}
           >
-            <AppText variant={textVariant} weight="500" color={onText} numberOfLines={tile ? undefined : 1} style={tile ? { textAlign: 'center' } : undefined}>
+            <AppText variant={textVariant} weight="500" color={onText} numberOfLines={tile ? undefined : 1} style={fillCell ? { textAlign: 'center' } : undefined}>
               {label}
             </AppText>
           </Animated.View>

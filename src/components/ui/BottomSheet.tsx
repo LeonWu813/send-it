@@ -25,6 +25,7 @@ import { Button } from './Button';
 import { IconButton } from './IconButton';
 import { InlineError } from './InlineError';
 
+export type BottomSheetConfirmTone = 'primary' | 'destructive';
 export type BottomSheetVariant = 'content' | 'list-single' | 'form' | 'confirm';
 export type BottomSheetPresentation = 'floating' | 'attached';
 
@@ -56,6 +57,8 @@ export interface BottomSheetProps {
   footer?: React.ReactNode;
   /** confirm: destructive button (top, lg, full width). */
   confirmLabel?: string;
+  /** confirm: tone of the top button. `destructive` (default) for deletes; `primary` for a normal confirmation. */
+  confirmTone?: BottomSheetConfirmTone;
   /** confirm: optional leading icon on the button. No icon by default; pass ICON.delete only for deletes. */
   confirmIcon?: IoniconName;
   onConfirm?: () => void;
@@ -122,6 +125,7 @@ export function BottomSheet({
   footer,
   confirmLabel,
   confirmIcon,
+  confirmTone = 'destructive',
   onConfirm,
   cancelLabel,
   error,
@@ -305,7 +309,7 @@ export function BottomSheet({
     variant === 'confirm' ? (
       <View style={{ marginTop: children ? theme.layout.sectionGap : theme.spacing.md }}>
         <Button
-          variant="destructive"
+          variant={confirmTone}
           size="lg"
           fullWidth
           label={confirmLabel ?? ''}

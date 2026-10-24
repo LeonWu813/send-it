@@ -53,6 +53,8 @@ export interface PageParameters {
   chrome?: boolean;
 }
 
+const BEZEL = StyleSheet.hairlineWidth * 2;
+
 const storyUser = { user: { id: 'story-user-me' } } as unknown as Session;
 const noop = (): void => {};
 
@@ -122,12 +124,8 @@ function PhoneFrame({ page, children }: { page: PageParameters; children: React.
     <SafeAreaFrameContext.Provider value={{ x: 0, y: 0, width: PHONE.width, height: PHONE.height }}>
       <SafeAreaInsetsContext.Provider value={insets}>
         <LayoutWidthOverrideContext.Provider value={PHONE.width}>
-        <View
-          style={[
-            styles.frame,
-            { backgroundColor: theme.colors.background, borderColor: theme.colors.border },
-          ]}
-        >
+        <View style={[styles.bezel, { borderColor: theme.colors.border }]}>
+        <View style={[styles.frame, { backgroundColor: theme.colors.background }]}>
           <UnreadCountProvider session={storyUser}>
             <ToastProvider bottomOffset={toastBottomOffset}>
               <CelebrationHost>
@@ -135,6 +133,7 @@ function PhoneFrame({ page, children }: { page: PageParameters; children: React.
               </CelebrationHost>
             </ToastProvider>
           </UnreadCountProvider>
+        </View>
         </View>
         </LayoutWidthOverrideContext.Provider>
       </SafeAreaInsetsContext.Provider>
@@ -150,11 +149,16 @@ export const withPhoneFrame: Decorator = (Story, context) => (
 );
 
 const styles = StyleSheet.create({
+  // The border sits OUTSIDE the 393x852 content box (outer view is content + border), so layouts get true device width.
+  bezel: {
+    borderRadius: 48 + BEZEL,
+    borderWidth: BEZEL,
+    overflow: 'hidden',
+  },
   frame: {
     width: PHONE.width,
     height: PHONE.height,
     borderRadius: 48,
-    borderWidth: StyleSheet.hairlineWidth * 2,
     overflow: 'hidden',
   },
   fill: { flex: 1 },
