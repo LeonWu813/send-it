@@ -237,6 +237,7 @@ export default function EditProfileScreen({
         title={t('profile.discardConfirmTitle')}
         description={t('profile.discardConfirmBody')}
         confirmLabel={t('profile.discard')}
+        confirmIcon={ICON.delete.outline}
         cancelLabel={t('profile.keepEditing')}
         onConfirm={() => {
           setDiscardOpen(false);
