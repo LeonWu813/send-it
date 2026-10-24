@@ -58,6 +58,7 @@ import {
 
 import { AppText } from '../../../components/ui/AppText';
 
+import { ICON } from '../../../lib/icons';
 import i18n from '../../../lib/i18n';
 import type { SupportedLanguage } from '../../../lib/i18n';
 import { supabase } from '../../../lib/supabase';
@@ -337,7 +338,7 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
               accessibilityLabel={t('settings.notifications')}
             >
               <AppText variant="body">{t('settings.notifications')}</AppText>
-              <Ionicons name="chevron-forward" size={theme.iconSize.sm} color={theme.colors.textSecondary} />
+              <Ionicons name={ICON.forward.outline} size={theme.iconSize.sm} color={theme.colors.textSecondary} />
             </Pressable>
           ) : null}
           <Pressable
@@ -351,7 +352,7 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
             accessibilityLabel={t('settings.blockedAccounts')}
           >
             <AppText variant="body">{t('settings.blockedAccounts')}</AppText>
-            <Ionicons name="chevron-forward" size={theme.iconSize.sm} color={theme.colors.textSecondary} />
+            <Ionicons name={ICON.forward.outline} size={theme.iconSize.sm} color={theme.colors.textSecondary} />
           </Pressable>
         </View>
 
@@ -395,7 +396,7 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
                 <ActivityIndicator size="small" color={theme.colors.error} />
               ) : (
                 <>
-                  <Ionicons name="log-out-outline" size={theme.iconSize.md} color={theme.colors.error} />
+                  <Ionicons name={ICON.signOut.outline} size={theme.iconSize.md} color={theme.colors.error} />
                   <AppText variant="body" color="error">{t('profile.logout')}</AppText>
                 </>
               )}
