@@ -34,11 +34,11 @@ import {
   EmptyState,
   FistBumpIcon,
   InlineError,
+  PageLoading,
   PressableScale,
-  Skeleton,
-  SkeletonGroup,
-  useSkeletonPhase,
+  useLoadingPhase,
 } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, ICON_SIZE, useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader } from '@/lib/AppHeaderContext';
 import {
@@ -98,7 +98,7 @@ export default function NotificationInboxScreen({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const skeletonPhase = useSkeletonPhase(loading);
+  const loadingPhase = useLoadingPhase(loading);
 
   // ── Load and mark-read ──────────────────────────────────────────────────────
 
@@ -154,25 +154,36 @@ export default function NotificationInboxScreen({
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  // Full-page loading: PageLoading after 300ms; after 10s E4 replaces it (a late success swaps back to content).
   if (loading) {
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') {
+      return (
+        <View style={styles.root}>
+          <EmptyState
+            variant="error"
+            title={t('notifications.loadErrorTitle')}
+            description={t('notifications.loadErrorDescription')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => void handleRefresh()}
+          />
+        </View>
+      );
+    }
+    return <View style={styles.root} />;
+  }
+
+  // Whole-page failure (nothing to show): E4. With rows on screen a failed refresh keeps the block notice below.
+  if (error !== null && notifications.length === 0) {
     return (
       <View style={styles.root}>
-        {skeletonPhase !== 'idle' && (
-          <SkeletonGroup label={t('notifications.title')} style={styles.skeletonList}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i}>
-                <View style={styles.skeletonRow}>
-                  <Skeleton shape="circle" width={theme.avatarSize.md} height={theme.avatarSize.md} />
-                  <View style={styles.body}>
-                    <Skeleton shape="text" textVariant="subhead" width="80%" />
-                    <Skeleton shape="text" textVariant="footnote" width="30%" />
-                  </View>
-                </View>
-                {i < 3 && <View style={styles.divider} />}
-              </View>
-            ))}
-          </SkeletonGroup>
-        )}
+        <EmptyState
+          variant="error"
+          title={t('notifications.loadErrorTitle')}
+          description={t('notifications.loadErrorDescription')}
+          primaryLabel={t('common.retry')}
+          onPrimary={() => void handleRefresh()}
+        />
       </View>
     );
   }
@@ -190,7 +201,7 @@ export default function NotificationInboxScreen({
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => void handleRefresh()}
-              tintColor={theme.colors.primary}
+              tintColor={theme.colors.textSecondary}
             />
           }
         >
@@ -214,9 +225,12 @@ export default function NotificationInboxScreen({
 
           {/* Empty state */}
           {error === null && notifications.length === 0 && (
-            <View style={styles.emptyCard}>
-              <EmptyState variant="inline" title={t('notifications.empty')} />
-            </View>
+            <EmptyState
+              variant="page"
+              icon={ICON.notifications.outline}
+              title={t('notifications.emptyTitle')}
+              description={t('notifications.emptyDescription')}
+            />
           )}
 
           {/* L-1: grouped 今天 / 本週 / 更早; each group is a surface card, never on the sand page */}
@@ -400,30 +414,6 @@ function makeStyles(
       borderRadius: theme.radius.card,
       ...CONTINUOUS,
       overflow: 'hidden',
-    },
-    emptyCard: {
-      marginTop: theme.spacing.md,
-      backgroundColor: theme.colors.surface,
-      marginHorizontal: screenMargin,
-      paddingHorizontal: theme.spacing.md,
-      borderRadius: theme.radius.card,
-      ...CONTINUOUS,
-      overflow: 'hidden',
-    },
-    skeletonList: {
-      backgroundColor: theme.colors.surface,
-      marginHorizontal: screenMargin,
-      marginTop: theme.spacing.md,
-      borderRadius: theme.radius.card,
-      ...CONTINUOUS,
-      overflow: 'hidden',
-    },
-    skeletonRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.smd,
-      height: INBOX_ROW_HEIGHT,
-      paddingHorizontal: theme.spacing.md,
     },
     // L-1: fixed 72pt two-line row (Avatar md 48)
     notificationRow: {

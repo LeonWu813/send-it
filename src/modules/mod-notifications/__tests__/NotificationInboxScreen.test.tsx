@@ -97,7 +97,7 @@ describe('NotificationInboxScreen', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('No notifications yet. Like activity from others will appear here.'),
+        screen.getByText('No notifications yet'),
       ).toBeTruthy();
     });
   });
@@ -168,9 +168,8 @@ describe('NotificationInboxScreen', () => {
     );
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Failed to load notifications. Please try again.'),
-      ).toBeTruthy();
+      expect(screen.getByText("Couldn't load notifications")).toBeTruthy();
+      expect(screen.getByText('Retry')).toBeTruthy();
     });
   });
 

@@ -20,11 +20,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
   AppText,
+  EmptyState,
   InlineError,
   ListRow,
-  Skeleton,
-  SkeletonGroup,
-  useSkeletonPhase,
+  PageLoading,
+  useLoadingPhase,
 } from '../../../components/ui';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader } from '@/lib/AppHeaderContext';
@@ -63,7 +63,7 @@ export default function NotificationPreferenceScreen({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const skeletonPhase = useSkeletonPhase(loading);
+  const loadingPhase = useLoadingPhase(loading);
 
   // ── Load preference ─────────────────────────────────────────────────────────
 
@@ -112,17 +112,26 @@ export default function NotificationPreferenceScreen({
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  // Full-page loading: PageLoading after 300ms; after 10s E4 replaces it (a late success swaps back to content).
   if (loading) {
-    return (
-      <View style={styles.root}>
-        {skeletonPhase !== 'idle' && (
-          <SkeletonGroup label={t('notifications.preferencesTitle')} style={styles.skeletonRow}>
-            <Skeleton shape="text" textVariant="subhead" width="60%" />
-            <Skeleton shape="text" textVariant="caption1" width="90%" />
-          </SkeletonGroup>
-        )}
-      </View>
-    );
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') {
+      return (
+        <View style={styles.root}>
+          <EmptyState
+            variant="error"
+            title={t('notifications.loadPreferenceErrorTitle')}
+            description={t('notifications.loadErrorDescription')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => {
+              setLoading(true);
+              void loadPreference().finally(() => setLoading(false));
+            }}
+          />
+        </View>
+      );
+    }
+    return <View style={styles.root} />;
   }
 
   return (
@@ -174,17 +183,6 @@ function makeStyles(
       backgroundColor: theme.colors.background,
       // R0: with the nested header the safe-area inset is already applied by the header
       paddingTop: hasHeader ? 0 : topInset + theme.spacing.md,
-    },
-    skeletonRow: {
-      backgroundColor: theme.colors.surface,
-      marginHorizontal: screenMargin,
-      minHeight: theme.layout.listRowMinHeight,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.layout.listRowPaddingV,
-      gap: theme.spacing.xs,
-      borderRadius: theme.radius.card,
-      ...CONTINUOUS,
-      overflow: 'hidden',
     },
     group: {
       marginHorizontal: screenMargin,

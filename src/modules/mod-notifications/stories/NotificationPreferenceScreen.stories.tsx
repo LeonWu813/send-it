@@ -54,7 +54,7 @@ export const Populated: Story = { args: { state: 'on' } };
 /** Toggle OFF (beta_video_like = false). */
 export const PreferenceOff: Story = { name: 'Preference Off', args: { state: 'off' } };
 
-/** Preference fetch never resolves: skeleton. */
+/** Preference fetch never resolves: PageLoading (spinner); after 10s it swaps to the E4 error. */
 export const Loading: Story = { args: { state: 'loading' } };
 
 // No Error story: the stub cannot return query errors.

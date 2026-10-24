@@ -81,7 +81,7 @@ const FAKE_ACTORS = [
   { id: 'u-david', display_name: '王大明', avatar_url: null },
 ];
 
-type StubState = 'populated' | 'empty' | 'loading';
+type StubState = 'populated' | 'empty' | 'loading' | 'error';
 
 /** Seed stubs synchronously so the screen's first fetch sees the data. */
 function WithStubs({ state, children }: { state: StubState; children: React.ReactNode }): React.JSX.Element {
@@ -93,6 +93,9 @@ function WithStubs({ state, children }: { state: StubState; children: React.Reac
     setStubData('beta_videos', FAKE_VIDEOS);
   } else if (state === 'loading') {
     setStubData('notifications', STUB_PENDING);
+  } else if (state === 'error') {
+    // The stub cannot return query errors; a non-array payload makes fetchNotifications throw.
+    setStubData('notifications', {} as never);
   }
   return <>{children}</>;
 }
@@ -127,7 +130,8 @@ export const Populated: Story = { args: { state: 'populated' } };
 /** No notifications: empty-state UI. */
 export const Empty: Story = { args: { state: 'empty' } };
 
-/** Fetch never resolves: skeleton rows. */
+/** Fetch never resolves: PageLoading (spinner); after 10s it swaps to the E4 error. */
 export const Loading: Story = { args: { state: 'loading' } };
 
-// No Error story: the stub cannot return query errors.
+/** Whole-page load failure: E4 with retry. */
+export const Error: Story = { args: { state: 'error' } };
