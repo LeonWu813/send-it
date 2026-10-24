@@ -65,7 +65,7 @@ export default function GymListScreen({
   const { screenMargin } = useLayout();
   const header = useAppHeaderRoot();
   const topPad = header.contentTopInset > 0 ? header.contentTopInset : theme.spacing.md;
-  const styles = makeStyles(theme, screenMargin, topPad, header.contentBottomInset);
+  const styles = makeStyles(theme, screenMargin, topPad, header.contentTopInset + theme.spacing.md, header.contentBottomInset);
 
   const [gyms, setGyms] = useState<GymSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -353,6 +353,7 @@ function makeStyles(
   theme: ReturnType<typeof useTheme>['theme'],
   screenMargin: number,
   topPad: number,
+  listTopPad: number,
   bottomInset: number,
 ) {
   return StyleSheet.create({
@@ -381,7 +382,8 @@ function makeStyles(
       height: theme.layout.cardGap,
     },
     listContent: {
-      paddingTop: topPad,
+      // R2: content starts 16 below the header, same as Home.
+      paddingTop: listTopPad,
       paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.lg,
     },
     card: {
