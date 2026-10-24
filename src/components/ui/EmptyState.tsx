@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import { Animated, View, useWindowDimensions } from 'react-native';
-import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 
 import { ICON } from '../../lib/icons';
 import type { IoniconName } from '../../lib/icons';
@@ -16,14 +16,18 @@ import type { OnSurface } from './Button';
 export type EmptyStateVariantName = 'page' | 'section' | 'filtered' | 'error';
 /**
  * @deprecated aliases kept one version so unmigrated screens keep compiling: `prompt` / `firstUse` /
- * `private` render as `page` (private keeps its lock icon; the lime card and `eyebrow` are retired),
+ * `private` render as `page` (no icon; the lime card and `eyebrow` are retired),
  * `inline` renders as `section`, `slot` still draws the old dashed card (retired; do not use).
  */
 export type EmptyStateDeprecatedVariant = 'slot' | 'prompt' | 'firstUse' | 'private' | 'inline';
 export type EmptyStateVariant = EmptyStateVariantName | EmptyStateDeprecatedVariant;
 
-/** react-native-web passes this through as CSS `text-wrap: balance`; native ignores it. */
-const BALANCED_WRAP = { textWrap: 'balance' } as TextStyle;
+/** U+2060 WORD JOINER: zero-width, forbids a break on either side. */
+const WORD_JOINER = '\u2060';
+/** Keeps a quoted 「…」 term on one line: joins every character inside the brackets (CJK has no spaces to hold on to). */
+export function keepQuotedTogether(text: string): string {
+  return text.replace(/「([^」]*)」/g, (_m, inner: string) => `「${WORD_JOINER}${Array.from(inner).join(WORD_JOINER)}${WORD_JOINER}」`);
+}
 
 const ALIAS: Record<EmptyStateDeprecatedVariant, EmptyStateVariantName | 'slot'> = {
   slot: 'slot',
@@ -36,16 +40,19 @@ const ALIAS: Record<EmptyStateDeprecatedVariant, EmptyStateVariantName | 'slot'>
 export interface EmptyStateProps {
   /**
    * E1 page: the whole screen has no content. Centred, top = content top + 48 (not vertically centred),
-   * 56 disc icon + title2 + subhead + optional primary (hug) + optional ghost link.
+   * title2 + subhead + optional primary (hug) + optional ghost link. No icon: the text carries it.
    * E2 section: one region of a populated screen. Left aligned on the keyline: one subhead sentence
    * (`description`) + optional ghost `sm` action under it. No icon, no title, no link.
-   * E3 filtered: data exists but the filter / search excluded it. Same layout as E1; the primary is "clear filters".
+   * E3 filtered: data exists but the filter / search excluded it. Same layout as E1 (no icon); the primary is "clear filters".
    * E4 error: the page failed to load. Same layout as E1 with an `error` icon; the primary is a secondary
    * "Retry" (reload icon) in `primaryLabel` / `onPrimary`. No link.
    * The screen decides which one; see the spec before adding a fifth.
    */
   variant?: EmptyStateVariant;
-  /** Concept glyph (`ICON.followers.outline`, ...) for page / filtered. error defaults to the alert glyph, filtered to search, private (alias) to the lock. */
+  /**
+   * @deprecated page / filtered no longer draw an icon; ignored there (kept so callers compile). Only `error`
+   * draws one: the alert glyph by default (a severity cue next to the red title), or this value.
+   */
   icon?: IoniconName;
   /** @deprecated retired with the lime prompt card; ignored. */
   eyebrow?: string;
@@ -70,7 +77,7 @@ export interface EmptyStateProps {
 
 /**
  * Only shown when it is certain there is no data (never while loading). Fades in over `short` (enter).
- * Title + description read as one VoiceOver node. At font scale >= 1.6 the icon is hidden. Centred
+ * Title + description read as one VoiceOver node. The error icon is hidden at font scale >= 1.6. Centred
  * variants centre every child, buttons and link included (each action sits in an `alignSelf: center`
  * wrapper because Button itself is `alignSelf: flex-start`).
  */
@@ -164,7 +171,7 @@ export function EmptyState({
   }
 
   const isError = variant === 'error';
-  const glyph = icon ?? (variantProp === 'private' ? ICON.locked.outline : isError ? ICON.error.outline : variant === 'filtered' ? ICON.search.outline : undefined);
+  const glyph = isError ? (icon ?? ICON.error.outline) : undefined;
   const showIcon = !!glyph && fontScale < 1.6;
   const label = [title, description].filter(Boolean).join('. ');
   const primaryVariant = isError ? 'secondary' : primaryTone;
@@ -174,7 +181,6 @@ export function EmptyState({
       style={[
         {
           width: '100%',
-          maxWidth: theme.componentSize.emptyStateMaxWidth,
           alignSelf: 'center',
           alignItems: 'center',
           paddingTop: theme.layout.pageLoadingOffset,
@@ -197,7 +203,7 @@ export function EmptyState({
               marginBottom: theme.spacing.smd,
             }}
           >
-            <Ionicons name={glyph as IoniconName} size={theme.iconSize.lg} color={isError ? theme.colors.error : theme.colors.textSecondary} />
+            <Ionicons name={glyph as IoniconName} size={theme.iconSize.lg} color={theme.colors.error} />
           </View>
         ) : null}
         {title ? (
@@ -210,12 +216,9 @@ export function EmptyState({
             variant="subhead"
             color="textSecondary"
             align="center"
-            // No orphans: Android balances the lines, iOS pushes a short last line out, web uses text-wrap: balance.
-            textBreakStrategy="balanced"
-            lineBreakStrategyIOS="push-out"
-            style={[{ marginTop: title ? theme.spacing.xs : 0 }, BALANCED_WRAP]}
+            style={{ marginTop: title ? theme.spacing.xs : 0 }}
           >
-            {description}
+            {keepQuotedTogether(description)}
           </AppText>
         ) : null}
       </View>

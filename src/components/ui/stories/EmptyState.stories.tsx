@@ -56,7 +56,7 @@ const meta: Meta<EmptyStateProps> = {
       options: ['page', 'section', 'filtered', 'error'],
       description: 'E1 page / E2 section / E3 filtered / E4 error. Old names (prompt, firstUse, private, inline, slot) are deprecated aliases kept one version.',
     },
-    icon: { control: 'select', options: Object.keys(glyphs), mapping: glyphs },
+    icon: { control: 'select', options: Object.keys(glyphs), mapping: glyphs, description: 'Deprecated: ignored by page / filtered; only error draws an icon.' },
     primaryTone: { control: 'inline-radio', options: ['primary', 'secondary'] },
     onPrimary: { action: 'primary' },
     onSecondary: { action: 'secondary' },
@@ -66,13 +66,12 @@ export default meta;
 
 export const Playground: StoryObj<EmptyStateProps> = {};
 
-/** E1 page: nothing on the screen. Icon disc, title, description, optional primary (hug) and centred link. */
+/** E1 page: nothing on the screen. Title, description, optional primary (hug) and centred link. */
 export const Page: StoryObj<EmptyStateProps> = {
   render: () => (
     <Frame>
       <EmptyState
         variant="page"
-        icon={ICON.route.outline}
         title="這間岩館還沒有路線"
         description="看到牆上的路線，就新增第一條。"
         primaryLabel="新增路線"
@@ -100,7 +99,6 @@ export const Filtered: StoryObj<EmptyStateProps> = {
     <Frame>
       <EmptyState
         variant="filtered"
-        icon={ICON.filter.outline}
         title="找不到符合的路線"
         description="換個難度或顏色試試。"
         primaryLabel="清除篩選"
@@ -125,10 +123,10 @@ export const Compositions: StoryObj<EmptyStateProps> = {
   render: () => (
     <View style={{ rowGap: 8 }}>
       <Frame>
-        <EmptyState variant="page" icon={ICON.block.outline} title="沒有封鎖任何人" />
+        <EmptyState variant="page" title="沒有封鎖任何人" />
       </Frame>
       <Frame>
-        <EmptyState variant="page" icon={ICON.followers.outline} title="還沒有追蹤者" description="分享 Beta 影片，讓其他攀岩者認識你。" />
+        <EmptyState variant="page" title="還沒有追蹤者" description="分享 Beta 影片，讓其他攀岩者認識你。" />
       </Frame>
     </View>
   ),
@@ -138,7 +136,7 @@ export const Compositions: StoryObj<EmptyStateProps> = {
 export const AllVariants: StoryObj<EmptyStateProps> = {
   render: () => (
     <View style={{ padding: 16, width: 375, rowGap: 24 }}>
-      <EmptyState variant="page" icon={ICON.followers.outline} title="還沒有追蹤者" description="分享 Beta 影片，讓其他攀岩者認識你。" style={{ paddingTop: 0 }} />
+      <EmptyState variant="page" title="還沒有追蹤者" description="分享 Beta 影片，讓其他攀岩者認識你。" style={{ paddingTop: 0 }} />
       <EmptyState variant="section" description="還沒有完攀紀錄。" secondaryLabel="找路線" />
       <EmptyState variant="filtered" title="找不到符合的岩館" description="換個關鍵字或城市試試。" primaryLabel="清除篩選" style={{ paddingTop: 0 }} />
       <EmptyState variant="error" title="路線載不出來" description="檢查網路後再試一次。" primaryLabel="重試" style={{ paddingTop: 0 }} />

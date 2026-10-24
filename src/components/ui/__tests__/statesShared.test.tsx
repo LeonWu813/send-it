@@ -1,12 +1,13 @@
 /** Shared states round: PageLoading, useLoadingPhase, EmptyState variants/aliases, InlineError severities, IconButton loading. */
 import '../../../lib/i18n';
+import { Ionicons } from '@expo/vector-icons';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react-native';
 import React from 'react';
-import { AccessibilityInfo, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Dimensions, StyleSheet } from 'react-native';
 
 import { ICON } from '../../../lib/icons';
 import { SPINNER, ThemeProvider, buildTheme } from '../../../lib/theme';
-import { EmptyState } from '../EmptyState';
+import { EmptyState, keepQuotedTogether } from '../EmptyState';
 import { IconButton } from '../IconButton';
 import { InlineError } from '../InlineError';
 import { PageLoading } from '../PageLoading';
@@ -106,6 +107,25 @@ describe('EmptyState', () => {
       expect(screen.getAllByText(/Alias/).length).toBeGreaterThan(0);
       unmount();
     }
+  });
+
+  it('page and filtered draw no icon, even when one is passed; error keeps its alert icon', () => {
+    const dims = jest.spyOn(Dimensions, 'get').mockReturnValue({ width: 393, height: 852, scale: 3, fontScale: 1 });
+    for (const variant of ['page', 'filtered', 'private'] as const) {
+      const { unmount } = wrap(<EmptyState variant={variant} icon={ICON.route.outline} title="T" description="D" />);
+      expect(screen.UNSAFE_queryAllByType(Ionicons)).toHaveLength(0);
+      unmount();
+    }
+    wrap(<EmptyState variant="error" title="T" description="D" />);
+    dims.mockRestore();
+    expect(screen.UNSAFE_queryAllByType(Ionicons)).toHaveLength(1);
+  });
+
+  it('keepQuotedTogether joins the characters inside 「」 with U+2060 only', () => {
+    const out = keepQuotedTogether('點「記錄完攀」保存。');
+    expect(out).toBe('點「\u2060記\u2060錄\u2060完\u2060攀\u2060」保存。');
+    expect(out.replace(/\u2060/g, '')).toBe('點「記錄完攀」保存。');
+    expect(keepQuotedTogether('no quotes')).toBe('no quotes');
   });
 
   it('section is left aligned (no centring)', () => {
