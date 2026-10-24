@@ -9,34 +9,55 @@ import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
 import { useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
 import { Button } from './Button';
-import { Card } from './Card';
 import { PressableScale } from './PressableScale';
 import type { OnSurface } from './Button';
 
-export type EmptyStateVariant = 'slot' | 'prompt' | 'firstUse' | 'filtered' | 'private' | 'inline';
+/** The four empty-state variants (states-audit-ux 1.1). */
+export type EmptyStateVariantName = 'page' | 'section' | 'filtered' | 'error';
+/**
+ * @deprecated aliases kept one version so unmigrated screens keep compiling: `prompt` / `firstUse` /
+ * `private` render as `page` (private keeps its lock icon; the lime card and `eyebrow` are retired),
+ * `inline` renders as `section`, `slot` still draws the old dashed card (retired; do not use).
+ */
+export type EmptyStateDeprecatedVariant = 'slot' | 'prompt' | 'firstUse' | 'private' | 'inline';
+export type EmptyStateVariant = EmptyStateVariantName | EmptyStateDeprecatedVariant;
+
+const ALIAS: Record<EmptyStateDeprecatedVariant, EmptyStateVariantName | 'slot'> = {
+  slot: 'slot',
+  prompt: 'page',
+  firstUse: 'page',
+  private: 'page',
+  inline: 'section',
+};
 
 export interface EmptyStateProps {
   /**
-   * slot (v2.2): a list region whose shape is known ("Projects"): 1.5pt dashed `outline`, radius 20, the
-   * WHOLE card is the pressable (`onPrimary`); `primaryLabel` is a visual `secondary sm` hint, not a
-   * separate focus target. prompt: ZERO records: a `primaryContainer` card (eyebrow + title1 + subhead +
-   * `primary md`, left aligned), the only prompt / primary on the page. `firstUse` is an alias of prompt.
-   * filtered: centred title + [Clear filters] primary. private: lock in a 56 disc + title + description +
-   * [Follow]. inline: ONE region of a screen: left-aligned sentence + ghost button.
+   * E1 page: the whole screen has no content. Centred, top = content top + 48 (not vertically centred),
+   * 56 disc icon + title2 + subhead + optional primary (hug) + optional ghost link.
+   * E2 section: one region of a populated screen. Left aligned on the keyline: one subhead sentence
+   * (`description`) + optional ghost `sm` action under it. No icon, no title, no link.
+   * E3 filtered: data exists but the filter / search excluded it. Same layout as E1; the primary is "clear filters".
+   * E4 error: the page failed to load. Same layout as E1 with an `error` icon; the primary is a secondary
+   * "Retry" (reload icon) in `primaryLabel` / `onPrimary`. No link.
+   * The screen decides which one; see the spec before adding a fifth.
    */
   variant?: EmptyStateVariant;
-  /** Concept glyph (`ICON.route.outline`, `ICON.betaVideo.outline`, ...). private defaults to the lock. No illustrations. */
+  /** Concept glyph (`ICON.followers.outline`, ...) for page / filtered. error defaults to the alert glyph, filtered to search, private (alias) to the lock. */
   icon?: IoniconName;
-  /** prompt: small label above the title (`footnote` 600). */
+  /** @deprecated retired with the lime prompt card; ignored. */
   eyebrow?: string;
-  /** Centred variants: what is empty (title2). inline: omit and put the sentence in `description`. */
+  /** page / filtered / error: what is empty (title2, no full stop). section: omit and put the sentence in `description`. */
   title?: string;
-  /** One or two lines: what the user can do about it. */
+  /** page / filtered / error: one or two lines on what to do (end with a full stop). section: the one sentence. */
   description?: string;
-  /** Primary action (centred variants only; fills the width, lg). */
+  /** Primary action, hugs its content (md). Section: the single ghost sm action's label is `secondaryLabel`. */
   primaryLabel?: string;
   onPrimary?: () => void;
-  /** Ghost action (centred: under the primary; inline: the only action). */
+  /** page / filtered: `secondary` instead of `primary` when another primary is already on the page. error is always secondary. */
+  primaryTone?: 'primary' | 'secondary';
+  /** Leading icon on the primary action (error defaults to the retry glyph). */
+  primaryIcon?: IoniconName;
+  /** Ghost action: page / filtered = centred link under the primary; section = the only action, under the sentence. */
   secondaryLabel?: string;
   onSecondary?: () => void;
   /** Surface behind the ghost button (it decides the pressed colour). Default 'background'. */
@@ -45,17 +66,20 @@ export interface EmptyStateProps {
 }
 
 /**
- * Only shown when it is certain there is no data (never while loading, never on error). Fades in over
- * `short` (enter). Title + description read as one VoiceOver node. At font scale >= 1.6 the icon is hidden.
+ * Only shown when it is certain there is no data (never while loading). Fades in over `short` (enter).
+ * Title + description read as one VoiceOver node. At font scale >= 1.6 the icon is hidden. Centred
+ * variants centre every child, buttons and link included (each action sits in an `alignSelf: center`
+ * wrapper because Button itself is `alignSelf: flex-start`).
  */
 export function EmptyState({
-  variant: variantProp = 'prompt',
-  eyebrow,
+  variant: variantProp = 'page',
   icon,
   title,
   description,
   primaryLabel,
   onPrimary,
+  primaryTone = 'primary',
+  primaryIcon,
   secondaryLabel,
   onSecondary,
   on = 'background',
@@ -63,15 +87,13 @@ export function EmptyState({
 }: EmptyStateProps): React.JSX.Element {
   const { theme } = useTheme();
   const { duration } = useMotion();
-  const variant = variantProp === 'firstUse' ? 'prompt' : variantProp;
   const { fontScale } = useWindowDimensions();
   const appear = useRef(new Animated.Value(0)).current;
+  const variant = variantProp in ALIAS ? ALIAS[variantProp as EmptyStateDeprecatedVariant] : (variantProp as EmptyStateVariantName);
 
   useEffect(() => {
     Animated.timing(appear, { toValue: 1, duration: duration.short, easing: bezierFor('enter'), useNativeDriver: USE_NATIVE_DRIVER }).start();
   }, [appear, duration.short]);
-
-  const inline = variant === 'inline';
 
   if (variant === 'slot') {
     const hint = primaryLabel ? [title, description, primaryLabel].filter(Boolean).join('. ') : [title, description].filter(Boolean).join('. ');
@@ -123,42 +145,7 @@ export function EmptyState({
     );
   }
 
-  if (variant === 'prompt') {
-    return (
-      <Animated.View style={[{ opacity: appear }, style]}>
-        <Card variant="tinted" padding={theme.spacing.mdl}>
-          <View accessible accessibilityLabel={[eyebrow, title, description].filter(Boolean).join('. ')}>
-            {eyebrow ? (
-              <AppText variant="footnote" weight="600" color="onPrimaryContainer">
-                {eyebrow}
-              </AppText>
-            ) : null}
-            {title ? (
-              <AppText variant="title1" color="onPrimaryContainer" numberOfLines={2} accessibilityRole="header" style={{ marginTop: eyebrow ? theme.spacing.xs : 0 }}>
-                {title}
-              </AppText>
-            ) : null}
-            {description ? (
-              <AppText variant="subhead" color="onPrimaryContainer" style={{ marginTop: theme.spacing.sm }}>
-                {description}
-              </AppText>
-            ) : null}
-          </View>
-          {primaryLabel ? (
-            <View style={{ marginTop: theme.spacing.md, alignSelf: 'flex-start' }}>
-              <Button variant="primary" size="md" label={primaryLabel} onPress={() => onPrimary?.()} />
-            </View>
-          ) : null}
-        </Card>
-      </Animated.View>
-    );
-  }
-
-  const glyph = icon ?? (variant === 'private' ? ICON.locked.outline : undefined);
-  const showIcon = !!glyph && !inline && fontScale < 1.6;
-  const label = [title, description].filter(Boolean).join('. ');
-
-  if (inline) {
+  if (variant === 'section') {
     return (
       <Animated.View style={[{ paddingVertical: theme.spacing.md, opacity: appear }, style]}>
         <AppText variant="subhead" color="textSecondary">
@@ -166,12 +153,18 @@ export function EmptyState({
         </AppText>
         {secondaryLabel ? (
           <View style={{ marginTop: theme.spacing.sm }}>
-            <Button variant="ghost" size="md" on={on} label={secondaryLabel} onPress={() => onSecondary?.()} style={{ marginLeft: -theme.spacing.md }} />
+            <Button variant="ghost" size="sm" on={on} label={secondaryLabel} onPress={() => onSecondary?.()} style={{ marginLeft: -14 }} />
           </View>
         ) : null}
       </Animated.View>
     );
   }
+
+  const isError = variant === 'error';
+  const glyph = icon ?? (variantProp === 'private' ? ICON.locked.outline : isError ? ICON.error.outline : variant === 'filtered' ? ICON.search.outline : undefined);
+  const showIcon = !!glyph && fontScale < 1.6;
+  const label = [title, description].filter(Boolean).join('. ');
+  const primaryVariant = isError ? 'secondary' : primaryTone;
 
   return (
     <Animated.View
@@ -181,7 +174,8 @@ export function EmptyState({
           maxWidth: theme.componentSize.emptyStateMaxWidth,
           alignSelf: 'center',
           alignItems: 'center',
-          paddingVertical: theme.spacing.xl,
+          paddingTop: theme.layout.pageLoadingOffset,
+          paddingBottom: theme.spacing.xl,
           opacity: appear,
         },
         style,
@@ -200,7 +194,7 @@ export function EmptyState({
               marginBottom: theme.spacing.smd,
             }}
           >
-            <Ionicons name={glyph as IoniconName} size={theme.iconSize.lg} color={theme.colors.textSecondary} />
+            <Ionicons name={glyph as IoniconName} size={theme.iconSize.lg} color={isError ? theme.colors.error : theme.colors.textSecondary} />
           </View>
         ) : null}
         {title ? (
@@ -214,14 +208,20 @@ export function EmptyState({
           </AppText>
         ) : null}
       </View>
-      {primaryLabel || secondaryLabel ? (
-        <View style={{ alignSelf: 'stretch', marginTop: theme.spacing.lg }}>
-          {primaryLabel ? <Button variant="primary" size="lg" fullWidth label={primaryLabel} onPress={() => onPrimary?.()} /> : null}
-          {secondaryLabel ? (
-            <View style={{ marginTop: primaryLabel ? theme.spacing.sm : 0, alignItems: 'center' }}>
-              <Button variant="ghost" size="md" on={on} label={secondaryLabel} onPress={() => onSecondary?.()} />
-            </View>
-          ) : null}
+      {primaryLabel ? (
+        <View style={{ alignSelf: 'center', marginTop: theme.spacing.lg }}>
+          <Button
+            variant={primaryVariant}
+            size="md"
+            label={primaryLabel}
+            icon={primaryIcon ?? (isError ? ICON.retry.outline : undefined)}
+            onPress={() => onPrimary?.()}
+          />
+        </View>
+      ) : null}
+      {secondaryLabel && !isError ? (
+        <View style={{ alignSelf: 'center', marginTop: primaryLabel ? theme.spacing.sm : theme.spacing.lg }}>
+          <Button variant="ghost" size="md" on={on} label={secondaryLabel} onPress={() => onSecondary?.()} />
         </View>
       ) : null}
     </Animated.View>

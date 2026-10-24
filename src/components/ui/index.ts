@@ -35,7 +35,7 @@ export type { LoadingPhase } from './useLoadingPhase';
 export { PageLoading } from './PageLoading';
 export type { PageLoadingProps } from './PageLoading';
 export { EmptyState } from './EmptyState';
-export type { EmptyStateProps, EmptyStateVariant } from './EmptyState';
+export type { EmptyStateProps, EmptyStateVariant, EmptyStateVariantName, EmptyStateDeprecatedVariant } from './EmptyState';
 export { InlineError, NoticeBox } from './InlineError';
 export type { InlineErrorProps, InlineErrorVariant, NoticeBoxProps } from './InlineError';
 export { ListRow, Radio } from './ListRow';
