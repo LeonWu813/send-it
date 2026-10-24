@@ -371,9 +371,8 @@ export default function RouteSubmitScreen({
               accessibilityIgnoresInvertColors
             />
             <Button
-              variant="ghost"
-              size="md"
-              on="background"
+              variant="text"
+              placement="centered"
               label={t('routeCatalog.submit.changePhoto')}
               onPress={() => void handlePickPhoto()}
             />

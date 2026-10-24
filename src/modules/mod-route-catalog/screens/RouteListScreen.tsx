@@ -28,6 +28,7 @@ import type { RouteCardRoute } from '../../../components/RouteCard';
 import {
   AppText,
   BottomSheet,
+  Button,
   ButtonGroup,
   Chip,
   EmptyState,
@@ -540,6 +541,17 @@ export default function RouteListScreen({
           contentContainerStyle={[styles.listContent, isFirstUseEmpty && styles.listContentEmpty, { paddingBottom: tabInset.contentBottom || theme.spacing.md }]}
           scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
           keyboardShouldPersistTaps="handled"
+          ListFooterComponent={
+            sortedRoutes.length > 0 ? (
+              <Button
+                variant="text"
+                placement="inline"
+                label={t('routeCatalog.addRoute')}
+                onPress={addRoute}
+                style={{ marginTop: theme.spacing.md }}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             isFirstUseEmpty ? (
               <EmptyState
@@ -549,8 +561,6 @@ export default function RouteListScreen({
                 description={t('routeCatalog.emptyDescription')}
                 primaryLabel={t('routeCatalog.submit.addRoute')}
                 onPrimary={addRoute}
-                secondaryLabel={t('routeCatalog.addRoute')}
-                onSecondary={addRoute}
               />
             ) : (
               <EmptyState

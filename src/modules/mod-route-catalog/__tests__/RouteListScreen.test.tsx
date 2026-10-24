@@ -252,7 +252,7 @@ describe('RouteListScreen', () => {
     }
   });
 
-  it('RL-2: shows ONE filter row (no inline grade/colour chip rows) and add-route CTA only in the empty state', async () => {
+  it('RL-2: shows ONE filter row (no inline grade/colour chip rows) and the add-route link as the list footer', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
@@ -262,16 +262,20 @@ describe('RouteListScreen', () => {
     });
     // Only the single Filter chip; grade chips live in the sheet.
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    expect(screen.queryAllByLabelText(/Can't find it|找不到路線/)).toHaveLength(0);
+    const footer = screen.getAllByLabelText(/Can't find it|找不到路線/);
+    expect(footer).toHaveLength(1);
+    fireEvent.press(footer[0]!);
+    expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
   });
 
-  it('RL-2: empty list offers add-route and calls onSubmitRoute', async () => {
+  it('RL-2: E1 offers only the primary add-route button (no duplicate link)', async () => {
     mockListRoutes.mockResolvedValueOnce([]);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    const cta = await screen.findByLabelText(/Can't find it|找不到路線/);
-    fireEvent.press(cta);
+    await screen.findByText(/No routes at this gym yet|這間岩館還沒有路線/);
+    expect(screen.queryAllByLabelText(/Can't find it|找不到路線/)).toHaveLength(0);
+    fireEvent.press(screen.getByLabelText(/^Add Route$|^新增路線$/));
     expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
   });
 
