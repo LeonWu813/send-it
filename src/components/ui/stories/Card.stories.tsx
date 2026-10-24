@@ -13,7 +13,7 @@ function Demo(props: CardProps): React.JSX.Element {
         <AppText variant="subhead" weight="600">
           紅色 V4 Crimpy 小人摳點
         </AppText>
-        <AppText variant="caption1" color="textSecondary">
+        <AppText variant="footnote" color="textSecondary">
           紅石岩館・3 支 Beta
         </AppText>
       </Card>
@@ -22,7 +22,7 @@ function Demo(props: CardProps): React.JSX.Element {
 }
 
 const meta: Meta<CardProps> = {
-  title: 'UI/Card',
+  title: 'Components/Card',
   component: Demo,
   args: { variant: 'static', padding: 16 },
   argTypes: {
@@ -32,5 +32,5 @@ const meta: Meta<CardProps> = {
 };
 export default meta;
 
-/** Light: shadow, no border. Dark: 1pt border, no shadow. pressable: colour only, never scales. */
+/** Super Flat: light = white surface only (no shadow, no border). Dark: 1pt border, no shadow. pressable: colour only, never scales. */
 export const Playground: StoryObj<CardProps> = {};

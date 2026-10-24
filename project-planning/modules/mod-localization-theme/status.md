@@ -2,6 +2,30 @@
 
 ## Engineering Progress
 
+### Off-spec design round 4: shared ui card rules C1-C4 (flat-alignment audit rev 3 §6) — 2026-10-24
+
+Branch `design/page-templates`, approved by the human designer, reviewed via PR. Only `src/components/ui/*`.
+- InlineError: block-in-sheet and page block 16 all sides; notice/warning 12 vertical / 16 horizontal; ghost action glyph on the padding line (`marginRight -14`, `marginLeft -14` when stacked); title to description 4.
+- UploadProgressCard (ProgressBar.tsx): thumbnail to text 12, title to meta 4, meta to bar 8.
+- BottomSheet: sheet padding stays 20; title to first content 16 (title box no longer pads to 44 below the text); confirm sheet description to actions 16.
+- Tests: `src/components/ui/__tests__/cardRules.test.tsx`. Stories unchanged (they render the components). On-device check still needed for the ghost action and sheet close hit areas (RN-web drops `hitSlop`).
+
+### Off-spec: custom like icon (fist bump) in the icon library — 2026-10-23
+
+Branch `design/page-templates`, approved by the human designer, reviewed via PR (design system v2.3 §9.12).
+- Added `react-native-svg` 15.15.4 (native module: dev-client rebuild required). New `src/components/ui/FistBumpIcon.tsx` (`FistBumpIcon`, `FistBumpBurst`).
+- `src/lib/icons.ts`: `IconEntry.custom?: 'fistbump'`; `ICON.like.custom` marks the custom glyph. Temporary Ionicons `outline`/`filled` kept as a compile alias until call sites swap.
+- Stories: Foundations/Icons shows the custom like; `Components/FistBumpIcon`. Test added for the custom-glyph rule.
+
+### Off-spec design work (page-review v2.3) pending PR review — 2026-10-23
+
+Branch `design/page-templates`, not part of the PRD/spec; reviewed via PR.
+- ST-1 Settings: Logout is a destructive row with a confirm sheet (BottomSheet confirm); the privacy toggle subtitle always states the ON effect; R0/R1/R3 spacing (container owns `screenMargin` + `sectionGap`, rows 52 / padding 12x16).
+- N-1: new Notifications row; `onNavigateToNotificationPreferences` prop wired through AppShell (opens the notifications overlay on `preferences`).
+- L-2 Blocked Accounts: 52pt rows, Avatar sm 32, Unblock centred, padding screenMargin, confirm sheet before unblocking.
+- Shared (`src/components/ui`): `ButtonGroup` (B-1) and T-1 (no content text below footnote 13).
+- Stories: Settings `Confirm Logout`, Blocked `Confirm Unblock`; `Components/ButtonGroup`. Tests updated for the logout confirm step.
+
 ### Stories + design-fix — 2026-10-22 (Storybook screen stories + Priority-1 design token migration)
 
 **Scope**: Two tasks in one pass:
@@ -1701,3 +1725,7 @@ No new regressions found in adjacent code paths.
 **Overall verdict: QA PASS**
 
 INT-031 is resolved. A failed `saveDeviceLanguage` or `saveDeviceTheme` call no longer blocks `signOut()`. All previously passing ACs (AC-090 through AC-203, REQ-CI) continue to pass. No regressions introduced. Integration-review row INT-031 is set to QA VERIFIED.
+
+### Off-spec round 3 (2026-10-23)
+- Super Flat: `ELEVATION.card` removed; Card/InlineError/Skeleton/SegmentedControl thumb flat. ICON.retry = reload-outline (Button icon on UploadProgressCard, InlineError `actionIcon`). listRowPaddingV 12. Settings chevrons 16. BlockedAccounts inset grouped (16), avatar 32, name = avatar+12. FistBumpIcon web aria props; IconButton story off thumbs-up.
+- Pending: remove temporary Ionicons alias on `ICON.like` once FeedScreen.tsx is swapped.

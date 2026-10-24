@@ -4,6 +4,12 @@
 
 **Status**: Complete — migration bug fixed, follow() bug fixed, tsc clean, AC-052 like button implemented, AC-186 RPC defined (deferred), AC-123/AC-124 JSDoc reference removed, AC-163 privacy gate fixed (QA Run 4 bug), AC-185 SwipeBackWrapper wired into FollowersList/FollowingList/UserProfile screens. INT-012: index.ts barrel created; cross-module deep imports fixed in FollowersListScreen, FollowingListScreen, UserProfileScreen. F-4/L-3: fetchLikeInfoBatch removed from public barrel; marked @internal in service. Stories: design-lead audit complete — all four screen stories added (FeedScreen, UserProfileScreen, FollowersListScreen, FollowingListScreen).
 
+### Page-review P-2 / L-2 (2026-10-23, off-spec design)
+
+- UserProfileScreen: custom stats row + 11pt grade bars replaced by compact `StatsPanel` (onOpenDetails -> `useOpenProfileHistory()(userId, false)`); left-aligned header card with inline counts (R13); card -> stats gap `cardGap` 12, stats -> grid `sectionGap` 24; no text below 13pt. Follow button stays single full-width; secondary actions remain in header "..." (AC-150).
+- Followers/Following: Avatar sm 32, no extra top padding; rows 52 min (shared ListRow adds 14pt vertical padding, so ~61 rendered).
+- Tests updated (compact panel stub + new P-2 test); jest 64/64, `npm run lint` (tsc) clean.
+
 ### Storybook Screen Stories (2026-10-22)
 
 **Added**: `src/modules/mod-social-feed/stories/` — four story files covering all module screens.
@@ -1077,3 +1083,7 @@ All five verification points pass:
 - mod-social-feed test suite 63/63 pass with no import errors.
 
 INT-012 row set to `QA VERIFIED` in `project-planning/integration-review.md`.
+
+### Off-spec design round 3 (2026-10-23)
+- Followers/Following: inset grouped container (margin 16, surface, radius.card), ListRow inset=grouped (avatar x32, name avatar+12 per A8).
+- FeedScreen like: IconButton thumbs-up replaced with Pressable (44pt) + FistBumpIcon. User Profile: no shadows found, no change. tsc and 64 tests pass.

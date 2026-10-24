@@ -23,7 +23,7 @@ export const ON_OPTIONS: OnSurface[] = ['surface', 'background', 'media', 'tinte
 export function Row({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
   return (
     <View style={{ marginBottom: 16 }}>
-      <AppText variant="caption1" color="textSecondary" style={{ marginBottom: 6, fontFamily: 'monospace' }}>
+      <AppText variant="footnote" color="textSecondary" style={{ marginBottom: 6, fontFamily: 'monospace' }}>
         {label}
       </AppText>
       {children}

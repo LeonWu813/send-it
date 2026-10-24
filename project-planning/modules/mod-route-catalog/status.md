@@ -2,6 +2,36 @@
 
 ## Engineering Progress
 
+### Flat/alignment audit round 4 (2026-10-24, rev 3 section 6 + 7)
+
+- Ascent card (C1-C5): header row no longer 44 layout; it is the 24 pill height. The ⋯ is a `PressableScale` around a 20 icon (box at R16) with `hitSlop` 12 (inside the card clip; on-device check needed, RN-web drops hitSlop). Card `gap` 8 (sm) between header / 「N 次」 / note. Note: tinted box removed, plain upright `subhead` `textSecondary` at the 16 keyline (human decision C5).
+- White tape light `#C9C3B8`, fill only. `hair` flag, `TAPE_HAIR` and the swatch ring retired (`useTapeSwatch` returns `{ fill }`; `swatchHair` no longer passed to Chip; `src/lib/tape.ts` re-export updated). Chip's own `swatchHair` prop (shared) left untouched.
+- Route List filter sheet: colour chip wrap `marginLeft: -14` so the swatch sits on the 20 keyline.
+- Tests: SendHistoryDetail note/hitSlop, new `tape.test.ts`. jest mod-route-catalog 121/121, lint clean. Measured at :6006 (light): ascent card padding top 16 / right 16 / bottom 16 / left 16.
+
+### Flat/alignment audit round 3 (2026-10-23, items #5 #6 #14)
+
+- #6 Send History ascent card: `SendStatus` is `alignSelf: flex-start`, which top-anchored the pill. Wrapped in a View inside a `minHeight: minTouchTarget` (44) header row, so pill, date and ⋯ share the row centre; 「N 次」 and note stay below on the same keyline (A7).
+- #5 Send History summary: RouteColorBadge wrapped like Log Send's header (same spec, badge centred with the text block).
+- #14 Route Detail: added-date footer `align="left"` (A6). Send History empty text also left (A6, inline empty).
+- Flat: no shadow/elevation in this module (only the shared Card shadow, removed elsewhere).
+- Test: added-date textAlign left. jest mod-route-catalog 118/118; tsc errors only in other modules (Tokens.stories, FeedScreen). Verified at :6006 (Send History Populated): pill/date row centre and badge/text centre aligned. Shared files untouched by me.
+
+### Page review P1/P2 (off-spec design implementation, 2026-10-23)
+
+Source: `send-it-design/ux-team/page-review/page-review.md`. Branch `design/page-templates`. Changes AC-130 (RD-1) and AC-127 wording (RD-4); needs PRD follow-up by Leon.
+
+- RD-1: Route Detail has one full-width primary Record Send. Upload button removed from the screen; it still passes `onRegisterUploadLauncher` / `onUploadError` so BetaVideoSection renders the upload entry (header + empty tile) itself.
+- RD-2: large title "{Colour} - {Section}" (no grade; badge carries it). Header title (AC-045 name) appears only after the large title scrolls off. "Section" block dropped.
+- RD-4: inline summary line "Sends N - Attempts M" (subhead numerals, 44pt hit area), tap -> Send History Detail. testID `send-summary-line`.
+- RL-2: one Filter chip row opening a BottomSheet (grade + colour choices, Done / Clear filters); active filters are removable chips; "+" in header trailing slot; filter -> card gap 16 (R10); cards spaced by list separator `cardGap` (R6). Grade stays single-select (no range) because the filter model/service is single-grade. Empty state: Clear filters (when active) + Add route.
+- RS-1: grade chips are a wrapped grid; photo field shows the required hint; Add Route CTA disabled until a photo is chosen.
+- SH-1: route summary card on top (new optional `gymName` prop, passed by RouteNavigator); per-card "..." opens a confirm BottomSheet (replaces trash icon + Alert).
+- R0/T-1: containers own margin + gap; no content text below 13pt.
+- Story-only optional props: `initialFilterSheetOpen` (RouteListScreen), `initialDeleteAscentId` (SendHistoryDetailScreen). New stories: Active Filters, Filter Sheet Open, Delete Confirm.
+- Locale keys added (shared files, uncommitted): `routeCatalog.detail.attemptsShort`, `routeCatalog.detail.moreActions`, `routeCatalog.filter.*`.
+- Verified: `npm run lint` 0 errors, `npm run check:i18n` OK, `npx jest src/modules/mod-route-catalog` 118/118. Light/dark screenshots reviewed. Route Detail Beta heading at y~400 in the 393 frame; Route List ~6.3 visible cards.
+
 ### Design-system fixes + Storybook screen stories (2026-10-22)
 
 **Design fixes (Issues 8 and 11):**
@@ -3619,3 +3649,6 @@ Result: **115 passed, 115 total** — 5 suites. Exit 0. No regressions. PASS.
 | TypeScript compilation clean (tsc --noEmit) | PASS |
 
 **REGRESSION PASS — INT-015 fix verified. `withdrawRoute` now throws 'Route could not be withdrawn — it may not be pending or may belong to another user.' when PostgREST returns 0 deleted rows (RLS-silent-block scenario). 115/115 mod-route-catalog tests pass. No regressions introduced.**
+
+### Engineering Progress - TapeBadge outline removal (designer request)
+- Removed the 1pt TAPE_HAIR hairline and the 1.5pt onMedia outline from TapeBadge (fill only, size unchanged). `onMedia` prop kept (no-op). TAPE_HAIR kept: still used by `useTapeSwatch` (11x11 filter-chip / thumbnail swatches), outside this request. Story caption updated. lint and full tests pass (682).

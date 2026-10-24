@@ -200,6 +200,17 @@ export const SPACING = {
   xxl: 48,
 } as const;
 
+/** Spinner size per context (states-audit-ui 1.3). Colour is decided by the context too (see Spinner). */
+export const SPINNER = {
+  page: 'large',
+  section: 'small',
+  control: 'small',
+  field: 'small',
+  media: 'large',
+  mediaControl: 'small',
+} as const;
+export type SpinnerContext = keyof typeof SPINNER;
+
 export const LAYOUT = {
   /** Screen side margin: 16 below `largeWidthBreakpoint`, 20 at/above it. Use useLayout(). */
   screenMarginCompact: 16,
@@ -207,8 +218,12 @@ export const LAYOUT = {
   largeWidthBreakpoint: 428,
   cardPadding: 16,
   cardGap: 12,
-  listRowPaddingV: 14,
+  listRowPaddingV: 12,
   listRowMinHeight: 52,
+  /** E1 / E3 / E4 anchor (PageLoading is now centred): content-area top + this (= SPACING.xxl). */
+  pageLoadingOffset: SPACING.xxl,
+  /** Height of the `section` spinner slot (= listRowMinHeight). */
+  sectionLoadingSlot: 52,
   sectionGap: 24,
   sectionHeaderGap: 8,
   inlineGap: 8,
@@ -230,6 +245,12 @@ export const LAYOUT = {
   fieldGap: 16,
   /** Below this width: RouteCard thumb 64, StatsPanel 1:1. */
   compactWidthBreakpoint: 360,
+  /** HIG AX font scale: ButtonGroup always stacks and ChoiceGrid uses the compact column count at/above it. */
+  axFontScale: 1.35,
+  /** ChoiceGrid columns; falls back to `choiceGridColumnsCompact` when a column would be under `choiceGridMinColumnWidth`. */
+  choiceGridColumns: 6,
+  choiceGridColumnsCompact: 4,
+  choiceGridMinColumnWidth: 48,
 } as const;
 
 export const ICON_SIZE = {
@@ -304,13 +325,16 @@ export const COMPONENT_SIZE = {
   sheetFloatMaxHeightRatio: 0.6,
   /** Reel double-tap heart. */
   likeBurst: 84,
+  /** Chip layout="tile": swatch above name. swatchGap = outer `background` ring on the selected swatch. */
+  colorTile: { minHeight: 56, padV: 6, swatch: 20, swatchGap: 2 },
 } as const;
 
-/** Line widths. Only these three are allowed. */
+/** Line widths. Only these four are allowed. focusRing: inner focus ring of text inputs / stepper only — never for selection or decoration. */
 export const STROKE = {
   hairline: StyleSheet.hairlineWidth,
   thin: 1,
   emphasis: 1.5,
+  focusRing: 2,
 } as const;
 
 export const AVATAR_SIZE = {
@@ -338,7 +362,7 @@ const NO_SHADOW: ElevationStyle = {
   elevation: 0,
 };
 
-/** Light theme shadows. Dark theme uses NO shadow: use a 1px border (`border` / `toastBorder`). */
+/** Light theme shadows (Super Flat: content layers have none; only closed-list floating surfaces). Dark theme uses NO shadow: use a 1px border (`border` / `toastBorder`). */
 export const ELEVATION = {
   /** Toast, celebration card, floating surfaces. */
   raised: {
@@ -348,15 +372,7 @@ export const ELEVATION = {
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   } as ElevationStyle,
-  /** Very light card shadow (light theme cards use this instead of a border). */
-  card: {
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
-  } as ElevationStyle,
-  /** Small floating controls: float IconButton, SegmentedControl thumb. */
+  /** Small floating controls: float IconButton in the header / over media (SegmentedControl thumb is flat). */
   control: {
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -366,7 +382,7 @@ export const ELEVATION = {
   } as ElevationStyle,
 };
 
-export const ELEVATION_DARK: typeof ELEVATION = { raised: NO_SHADOW, card: NO_SHADOW, control: NO_SHADOW };
+export const ELEVATION_DARK: typeof ELEVATION = { raised: NO_SHADOW, control: NO_SHADOW };
 
 const FW = { w400: '400', w500: '500', w600: '600', w700: '700', w800: '800' } as const;
 
@@ -540,9 +556,9 @@ interface ThemeContextValue {
   setThemeUserId: (userId: string | null) => void;
 }
 
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
+export const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 
-function buildTheme(isDark: boolean): Theme {
+export function buildTheme(isDark: boolean): Theme {
   return {
     colors: isDark ? DARK_PALETTE : LIGHT_PALETTE,
     spacing: SPACING,
@@ -650,6 +666,9 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
   );
 }
 
+/** Optional width override for useLayout (Storybook phone frame). Default null = real window width. */
+export const LayoutWidthOverrideContext = createContext<number | null>(null);
+
 // ─── Hooks ──
 
 /**
@@ -657,7 +676,9 @@ export function ThemeProvider({ children }: ThemeProviderProps): React.JSX.Eleme
  * module load time.
  */
 export function useLayout(): { screenMargin: number; width: number; isLarge: boolean } {
-  const { width } = useWindowDimensions();
+  const windowWidth = useWindowDimensions().width;
+  // Storybook-only seam: PhoneFrame provides the frame width. Null (the default) in the app.
+  const width = useContext(LayoutWidthOverrideContext) ?? windowWidth;
   const isLarge = width >= LAYOUT.largeWidthBreakpoint;
   return {
     screenMargin: isLarge ? LAYOUT.screenMarginLarge : LAYOUT.screenMarginCompact,

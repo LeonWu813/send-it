@@ -1,23 +1,36 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef } from 'react';
-import { AccessibilityInfo, Animated, View, useWindowDimensions } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { AccessibilityInfo, Animated, Platform, View, findNodeHandle, useWindowDimensions } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { ICON } from '../../lib/icons';
+import type { IoniconName } from '../../lib/icons';
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
 import { useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
 import { Button } from './Button';
 
-export type InlineErrorVariant = 'field' | 'block' | 'notice' | 'warning';
+export type InlineErrorVariant = 'field' | 'block' | 'notice' | 'warning' | 'error' | 'success';
+
+/** Callout severities (states-audit-ux 2.1): the container is always neutral, the level is told by icon, icon colour, bold title and a VoiceOver prefix. */
+const CALLOUT = {
+  notice: { icon: ICON.info.outline, color: 'textSecondary', prefixKey: null, announce: false },
+  warning: { icon: ICON.warning.outline, color: 'warning', prefixKey: 'ui.alertPrefix.warning', announce: true },
+  error: { icon: ICON.error.outline, color: 'error', prefixKey: 'ui.alertPrefix.error', announce: true },
+  success: { icon: 'checkmark-circle-outline' as IoniconName, color: 'success', prefixKey: null, announce: true },
+} as const;
+type CalloutVariant = keyof typeof CALLOUT;
 
 export interface InlineErrorProps {
   /**
    * field: under a TextField (icon sm + footnote, no container). block: replaces a region's content, or
    * sits above a sheet's primary action: `surface` card (radius 20) on the page, `surfaceAlt` radius 12
    * in a sheet (`on="elevated"`); red icon + headline title + description, the action `sm` on the same
-   * row. notice: NEUTRAL heads-up (`surfaceAlt`, radius 12, info icon). warning: a real warning
-   * (`noticeContainer`, warning icon). No colour bars. Prefer <NoticeBox>.
+   * row. Callouts (`surfaceAlt`, radius 12, no colour bars, never a tinted container): notice = info
+   * (neutral icon, `title` optional), warning = `warning`-coloured warning-outline, error = `error`-coloured
+   * alert-circle, success = `success` check. warning and error need a `title` (bold headline); with a title
+   * the body is `subhead` `textSecondary` and the icon aligns to the headline line. Prefer <NoticeBox>.
    */
   variant?: InlineErrorVariant;
   /** block: bold title ("Route failed to load"); `message` then becomes the description under it. */
@@ -27,13 +40,24 @@ export interface InlineErrorProps {
   /** `sm` action: Retry / Open Settings / Choose another. Same row as the text; under it at font scale >= 1.6. */
   actionLabel?: string;
   onAction?: () => void;
+  /** 16pt leading icon on the action. Only the block-on-page `secondary` action takes one (default `ICON.retry.outline`; `null` for none); the text-style action of callouts never has an icon. */
+  actionIcon?: IoniconName | null;
   actionLoading?: boolean;
   /** block only: the surface it sits on (page card = surface, inside a BottomSheet = elevated). */
   on?: 'surface' | 'elevated';
-  /** notice only (legacy): same as variant="warning". */
+  /** notice only. @deprecated use variant="warning" (kept one version). */
   warning?: boolean;
-  /** Announce to VoiceOver on appear (default true for field and block). */
+  /**
+   * Announce to VoiceOver when it goes from absent to present (mount), once: later message changes do not
+   * re-announce (field: each new message does). Default true for field, block, warning (prefixed "Warning:"),
+   * error (prefixed "Error:") and success; false for notice.
+   */
   announce?: boolean;
+  /**
+   * Form submit failed: move the screen-reader focus here when it appears (fade start) instead of announcing
+   * (no double reading). The container becomes one accessible node labelled `title. message`.
+   */
+  focusOnAppear?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -47,10 +71,12 @@ export function InlineError({
   message,
   actionLabel,
   onAction,
+  actionIcon,
   actionLoading,
   on = 'surface',
   warning = false,
   announce,
+  focusOnAppear = false,
   style,
 }: InlineErrorProps): React.JSX.Element {
   const { theme } = useTheme();
@@ -59,12 +85,38 @@ export function InlineError({
   const c = theme.colors;
   const appear = useRef(new Animated.Value(0)).current;
 
+  const { t } = useTranslation('common');
+  const containerRef = useRef<View>(null);
+  const [oneLine, setOneLine] = useState(true);
+  const level: CalloutVariant | null = variant === 'notice' && warning ? 'warning' : variant in CALLOUT ? (variant as CalloutVariant) : null;
+  const callout = level ? CALLOUT[level] : null;
+  const shouldAnnounce = !focusOnAppear && (announce ?? (callout ? callout.announce : true));
+  const prefix = callout?.prefixKey ? t(callout.prefixKey) : '';
+  const spoken = (title ? `${title}. ${message}` : message);
+
   useEffect(() => {
     appear.setValue(0);
     Animated.timing(appear, { toValue: 1, duration: duration.short, easing: bezierFor('enter'), useNativeDriver: USE_NATIVE_DRIVER }).start();
-    if (announce ?? (variant !== 'notice' && variant !== 'warning')) AccessibilityInfo.announceForAccessibility(title ? `${title}. ${message}` : message);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message]);
+
+  // absent -> present (mount): announce once. Only `field` re-announces when its message changes.
+  useEffect(() => {
+    if (shouldAnnounce) AccessibilityInfo.announceForAccessibility(`${prefix}${spoken}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [variant === 'field' ? message : null]);
+
+  useEffect(() => {
+    if (!focusOnAppear) return;
+    // findNodeHandle does not exist on web: focus the DOM node instead
+    if (Platform.OS === 'web') {
+      (containerRef.current as unknown as { focus?: () => void } | null)?.focus?.();
+      return;
+    }
+    const handle = containerRef.current ? findNodeHandle(containerRef.current) : null;
+    if (handle) AccessibilityInfo.setAccessibilityFocus(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (variant === 'field') {
     return (
@@ -83,24 +135,35 @@ export function InlineError({
     );
   }
 
-  const warn = variant === 'warning' || (variant === 'notice' && warning);
-  const notice = variant === 'notice' || variant === 'warning';
   const stacked = fontScale >= 1.6;
+  const notice = callout !== null;
   const page = !notice && on === 'surface';
-  const iconName = warn ? ICON.warning.outline : notice ? ICON.info.outline : ICON.error.outline;
-  const iconColor = warn ? c.warning : notice ? c.textSecondary : c.error;
+  const iconName = callout ? callout.icon : ICON.error.outline;
+  const iconColor = callout ? c[callout.color] : c.error;
   const iconSize = notice ? theme.iconSize.md : 22;
-  const bg = warn ? c.noticeContainer : page ? c.surface : c.surfaceAlt;
+  const bg = page ? c.surface : c.surfaceAlt;
   const radius = page ? theme.radius.card : theme.radius.control;
-  const textColor = warn ? 'onNoticeContainer' : 'textPrimary';
-  const iconTop = ((notice ? theme.typeScale.subhead.lineHeight : theme.typeScale.headline.lineHeight) - iconSize) / 2;
+  // icon centred on the headline line when there is a title, else on the first body line
+  const iconLine = notice && !title ? theme.typeScale.subhead.lineHeight : theme.typeScale.headline.lineHeight;
+  const iconTop = (iconLine - iconSize) / 2;
+  const textAction = notice || !page;
+  const resolvedActionIcon = actionIcon === null ? undefined : (actionIcon ?? ICON.retry.outline);
+  // A4: a single-line message and its action share one centre
+  const centreRow = !title && oneLine && !stacked;
   const action = actionLabel ? (
-    <Button variant={notice || !page ? 'ghost' : 'secondary'} size="sm" on="tinted" label={actionLabel} loading={actionLoading} onPress={() => onAction?.()} />
+    textAction ? (
+      <Button variant="text" size="sm" placement="container" on="tinted" label={actionLabel} loading={actionLoading} onPress={() => onAction?.()} />
+    ) : (
+      <Button variant="secondary" size="sm" on="tinted" label={actionLabel} icon={resolvedActionIcon} loading={actionLoading} onPress={() => onAction?.()} />
+    )
   ) : null;
 
   return (
     <Animated.View
+      ref={containerRef}
       accessibilityLiveRegion="polite"
+      accessible={focusOnAppear ? true : undefined}
+      accessibilityLabel={focusOnAppear ? `${prefix}${spoken}` : undefined}
       style={[
         {
           backgroundColor: bg,
@@ -108,20 +171,19 @@ export function InlineError({
           borderCurve: 'continuous',
           borderWidth: theme.isDark && page ? theme.stroke.thin : 0,
           borderColor: c.border,
-          paddingVertical: page ? theme.layout.cardPadding : notice ? 12 : 14,
-          paddingHorizontal: page ? theme.layout.cardPadding : 14,
+          paddingVertical: notice ? theme.layout.listRowPaddingV : theme.layout.cardPadding,
+          paddingHorizontal: theme.layout.cardPadding,
           opacity: appear,
         },
-        page ? theme.elevation.card : null,
         style,
       ]}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+      <View style={{ flexDirection: 'row', alignItems: centreRow ? 'center' : 'flex-start' }}>
         <Ionicons
           name={iconName}
           size={iconSize}
           color={iconColor}
-          style={{ marginTop: iconTop, marginRight: notice ? 10 : theme.spacing.smd }}
+          style={{ marginTop: centreRow ? 0 : iconTop, marginRight: notice ? 10 : theme.spacing.smd }}
           accessibilityElementsHidden
         />
         <View style={{ flex: 1 }}>
@@ -132,8 +194,9 @@ export function InlineError({
           ) : null}
           <AppText
             variant={notice || !title ? 'subhead' : 'footnote'}
-            color={notice ? textColor : title ? 'textSecondary' : 'textPrimary'}
-            style={{ marginTop: title ? 2 : 0 }}
+            color={title ? 'textSecondary' : 'textPrimary'}
+            onTextLayout={title ? undefined : (e) => setOneLine(e.nativeEvent.lines.length <= 1)}
+            style={{ marginTop: title ? theme.spacing.xs : 0 }}
           >
             {message}
           </AppText>
@@ -146,11 +209,15 @@ export function InlineError({
 }
 
 export interface NoticeBoxProps extends Omit<InlineErrorProps, 'variant' | 'on'> {
-  /** Real warning (review pending, offline): `noticeContainer`. Default is the neutral notice. */
-  tone?: 'neutral' | 'warning';
+  /**
+   * Callout level. neutral / info = info icon; warning = `warning`-coloured icon + bold `title` (required in
+   * practice); error = `error` icon + bold `title`; success = check. The container is `surfaceAlt` for all.
+   */
+  tone?: 'neutral' | 'info' | 'warning' | 'error' | 'success';
 }
 
-/** Neutral heads-up box (e.g. "we'll review this account; this won't block them"). */
+/** Neutral-container callout (e.g. "we'll review this account; this won't block them"). */
 export function NoticeBox({ tone = 'neutral', ...props }: NoticeBoxProps): React.JSX.Element {
-  return <InlineError {...props} variant={tone === 'warning' ? 'warning' : 'notice'} />;
+  const variant: InlineErrorVariant = tone === 'neutral' || tone === 'info' ? 'notice' : tone;
+  return <InlineError {...props} variant={variant} />;
 }

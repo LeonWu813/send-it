@@ -28,7 +28,7 @@ interface NotificationsNavigatorProps {
   initialView?: NotificationsView;
   isActive?: boolean;
   /**
-   * Callback invoked when the user taps the back button in the inbox header.
+   * Callback invoked when the user taps the back button in the nested header (inbox or preferences).
    * Returns the caller (e.g. ProfileNavigator) to its previous view.
    */
   onBack?: () => void;
@@ -57,8 +57,8 @@ export default function NotificationsNavigator({
       return (
         <NotificationPreferenceScreen
           session={session}
-          // Preferences screen can navigate back via a future onBack prop —
-          // added as a TODO when integrated into the app shell.
+          // N-1: back returns to the opener (Settings) via the overlay's onBack.
+          onBack={onBack}
         />
       );
 

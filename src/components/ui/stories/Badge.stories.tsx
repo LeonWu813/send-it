@@ -6,7 +6,7 @@ import { Badge } from '../Badge';
 import type { BadgeProps } from '../Badge';
 
 const meta: Meta<BadgeProps> = {
-  title: 'UI/Badge',
+  title: 'Components/Badge',
   component: (props: BadgeProps) => (
     <View style={{ padding: 24 }}>
       <Badge {...props} />

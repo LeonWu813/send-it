@@ -6,7 +6,7 @@
  * next to the area name, which ListRow's string `title` cannot carry.
  *
  *   [thumb 56]  [TapeBadge md grade] Area (headline)             (disc 28)
- *               Color · Gym · Date  (lock 12 + Private)
+ *               Color · Gym · Date  (lock icon + Private)
  *
  * - With a photo: thumbnail = photo; line 1 = TapeBadge md (grade) + 8 + area.
  * - Without a photo: the same 56 `surfaceAlt` square holds the TapeBadge md (grade), so the row's left

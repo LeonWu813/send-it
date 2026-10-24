@@ -25,7 +25,7 @@ export interface AvatarProps {
 }
 
 const TEXT: Record<AvatarSize, { variant: TypeVariant; weight?: '600' }> = {
-  xs: { variant: 'caption1', weight: '600' },
+  xs: { variant: 'footnote', weight: '600' },
   sm: { variant: 'footnote', weight: '600' },
   md: { variant: 'headline' },
   lg: { variant: 'title2' },

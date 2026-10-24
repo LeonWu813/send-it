@@ -11,11 +11,11 @@ import { ROUTE_COLORS } from '../types';
 // Off-spec design tooling. Fake data only.
 const SIZES = ['sm', 'md', 'lg'] as const;
 const GRADES = ['V0', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6', 'V7', 'V8', 'V9', 'V10'];
-// 'unknown' demonstrates the "Other" fallback (surfaceAlt + hairline).
+// 'unknown' demonstrates the "Other" fallback (surfaceAlt).
 const COLOR_OPTIONS = [...ROUTE_COLORS, 'unknown'];
 
 const meta: Meta<typeof RouteColorBadge> = {
-  title: 'Route Catalog/RouteColorBadge',
+  title: 'Patterns/RouteColorBadge',
   component: RouteColorBadge,
   args: { color: 'red', size: 'lg', grade: 'V4', onMedia: false },
   argTypes: {
@@ -87,8 +87,8 @@ function PanelBody({ mode }: { mode: 'light' | 'dark' }): React.JSX.Element {
   );
 }
 
-/** All 9 tapes plus the unknown fallback, sm / md (colour name) / lg (grade) plus an onMedia grade tape, light beside dark, on a white card (hairlines show on white/yellow/pink in light, black in dark). */
-export const AllTapesBySizeLightVsDark: Story = {
+/** All 9 tapes plus the unknown fallback, sm / md (colour name) / lg (grade) plus an onMedia grade tape, light beside dark, on a white card (fill only, no outline). */
+export const AllVariants: Story = {
   render: () => (
     <View style={{ flexDirection: 'row', gap: 16, padding: 16 }}>
       <Panel mode="light" />

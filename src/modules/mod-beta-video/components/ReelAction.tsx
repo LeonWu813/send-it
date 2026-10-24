@@ -2,20 +2,22 @@
  * ReelAction — a like / report control on the Reel viewer (design system v1.2, §32.9).
  *
  * 44pt target on a `mediaScrim` disc (`mediaScrimStrong` while pressed), `xl` glyph, always
- * `onMedia`: on / off is filled vs outline, never a colour (the like is not red). The like plays
- * celebratePeak + topOut + particles.like with a `toggle` haptic; Reduce Motion is a cross-fade only.
+ * `onMedia`: on / off is filled vs outline, never a colour (the like is not red). The like is the v6
+ * `FistBumpLike` (fist-bump `motion.md`): it plays only when the USER presses like (`bumpKey`), fires the
+ * `toggle` haptic at contact, and unlike plays `select`. Reduce Motion is a cross-fade only.
+ * The like draws outside its box (left up to 0.75S, top/bottom 0.2S): no `overflow: 'hidden'` up to the root.
  * Kept in its own file (no expo-video import) so Storybook can render it.
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Text, View } from 'react-native';
+import { Animated, View } from 'react-native';
 import { AppText } from '../../../components/ui/AppText';
-import { ParticleBurst } from '../../../components/ui/Particles';
+import { FistBumpLike } from '../../../components/ui/FistBumpLike';
 import { PressableScale } from '../../../components/ui/PressableScale';
 import { Spinner } from '../../../components/ui/ProgressBar';
 import type { IoniconName } from '../../../lib/icons';
-import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
+import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { useTheme } from '../../../lib/theme';
 
 /** Touch target of a Reel action (like / report): 44pt, the glyph is `xl` inside it. */
@@ -25,21 +27,17 @@ export interface ReelActionProps {
   testID: string;
   accessibilityLabel: string;
   onPress: () => void;
-  /** Outline when off, filled when on (never a colour change). Ignored when `emoji` is set. */
+  /** Outline when off, filled when on (never a colour change). Ignored when `fist` is set. */
   nameOff?: IoniconName;
-  /** Ignored when `emoji` is set. */
+  /** Ignored when `fist` is set. */
   nameOn?: IoniconName;
-  /**
-   * When set, renders this emoji character instead of an Ionicons glyph.
-   * Selected state is shown via full opacity (selected) vs 0.5 opacity (unselected).
-   * `nameOff` / `nameOn` are ignored when this prop is provided.
-   */
-  emoji?: string;
+  /** Renders the custom fist (outline / filled) instead of Ionicons; `nameOff` / `nameOn` are ignored. */
+  fist?: boolean;
   selected: boolean;
   disabled?: boolean;
   /** Replaces the glyph (report in flight). */
   busy?: boolean;
-  /** Plays the like motion (celebratePeak + topOut + particles) when it turns on by a press. */
+  /** Plays the fist-bump like (and the unlike haptic) when the user presses. */
   likeMotion?: boolean;
   /** Small text under the glyph (like count / report label). */
   caption?: string;
@@ -52,7 +50,7 @@ export function ReelAction({
   onPress,
   nameOff,
   nameOn,
-  emoji,
+  fist,
   selected,
   disabled,
   busy,
@@ -61,15 +59,13 @@ export function ReelAction({
   captionTestID,
 }: ReelActionProps): React.JSX.Element {
   const { theme } = useTheme();
-  const { duration, scale, spring, reduceMotion, haptic } = useMotion();
+  const { duration, reduceMotion, haptic } = useMotion();
   const c = theme.colors;
   const [pressed, setPressed] = useState(false);
-  const [burstKey, setBurstKey] = useState(0);
+  const [bumpKey, setBumpKey] = useState(0);
   const fade = useRef(new Animated.Value(selected ? 1 : 0)).current;
-  const pop = useRef(new Animated.Value(1)).current;
-  const pressedOn = useRef(false);
 
-  // Outline <-> filled cross-fade (also the whole Reduce Motion treatment).
+  // Outline <-> filled cross-fade for the Ionicons actions (the fist cross-fades inside FistBumpLike).
   useEffect(() => {
     Animated.timing(fade, {
       toValue: selected ? 1 : 0,
@@ -79,25 +75,15 @@ export function ReelAction({
     }).start();
   }, [selected, fade, reduceMotion, duration.micro, duration.short]);
 
-  // Like motion: only when the user's own press turned it on.
-  useEffect(() => {
-    if (!likeMotion || !selected || !pressedOn.current) return;
-    pressedOn.current = false;
-    if (reduceMotion) return;
-    setBurstKey((k) => k + 1);
-    pop.setValue(scale.celebratePeak);
-    Animated.spring(pop, { toValue: 1, ...spring.topOut, ...SPRING_REST, useNativeDriver: USE_NATIVE_DRIVER }).start();
-  }, [selected, likeMotion, reduceMotion, pop, scale.celebratePeak, spring.topOut]);
-
   const glyph = theme.iconSize.xl;
   return (
     <View style={{ alignItems: 'center' }}>
       <PressableScale
         testID={testID}
         onPress={() => {
-          if (likeMotion && !selected) {
-            pressedOn.current = true;
-            haptic('toggle', 'reel-like');
+          if (likeMotion) {
+            if (selected) haptic('select', 'reel-like');
+            else setBumpKey((k) => k + 1);
           }
           onPress();
         }}
@@ -116,19 +102,20 @@ export function ReelAction({
         }}
       >
         {busy ? (
-          <Spinner color="onMedia" size="small" />
-        ) : emoji !== undefined ? (
-          // Emoji variant: single character, opacity conveys selected state.
-          <Animated.View
-            style={{ width: glyph, height: glyph, alignItems: 'center', justifyContent: 'center', transform: [{ scale: pop }], opacity: selected ? 1 : 0.5 }}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            <Text style={{ fontSize: glyph, lineHeight: glyph * 1.2 }}>{emoji}</Text>
-          </Animated.View>
+          <Spinner context="mediaControl" />
+        ) : fist ? (
+          <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <FistBumpLike
+              liked={selected}
+              size={glyph}
+              color={c.onMedia}
+              playKey={bumpKey}
+              onContact={() => haptic('toggle', 'reel-like')}
+            />
+          </View>
         ) : (
           <Animated.View
-            style={{ width: glyph, height: glyph, transform: [{ scale: pop }] }}
+            style={{ width: glyph, height: glyph }}
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
           >
@@ -140,11 +127,10 @@ export function ReelAction({
             </Animated.View>
           </Animated.View>
         )}
-        {likeMotion && burstKey > 0 ? <ParticleBurst kind="like" playKey={burstKey} /> : null}
       </PressableScale>
       {caption !== undefined ? (
         <View style={{ marginTop: theme.spacing.xs }}>
-          <AppText variant="caption1" weight="600" numeric color="onMedia" testID={captionTestID}>
+          <AppText variant="footnote" weight="600" numeric color="onMedia" testID={captionTestID}>
             {caption}
           </AppText>
         </View>

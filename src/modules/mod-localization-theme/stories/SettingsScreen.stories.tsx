@@ -2,119 +2,117 @@
  * SettingsScreen stories — design review for MOD-010.
  *
  * States:
- *   Loaded     — all controls visible: language picker, appearance picker,
- *                Blocked Accounts row, Beta Video Privacy toggle, Logout button.
- *   LoggingOut — Logout button shows spinner (disabled/loading state). Achieved by
+ *   Populated  — all controls visible: language picker, appearance picker,
+ *                Notifications + Blocked Accounts rows, Beta Video Privacy toggle (subtitle
+ *                states the ON effect), destructive Logout row.
+ *   Confirm Logout — Logout row pressed: the confirm sheet is open (destructive + cancel).
+ *   Logging Out — Logout confirmed: the sheet stays open with the destructive button loading (the row is unchanged). Achieved by
  *                patching supabase.auth.signOut to never resolve, then
- *                programmatically clicking the button after mount.
+ *                programmatically clicking the row and the sheet's confirm after mount.
  *
  * Supabase is replaced by the Storybook stub (no network). Auth session and
  * user data are seeded synchronously during render so the component's effects
  * see the data immediately.
- *
- * AppHeaderContext hooks (useAppHeader / useHeaderContentInset / useTabBarInset)
- * are no-ops / return 0 outside AppShell — safe to call from stories.
- */
+ * */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
 import { supabase } from '../../../lib/supabase';
-import { setStubData } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
+import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
 import SettingsScreen from '../screens/SettingsScreen';
+
+/** Clicks the last Log Out / 登出 button on the page: the row first, then the sheet's confirm. */
+function clickLogout(): void {
+  const all = Array.from(document.querySelectorAll('[role="button"]')).filter((el) => {
+    const label = el.getAttribute('aria-label') ?? el.textContent ?? '';
+    return label === 'Log Out' || label === '登出';
+  });
+  (all[all.length - 1] as HTMLElement | undefined)?.click();
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const FAKE_USER_ID = 'user-storybook';
+const FAKE_USER_ID = 'story-user-me';
 const FAKE_SESSION = { user: { id: FAKE_USER_ID } };
 const FAKE_USERS_ROW = { id: FAKE_USER_ID, beta_video_privacy: 'public' };
 
 /** Seeds stub data synchronously during render so component effects see it. */
-function seedLoaded(): void {
+function seedPopulated(): void {
+  resetStubData();
   setStubData('auth:session', FAKE_SESSION);
   setStubData('users', FAKE_USERS_ROW);
 }
 
-// ── Loaded wrapper ─────────────────────────────────────────────────────────────
-
-function LoadedWrapper(): React.JSX.Element {
-  seedLoaded();
-  return (
-    <View style={{ flex: 1 }}>
-      <SettingsScreen onBack={() => {}} />
-    </View>
-  );
+function PopulatedWrapper(): React.JSX.Element {
+  seedPopulated();
+  return <SettingsScreen onBack={() => {}} onNavigateToNotificationPreferences={() => {}} />;
 }
-
-// ── LoggingOut wrapper ─────────────────────────────────────────────────────────
 
 /**
  * Patches supabase.auth.signOut to never resolve so the Logout button stays in
- * its loading state after it is pressed. The button is programmatically clicked
- * via the DOM after the component mounts (200 ms delay gives the screen time to
- * render fully).
- *
- * The patch is removed when the story unmounts so other stories are not affected.
+ * its loading state after it is pressed. The button is clicked via the DOM after
+ * mount. The patch is removed when the story unmounts.
  */
 function LoggingOutWrapper(): React.JSX.Element {
-  seedLoaded();
+  seedPopulated();
 
   React.useEffect(() => {
     const origSignOut = supabase.auth.signOut;
-
-    // Patch signOut to hang → isSigningOut stays true indefinitely
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase.auth as Record<string, any>).signOut = (): Promise<never> =>
       new Promise<never>(() => {});
 
-    const timer = setTimeout(() => {
-      // Logout button is the last [role="button"] element on the page.
-      // Language / appearance options use role="radio"; blocked-accounts
-      // row uses role="button"; logout Button also uses role="button".
-      const allButtons = document.querySelectorAll('[role="button"]');
-      const logoutBtn = allButtons[allButtons.length - 1] as HTMLElement | undefined;
-      logoutBtn?.click();
-    }, 200);
+    const timer = setTimeout(() => { clickLogout(); }, 200);
+    const confirmTimer = setTimeout(() => { clickLogout(); }, 1200);
 
     return () => {
       clearTimeout(timer);
+      clearTimeout(confirmTimer);
       supabase.auth.signOut = origSignOut;
     };
   }, []);
 
-  return (
-    <View style={{ flex: 1 }}>
-      <SettingsScreen onBack={() => {}} />
-    </View>
-  );
+  return <SettingsScreen onBack={() => {}} onNavigateToNotificationPreferences={() => {}} />;
+}
+
+/** Opens the confirm sheet by pressing the Logout row after mount. */
+function ConfirmLogoutWrapper(): React.JSX.Element {
+  seedPopulated();
+  React.useEffect(() => {
+    const timer = setTimeout(() => { clickLogout(); }, 200);
+    return () => { clearTimeout(timer); };
+  }, []);
+  return <SettingsScreen onBack={() => {}} onNavigateToNotificationPreferences={() => {}} />;
 }
 
 // ── Meta ───────────────────────────────────────────────────────────────────────
 
 const meta: Meta = {
-  title: 'LocalizationTheme/SettingsScreen',
-  parameters: { layout: 'fullscreen' },
-  decorators: [
-    (Story) => (
-      <View style={{ width: 390, height: 780 }}>
-        <Story />
-      </View>
-    ),
-  ],
+  title: 'Pages/Settings & Notifications/Settings',
+  component: SettingsScreen as never, // real component; stories only drive the stub data
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { overlay: true } },
+  decorators: [withPhoneFrame],
 };
 export default meta;
 
 type Story = StoryObj;
 
-// ── Stories ───────────────────────────────────────────────────────────────────
-
-/** All controls visible: language picker, appearance picker, Blocked Accounts row, Beta Video Privacy toggle, Logout button. */
-export const Loaded: Story = {
-  render: () => <LoadedWrapper />,
+/** All controls visible: language, appearance, Notifications + Blocked Accounts rows, Beta Video Privacy toggle, destructive Logout row. */
+export const Populated: Story = {
+  render: () => <PopulatedWrapper />,
 };
 
-/** Logout button is disabled and shows a loading spinner — the state while signOut is in flight. */
+/** Logout row pressed: confirm sheet with destructive Log Out and Cancel. */
+export const ConfirmLogout: Story = {
+  name: 'Confirm Logout',
+  render: () => <ConfirmLogoutWrapper />,
+};
+
+/** Confirm sheet stays open with the destructive button in loading (sheet not dismissible): the state while signOut is in flight. */
 export const LoggingOut: Story = {
+  name: 'Logging Out',
   render: () => <LoggingOutWrapper />,
 };

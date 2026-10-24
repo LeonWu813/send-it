@@ -12,8 +12,6 @@ import type { RouteColor } from './types';
 export interface TapeDisplayEntry {
   fill: string;
   label: string;
-  /** Draw a 1pt `TAPE_HAIR` outline (light yellow / pink / white; dark black). */
-  hair?: boolean;
 }
 
 const INK = '#1D1B15';
@@ -26,12 +24,12 @@ export const TAPE_DISPLAY: {
   light: {
     red: { fill: '#EB4C46', label: INK },
     orange: { fill: '#F08A24', label: INK },
-    yellow: { fill: '#F2CC2E', label: INK, hair: true },
+    yellow: { fill: '#F2CC2E', label: INK },
     green: { fill: '#2E9B4E', label: INK },
     blue: { fill: '#2F6CD8', label: WHITE },
     purple: { fill: '#8B3FA5', label: WHITE },
-    pink: { fill: '#F2A0BC', label: INK, hair: true },
-    white: { fill: '#FFFFFF', label: INK, hair: true },
+    pink: { fill: '#F2A0BC', label: INK },
+    white: { fill: '#C9C3B8', label: INK },
     black: { fill: '#26241F', label: WHITE },
   },
   dark: {
@@ -43,15 +41,9 @@ export const TAPE_DISPLAY: {
     purple: { fill: '#9A52B8', label: WHITE },
     pink: { fill: '#F4AFC6', label: INK },
     white: { fill: '#F2EFE8', label: INK },
-    black: { fill: '#0B0A08', label: WHITE, hair: true },
+    black: { fill: '#0B0A08', label: WHITE },
   },
 };
-
-/** 1pt outline colour for tapes flagged `hair`. */
-export const TAPE_HAIR = {
-  light: 'rgba(29,27,21,0.22)',
-  dark: 'rgba(232,226,215,0.35)',
-} as const;
 
 /**
  * Resolve display values for a stored colour name. Unknown colours (bad data / new colour)

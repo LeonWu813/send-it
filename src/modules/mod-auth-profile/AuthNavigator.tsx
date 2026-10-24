@@ -12,8 +12,7 @@
  */
 
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Spinner } from '../../components/ui';
+import { View } from 'react-native';
 
 import { useTheme } from '../../lib/theme';
 import { useSession } from './hooks/useSession';
@@ -34,22 +33,10 @@ export default function AuthNavigator({
   const { session, isLoading } = useSession();
   const [authView, setAuthView] = useState<AuthView>('signIn');
 
-  const styles = StyleSheet.create({
-    loadingContainer: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-  });
-
-  // While initial session is loading, show a spinner
+  // While the initial session is loading there is no header and no content to anchor a spinner to
+  // (states-audit-ui 1.4 B #9): draw only the page background, matching the launch screen.
   if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Spinner color="primary" size="large" />
-      </View>
-    );
+    return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
   }
 
   // No session → show auth screens

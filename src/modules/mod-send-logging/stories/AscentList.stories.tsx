@@ -3,7 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
 import { View } from 'react-native';
 
-import { setStubData } from '../../../../.storybook/stubs/supabase';
+import { setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
 import { ToastProvider } from '../../../components/ui';
 import AscentList from '../components/AscentList';
 
@@ -66,7 +66,7 @@ function rowsFor(count: number): Row[] {
   });
 }
 
-type ListState = 'populated' | 'empty' | 'error';
+type ListState = 'populated' | 'empty' | 'error' | 'loading';
 
 interface PlaygroundArgs {
   state: ListState;
@@ -80,7 +80,7 @@ interface PlaygroundArgs {
 /** Seeds the stub synchronously during render so the component's fetch effect sees it. */
 function Seeded({ state, rowCount, ownOnly, refreshKey }: PlaygroundArgs): React.JSX.Element {
   // The stub returns a non-array for `error`, so the service's `.map` throws and the real error UI shows.
-  setStubData('ascents', state === 'error' ? 'boom' : state === 'empty' ? [] : (ownOnly ? rowsFor(rowCount).map((r) => ({ ...r, user_id: ME, users: { display_name: 'Me' } })) : rowsFor(rowCount)));
+  setStubData('ascents', state === 'error' ? 'boom' : state === 'loading' ? STUB_PENDING : state === 'empty' ? [] : (ownOnly ? rowsFor(rowCount).map((r) => ({ ...r, user_id: ME, users: { display_name: 'Me' } })) : rowsFor(rowCount)));
   return (
     <ToastProvider>
       <View style={{ padding: 16, maxWidth: 420 }}>
@@ -91,11 +91,11 @@ function Seeded({ state, rowCount, ownOnly, refreshKey }: PlaygroundArgs): React
 }
 
 const meta: Meta<PlaygroundArgs> = {
-  title: 'SendLogging/AscentList',
+  title: 'Patterns/AscentList',
   parameters: { layout: 'fullscreen' },
   args: { state: 'populated', rowCount: 5, ownOnly: false, refreshKey: 0 },
   argTypes: {
-    state: { control: 'inline-radio', options: ['populated', 'empty', 'error'] },
+    state: { control: 'inline-radio', options: ['populated', 'empty', 'error', 'loading'] },
     rowCount: { control: { type: 'range', min: 1, max: 40, step: 1 } },
     ownOnly: { control: 'boolean' },
     refreshKey: { control: { type: 'number', min: 0, max: 20 } },
@@ -111,3 +111,15 @@ type Story = StoryObj<PlaygroundArgs>;
  * the floating confirm sheet; raise refreshKey after adding a row to see the landing motion.
  */
 export const Playground: Story = {};
+
+/** No sends logged yet for this route: E2 section empty state. */
+export const Empty: Story = { args: { state: 'empty' } };
+
+/** Fetch failed: the real error UI with retry. */
+export const ErrorState: Story = {
+  name: 'Error',
+  args: { state: 'error' },
+};
+
+/** First load in flight: section spinner in the 52pt slot under the title. */
+export const Loading: Story = { args: { state: 'loading' } };

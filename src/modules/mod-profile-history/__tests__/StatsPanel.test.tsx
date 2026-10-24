@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 // Initialize i18n before component renders
 import '../../../lib/i18n';
@@ -90,5 +90,26 @@ describe('StatsPanel', () => {
     expect(() =>
       render(<StatsPanel stats={stats} />, { wrapper: Wrapper }),
     ).not.toThrow();
+  });
+
+  describe('compact variant', () => {
+    it('shows three numerals and no distribution chart', () => {
+      const stats = buildStats({ total_sends: 42, accumulated_days: 7, highest_grade: 'V6' });
+      const { getByText, queryByText } = render(<StatsPanel variant="compact" stats={stats} />, { wrapper: Wrapper });
+      expect(getByText('42')).toBeTruthy();
+      expect(getByText('7')).toBeTruthy();
+      expect(getByText('V6')).toBeTruthy();
+      expect(queryByText('V0')).toBeNull();
+    });
+
+    it('calls onOpenDetails when a tile is pressed', () => {
+      const onOpenDetails = jest.fn();
+      const { getByText } = render(
+        <StatsPanel variant="compact" stats={buildStats({ total_sends: 42 })} onOpenDetails={onOpenDetails} />,
+        { wrapper: Wrapper },
+      );
+      fireEvent.press(getByText('42'));
+      expect(onOpenDetails).toHaveBeenCalledTimes(1);
+    });
   });
 });

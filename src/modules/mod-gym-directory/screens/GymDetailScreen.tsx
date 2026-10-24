@@ -15,22 +15,23 @@
  * Tappable address: pressing the address row opens Google Maps via Linking.openURL.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
   Button,
+  EmptyState,
   IconButton,
-  InlineError,
   NoticeBox,
-  Skeleton,
-  SkeletonGroup,
-  useSkeletonPhase,
+  PageLoading,
+  PressableScale,
+  useLoadingPhase,
 } from '../../../components/ui';
 import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
@@ -38,7 +39,6 @@ import { CONTINUOUS, RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import { fetchSavedGymIds, loadGym, saveGym, unsaveGym } from '../gym-service';
 import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
 import type { Gym } from '../types';
-import { getGymInitials } from '../gym-initials';
 
 interface GymDetailScreenProps {
   gymId: string;
@@ -66,15 +66,27 @@ export default function GymDetailScreen({
 
   const [gym, setGym] = useState<Gym | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const skeletonPhase = useSkeletonPhase(isLoading);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
+  // 'notFound' = the row is gone (no retry can help); 'network' = the request threw (retry).
+  const [loadError, setLoadError] = useState<'notFound' | 'network' | null>(null);
 
   // AC-120, AC-121: saved-gym bookmark state
   const [isSaved, setIsSaved] = useState(false);
 
+  // G-2: the header title appears only once the in-body title has scrolled off.
+  const [titleScrolledOff, setTitleScrolledOff] = useState(false);
+  const titleBottom = useRef(Number.POSITIVE_INFINITY);
+  const handleTitleLayout = useCallback((e: LayoutChangeEvent): void => {
+    const { y, height } = e.nativeEvent.layout;
+    titleBottom.current = y + height;
+  }, []);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>): void => {
+    setTitleScrolledOff(e.nativeEvent.contentOffset.y >= titleBottom.current);
+  }, []);
+
   const fetchGym = useCallback(async (): Promise<void> => {
     setIsLoading(true);
-    setErrorMessage(null);
+    setLoadError(null);
     try {
       // Fetch gym detail and saved status in parallel
       const [data, savedIds] = await Promise.all([
@@ -82,17 +94,17 @@ export default function GymDetailScreen({
         fetchSavedGymIds(),
       ]);
       if (!data) {
-        setErrorMessage(t('gymDirectory.errors.notFound'));
+        setLoadError('notFound');
       } else {
         setGym(data);
         setIsSaved(savedIds.includes(gymId));
       }
     } catch {
-      setErrorMessage(t('gymDirectory.errors.loadFailed'));
+      setLoadError('network');
     } finally {
       setIsLoading(false);
     }
-  }, [gymId, t]);
+  }, [gymId]);
 
   useEffect(() => {
     void fetchGym();
@@ -119,7 +131,7 @@ export default function GymDetailScreen({
 
   // v2.2: AppShell header owns back + title; the bookmark toggle is its trailing control.
   useAppHeader({
-    title: gym?.name ?? '',
+    title: titleScrolledOff ? (gym?.name ?? '') : '',
     onBack,
     trailing: gym ? (
       <IconButton
@@ -136,42 +148,53 @@ export default function GymDetailScreen({
   });
 
   const isMixed = gym?.gym_type === 'both';
+  // Photo author (truncatable first part of the credit capsule). No data yet; see the capsule comment.
+  const author: string | null = null;
+  const creditLabel = author
+    ? `${author} · ${t('gymDirectory.googlePhotosAttribution')}`
+    : t('gymDirectory.googlePhotosAttribution');
 
+  const networkError = (
+    <EmptyState
+      variant="error"
+      title={t('gymDirectory.errors.loadFailedTitle')}
+      description={t('gymDirectory.errors.loadFailedBody')}
+      primaryLabel={t('common.retry')}
+      onPrimary={() => {
+        void fetchGym();
+      }}
+    />
+  );
+
+  // One loading design for every page: nothing for 300ms, PageLoading, then E4 after 10s.
   if (isLoading) {
     return (
       <SwipeBackWrapper onBack={onBack} enabled={false}>
-        <View style={styles.root}>
-          <View style={styles.contentContainer}>
-            {skeletonPhase !== 'idle' ? (
-              <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonGroup}>
-                <Skeleton shape="card" surface="page" height={160} />
-                <Skeleton shape="text" textVariant="title1" width="70%" surface="page" />
-                <Skeleton shape="text" textVariant="title3" width="45%" surface="page" />
-                <Skeleton shape="text" textVariant="title3" width="30%" surface="page" />
-                <Skeleton shape="text" textVariant="body" width="60%" surface="page" />
-                <Skeleton shape="text" textVariant="body" width="80%" surface="page" />
-              </SkeletonGroup>
-            ) : null}
+        {loadingPhase === 'loading' ? (
+          <PageLoading />
+        ) : (
+          <View style={[styles.root, loadingPhase === 'timeout' ? styles.pageState : null]}>
+            {loadingPhase === 'timeout' ? networkError : null}
           </View>
-        </View>
+        )}
       </SwipeBackWrapper>
     );
   }
 
-  if (errorMessage || !gym) {
+  if (loadError || !gym) {
     return (
       <SwipeBackWrapper onBack={onBack}>
-        <View style={styles.root}>
-          <View style={styles.contentContainer}>
-            <InlineError
-              variant="block"
-              message={errorMessage ?? t('common.error')}
-              actionLabel={t('common.retry')}
-              onAction={() => {
-                void fetchGym();
-              }}
+        <View style={[styles.root, styles.pageState]}>
+          {loadError === 'network' ? (
+            networkError
+          ) : (
+            <EmptyState
+              variant="page"
+              icon={ICON.gyms.outline}
+              title={t('gymDirectory.errors.notFoundTitle')}
+              description={t('gymDirectory.errors.notFoundBody')}
             />
-          </View>
+          )}
         </View>
       </SwipeBackWrapper>
     );
@@ -179,77 +202,106 @@ export default function GymDetailScreen({
 
   return (
     <SwipeBackWrapper onBack={onBack}>
-      <ScrollView
-        style={styles.root}
-        contentContainerStyle={styles.contentContainer}
-        scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
-      >
-        {/* AC-196: cover photo from Places API seeder (when present) */}
-        {gym.cover_photo_url ? (
-          <>
-            <Image
-              source={{ uri: gym.cover_photo_url }}
-              style={styles.coverPhoto}
-              accessibilityLabel={gym.name ?? ''}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-            />
-            {/* AC-196: Google Maps Platform ToS — attribution required */}
-            <AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
-              {t('gymDirectory.googlePhotosAttribution')}
-            </AppText>
-          </>
-        ) : (
-          /* AC-198: initials avatar fallback when cover_photo_url is null */
-          <View style={styles.initialsAvatar} accessibilityLabel={gym.name ?? ''}>
-            <AppText variant="title1" color="textSecondary">
-              {getGymInitials(gym.name ?? '')}
-            </AppText>
-          </View>
-        )}
-
-        {/* Name + branch */}
-        <AppText variant="title1">{gym.name}</AppText>
-        <AppText variant="title3" color="textSecondary">
-          {gym.name_zh}
-        </AppText>
-        {gym.branch_label ? (
-          <AppText variant="callout" color="textSecondary" style={styles.branchLabel}>
-            {gym.branch_label}
-          </AppText>
-        ) : null}
-
-        {/* Location section */}
-        <AppText variant="pageSection" style={styles.sectionLabel}>
-          {t('gymDirectory.detail.location')}
-        </AppText>
-        <AppText variant="body">
-          {localizedCity(gym)} · {localizedDistrict(gym)}
-        </AppText>
-        <TouchableOpacity
-          accessibilityRole="link"
-          accessibilityLabel={gym.address_text}
-          onPress={() => {
-            const mapsUrl =
-              gym.lat != null && gym.lng != null
-                ? `https://maps.google.com/?q=${gym.lat},${gym.lng}`
-                : `https://maps.google.com/?q=${encodeURIComponent(gym.address_text)}`;
-            void Linking.openURL(mapsUrl);
-          }}
-          style={styles.addressRow}
+      <View style={styles.root}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.contentContainer}
+          scrollIndicatorInsets={{ bottom: 0 }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
         >
-          <AppText variant="body" color="primary" style={styles.addressText}>
-            {gym.address_text}
-          </AppText>
-          <Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />
-        </TouchableOpacity>
+          {/* AC-196: cover photo from Places API seeder. G-2: no photo => no photo area at all. */}
+          {gym.cover_photo_url ? (
+            <View>
+              <Image
+                source={{ uri: gym.cover_photo_url }}
+                style={styles.coverPhoto}
+                accessibilityLabel={gym.name ?? ''}
+                contentFit="cover"
+                cachePolicy="memory-disk"
+              />
+              {/*
+                AC-196: Google Maps Platform ToS attribution, overlaid as a scrim capsule (states-audit-ui 2.2).
+                Only the author part truncates; the credit part never shrinks or wraps.
+                `author` has no data source yet (needs the seeder to store authorAttributions).
+              */}
+              <View pointerEvents="box-none" style={styles.creditOuter}>
+                <View accessible accessibilityLabel={creditLabel} style={styles.creditPill}>
+                  {author ? (
+                    <AppText
+                      variant="footnote"
+                      color="onMedia"
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.2}
+                      style={styles.creditAuthor}
+                    >
+                      {author}
+                      {' · '}
+                    </AppText>
+                  ) : null}
+                  <AppText
+                    variant="footnote"
+                    color="onMedia"
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.2}
+                    style={styles.creditText}
+                  >
+                    {t('gymDirectory.googlePhotosAttribution')}
+                  </AppText>
+                </View>
+              </View>
+            </View>
+          ) : null}
 
-        {/* Mixed gym note */}
-        {isMixed && gym.bouldering_only_note ? (
-          <NoticeBox message={gym.bouldering_only_note} style={styles.noteBox} />
-        ) : null}
+          {/* Name + branch */}
+          <View onLayout={handleTitleLayout}>
+            <AppText variant="title1">{gym.name}</AppText>
+            <AppText variant="title3" color="textSecondary" style={styles.nameZh}>
+              {gym.name_zh}
+            </AppText>
+            {gym.branch_label ? (
+              <AppText variant="callout" color="textSecondary" style={styles.branchLabel}>
+                {gym.branch_label}
+              </AppText>
+            ) : null}
+          </View>
 
-        {/* View Routes CTA */}
+          {/* Location section */}
+          <View>
+            <AppText variant="pageSection" style={styles.sectionLabel}>
+              {t('gymDirectory.detail.location')}
+            </AppText>
+            <AppText variant="body">
+              {localizedCity(gym)} · {localizedDistrict(gym)}
+            </AppText>
+            <PressableScale
+              feedback="row"
+              pressedColor={theme.colors.surfacePressed}
+              accessibilityRole="link"
+              accessibilityLabel={gym.address_text}
+              onPress={() => {
+                const mapsUrl =
+                  gym.lat != null && gym.lng != null
+                    ? `https://maps.google.com/?q=${gym.lat},${gym.lng}`
+                    : `https://maps.google.com/?q=${encodeURIComponent(gym.address_text)}`;
+                void Linking.openURL(mapsUrl);
+              }}
+              style={styles.addressRow}
+            >
+              <AppText variant="body" color="primary" style={styles.addressText}>
+                {gym.address_text}
+              </AppText>
+              <Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />
+            </PressableScale>
+          </View>
+
+          {/* Mixed gym note */}
+          {isMixed && gym.bouldering_only_note ? (
+            <NoticeBox message={gym.bouldering_only_note} />
+          ) : null}
+        </ScrollView>
+
+        {/* G-2: View Routes CTA pinned at the bottom (AC-005) */}
         <View style={styles.cta}>
           <Button
             variant="primary"
@@ -258,7 +310,7 @@ export default function GymDetailScreen({
             onPress={() => onViewRoutes(gym.id, gym.name)}
           />
         </View>
-      </ScrollView>
+      </View>
     </SwipeBackWrapper>
   );
 }
@@ -274,13 +326,19 @@ function makeStyles(
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    contentContainer: {
-      paddingTop: theme.spacing.sm,
-      paddingHorizontal: screenMargin,
-      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.xxl,
+    scroll: {
+      flex: 1,
     },
-    skeletonGroup: {
-      gap: theme.layout.cardGap,
+    // R0: the gap between sections is set once, here.
+    contentContainer: {
+      paddingTop: theme.spacing.md,
+      paddingHorizontal: screenMargin,
+      paddingBottom: theme.spacing.md,
+      gap: theme.layout.sectionGap,
+    },
+    // E1 / E4 sit 48 below the header bottom (EmptyState adds the 48), so no top padding here.
+    pageState: {
+      paddingHorizontal: screenMargin,
     },
     coverPhoto: {
       width: '100%',
@@ -290,20 +348,30 @@ function makeStyles(
       overflow: 'hidden',
       backgroundColor: theme.colors.surfaceAlt,
     },
-    googleAttribution: {
-      marginTop: theme.spacing.xs,
-      marginBottom: theme.spacing.md,
-      textAlign: 'right',
+    creditOuter: {
+      position: 'absolute',
+      left: theme.spacing.sm,
+      right: theme.spacing.sm,
+      bottom: theme.spacing.sm,
+      alignItems: 'flex-end',
     },
-    initialsAvatar: {
-      width: '100%',
-      height: 200,
-      borderRadius: RADIUS.card,
-      ...CONTINUOUS,
-      backgroundColor: theme.colors.surfaceAlt,
+    creditPill: {
+      flexDirection: 'row',
+      maxWidth: '100%',
+      height: 24,
+      paddingHorizontal: theme.spacing.sm,
       alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: theme.spacing.md,
+      borderRadius: RADIUS.full,
+      backgroundColor: theme.colors.mediaScrimStrong,
+    },
+    creditAuthor: {
+      flexShrink: 1,
+    },
+    creditText: {
+      flexShrink: 0,
+    },
+    nameZh: {
+      marginTop: theme.layout.stackTight,
     },
     addressRow: {
       flexDirection: 'row',
@@ -314,17 +382,16 @@ function makeStyles(
       flex: 1,
     },
     branchLabel: {
-      marginTop: theme.spacing.xxs,
+      marginTop: theme.layout.stackTight,
     },
     sectionLabel: {
-      marginTop: theme.layout.sectionGap,
       marginBottom: theme.layout.sectionHeaderGap,
     },
-    noteBox: {
-      marginTop: theme.layout.sectionGap,
-    },
     cta: {
-      marginTop: theme.spacing.xl,
+      paddingHorizontal: screenMargin,
+      paddingTop: theme.spacing.smd,
+      paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.md,
+      backgroundColor: theme.colors.background,
     },
   });
 }

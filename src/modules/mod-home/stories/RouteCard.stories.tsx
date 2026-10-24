@@ -19,6 +19,7 @@ const SECTIONS = {
 const COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'white', 'black', 'unknown'] as const;
 
 interface Args {
+  variant: 'compact' | 'regular';
   saved: boolean;
   sendStyle: 'none' | 'flash' | 'top';
   betaVideoCount: number;
@@ -30,12 +31,13 @@ interface Args {
   gymName: string;
 }
 
-function Demo({ saved, sendStyle, betaVideoCount, hasPhoto, section, grade, colorTag, gymName }: Args): React.JSX.Element {
+function Demo({ variant, saved, sendStyle, betaVideoCount, hasPhoto, section, grade, colorTag, gymName }: Args): React.JSX.Element {
   const [isSaved, setIsSaved] = useState(saved);
   useEffect(() => setIsSaved(saved), [saved]);
   return (
     <View style={{ width: 375, padding: 16 }}>
       <RouteCard
+        variant={variant}
         route={{
           id: 'r1',
           name: `${grade} ${colorTag}`,
@@ -57,9 +59,10 @@ function Demo({ saved, sendStyle, betaVideoCount, hasPhoto, section, grade, colo
 }
 
 const meta: Meta<Args> = {
-  title: 'Home/RouteCard',
+  title: 'Patterns/RouteCard',
   component: Demo,
   args: {
+    variant: 'compact',
     saved: false,
     sendStyle: 'none',
     betaVideoCount: 0,
@@ -70,8 +73,9 @@ const meta: Meta<Args> = {
     gymName: 'Boulder Lab Taipei',
   },
   argTypes: {
+    variant: { control: 'inline-radio', options: ['compact', 'regular'], description: 'compact (default, 80pt, one meta line) or regular (104pt)' },
     sendStyle: { control: 'inline-radio', options: ['none', 'flash', 'top'], description: 'Flash / top only; attempts show nothing (AC-190)' },
-    betaVideoCount: { control: { type: 'number', min: 0, max: 120 }, description: '0 hides the line; the play disc also needs a photo (AC-189)' },
+    betaVideoCount: { control: { type: 'number', min: 0, max: 120 }, description: '0 hides the 「▶ n」 chip on the thumbnail (AC-189)' },
     section: { control: 'inline-radio', options: Object.keys(SECTIONS) },
     grade: { control: 'text', description: 'Printed on the tape badge (24/800)' },
     colorTag: { control: 'select', options: COLORS, description: 'Tape colour of the grade badge' },
@@ -88,12 +92,13 @@ const LIST = [
   { id: 'c', section: 'Overhang Cave', colorTag: 'black', grade: 'V6', send: null, beta: 12, saved: true },
 ];
 
-function ListDemo(): React.JSX.Element {
+function ListDemo({ variant }: { variant: 'compact' | 'regular' }): React.JSX.Element {
   const [savedIds, setSavedIds] = useState(new Set(LIST.map((r) => r.id)));
   return (
     <View style={{ width: 375, padding: 16, rowGap: 12 }}>
       {LIST.map((r) => (
         <RouteCard
+          variant={variant}
           key={r.id}
           route={{ id: r.id, name: `${r.grade} ${r.colorTag}`, section: r.section, grade: r.grade, photo_url: null, colorTag: r.colorTag, gymName: 'Boulder Lab Taipei' }}
           onPress={() => {}}
@@ -116,4 +121,10 @@ function ListDemo(): React.JSX.Element {
 }
 
 /** Cards stacked with `cardGap` 12, as in Projecting Routes: press, scroll-press and bookmark each independently. */
-export const List: StoryObj = { render: () => <ListDemo /> };
+export const AllVariants: StoryObj = { render: () => <ListDemo variant="compact" /> };
+
+/** RL-1 compact (the list default): thumb 64 + 2 x 8 = 80pt, pitch 92, grade on the tape badge, ONE meta line (colour・section・gym, beta count at the right). */
+export const Compact: StoryObj = { render: () => <ListDemo variant="compact" /> };
+
+/** The previous 104pt layout, kept as `variant="regular"` for opt-in. */
+export const Regular: StoryObj = { render: () => <ListDemo variant="regular" /> };

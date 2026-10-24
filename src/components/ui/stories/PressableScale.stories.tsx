@@ -24,7 +24,7 @@ function Demo(props: PressableScaleProps): React.JSX.Element {
 }
 
 const meta: Meta<PressableScaleProps> = {
-  title: 'UI/PressableScale',
+  title: 'Components/PressableScale',
   component: Demo,
   args: { feedback: 'control', inScroll: false },
   argTypes: { feedback: { control: 'inline-radio', options: ['control', 'row'] } },

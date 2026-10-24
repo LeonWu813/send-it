@@ -96,7 +96,7 @@ export default function BetaVideoPlayer({
           )}
           {/* Duration badge */}
           <View style={styles.durationBadge}>
-            <AppText variant="caption1" weight="600" numeric color="onMedia">
+            <AppText variant="footnote" weight="600" numeric color="onMedia">
               {formatDuration(durationSeconds)}
             </AppText>
           </View>
@@ -118,7 +118,7 @@ export default function BetaVideoPlayer({
           />
           {isBuffering ? (
             <View style={styles.bufferingOverlay}>
-              <Spinner color="onMedia" size="large" />
+              <Spinner context="media" />
             </View>
           ) : null}
         </View>

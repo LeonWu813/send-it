@@ -45,13 +45,14 @@ function expoTypeDeclarationsPlugin(): Plugin {
 const config: StorybookConfig = {
   framework: '@storybook/react-native-web-vite',
   stories: ['../src/**/*.stories.@(ts|tsx)', '../src/**/*.mdx'],
-  addons: [],
+  addons: ['@storybook/addon-docs'],
   core: { disableTelemetry: true },
   viteFinal: async (viteConfig) => {
     viteConfig.plugins = [supabaseStubPlugin(), expoTypeDeclarationsPlugin(), ...(viteConfig.plugins ?? [])];
     viteConfig.resolve ??= {};
     const existing = viteConfig.resolve.alias;
     const extra = [
+      { find: /^expo-image-picker$/, replacement: stub('expo-image-picker.ts') },
       { find: /^@react-native-async-storage\/async-storage$/, replacement: stub('async-storage.ts') },
       { find: /^@\//, replacement: `${path.resolve(root, 'src')}/` },
     ];

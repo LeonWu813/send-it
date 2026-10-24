@@ -31,7 +31,11 @@
       "appleSignInFailed": "Apple Sign-In failed. Please try again.",
       "googleSignInFailed": "Google Sign-In failed. Please try again.",
       "signOutFailed": "Sign out failed. Please try again.",
-      "networkError": "Network error. Please check your connection and retry."
+      "networkError": "Network error. Please check your connection and retry.",
+      "signInFailedTitle": "Couldn't sign in",
+      "signInFailedBody": "Check your email and password, then try again.",
+      "signUpFailedTitle": "Couldn't sign up",
+      "signUpFailedBody": "Something went wrong. Please try again."
     }
   },
   "profile": {
@@ -51,18 +55,25 @@
     "sendHistory": "Send History",
     "logout": "Log Out",
     "save": "Save",
-    "cancel": "Cancel",
     "errors": {
       "saveFailed": "Failed to save profile. Please try again.",
       "avatarUploadFailed": "Failed to upload photo. Please try again.",
-      "loadFailed": "Failed to load profile."
-    }
+      "loadFailed": "Failed to load profile.",
+      "loadFailedTitle": "Couldn't load your profile",
+      "loadFailedBody": "Check your connection and try again."
+    },
+    "discardConfirmTitle": "Discard changes?",
+    "discardConfirmBody": "Your edits won't be saved.",
+    "discard": "Discard",
+    "keepEditing": "Keep editing",
+    "noSendsYet": "No sends yet.",
+    "betaEmpty": "Beta videos you upload will show up here."
   },
   "settings": {
     "title": "Settings",
     "back": "Back",
     "blockedAccounts": "Blocked Accounts",
-    "betaVideoPrivacy": "Beta Video Visibility",
+    "betaVideoPrivacy": "Followers-only beta videos",
     "betaVideoPrivacyPublic": "All Users",
     "betaVideoPrivacyFollowersOnly": "Followers Only",
     "betaVideoPrivacySubtextPublic": "All users can see your beta videos",
@@ -77,12 +88,23 @@
       "system": "System",
       "light": "Light",
       "dark": "Dark"
-    }
+    },
+    "notifications": "Notifications",
+    "betaVideoPrivacyOnEffect": "When on, only your followers can see your beta videos.",
+    "logoutConfirmTitle": "Log out?",
+    "logoutConfirmBody": "You will need to sign in again to use your account."
   },
   "gymDirectory": {
     "title": "Gyms",
     "searchPlaceholder": "Search gyms…",
-    "noResults": "No gyms found.",
+    "empty": {
+      "title": "No gyms yet"
+    },
+    "filteredEmpty": {
+      "title": "No matching gyms",
+      "description": "Try a different keyword or city.",
+      "clear": "Clear filters"
+    },
     "gymTypeBadge": {
       "bouldering": "Bouldering",
       "topRope": "Top Rope",
@@ -125,8 +147,10 @@
       "saved": "Saved"
     },
     "errors": {
-      "loadFailed": "Failed to load gyms. Please try again.",
-      "notFound": "Gym not found."
+      "loadFailedTitle": "Couldn't load gyms",
+      "loadFailedBody": "Check your connection and try again.",
+      "notFoundTitle": "Gym not found",
+      "notFoundBody": "It may have been removed or merged."
     },
     "googlePhotosAttribution": "Photos from Google"
   },
@@ -134,6 +158,12 @@
     "noResults": "No routes match the filter",
     "addRoute": "Can't find it? Add a new route",
     "pendingApproval": "Your route will appear once approved by the admin",
+    "pendingToast": "Submitted. It will show in the route list once approved.",
+    "emptyTitle": "No routes at this gym yet",
+    "emptyDescription": "See a route on the wall? Add the first one.",
+    "filteredDescription": "Try a different grade or colour.",
+    "loadErrorTitle": "Couldn't load routes",
+    "loadErrorDescription": "Check your connection and try again.",
     "colors": {
       "red": "Red",
       "orange": "Orange",
@@ -165,7 +195,23 @@
       "recordSend": "Record Send",
       "uploadBeta": "Upload Beta Video",
       "sendHistoryTitle": "Send History",
-      "noSends": "No sends recorded yet"
+      "noSends": "No sends recorded for this route yet.",
+      "recordSendLink": "Record a send",
+      "addedAndRetired": "Added {{added}} · Retired {{retired}}",
+      "notFoundTitle": "Route not found",
+      "notFoundDescription": "It may have been retired or merged.",
+      "loadErrorTitle": "Couldn't load this route",
+      "historyLoadErrorTitle": "Couldn't load send history",
+      "attemptsShort": "Attempts",
+      "moreActions": "More actions"
+    },
+    "filter": {
+      "button": "Filter",
+      "sheetTitle": "Filter routes",
+      "grade": "Grade",
+      "color": "Hold colour",
+      "clearAll": "Clear filters",
+      "removeChip": "Remove filter: {{label}}"
     }
   },
   "routes": {
@@ -203,12 +249,13 @@
     "submit": {
       "cta": "+ Add Route",
       "title": "Add a Route",
-      "gradeLabel": "GRADE",
-      "colorLabel": "HOLD COLOR",
-      "sectionLabel": "SECTION (optional)",
+      "gymContext": "Gym: {{name}}",
+      "gradeLabel": "Grade",
+      "colorLabel": "Hold color",
+      "sectionLabel": "Section (optional)",
       "sectionPlaceholder": "e.g. Cave, Slab, Overhang…",
       "photo": {
-        "title": "Add a Photo",
+        "title": "Photo",
         "body": "A photo is required so other climbers can identify the route. Take a clear photo of the start holds or the full route.",
         "placeholder": "No photo selected",
         "preview": "Route photo preview",
@@ -221,7 +268,9 @@
         "photoRequired": "A photo is required. Please take or choose a photo of the route.",
         "photoPermissionDenied": "Photo library access is required to choose a photo.",
         "cameraPermissionDenied": "Camera access is required to take a photo.",
-        "submitFailed": "Failed to submit route. Please try again."
+        "submitFailed": "Failed to submit route. Please try again.",
+        "submitFailedTitle": "Route not submitted",
+        "submitFailedBody": "Check your connection and try again. What you filled in is still here."
       }
     },
     "errors": {
@@ -274,6 +323,8 @@
     "deleted": "Deleted",
     "loading": "Loading sends",
     "searching": "Searching routes",
+    "noRoutesTitle": "No routes found for “{{query}}”",
+    "noRoutesHint": "Check the gym ID and search again.",
     "logged": "Logged: {{style}}",
     "noteMore": "More",
     "deleteLabel": "Delete {{date}} {{style}} send"
@@ -281,6 +332,10 @@
   "home": {
     "banner": {
       "noEvents": "No active events"
+    },
+    "loadFailed": {
+      "title": "Couldn't load Home",
+      "description": "Check your connection and try again."
     },
     "banners": {
       "competition": "Competition",
@@ -290,11 +345,11 @@
     "savedGyms": {
       "title": "Saved Gyms",
       "viewAll": "View All",
-      "empty": "Tap the bookmark on any gym to save it."
+      "empty": "Tap the bookmark on any gym to save it.",
+      "explore": "Explore gyms"
     },
     "following": {
       "title": "Following",
-      "empty": "Follow climbers to see their activity",
       "newUpload": "new video upload"
     },
     "projectingRoutes": {
@@ -302,16 +357,21 @@
       "allGrades": "All",
       "empty": "Save a route to track your projects.",
       "emptyFiltered": "No projecting routes at this grade.",
+      "browse": "Browse routes",
       "bookmarkFailed": "Couldn't update your saved routes. Try again."
     },
     "followingActivity": {
-      "title": "Following Activity",
+      "title": "New beta videos",
       "newVideos": "{{count}} new beta video",
       "newVideos_other": "{{count}} new beta videos",
       "empty": "Follow climbers to see their new beta videos.",
       "today": "today",
       "dayAgo": "1 day ago",
-      "daysAgo": "{{count}} days ago"
+      "daysAgo": "{{count}} days ago",
+      "viewAll": "View All",
+      "openProfileHint": "Opens profile",
+      "findClimbers": "Find climbers",
+      "rowA11y": "{{name}}, {{label}}, {{time}}"
     },
     "routeCard": {
       "thumbnailAlt": "Route photo for {{name}}"
@@ -335,14 +395,15 @@
     "unsaveAction": "Remove from saved"
   },
   "betaVideo": {
-    "sectionTitle": "BETA VIDEOS",
+    "sectionTitle": "Beta videos",
     "addVideo": "Add Beta Video",
     "noVideos": "No one has shared beta yet.",
     "myVideos": "My Beta Videos",
+    "noVideosYetUser": "{{name}} hasn't uploaded any beta videos yet.",
     "noVideosYet": "No beta videos yet",
     "uploading": "Uploading…",
     "uploadProgress": "{{percent}}% complete",
-    "loadError": "Unable to load video",
+    "loadError": "Couldn't load video",
     "replaceWarning": "You already have a beta video for this route. Confirming will replace your existing video.",
     "replaceConfirmTitle": "Replace Beta Video",
     "replaceConfirmMessage": "You already have a beta video for this route. If you proceed, the old video will be replaced.",
@@ -376,6 +437,7 @@
       "videoTooLargeForStorage": "Video is too large. Please trim it and try again."
     },
     "emptyUpload": "Upload beta",
+    "replaceMine": "Replace my beta",
     "loadingVideos": "Loading beta videos",
     "uploadingHint": "Please stay on this screen until the upload finishes.",
     "uploadFailedTitle": "Upload failed",
@@ -405,11 +467,26 @@
     "moreOptions": "More options",
     "menu": {
       "actionFailed": "Didn't go through. Try again."
-    }
+    },
+    "noFollowersDescription": "Share beta videos so other climbers can find you.",
+    "noFollowingDescription": "Follow climbers to see their new beta videos on Home.",
+    "loadErrorTitle": "Couldn't load this page",
+    "loadErrorDescription": "Check your connection and try again.",
+    "emptyTitle": "No activity yet",
+    "videosPrivate": "Only followers can see {{name}}'s beta videos."
   },
   "notifications": {
     "title": "Notifications",
-    "empty": "No notifications yet. Like activity from others will appear here.",
+    "emptyTitle": "No notifications yet",
+    "emptyDescription": "When someone likes your beta video, it will show up here.",
+    "loadErrorTitle": "Couldn't load notifications",
+    "loadPreferenceErrorTitle": "Couldn't load settings",
+    "loadErrorDescription": "Check your connection and try again.",
+    "section": {
+      "today": "Today",
+      "thisWeek": "This week",
+      "earlier": "Earlier"
+    },
     "badgeBetaVideoLike": "Like",
     "betaVideoLikedBody": "liked your beta video.",
     "betaVideoLikeA11y": "Beta video like notification",
@@ -442,14 +519,11 @@
       "heroSends": "{{count}} send",
       "unitTimes": "times",
       "unitDays": "days",
-      "noSendsTitle": "No sends yet",
-      "noSendsBody": "Your top grade will show here once you send.",
       "heroA11y": "Top grade {{grade}}, {{count}} send",
       "sendsA11y": "{{count}} send",
       "daysA11y": "Days climbed, {{count}} day",
-      "promptEyebrow": "First record",
-      "promptTitle": "Which route did you climb? Log it.",
-      "promptBody": "Find the route at the gym and tap Log send. Your top grade and stats start from here.",
+      "compactHint": "Opens full stats",
+      "promptBody": "Find a route at the gym and tap Log send. Your top grade and stats will show up here.",
       "promptAction": "Find routes",
       "heroSends_other": "{{count}} sends",
       "sendsA11y_other": "{{count}} sends",
@@ -475,6 +549,8 @@
       "lastYear": "Last Year"
     },
     "empty": "No sends recorded yet.",
+    "emptyTitle": "No sends yet",
+    "emptySection": "Routes you send will show up here.",
     "hiddenTitle": "Profile is Private",
     "hiddenBody": "Follow this climber to see their send history.",
     "errors": {
@@ -488,7 +564,10 @@
     "blockedNotice": "You blocked {{name}}",
     "blockedNoticeGeneric": "You blocked this user",
     "unblock": "Unblock",
-    "noBlockedAccounts": "No blocked accounts",
+    "noBlockedAccounts": "You haven't blocked anyone",
+    "noBlockedAccountsBody": "People you block appear here, and you can unblock them here.",
+    "blockedLoadFailed": "Couldn't load blocked accounts",
+    "blockedLoadFailedBody": "Check your connection and try again.",
     "sheetReport": "Report and block",
     "sheetBlock": "Block",
     "sheetUnblock": "Unblock",
@@ -518,7 +597,9 @@
       "blocked": "User blocked.",
       "unblocked": "User unblocked.",
       "error": "Action failed. Please try again.",
-      "confirmBody": "You'll stop seeing each other's content. You can unblock any time."
+      "confirmBody": "You'll stop seeing each other's content. You can unblock any time.",
+      "confirmUnblock": "Unblock this user?",
+      "confirmUnblockBody": "You will see each other's content again. You can block them again any time."
     },
     "sheetReportHint": "We'll review this account, and you'll stop seeing each other's content right away."
   },
@@ -533,6 +614,10 @@
     "back": "Back"
   },
   "ui": {
+    "alertPrefix": {
+      "warning": "Warning: ",
+      "error": "Error: "
+    },
     "close": "Close",
     "dismiss": "Dismiss",
     "loading": "Loading",

@@ -11,15 +11,15 @@
 
 import type { Session } from '@supabase/supabase-js';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollView, StyleSheet, View } from 'react-native';
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
   Button,
-  Card,
   InlineError,
   TextField,
 } from '../../../components/ui';
@@ -44,7 +44,18 @@ export default function RequestGymScreen({
   const { screenMargin } = useLayout();
   const styles = makeStyles(theme, screenMargin);
 
-  useAppHeader({ title: t('gymDirectory.requestGym.title'), onBack });
+  // A9: header title appears only once the large title scrolls off.
+  const [titleScrolledOff, setTitleScrolledOff] = useState(false);
+  const titleBottom = useRef(Number.POSITIVE_INFINITY);
+  const handleTitleLayout = useCallback((e: LayoutChangeEvent): void => {
+    const { y, height } = e.nativeEvent.layout;
+    titleBottom.current = y + height;
+  }, []);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>): void => {
+    setTitleScrolledOff(e.nativeEvent.contentOffset.y >= titleBottom.current);
+  }, []);
+
+  useAppHeader({ title: titleScrolledOff ? t('gymDirectory.requestGym.title') : '', onBack });
   useHideTabBar();
 
   const [screenState, setScreenState] = useState<ScreenState>('form');
@@ -120,15 +131,19 @@ export default function RequestGymScreen({
         style={styles.root}
         contentContainerStyle={styles.contentContainer}
         keyboardShouldPersistTaps="handled"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
       >
-        <AppText variant="largeTitle" accessibilityRole="header">
-          {t('gymDirectory.requestGym.title')}
-        </AppText>
+        <View onLayout={handleTitleLayout}>
+          <AppText variant="largeTitle" accessibilityRole="header">
+            {t('gymDirectory.requestGym.title')}
+          </AppText>
+        </View>
         <AppText variant="subhead" color="textSecondary" style={styles.screenSubtitle}>
           {t('gymDirectory.requestGym.subtitle')}
         </AppText>
 
-        <Card style={styles.form}>
+        <View style={styles.form}>
           {/* Gym name (required) */}
           <TextField
             label={`${t('gymDirectory.requestGym.nameLabel')} *`}
@@ -163,7 +178,7 @@ export default function RequestGymScreen({
             returnKeyType="done"
             onSubmitEditing={handleSubmit}
           />
-        </Card>
+        </View>
 
         {/* Submission error */}
         {errorMessage ? (

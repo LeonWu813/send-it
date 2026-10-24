@@ -10,12 +10,15 @@
  *   - MOD-006 (AC-163)
  *   - MOD-001 (AC-164)
  *
- * Design system v2.2 (§32.9, off-spec design work): portrait 3:4 tiles (`mediaTileAspect`), gap 2,
- * tiles measure their own width with onLayout; an inset grid (horizontalPadding > 0) is clipped by ONE
- * outer View (`media` 12 + continuous curve), tiles have radius 0; no per-tile badge or play disc;
+ * Design system v2.3 (§32.9, page-review RD-3): portrait 3:4 tiles (`mediaTileAspect`), gap 2,
+ * tiles measure their own width with onLayout (the PARENT owns the screen margin: the grid never adds
+ * its own, so tiles are 119pt at x=16 on a 393 screen); an inset grid (horizontalPadding > 0) rounds
+ * each tile's OUTER corners individually (`media` 12 + continuous curve) so a short last row still has
+ * round corners; no per-tile badge or play disc;
  * press overlays `mediaScrim` (press 100 in, release 120 out, no scale: Motion #12); a real thumbnail
- * fades in over `short` unless cached; with no videos and `onUpload`, the first tile is the upload
- * slot (existing upload flow only) followed by a dashed placeholder.
+ * fades in over `short` unless cached; with no videos the grid renders the caller's `emptyState` (E2
+ * `section`; the upload entry lives in the section header, never in the grid: states-audit-ux #48, the
+ * dashed slot tiles are retired); while loading it shows the `section` spinner in a 52pt slot.
  *
  * Tech Lead decisions (Rev 13, point 6):
  * - No VideoView per grid cell (avoid N live decoders).
@@ -26,7 +29,6 @@
  *   matching the route-detail inline cell style (Fix 3).
  */
 
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -38,9 +40,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
-import { AppText } from '../../../components/ui/AppText';
-import { Skeleton, SkeletonGroup, useSkeletonPhase } from '../../../components/ui/Skeleton';
-import { ICON } from '../../../lib/icons';
+import { Spinner } from '../../../components/ui/ProgressBar';
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { CONTINUOUS, useTheme } from '../../../lib/theme';
 import type { BetaVideo } from '../types';
@@ -57,23 +57,18 @@ export interface BetaVideoGridProps {
   /** Called with the tapped cell's index when a cell is pressed. */
   onPressVideo: (index: number) => void;
   /**
-   * Optional empty-state node rendered when videos.length === 0 (use ui/ EmptyState `inline`).
+   * Optional empty-state node rendered when videos.length === 0 (use ui/ EmptyState `section`).
    * If not provided and videos is empty, nothing is rendered.
    */
   emptyState?: React.ReactNode;
   /**
    * Horizontal padding (in dp) applied by the caller's wrapping container on each side of the grid.
    * 0 (default, profile screens, edge-to-edge): no outer rounding. > 0 (route detail, inset):
-   * the whole grid gets the `media` outer radius. The gap is 2 either way. The tile width itself comes from onLayout, not from this value
-   * (it is only the first-render estimate before the layout pass).
+   * the grid's outer corners get the `media` radius, per tile. The gap is 2 either way. The tile width comes from onLayout, not from
+   * this value (it is only the first-render estimate before the layout pass). The grid adds NO margin of its own.
    */
   horizontalPadding?: number;
-  /**
-   * Existing upload entry point. When there are no videos and this is set, the first tile is the
-   * "upload beta" slot (a button) followed by a dashed placeholder, instead of `emptyState`.
-   */
-  onUpload?: () => void;
-  /** Show skeleton tiles instead of the grid (the caller decides when, see useSkeletonPhase). */
+  /** Show the `section` spinner (52pt slot) instead of the grid (the caller decides when, see useLoadingPhase). */
   loading?: boolean;
 }
 
@@ -160,16 +155,18 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
     }).start();
   };
 
-  // When the first row is not full (total < NUM_COLUMNS), the outer container's
-  // overflow:hidden clips the top corners of the grid container — but the spacer
-  // Views to the right of the last real tile sit between the tile and the clipped
-  // corner, so the top-right of the last real tile is NOT rounded by the outer
-  // clip. Apply explicit top corner radii to the relevant tiles instead.
-  const topLeftRadius = index === 0 ? metrics.radius : 0;
-  const topRightRadius = (total < NUM_COLUMNS && index === total - 1) || index === NUM_COLUMNS - 1
-    ? metrics.radius
-    : 0;
-  const bottomRightRadius = total < NUM_COLUMNS && index === total - 1 ? metrics.radius : 0;
+  // Each tile rounds only the corners on the grid's outer boundary (no clipping of the bounding box):
+  // a short last row also rounds the right side of the tile above the empty cell.
+  const rows = Math.ceil(total / NUM_COLUMNS);
+  const row = Math.floor(index / NUM_COLUMNS);
+  const col = index % NUM_COLUMNS;
+  const isLast = index === total - 1;
+  const hasTileBelow = index + NUM_COLUMNS < total;
+  const r = metrics.radius;
+  const topLeftRadius = row === 0 && col === 0 ? r : 0;
+  const topRightRadius = row === 0 && (col === NUM_COLUMNS - 1 || isLast) ? r : 0;
+  const bottomLeftRadius = row === rows - 1 && col === 0 ? r : 0;
+  const bottomRightRadius = isLast || (!hasTileBelow && col === NUM_COLUMNS - 1) ? r : 0;
 
   return (
     <Pressable
@@ -187,7 +184,9 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
         backgroundColor: theme.isDark ? c.surfaceAlt : c.border,
         borderTopLeftRadius: topLeftRadius,
         borderTopRightRadius: topRightRadius,
+        borderBottomLeftRadius: bottomLeftRadius,
         borderBottomRightRadius: bottomRightRadius,
+        ...CONTINUOUS,
       }}
     >
       {uri && !failed ? (
@@ -209,76 +208,18 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
   );
 }
 
-/** First tile of an empty grid: the upload slot (the existing upload flow) and a dashed placeholder. */
-function UploadSlotRow({ metrics, onUpload }: { metrics: GridMetrics; onUpload: () => void }): React.JSX.Element {
+/** `section` loading: a small textSecondary spinner centred in a 52pt slot (states-audit-ui 1.3). */
+function GridLoading(): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const c = theme.colors;
-  const outer = { borderRadius: theme.radius.media, ...CONTINUOUS } as const;
   return (
-    <View style={{ flexDirection: 'row', gap: metrics.gap }} testID="beta-video-grid-slot-row">
-      <Pressable
-        onPress={onUpload}
-        accessibilityRole="button"
-        accessibilityLabel={t('betaVideo.emptyUpload')}
-        testID="beta-video-grid-upload-slot"
-        style={({ pressed }) => [
-          outer,
-          {
-            width: metrics.cellSize,
-            height: metrics.cellHeight,
-            backgroundColor: pressed ? c.surfacePressed : c.surface,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: theme.spacing.xs,
-          },
-        ]}
-      >
-        <Ionicons name={ICON.add.outline} size={theme.iconSize.xl} color={c.primary} accessibilityElementsHidden />
-        <AppText variant="footnote" weight="600" color="primary" align="center">
-          {t('betaVideo.emptyUpload')}
-        </AppText>
-      </Pressable>
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[
-          outer,
-          {
-            width: metrics.cellSize,
-            height: metrics.cellHeight,
-            borderWidth: theme.stroke.emphasis,
-            borderStyle: 'dashed',
-            borderColor: c.outline,
-          },
-        ]}
-      />
+    <View
+      accessible
+      accessibilityLabel={t('betaVideo.loadingVideos')}
+      style={{ height: theme.layout.sectionLoadingSlot, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Spinner context="section" />
     </View>
-  );
-}
-
-/** Two rows of skeleton tiles (no pulse colour change: `border` on the page). Wrap-free: use inside the caller. */
-function GridSkeleton({ metrics }: { metrics: GridMetrics }): React.JSX.Element {
-  const { t } = useTranslation('common');
-  const phase = useSkeletonPhase(true);
-  return (
-    <SkeletonGroup label={t('betaVideo.loadingVideos')}>
-      {phase === 'idle'
-        ? null
-        : [0, 1].map((row) => (
-            <View key={row} style={{ flexDirection: 'row', gap: metrics.gap, marginBottom: row === 0 ? metrics.gap : 0 }}>
-              {Array.from({ length: NUM_COLUMNS }).map((_, i) => (
-                <Skeleton
-                  key={i}
-                  surface="page"
-                  width={metrics.cellSize}
-                  height={metrics.cellHeight}
-                  radius={0}
-                />
-              ))}
-            </View>
-          ))}
-    </SkeletonGroup>
   );
 }
 
@@ -290,7 +231,6 @@ export default function BetaVideoGrid({
   videos,
   onPressVideo,
   emptyState,
-  onUpload,
   horizontalPadding = 0,
   loading = false,
 }: BetaVideoGridProps): React.JSX.Element | null {
@@ -298,22 +238,13 @@ export default function BetaVideoGrid({
 
   if (loading) {
     return (
-      <View onLayout={onLayout} testID="beta-video-grid-skeleton">
-        <View style={{ borderRadius: metrics.radius, ...CONTINUOUS, overflow: 'hidden' }}>
-          <GridSkeleton metrics={metrics} />
-        </View>
+      <View testID="beta-video-grid-loading">
+        <GridLoading />
       </View>
     );
   }
 
   if (videos.length === 0) {
-    if (onUpload) {
-      return (
-        <View onLayout={onLayout} testID="beta-video-grid">
-          <UploadSlotRow metrics={metrics} onUpload={onUpload} />
-        </View>
-      );
-    }
     return emptyState ? <>{emptyState}</> : null;
   }
 
@@ -345,7 +276,7 @@ export default function BetaVideoGrid({
 
   return (
     <View onLayout={onLayout} testID="beta-video-grid">
-      <View style={{ borderRadius: metrics.radius, ...CONTINUOUS, overflow: 'hidden' }}>{rows}</View>
+      {rows}
     </View>
   );
 }

@@ -6,12 +6,14 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { ICON } from '../../lib/icons';
 import type { IoniconName } from '../../lib/icons';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
-import { useTheme } from '../../lib/theme';
+import { CONTINUOUS, useTheme } from '../../lib/theme';
 import { AppText } from './AppText';
+import { ChoiceGridContext } from './ChoiceGrid';
 import { IconButton } from './IconButton';
 import { PressableScale } from './PressableScale';
 
 export type ChipVariant = 'filter' | 'choice' | 'multi';
+export type ChipLayout = 'capsule' | 'tile';
 
 export interface ChipProps {
   label: string;
@@ -30,8 +32,14 @@ export interface ChipProps {
   clearAccessibilityLabel?: string;
   /** Tape swatch fill (14x14, radius `minor`) for colour filters. Pops when the chip becomes selected. */
   swatch?: string;
-  /** Hairline colour for swatches that need one (white / yellow / pink / black tape). */
-  swatchHair?: string;
+  /**
+   * capsule (default): the inline pill. tile: colour-picker cell, swatch (20, fill only) above the name,
+   * radius `control` 12, minHeight 56, width from the parent (ChoiceGrid). Selected = inverted + a checkmark
+   * (`swatchMark`) on the swatch + a 2pt outer `background` gap ring. Needs `swatch`.
+   */
+  layout?: ChipLayout;
+  /** tile: colour of the selected checkmark on the swatch (`TAPE_DISPLAY[mode][color].label`). */
+  swatchMark?: string;
   /** Surface the chip sits on: `background` (default, chip = surface) or `surface` (chip = surfaceAlt). */
   on?: 'background' | 'surface';
   /** Leading glyph (sm 16; md 20 for size="large"). */
@@ -66,7 +74,8 @@ export function Chip({
   onClear,
   clearAccessibilityLabel,
   swatch,
-  swatchHair,
+  layout = 'capsule',
+  swatchMark,
   on = 'background',
   icon,
   iconSelected,
@@ -120,14 +129,20 @@ export function Chip({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected]);
 
-  const { chipHeight, tapeSwatch } = theme.componentSize;
+  const { chipHeight, tapeSwatch, colorTile } = theme.componentSize;
+  const inGrid = React.useContext(ChoiceGridContext);
+  const tile = layout === 'tile';
+  const fillCell = tile || inGrid;
   const large = size === 'large';
-  const height = large ? theme.layout.minTouchTarget : chipHeight;
-  const slop = large ? 0 : Math.max(0, (theme.layout.minTouchTarget - chipHeight) / 2);
+  const height = tile ? colorTile.minHeight : large ? theme.layout.minTouchTarget : chipHeight;
+  const slop = large || tile ? 0 : Math.max(0, (theme.layout.minTouchTarget - chipHeight) / 2);
   const glyph = large ? theme.iconSize.md : theme.iconSize.sm;
-  const textVariant = 'subhead';
+  const textVariant = tile ? 'footnote' : 'subhead';
+  const ringGap = tile ? colorTile.swatchGap : theme.stroke.thin;
+  const swatchSize = tile ? colorTile.swatch : tapeSwatch;
   const offText = disabled ? 'textDisabled' : 'textPrimary';
-  const onText = disabled ? 'textDisabled' : 'background';
+  // Disabled only locks a whole group: a selected chip keeps its inverted fill, so its text stays `background`.
+  const onText = 'background';
   const textColor = selected ? onText : offText;
   const role = variant === 'choice' ? 'radio' : variant === 'multi' ? 'checkbox' : 'button';
   const showClear = variant === 'filter' && selected && !!onClear;
@@ -145,10 +160,10 @@ export function Chip({
       underlay={
         <>
           <View style={[StyleSheet.absoluteFill, { backgroundColor: on === 'surface' ? c.surfaceAlt : c.surface }]} />
-          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.textPrimary, opacity: disabled ? 0 : fill }]} />
+          <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: c.textPrimary, opacity: fill }]} />
         </>
       }
-      style={[{ borderRadius: theme.radius.full, overflow: 'hidden' }, style]}
+      style={[tile ? { borderRadius: theme.radius.control, ...CONTINUOUS, overflow: 'hidden' } : { borderRadius: theme.radius.full, overflow: 'hidden' }, style]}
     >
       <View
         style={{
@@ -156,30 +171,44 @@ export function Chip({
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          paddingHorizontal: 14,
+          paddingHorizontal: tile ? 0 : inGrid ? 8 : 14,
+          ...(tile ? { flexDirection: 'column' as const, paddingVertical: colorTile.padV } : null),
         }}
       >
         {swatch ? (
           <Animated.View
             style={{
-              width: tapeSwatch,
-              height: tapeSwatch,
+              width: swatchSize,
+              height: swatchSize,
               borderRadius: theme.radius.minor,
               backgroundColor: swatch,
-              borderWidth: swatchHair ? theme.stroke.thin : 0,
-              borderColor: swatchHair,
-              marginRight: 6,
+              marginRight: tile ? 0 : 6,
+              marginBottom: tile ? theme.spacing.xs : 0,
               transform: [{ scale: pop }],
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {/* selected: 1pt `background` ring fades in (keeps black tape visible on the black fill) */}
+            {/* selected: OUTER `background` gap ring (chip 1pt, tile 2pt) fades in with the fill; takes no layout space */}
             <Animated.View
               pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFill,
-                { borderRadius: theme.radius.minor, borderWidth: theme.stroke.thin, borderColor: c.background, opacity: fill },
-              ]}
+              style={{
+                position: 'absolute',
+                top: -ringGap,
+                left: -ringGap,
+                right: -ringGap,
+                bottom: -ringGap,
+                borderRadius: theme.radius.minor + ringGap,
+                borderWidth: ringGap,
+                borderColor: c.background,
+                opacity: fill,
+              }}
             />
+            {tile ? (
+              <Animated.View pointerEvents="none" style={{ opacity: fill }}>
+                <Ionicons name={ICON.selected.outline} size={theme.iconSize.xs} color={swatchMark ?? c.background} />
+              </Animated.View>
+            ) : null}
           </Animated.View>
         ) : null}
         {icon ? (
@@ -187,17 +216,17 @@ export function Chip({
             <Ionicons name={selected && iconSelected ? iconSelected : icon} size={glyph} color={c[textColor]} />
           </Animated.View>
         ) : null}
-        <View style={{ flexShrink: 1 }}>
-          <AppText variant={textVariant} weight="500" color={offText} numberOfLines={1}>
+        <View style={{ flexShrink: 1, ...(tile ? { alignSelf: 'stretch' as const } : inGrid ? { flexGrow: 1 } : null) }}>
+          <AppText variant={textVariant} weight="500" color={offText} numberOfLines={tile ? undefined : 1} style={fillCell ? { textAlign: 'center' } : undefined}>
             {label}
           </AppText>
           <Animated.View
             pointerEvents="none"
             accessibilityElementsHidden
             importantForAccessibility="no-hide-descendants"
-            style={{ position: 'absolute', left: 0, right: 0, opacity: disabled ? 0 : fill }}
+            style={{ position: 'absolute', left: 0, right: 0, opacity: fill }}
           >
-            <AppText variant={textVariant} weight="500" color={onText} numberOfLines={1}>
+            <AppText variant={textVariant} weight="500" color={onText} numberOfLines={tile ? undefined : 1} style={fillCell ? { textAlign: 'center' } : undefined}>
               {label}
             </AppText>
           </Animated.View>

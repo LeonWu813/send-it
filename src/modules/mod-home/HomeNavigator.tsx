@@ -10,6 +10,7 @@
  *   onSelectGym               — navigates directly to that gym's RouteListScreen (AC-114, AC-176).
  *   onSelectRoute             — navigates to RouteDetailScreen (AC-178).
  *   onSelectClimber           — opens that user's UserProfileScreen overlay (AC-182).
+ *   onViewAllFollowing        — opens FollowingListScreen for the signed-in user (home-v2 「查看全部」).
  *   onNavigateToNotifications — opens MOD-007 NotificationInboxScreen (AC-184).
  *   onNavigateToSettings      — opens MOD-010 SettingsScreen (AC-184).
  */
@@ -26,6 +27,7 @@ interface HomeNavigatorProps {
   onSelectGym: (gymId: string, gymName: string) => void;
   onSelectRoute: (routeId: string, gymId: string) => void;
   onSelectClimber: (userId: string) => void;
+  onViewAllFollowing?: (userId: string) => void;
   onNavigateToNotifications: () => void;
   onNavigateToSettings: () => void;
 }
@@ -37,6 +39,7 @@ export default function HomeNavigator({
   onSelectGym,
   onSelectRoute,
   onSelectClimber,
+  onViewAllFollowing,
   onNavigateToNotifications,
   onNavigateToSettings,
 }: HomeNavigatorProps): React.JSX.Element {
@@ -54,6 +57,7 @@ export default function HomeNavigator({
       onSelectGym={onSelectGym}
       onSelectRoute={onSelectRoute}
       onSelectClimber={onSelectClimber}
+      onViewAllFollowing={onViewAllFollowing}
     />
   );
 }

@@ -55,7 +55,7 @@ function Frame({ args }: { args: Args }): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'Profile/AscentHistoryItem',
+  title: 'Patterns/AscentHistoryItem',
   render: (args) => <Frame args={args} />,
   args: { colorTag: 'blue', sendStyle: 'top', attempts: 3, isPrivate: false, hasSection: true, hasPhoto: false, longNames: false },
   argTypes: {

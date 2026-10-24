@@ -1,23 +1,15 @@
 /**
- * GymDetailScreen stories — gym detail page with cover photo, map pin, and
- * the "View Routes" CTA (AC-005).
+ * Pages/Gyms/Gym Detail: gym detail with cover photo, map pin and the "View Routes" CTA (AC-005).
+ * Renders inside PhoneFrame (real AppHeader + TabBar, gyms tab active).
  *
- * States:
- *  Populated   — full gym record, bookmark saved, "View Routes" CTA visible
- *  Loading     — skeleton shown during the initial fetch
- *  Error       — block error when the fetch fails
- *
- * Navigation: this module uses custom state-machine navigation — no
- * @react-navigation/native hooks are used or mocked.
+ * NotFound (E1) when the gym row is missing; Error (E4) appears after the 10s loading timeout.
  */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
-import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
-import { InlineError, Skeleton, SkeletonGroup } from '../../../components/ui';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
 import GymDetailScreen from '../screens/GymDetailScreen';
 import type { Gym } from '../types';
 
@@ -45,37 +37,44 @@ const GYM_FIXTURE: Gym = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-// ── Shared frame ──────────────────────────────────────────────────────────────
+type StubState = 'populated' | 'noPhoto' | 'loading' | 'notFound';
 
-function ScreenFrame({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <View style={{ width: 390, height: 844 }}>{children}</View>;
+function setupStubs(state: StubState): void {
+  resetStubData();
+  setStubData('auth:session', { user: { id: 'story-user-me' } });
+  if (state === 'loading') {
+    setStubData('gyms', STUB_PENDING);
+    setStubData('saved_gyms', STUB_PENDING);
+  } else if (state === 'populated' || state === 'noPhoto') {
+    // loadGym uses .single(): the stub returns the first element
+    setStubData('gyms', [state === 'noPhoto' ? { ...GYM_FIXTURE, cover_photo_url: null, branch_label: '新莊店' } : GYM_FIXTURE]);
+    setStubData('saved_gyms', [{ gym_id: 'gym-001' }]);
+  }
+  // notFound: no gym row -> the E1 not-found page
 }
 
-// ── Meta ──────────────────────────────────────────────────────────────────────
+/** Seed stubs synchronously so the screen's first fetch sees the data. */
+function WithStubs({ state, children }: { state: StubState; children: React.ReactNode }): React.JSX.Element {
+  setupStubs(state);
+  return <>{children}</>;
+}
 
-const meta: Meta = {
-  title: 'GymDirectory/GymDetailScreen',
-  parameters: { layout: 'fullscreen' },
-  decorators: [(Story) => <ScreenFrame><Story /></ScreenFrame>],
-};
-export default meta;
-type Story = StoryObj;
+type Args = { state: StubState };
 
-// ── Populated ─────────────────────────────────────────────────────────────────
-// Full gym record: name, address, cover photo, Google attribution, saved bookmark,
-// and the "View Routes" CTA at the bottom (AC-005, AC-120, AC-121, AC-196).
-
-export const Populated: Story = {
+const meta: Meta<Args> = {
+  title: 'Pages/Gyms/Gym Detail',
+  component: GymDetailScreen as never,
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { tab: 'gyms' } },
   decorators: [
-    (Story) => {
-      resetStubData();
-      // loadGym uses .single() — the stub returns the first element of the array
-      setStubData('gyms', [GYM_FIXTURE]);
-      // gym-001 is saved — bookmark shows filled
-      setStubData('saved_gyms', [{ gym_id: 'gym-001' }]);
-      return <Story />;
-    },
+    (Story, ctx) => (
+      <WithStubs state={(ctx.args as Args).state}>
+        <Story />
+      </WithStubs>
+    ),
+    withPhoneFrame,
   ],
+  argTypes: { state: { control: false } },
   render: () => (
     <GymDetailScreen
       gymId="gym-001"
@@ -84,63 +83,21 @@ export const Populated: Story = {
     />
   ),
 };
+export default meta;
 
-// ── Loading Skeleton ──────────────────────────────────────────────────────────
-// Shows the skeleton rendered during the initial gym-detail fetch.
+type Story = StoryObj<Args>;
 
-function LoadingShell(): React.JSX.Element {
-  const { theme } = useTheme();
-  const { screenMargin } = useLayout();
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        paddingHorizontal: screenMargin,
-        paddingTop: theme.spacing.sm,
-      }}
-    >
-      <SkeletonGroup label="Loading gym detail">
-        <Skeleton shape="card" surface="page" height={160} />
-        <Skeleton shape="text" textVariant="title1" width="70%" surface="page" />
-        <Skeleton shape="text" textVariant="title3" width="45%" surface="page" />
-        <Skeleton shape="text" textVariant="title3" width="30%" surface="page" />
-        <Skeleton shape="text" textVariant="body" width="60%" surface="page" />
-        <Skeleton shape="text" textVariant="body" width="80%" surface="page" />
-      </SkeletonGroup>
-    </View>
-  );
-}
+/** Gym with a cover photo (Google credit as a scrim capsule on the photo's bottom-right); "View Routes" pinned at the bottom. */
+export const Populated: Story = { args: { state: 'populated' } };
 
-export const Loading: Story = {
-  render: () => <LoadingShell />,
-};
+/** No cover photo: the photo area collapses (no placeholder); title starts at the top. */
+export const NoPhoto: Story = { args: { state: 'noPhoto' } };
 
-// ── Error ─────────────────────────────────────────────────────────────────────
-// Block error shown when the gym-detail fetch fails.
+/** Initial fetch never resolves: the one full-page PageLoading spinner. Appears after the 300ms delay. */
+export const Loading: Story = { args: { state: 'loading' } };
 
-function ErrorShell(): React.JSX.Element {
-  const { theme } = useTheme();
-  const { screenMargin } = useLayout();
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        paddingHorizontal: screenMargin,
-        paddingTop: theme.spacing.sm,
-      }}
-    >
-      <InlineError
-        variant="block"
-        message="Gym details could not be loaded. Please try again."
-        actionLabel="Retry"
-        onAction={() => console.log('retry')}
-      />
-    </View>
-  );
-}
+/** E1: the gym row is gone (removed or merged). No retry; the header back is the way out. */
+export const NotFound: Story = { args: { state: 'notFound' } };
 
-export const Error: Story = {
-  render: () => <ErrorShell />,
-};
+/** E4 page error. Appears 10s after the Loading story starts (queries never resolve); Retry with the reload icon. */
+export const Error: Story = { args: { state: 'loading' } };

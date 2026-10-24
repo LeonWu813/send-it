@@ -1,15 +1,16 @@
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
-import { setStubData } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
 import RouteDetailScreen from '../screens/RouteDetailScreen';
 import type { Route } from '../types';
 
 // Off-spec design tooling. Fake data only; the supabase stub resolves all queries.
 
-const session = { user: { id: 'user-me' } } as unknown as Session;
+const ME = 'story-user-me';
+const session = { user: { id: ME } } as unknown as Session;
 
 const ACTIVE_ROUTE: Route = {
   id: 'route-1',
@@ -19,7 +20,7 @@ const ACTIVE_ROUTE: Route = {
   section_label: 'Cave',
   photo_url: '',
   status: 'active',
-  submitted_by_user_id: 'user-me',
+  submitted_by_user_id: ME,
   created_at: new Date(2026, 7, 15).toISOString(),
   retired_at: null,
   retired_by_user_id: null,
@@ -37,97 +38,69 @@ const RETIRED_ROUTE: Route = {
 };
 
 const ASCENTS = [
-  { id: 'a1', route_id: 'route-1', user_id: 'user-me', style: 'flash', attempts: 1, note: null, logged_at: new Date(2026, 8, 10).toISOString(), is_private: false, users: { display_name: 'Me' } },
-  { id: 'a2', route_id: 'route-1', user_id: 'user-me', style: 'top', attempts: 3, note: '第二次完攀', logged_at: new Date(2026, 8, 20).toISOString(), is_private: false, users: { display_name: 'Me' } },
+  { id: 'a1', route_id: 'route-1', user_id: ME, style: 'flash', attempts: 1, note: null, logged_at: new Date(2026, 8, 10).toISOString(), is_private: false, users: { display_name: '小明' } },
+  { id: 'a2', route_id: 'route-1', user_id: ME, style: 'top', attempts: 3, note: '第二次完攀', logged_at: new Date(2026, 8, 20).toISOString(), is_private: false, users: { display_name: '小明' } },
 ];
 
-function seedPopulated(): void {
+type State = 'populated' | 'bookmarked' | 'retired' | 'loading' | 'error';
+
+function seed(state: State): Route {
+  resetStubData();
+  setStubData('auth:session', { user: { id: ME } });
+  setStubData('saved_routes', state === 'bookmarked' ? [{ route_id: ACTIVE_ROUTE.id }] : []);
+  if (state === 'loading') {
+    setStubData('routes', STUB_PENDING);
+    return ACTIVE_ROUTE;
+  }
+  if (state === 'error') {
+    // No matching route: the screen shows its "route not found" error block.
+    setStubData('routes', []);
+    return ACTIVE_ROUTE;
+  }
+  if (state === 'retired') {
+    setStubData('routes', [RETIRED_ROUTE]);
+    setStubData('ascents', []);
+    return RETIRED_ROUTE;
+  }
   setStubData('routes', [ACTIVE_ROUTE]);
-  setStubData('saved_routes', []);
   setStubData('ascents', ASCENTS);
-  setStubData('auth:session', { user: { id: 'user-me' } });
+  return ACTIVE_ROUTE;
 }
 
-function seedRetired(): void {
-  setStubData('routes', [RETIRED_ROUTE]);
-  setStubData('saved_routes', []);
-  setStubData('ascents', []);
-  setStubData('auth:session', { user: { id: 'user-me' } });
-}
-
-type ScreenState = 'populated' | 'retired';
-
-interface PlaygroundArgs {
-  state: ScreenState;
-  isSaved: boolean;
-}
-
-function Screen({ routeId, gymName = '紅石攀岩館' }: { routeId: string; gymName?: string }): React.JSX.Element {
+function Seeded({ state, gymName = '紅石攀岩館' }: { state: State; gymName?: string }): React.JSX.Element {
+  const route = seed(state);
   return (
-    <View style={{ width: 390, height: 780 }}>
-      <RouteDetailScreen
-        routeId={routeId}
-        gymName={gymName}
-        session={session}
-        onBack={() => {}}
-        onViewSendHistory={() => {}}
-      />
-    </View>
+    <RouteDetailScreen
+      routeId={route.id}
+      gymName={gymName}
+      session={session}
+      onBack={() => {}}
+      onViewSendHistory={() => {}}
+    />
   );
 }
 
-function Seeded({ state, isSaved }: PlaygroundArgs): React.JSX.Element {
-  if (state === 'retired') {
-    seedRetired();
-  } else {
-    seedPopulated();
-    if (isSaved) setStubData('saved_routes', [{ route_id: 'route-1' }]);
-  }
-  const routeId = state === 'retired' ? RETIRED_ROUTE.id : ACTIVE_ROUTE.id;
-  return <Screen routeId={routeId} />;
-}
-
-const meta: Meta<PlaygroundArgs> = {
-  title: 'Route Catalog/RouteDetailScreen',
-  parameters: { layout: 'fullscreen' },
-  args: { state: 'populated', isSaved: false },
-  argTypes: {
-    state: { control: 'inline-radio', options: ['populated', 'retired'] },
-    isSaved: { control: 'boolean' },
-  },
-  render: (args) => <Seeded key={`${args.state}-${String(args.isSaved)}`} {...args} />,
+const meta: Meta = {
+  title: 'Pages/Home/Route Detail',
+  component: RouteDetailScreen as never, // real component; stories only drive the stub data
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { tab: 'home' } },
+  decorators: [withPhoneFrame],
 };
 export default meta;
-type Story = StoryObj<PlaygroundArgs>;
+type Story = StoryObj;
 
-/**
- * Toggle state between populated and retired. Toggle isSaved to see the filled
- * bookmark icon. In populated state: 2 sends (1 flash, 1 top) are shown in the
- * summary cards. The BetaVideoSection renders in its empty state (no videos seeded).
- */
-export const Playground: Story = {};
+/** Active route: large title "紅色 · Cave", grade badge + gym subtitle, inline summary "完攀 · 嘗試", one full-width Record Send button, beta section, added-date footer. */
+export const Populated: Story = { render: () => <Seeded state="populated" /> };
 
-/**
- * Active route: grade, color badge, gym subtitle, send summary (1 flash + 1 top = 2 sends,
- * 4 total attempts), action row (Record Send / Upload Beta Video), beta section, added-date footer.
- */
-export const Populated: Story = {
-  render: () => { seedPopulated(); return <Screen routeId={ACTIVE_ROUTE.id} />; },
-};
+/** The route is bookmarked, so the header bookmark icon is filled. */
+export const Bookmarked: Story = { render: () => <Seeded state="bookmarked" /> };
 
-/**
- * Retired route: shows the "Retired" status badge; the date and section label are absent
- * since `section_label` is null and `retired_at` is populated. No send summary (no ascents).
- */
-export const RetiredRoute: Story = {
-  render: () => { seedRetired(); return <Screen routeId={RETIRED_ROUTE.id} gymName="攀石山" />; },
-};
+/** Retired route: shows the "Retired" status badge; the retire date joins the footnote meta ("Added … · Retired …"). */
+export const RetiredRoute: Story = { name: 'Retired Route', render: () => <Seeded state="retired" gymName="攀石山" /> };
 
-/** Bookmarked route — the header bookmark icon is filled (yellow) on load. */
-export const Bookmarked: Story = {
-  render: () => {
-    seedPopulated();
-    setStubData('saved_routes', [{ route_id: ACTIVE_ROUTE.id }]);
-    return <Screen routeId={ACTIVE_ROUTE.id} />;
-  },
-};
+/** The route query never resolves: PageLoading after 300ms. */
+export const Loading: Story = { render: () => <Seeded state="loading" /> };
+
+/** The route cannot be found: E1 "Route not found" (network failures use the E4 error instead; the stub cannot return query errors). */
+export const Error: Story = { render: () => <Seeded state="error" /> };

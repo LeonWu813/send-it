@@ -14,7 +14,7 @@ function Demo(props: AvatarProps): React.JSX.Element {
 }
 
 const meta: Meta<AvatarProps> = {
-  title: 'UI/Avatar',
+  title: 'Components/Avatar',
   component: Demo,
   args: { size: 'md', name: '小明', uri: '' },
   argTypes: {
@@ -28,7 +28,7 @@ export default meta;
 export const Playground: StoryObj<AvatarProps> = {};
 
 /** Five sizes (initial, person glyph when the name is empty). */
-export const AllSizes: StoryObj<AvatarProps> = {
+export const AllVariants: StoryObj<AvatarProps> = {
   render: () => (
     <View style={{ padding: 16, flexDirection: 'row', columnGap: 12, alignItems: 'flex-end' }}>
       {(['xs', 'sm', 'md', 'lg', 'xl'] as const).map((s) => (

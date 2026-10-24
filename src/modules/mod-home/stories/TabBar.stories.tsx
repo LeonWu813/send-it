@@ -19,7 +19,7 @@ function Demo({ activeTab, bottomInset }: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'Home/TabBar',
+  title: 'Patterns/TabBar',
   component: Demo,
   args: { activeTab: 'home', bottomInset: 0 },
   argTypes: {

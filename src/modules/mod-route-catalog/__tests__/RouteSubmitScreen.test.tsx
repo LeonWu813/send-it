@@ -207,6 +207,36 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     });
   });
 
+  it('photo field shows the neutral required hint, and the Add Route CTA is always enabled (AC-187)', async () => {
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    expect(screen.getByTestId('photo-required-hint')).toBeTruthy();
+    const cta = screen.getAllByRole('button').find((el) => el.props.accessibilityLabel === 'Add Route');
+    expect(cta?.props.accessibilityState?.disabled).toBeFalsy();
+  });
+
+  it('pressing Add Route on an empty form shows the missing-field errors inline and submits nothing (AC-021)', async () => {
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    fireEvent.press(screen.getAllByRole('button').find((el) => el.props.accessibilityLabel === 'Add Route') as never);
+
+    expect(await screen.findByText(/Please select a grade|請選擇難度/)).toBeTruthy();
+    expect(screen.getByText(/Please select a hold color|請選擇岩點顏色/)).toBeTruthy();
+    expect(screen.getByText(/photo is required|必須附上照片/i)).toBeTruthy();
+    expect(screen.queryByTestId('photo-required-hint')).toBeNull();
+    expect(mockSubmitRoute).not.toHaveBeenCalled();
+  });
+
+  it('grade and colour are equal-width choice grids (radiogroups) that include every option', async () => {
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    expect(screen.getByLabelText('Grade', { exact: true })).toBeTruthy();
+    expect(screen.getByLabelText('Hold color', { exact: true })).toBeTruthy();
+    for (const grade of ['VB', 'V0', 'V5', 'V10']) {
+      expect(screen.getByText(grade)).toBeTruthy();
+    }
+  });
+
   it('shows inline photo error when Add Route pressed without a photo (AC-021)', async () => {
     render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
 
@@ -421,6 +451,70 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     expect(checkBtn).toBeUndefined();
   });
 
+  // ── States round: pending toast + submit-failure callout ──────────────────
+
+  function resetQueues(): void {
+    // Earlier tests may leave unconsumed *Once values behind.
+    mockLaunchImageLibraryAsync.mockReset();
+    mockUploadRoutePhoto.mockReset();
+    mockSubmitRoute.mockReset();
+    mockListRoutes.mockReset();
+    mockListRoutes.mockResolvedValue([]);
+  }
+
+  async function fillAndSubmit(): Promise<void> {
+    mockUploadRoutePhoto.mockResolvedValueOnce('https://example.com/photo.jpg');
+    mockLaunchImageLibraryAsync.mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file://photo.jpg', mimeType: 'image/jpeg', width: 800, height: 600, type: 'image',
+          fileName: 'photo.jpg', fileSize: 100000, assetId: null, base64: null, duration: null,
+          exif: null, pairedVideoAsset: null,
+        },
+      ],
+    });
+    fireEvent.press(screen.getByText('V3'));
+    fireEvent.press(screen.getAllByText('Red')[0]);
+    const chooseBtn = screen.queryAllByRole('button').find(
+      (el) => /library|choose|相簿/i.test(el.props.accessibilityLabel ?? ''),
+    );
+    if (chooseBtn) fireEvent.press(chooseBtn);
+    await waitFor(() => {
+      expect(
+        screen.queryAllByRole('button').find((el) => /Change Photo|更換照片/.test(el.props.accessibilityLabel ?? '')),
+      ).toBeTruthy();
+    });
+    const addBtn = screen.queryAllByRole('button').find((el) => /Add Route|新增路線/.test(el.props.accessibilityLabel ?? ''));
+    if (addBtn) fireEvent.press(addBtn);
+  }
+
+  it('pending route: confirms with a toast and goes back (no system Alert)', async () => {
+    resetQueues();
+    mockSubmitRoute.mockResolvedValueOnce({
+      id: 'route-new', gym_id: 'gym-001', section_label: null, grade: 'V3', color_tag: 'red',
+      photo_url: 'https://example.com/photo.jpg', status: 'pending', submitted_by_user_id: 'user-001',
+      created_at: '2026-09-23T10:00:00Z', retired_at: null, retired_by_user_id: null,
+    });
+    const onBack = jest.fn();
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} onBack={onBack} />, renderOptions());
+    await fillAndSubmit();
+    await waitFor(() => {
+      expect(onBack).toHaveBeenCalled();
+    });
+    expect(await screen.findByText(/approved|審核通過/)).toBeTruthy();
+  });
+
+  it('submit failure: shows an error callout, keeps the form, and never shows err.message', async () => {
+    resetQueues();
+    mockSubmitRoute.mockRejectedValueOnce(new Error('pg: duplicate key value violates constraint'));
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+    await fillAndSubmit();
+    expect(await screen.findByText(/Route not submitted|路線沒有送出/)).toBeTruthy();
+    expect(screen.queryByText(/duplicate key/)).toBeNull();
+    expect(screen.getByText('V3')).toBeTruthy();
+  });
+
   // ── AC-187: inline duplicate notice ───────────────────────────────────────
 
   it('shows inline duplicate notice when active routes contain same grade+color (AC-187)', async () => {
@@ -578,6 +672,8 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       // The sheet title should appear
       const sheetTitle = screen.queryByText(/Similar Routes Found|找到相似路線/);
       expect(sheetTitle).toBeTruthy();
+      // AC-187: non-dismissable, only the two buttons: no X close button (the one "Close" node left is the inert backdrop)
+      expect(screen.queryAllByLabelText(/^(Close|關閉)$/).length).toBeLessThanOrEqual(1);
     });
   });
 

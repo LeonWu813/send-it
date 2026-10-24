@@ -73,7 +73,8 @@ import { useTheme } from '../../lib/theme';
 import { UnreadCountProvider, NotificationsNavigator } from '../mod-notifications';
 import ProfileNavigator from '../mod-auth-profile/ProfileNavigator';
 import { GymNavigator } from '../mod-gym-directory';
-import { UserProfileScreen } from '../mod-social-feed';
+import { FollowingListScreen, UserProfileScreen } from '../mod-social-feed';
+import { ProfileHistoryNavProvider, ProfileHistoryView } from '../mod-profile-history';
 import SettingsScreen from '../mod-localization-theme/SettingsScreen';
 import AppHeader from './components/AppHeader';
 import {
@@ -208,8 +209,16 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   /** Non-null while a climber profile overlay is open (AC-182). */
   const [targetUserId, setTargetUserId] = useState<string | null>(null);
 
+  /** Non-null while the Following list pushed from Home 「查看全部」 is open (home-v2). */
+  const [followingListUserId, setFollowingListUserId] = useState<string | null>(null);
+
+  /** Non-null while the Profile History pushed view is open (page-review P-1). */
+  const [historyTarget, setHistoryTarget] = useState<{ userId: string; isOwnProfile: boolean } | null>(null);
+
   /** Non-null while the notifications overlay is open (AC-184). */
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  /** View the notifications overlay opens on: inbox from the bell, preferences from Settings (N-1). */
+  const [notificationsView, setNotificationsView] = useState<'inbox' | 'preferences'>('inbox');
 
   /** Non-null while the settings overlay is open (AC-184). */
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -268,6 +277,14 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     // This gives replace-semantics: the back button always returns to PagePrev,
     // never to a stacked Settings screen.
     setSettingsOpen(false);
+    setNotificationsView('inbox');
+    setNotificationsOpen(true);
+  }
+
+  /** N-1: Settings > Notifications pushes Notification Preferences. */
+  function handleNavigateToNotificationPreferences(): void {
+    setSettingsOpen(false);
+    setNotificationsView('preferences');
     setNotificationsOpen(true);
   }
 
@@ -285,7 +302,12 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
     setSettingsOpen(false);
   }
 
+  const handleOpenHistory = useCallback((userId: string, isOwnProfile: boolean): void => {
+    setHistoryTarget({ userId, isOwnProfile });
+  }, []);
+
   const handleNavigateToRoute = useCallback((routeId: string, gymId: string): void => {
+    setHistoryTarget(null); // leaving Profile History for the route's gym
     setRouteDeepLinkId(routeId);
     setGymDeepLinkId(gymId);
     setRouteNavKey((k) => k + 1);
@@ -295,6 +317,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
   return (
     <UnreadCountProvider session={session}>
       <AppHeaderProvider value={headerStore}>
+      <ProfileHistoryNavProvider open={handleOpenHistory}>
       <ToastProvider bottomOffset={toastBottomOffset}>
         <CelebrationHost>
           <View style={styles.root}>
@@ -317,6 +340,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   onSelectGym={handleSelectGym}
                   onSelectRoute={handleSelectRoute}
                   onSelectClimber={handleSelectClimber}
+                  onViewAllFollowing={setFollowingListUserId}
                   onNavigateToNotifications={handleNavigateToNotifications}
                   onNavigateToSettings={handleNavigateToSettings}
                 />
@@ -349,6 +373,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   isActive={activeTab === 'profile'}
                   onNavigateToRoute={handleNavigateToRoute}
                   onNavigateToUser={handleSelectClimber}
+                  onFindRoutes={handleViewAllGyms}
                 />
                 </AppHeaderTabScope>
               </View>
@@ -360,6 +385,25 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
               onTabPress={setActiveTab}
               onBarLayout={setTabBarHeight}
             />
+
+            {/* Following list pushed from Home (home-v2). Rendered BEFORE the profile overlay so a tapped
+                climber opens above it and Back returns to the list. */}
+            {followingListUserId !== null && (
+              <View style={styles.overlayContainer}>
+                <AppHeaderOverlayScope
+                  topInset={insets.top}
+                  bottomInset={insets.bottom}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                >
+                <FollowingListScreen
+                  userId={followingListUserId}
+                  onBack={() => setFollowingListUserId(null)}
+                  onNavigateToUser={handleSelectClimber}
+                />
+                </AppHeaderOverlayScope>
+              </View>
+            )}
 
             {/* Climber profile overlay (AC-182) */}
             {targetUserId !== null && (
@@ -379,6 +423,25 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
               </View>
             )}
 
+            {/* Profile History pushed view (page-review P-1) */}
+            {historyTarget !== null && (
+              <View style={styles.overlayContainer}>
+                <AppHeaderOverlayScope
+                  topInset={insets.top}
+                  bottomInset={insets.bottom}
+                  onNavigateToNotifications={handleNavigateToNotifications}
+                  onNavigateToSettings={handleNavigateToSettings}
+                >
+                <ProfileHistoryView
+                  userId={historyTarget.userId}
+                  isOwnProfile={historyTarget.isOwnProfile}
+                  onBack={() => setHistoryTarget(null)}
+                  onNavigateToRoute={handleNavigateToRoute}
+                />
+                </AppHeaderOverlayScope>
+              </View>
+            )}
+
             {/* Notifications overlay (AC-184) */}
             {notificationsOpen && (
               <View style={styles.overlayContainer}>
@@ -390,7 +453,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                 >
                 <NotificationsNavigator
                   session={session}
-                  initialView="inbox"
+                  initialView={notificationsView}
                   isActive={notificationsOpen}
                   onBack={handleNotificationsBack}
                   onNavigateToUser={handleSelectClimber}
@@ -408,13 +471,17 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   onNavigateToNotifications={handleNavigateToNotifications}
                   onNavigateToSettings={handleNavigateToSettings}
                 >
-                <SettingsScreen onBack={handleSettingsBack} />
+                <SettingsScreen
+                  onBack={handleSettingsBack}
+                  onNavigateToNotificationPreferences={handleNavigateToNotificationPreferences}
+                />
                 </AppHeaderOverlayScope>
               </View>
             )}
           </View>
         </CelebrationHost>
       </ToastProvider>
+      </ProfileHistoryNavProvider>
       </AppHeaderProvider>
     </UnreadCountProvider>
   );

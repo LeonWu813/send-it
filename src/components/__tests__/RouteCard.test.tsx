@@ -88,11 +88,12 @@ describe('RouteCard (AC-183, v2.2)', () => {
     expect(screen.getByTestId('thumb-placeholder', HIDDEN)).toBeTruthy();
   });
 
-  it('shows the play disc only with beta videos and a photo, hidden from VoiceOver', () => {
+  it('shows the 「play n」 chip on the thumbnail with beta videos, hidden from VoiceOver (audit #4)', () => {
     const { rerender } = render(<RouteCard route={BASE_ROUTE} onPress={jest.fn()} betaVideoCount={2} />, { wrapper: TestProviders });
     expect(screen.queryByTestId('play-disc')).toBeNull();
     expect(screen.getByTestId('play-disc', HIDDEN)).toBeTruthy();
-    rerender(<RouteCard route={{ ...BASE_ROUTE, photo_url: null }} onPress={jest.fn()} betaVideoCount={2} />);
+    expect(screen.getByText('2', HIDDEN)).toBeTruthy();
+    rerender(<RouteCard route={BASE_ROUTE} onPress={jest.fn()} betaVideoCount={0} />);
     expect(screen.queryByTestId('play-disc', HIDDEN)).toBeNull();
   });
 
@@ -166,12 +167,13 @@ describe('RouteCard (AC-183, v2.2)', () => {
 
   // ── AC-189: betaVideoCount ─────────────────────────────────────────────────
 
-  it('renders the beta count subtitle when betaVideoCount > 0 (AC-189)', () => {
+  it('carries the beta count on the thumbnail chip, not as a text line (AC-189, audit #4)', () => {
     render(
       <RouteCard route={BASE_ROUTE} onPress={jest.fn()} betaVideoCount={3} />,
       { wrapper: TestProviders },
     );
-    expect(screen.getByText('3 Beta Videos', HIDDEN)).toBeTruthy();
+    expect(screen.getByText('3', HIDDEN)).toBeTruthy();
+    expect(screen.queryByText('3 Beta Videos', HIDDEN)).toBeNull();
   });
 
   it('does not render the beta count subtitle when betaVideoCount === 0 (AC-189)', () => {
@@ -312,5 +314,18 @@ describe('RouteCard (AC-183, v2.2)', () => {
     );
     // The card body reads grade + name (the grade is hidden on screen but spoken, AC-191).
     expect(screen.getByLabelText(/Crimson Tide/)).toBeTruthy();
+  });
+
+  it('is the 80pt compact card by default and 104pt with variant="regular" (RL-1)', () => {
+    const minHeightOf = (variant?: 'compact' | 'regular'): number[] => {
+      const { toJSON, unmount } = render(<RouteCard route={BASE_ROUTE} onPress={jest.fn()} variant={variant} />, {
+        wrapper: TestProviders,
+      });
+      const found = [...JSON.stringify(toJSON()).matchAll(/"minHeight":(\d+)/g)].map((m) => Number(m[1]));
+      unmount();
+      return found;
+    };
+    expect(minHeightOf()).toContain(80);
+    expect(minHeightOf('regular')).toContain(104);
   });
 });

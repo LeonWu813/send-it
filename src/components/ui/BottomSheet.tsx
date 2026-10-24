@@ -25,6 +25,7 @@ import { Button } from './Button';
 import { IconButton } from './IconButton';
 import { InlineError } from './InlineError';
 
+export type BottomSheetConfirmTone = 'primary' | 'destructive';
 export type BottomSheetVariant = 'content' | 'list-single' | 'form' | 'confirm';
 export type BottomSheetPresentation = 'floating' | 'attached';
 
@@ -56,6 +57,9 @@ export interface BottomSheetProps {
   footer?: React.ReactNode;
   /** confirm: destructive button (top, lg, full width). */
   confirmLabel?: string;
+  /** confirm: tone of the top button. `destructive` (default) for deletes; `primary` for a normal confirmation. */
+  confirmTone?: BottomSheetConfirmTone;
+  /** confirm: optional leading icon on the button. No icon by default; pass ICON.delete only for deletes. */
   confirmIcon?: IoniconName;
   onConfirm?: () => void;
   /** confirm: secondary button under it. Defaults to common.cancel. */
@@ -121,6 +125,7 @@ export function BottomSheet({
   footer,
   confirmLabel,
   confirmIcon,
+  confirmTone = 'destructive',
   onConfirm,
   cancelLabel,
   error,
@@ -302,13 +307,13 @@ export function BottomSheet({
 
   const actions =
     variant === 'confirm' ? (
-      <View style={{ marginTop: theme.layout.sectionGap }}>
+      <View style={{ marginTop: children ? theme.layout.sectionGap : theme.spacing.md }}>
         <Button
-          variant="destructive"
+          variant={confirmTone}
           size="lg"
           fullWidth
           label={confirmLabel ?? ''}
-          icon={confirmIcon ?? ICON.delete.outline}
+          icon={confirmIcon}
           loading={loading}
           onPress={() => onConfirm?.()}
         />
@@ -387,7 +392,7 @@ export function BottomSheet({
             ref={titleRef}
             accessible
             accessibilityRole="header"
-            style={{ minHeight: closeBox, justifyContent: 'center', paddingRight: showClose ? closeBox : 0 }}
+            style={{ paddingTop: (closeBox - theme.typeScale.title2.lineHeight) / 2, paddingRight: showClose ? closeBox : 0 }}
           >
             <AppText variant="title2" numberOfLines={fontScale >= 1.6 ? undefined : 2}>
               {title}
@@ -402,15 +407,17 @@ export function BottomSheet({
           {description}
         </AppText>
       ) : null}
-      <ScrollView
-        style={{ flexShrink: 1, marginTop: theme.spacing.sm }}
+      {children ? (
+        <ScrollView
+        style={{ flexShrink: 1, marginTop: description ? theme.spacing.sm : theme.spacing.md }}
         keyboardDismissMode="interactive"
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
         {children}
-      </ScrollView>
+        </ScrollView>
+      ) : null}
       {error ? (
         <InlineError
           variant="block"

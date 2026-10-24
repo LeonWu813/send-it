@@ -8,13 +8,23 @@
  * + a distribution card (6pt bars on `surfaceAlt` tracks; neutral `outline` fill, only the top-grade
  * row uses `sendTop` and carries the "Highest" pill in the grade column).
  *
- * States: normal, attempts-only (total_sends = 0 but records exist: structure kept, no button),
- * zero records (`hasRecords = false`: ONE EmptyState `prompt`).
+ * States: normal only. With 0 sends the host (ProfileHistoryScreen) does not render the panel; the
+ * lime attempts-only hero and the lime zero-records prompt are retired.
  *
  * Motion D7: displacement reveal. The fill has its final width inside an `overflow: hidden` capsule
  * track and `translateX` runs -W -> 0 (native driver), so the head stays round. `medium` + `enter`,
  * stagger 30, at most 7 steps (<= 510ms), top row last with `settle`. Once per session. Reduce
  * Motion: bars are final, the distribution card fades in over `short`.
+ *
+ * COMPACT variant (page-review P-1/P-2, spec §32.5 v2.3): `variant="compact"` renders ONE row of three
+ * tiles (total sends, days climbed, highest grade) with gap `inlineGap` 8. Numerals are `title3` 20
+ * `numeric`, labels `footnote` 13; no 11/12pt text. It is the entry point for the full panel, which
+ * lives on Profile History.
+ *   <StatsPanel variant="compact" stats={stats} onOpenDetails={openProfileHistory} />
+ * Props for compact: `stats` (required), `onOpenDetails` (optional; when set every tile is one
+ * pressable card, hint "Opens full stats"; omitted -> static tiles). Adopted by Profile (auth-profile) and User Profile (social-feed) in phase 2.
+ *
+ * Margins: the panel never pads horizontally; the parent owns screenMargin (R0), so content sits at 16.
  *
  * Tokens only: no hex, font sizes or radii.
  */
@@ -23,9 +33,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { AppText, Card, EmptyState } from '../../../components/ui';
+import { AppText, Card } from '../../../components/ui';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { useTheme } from '../../../lib/theme';
 import type { ProfileStats } from '../types';
 import { GRADE_ORDER } from '../types';
 
@@ -147,26 +157,22 @@ function NumberUnit({ value, unit }: { value: number; unit: string }): React.JSX
 
 interface StatsPanelProps {
   stats: ProfileStats;
-  /**
-   * False when the user has no ascent records at all (not even attempts): the whole panel becomes one
-   * EmptyState `prompt`. Default true (total_sends = 0 then means "attempts only").
-   */
-  hasRecords?: boolean;
-  /** The single primary action of the zero-records prompt ("Find routes"). Omitted -> no button. */
-  onLogSend?: () => void;
+  /** `full` (default): hero + tiles + distribution. `compact`: one row of three small tiles. */
+  variant?: 'full' | 'compact';
+  /** Compact only: tap target that opens the full StatsPanel (Profile History). */
+  onOpenDetails?: () => void;
 }
 
 export default function StatsPanel({
   stats,
-  hasRecords = true,
-  onLogSend,
+  variant = 'full',
+  onOpenDetails,
 }: StatsPanelProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { fontScale, width } = useWindowDimensions();
   const { duration, reduceMotion } = useMotion();
-  const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, screenMargin);
+  const styles = makeStyles(theme);
   const ax = fontScale >= AX_FONT_SCALE;
   const narrow = width < theme.layout.compactWidthBreakpoint;
   const c = theme.colors;
@@ -190,22 +196,50 @@ export default function StatsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion]);
 
-  if (!hasRecords) {
+  if (variant === 'compact') {
+    const items = [
+      {
+        key: 'sends',
+        label: t('profileHistory.stats.totalSends'),
+        value: String(stats.total_sends),
+        a11y: t('profileHistory.stats.sendsA11y', { count: stats.total_sends }),
+      },
+      {
+        key: 'days',
+        label: t('profileHistory.stats.accumulatedDays'),
+        value: String(stats.accumulated_days),
+        a11y: t('profileHistory.stats.daysA11y', { count: stats.accumulated_days }),
+      },
+      {
+        key: 'highest',
+        label: t('profileHistory.stats.highestGrade'),
+        value: stats.highest_grade ?? t('profileHistory.stats.noGrade'),
+        a11y: `${t('profileHistory.stats.highestGrade')}, ${stats.highest_grade ?? t('profileHistory.stats.noGrade')}`,
+      },
+    ];
     return (
-      <View style={styles.container}>
-        <EmptyState
-          variant="prompt"
-          eyebrow={t('profileHistory.stats.promptEyebrow')}
-          title={t('profileHistory.stats.promptTitle')}
-          description={t('profileHistory.stats.promptBody')}
-          primaryLabel={onLogSend ? t('profileHistory.stats.promptAction') : undefined}
-          onPrimary={onLogSend}
-        />
+      <View style={styles.compactRow}>
+        {items.map(({ key, label, value, a11y }) => (
+          <Card
+            key={key}
+            variant={onOpenDetails ? 'pressable' : 'static'}
+            onPress={onOpenDetails}
+            padding={theme.layout.cardPadding}
+            accessibilityLabel={`${label}, ${a11y}`}
+            accessibilityHint={onOpenDetails ? t('profileHistory.stats.compactHint') : undefined}
+            style={styles.compactTile}
+          >
+            <AppText variant="footnote" weight="600" color="textSecondary">
+              {label}
+            </AppText>
+            <AppText variant="title3" numeric>
+              {value}
+            </AppText>
+          </Card>
+        ))}
       </View>
     );
   }
-
-  const attemptsOnly = stats.total_sends === 0;
 
   const countOf = (grade: string): number =>
     stats.sends_by_grade.find((g) => g.grade === grade)?.count ?? 0;
@@ -236,34 +270,19 @@ export default function StatsPanel({
       <View
         style={styles.heroInner}
         accessible
-        accessibilityLabel={
-          attemptsOnly
-            ? `${t('profileHistory.stats.highestGrade')}, ${t('profileHistory.stats.noSendsTitle')}`
-            : t('profileHistory.stats.heroA11y', { grade: topGrade, count: topCount })
-        }
+        accessibilityLabel={t('profileHistory.stats.heroA11y', { grade: topGrade, count: topCount })}
       >
         <AppText variant="subhead" weight="600" color="onPrimaryContainer">
           {t('profileHistory.stats.highestGrade')}
         </AppText>
-        {attemptsOnly ? (
-          <View style={styles.heroBottom}>
-            <AppText variant="title2" color="onPrimaryContainer">
-              {t('profileHistory.stats.noSendsTitle')}
-            </AppText>
-            <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
-              {t('profileHistory.stats.noSendsBody')}
-            </AppText>
-          </View>
-        ) : (
-          <View style={styles.heroBottom}>
-            <AppText variant="display" numeric color="onPrimaryContainer">
-              {topGrade}
-            </AppText>
-            <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
-              {t('profileHistory.stats.heroSends', { count: topCount })}
-            </AppText>
-          </View>
-        )}
+        <View style={styles.heroBottom}>
+          <AppText variant="display" numeric color="onPrimaryContainer">
+            {topGrade}
+          </AppText>
+          <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
+            {t('profileHistory.stats.heroSends', { count: topCount })}
+          </AppText>
+        </View>
       </View>
     </Card>
   );
@@ -317,8 +336,8 @@ export default function StatsPanel({
         </View>
       )}
 
-      {/* ── Distribution (hidden when there are no sends) ───────────────────── */}
-      {attemptsOnly ? null : (
+      {/* ── Distribution ─────────────────────────────────────────────────────── */}
+      {(
         <Animated.View style={{ opacity: fade }}>
           <Card variant="static">
             <View style={styles.chartHeader}>
@@ -329,7 +348,7 @@ export default function StatsPanel({
                 {t('profileHistory.stats.chartTotal')}
               </AppText>
             </View>
-            <View accessibilityLabel={t('profileHistory.stats.chartA11y')}>
+            <View accessibilityLabel={t('profileHistory.stats.chartA11y')} style={styles.rows}>
               {rows.map(({ grade, i, count }, order) => {
                 const highest = i === topIndex;
                 const a11y = t(
@@ -376,13 +395,21 @@ export default function StatsPanel({
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: number) {
+function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
     // Cards never carry their own margin: the parent gaps them (cardGap 8).
     container: {
       gap: theme.spacing.sm,
       marginBottom: theme.layout.sectionGap,
-      paddingHorizontal: screenMargin,
+    },
+    compactRow: {
+      flexDirection: 'row',
+      gap: theme.layout.inlineGap,
+    },
+    compactTile: {
+      flex: 1,
+      minWidth: 0,
+      gap: theme.spacing.xs,
     },
     row: {
       flexDirection: 'row',
@@ -411,14 +438,19 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       minWidth: 0,
     },
     tileInner: {
-      paddingVertical: theme.spacing.smd,
-      paddingHorizontal: 14,
+      padding: theme.layout.cardPadding,
       gap: theme.spacing.xs,
     },
     chartHeader: {
       flexDirection: 'row',
       alignItems: 'baseline',
-      marginBottom: theme.spacing.sm,
+      marginBottom: theme.layout.sectionHeaderGap,
+    },
+    // C3/C1: row slack above the first and below the last bar is pulled out, so the visible gaps are
+    // title -> first bar `sectionHeaderGap` 8 and last bar -> card edge `cardPadding` 16.
+    rows: {
+      marginTop: -(ROW_HEIGHT - theme.componentSize.statsBarHeight) / 2,
+      marginBottom: -(ROW_HEIGHT - theme.componentSize.statsBarHeight) / 2,
     },
     barRow: {
       flexDirection: 'row',

@@ -28,7 +28,7 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText, Button, Card, InlineError, TextField } from '../../../components/ui';
+import { AppText, Button, InlineError, TextField } from '../../../components/ui';
 import { RADIUS, useLayout, useTheme } from '../../../lib/theme';
 import {
   signInWithApple,
@@ -52,6 +52,9 @@ export default function SignInScreen({
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Field validation sits under its field (outline + message); only a failed request is a callout above the button.
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   // Apple Sign-In is unavailable on simulator builds without the entitlement.
   // Check on mount so the button only renders when the entitlement is present.
@@ -71,25 +74,26 @@ export default function SignInScreen({
 
   function clearError(): void {
     setErrorMessage(null);
+    setEmailError(null);
+    setPasswordError(null);
   }
 
   async function handleEmailSignIn(): Promise<void> {
     clearError();
     if (!email.trim()) {
-      setErrorMessage(t('auth.errors.emailRequired'));
+      setEmailError(t('auth.errors.emailRequired'));
       return;
     }
     if (!password) {
-      setErrorMessage(t('auth.errors.passwordRequired'));
+      setPasswordError(t('auth.errors.passwordRequired'));
       return;
     }
     setIsLoading(true);
     try {
       await signInWithEmail(email.trim(), password);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('auth.errors.signInFailed');
-      setErrorMessage(message);
+      console.warn('Email sign-in failed', err);
+      setErrorMessage(t('auth.errors.signInFailedBody'));
     } finally {
       setIsLoading(false);
     }
@@ -101,9 +105,8 @@ export default function SignInScreen({
     try {
       await signInWithApple();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('auth.errors.appleSignInFailed');
-      setErrorMessage(message);
+      console.warn('Apple sign-in failed', err);
+      setErrorMessage(t('auth.errors.appleSignInFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -115,9 +118,8 @@ export default function SignInScreen({
     try {
       await signInWithGoogle();
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('auth.errors.googleSignInFailed');
-      setErrorMessage(message);
+      console.warn('Google sign-in failed', err);
+      setErrorMessage(t('auth.errors.googleSignInFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -136,13 +138,17 @@ export default function SignInScreen({
           {t('app.name')}
         </AppText>
 
-        {/* Grouped form card: one Card, fields keep their own 1pt border */}
-        <Card style={styles.formCard}>
+        {/* Flat form on the page background (F4): labels on the 16 keyline */}
+        <View style={styles.form}>
         {/* Email input */}
         <TextField
           label={t('auth.email')}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(v) => {
+            setEmail(v);
+            if (emailError) setEmailError(null);
+          }}
+          error={emailError ?? undefined}
           placeholder={t('auth.emailPlaceholder')}
           keyboardType="email-address"
           autoCapitalize="none"
@@ -154,16 +160,24 @@ export default function SignInScreen({
         <TextField
           label={t('auth.password')}
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(v) => {
+            setPassword(v);
+            if (passwordError) setPasswordError(null);
+          }}
+          error={passwordError ?? undefined}
           placeholder={t('auth.passwordPlaceholder')}
           secureTextEntry
           disabled={isLoading}
         />
-        </Card>
+        </View>
 
-        {/* Error message */}
+        {/* Request failure (wrong password, provider error): error callout above the primary button */}
         {errorMessage ? (
-          <InlineError variant="block" message={errorMessage} />
+          <InlineError
+            variant="error"
+            title={t('auth.errors.signInFailedTitle')}
+            message={errorMessage}
+          />
         ) : null}
 
         {/* Email sign-in button */}
@@ -224,9 +238,8 @@ export default function SignInScreen({
         <Button
           label={t('auth.noAccount')}
           onPress={onNavigateSignUp}
-          variant="ghost"
-          on="background"
-          fullWidth
+          variant="text"
+          placement="centered"
           disabled={isLoading}
         />
       </ScrollView>
@@ -252,7 +265,7 @@ function makeStyles(
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.md,
     },
-    formCard: {
+    form: {
       gap: theme.layout.fieldGap,
     },
     title: {

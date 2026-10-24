@@ -115,8 +115,7 @@ function Demo(args: DemoArgs): React.JSX.Element {
               setLiked((v) => !v);
               setCount((n) => (liked ? n - 1 : n + 1));
             }}
-            nameOff={ICON.like.outline}
-            nameOn={ICON.like.filled}
+            fist
             selected={liked}
             likeMotion
             caption={String(count)}
@@ -140,7 +139,7 @@ function Demo(args: DemoArgs): React.JSX.Element {
 }
 
 const meta: Meta<DemoArgs> = {
-  title: 'Beta Video/Reel overlay',
+  title: 'Patterns/ReelOverlay',
   component: Demo,
   args: {
     footage: 'bright',
@@ -169,5 +168,15 @@ export default meta;
 
 type Story = StoryObj<DemoArgs>;
 
-/** Tap the fistbump/thumbs-up (peak scale, particles; Reduce Motion cross-fades only), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
+/** Tap the fist bump (v6: left fist bumps in, ticks burst, right fist fills; nothing may be clipped; Reduce Motion cross-fades only), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
 export const Playground: Story = {};
+
+/** Dark and bright footage side by side: the overlay must read identically on both. */
+export const AllVariants: Story = {
+  render: () => (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 24 }}>
+      <Demo {...(meta.args as DemoArgs)} footage="dark" />
+      <Demo {...(meta.args as DemoArgs)} footage="bright" />
+    </View>
+  ),
+};

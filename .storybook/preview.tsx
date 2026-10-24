@@ -72,10 +72,31 @@ const preview: Preview = {
       },
     },
   },
+  // Docs page per Component/Pattern. Pages and Foundations metas opt out with `tags: ['!autodocs']`.
+  tags: ['autodocs'],
   parameters: {
     layout: 'fullscreen',
     // The canvas background is driven by the theme `background` token (see Canvas).
     backgrounds: { disabled: true },
+    // Sidebar order: see send-it-design/ux-team/storybook-ia/storybook-ia.md section 2b.
+    options: {
+      storySort: {
+        method: 'alphabetical',
+        order: [
+          'Welcome',
+          'Foundations', ['Tokens', 'Icons'],
+          'Components',
+          'Patterns',
+          'Pages', [
+            'Home', ['Home', 'Route Detail', 'Log Send', 'Route Search', 'Send History Detail'],
+            'Gyms', ['Gym List', 'Gym Detail', 'Route List', 'Route Submit', 'Request Gym'],
+            'Profile', ['Profile', 'Edit Profile', 'Profile History', 'Followers', 'Following', 'User Profile', 'Other User Profile'],
+            'Settings & Notifications', ['Settings', 'Blocked Accounts', 'Notification Inbox', 'Notification Preferences'],
+            'Auth', ['Sign In', 'Sign Up'],
+          ],
+        ],
+      },
+    },
   },
   decorators: [
     (Story, context) => {

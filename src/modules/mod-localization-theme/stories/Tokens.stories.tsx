@@ -173,8 +173,9 @@ function Tokens(): React.JSX.Element {
       </Section>
 
       <Section title="ELEVATION (current theme)">
+        <AppText variant="footnote" color="textSecondary">Super Flat: content-layer cards have no shadow (no `card` token); only floating surfaces use these.</AppText>
         <View style={{ flexDirection: 'row' }}>
-          {(['card', 'control', 'raised'] as const).map((k) => (
+          {(['control', 'raised'] as const).map((k) => (
             <View
               key={k}
               style={[
@@ -242,6 +243,7 @@ function Tokens(): React.JSX.Element {
 
 const meta: Meta<typeof Tokens> = {
   title: 'Foundations/Tokens',
+  tags: ['!autodocs'],
   component: Tokens,
 };
 export default meta;

@@ -2,9 +2,9 @@
  * RouteColorBadge (TapeBadge), design system v1.2 chapter 17 / 32.2.
  *
  * Route tape colour label: the only tape-radius (6) label with text; v2.2.
- * Fill / label / hairline come from `TAPE_DISPLAY` / `TAPE_HAIR` (display only; stored colour
+ * Fill / label come from `TAPE_DISPLAY` (no outline on the badge) (display only; stored colour
  * names are unchanged). Colour names go through i18n. Static: not pressable, no motion.
- * Unknown colours render `surfaceAlt` / `textPrimary` / hairline with the "Other" label.
+ * Unknown colours render `surfaceAlt` / `textPrimary` with the "Other" label.
  */
 
 import React from 'react';
@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { useTheme } from '../../../lib/theme';
-import { TAPE_HAIR, resolveTape } from '../tape';
+import { resolveTape } from '../tape';
 import type { RouteColor } from '../types';
 
 interface RouteColorBadgeProps {
@@ -25,24 +25,23 @@ interface RouteColorBadgeProps {
    * The accessibility label becomes "V4, red". Without `grade`, the colour name is printed.
    */
   grade?: string;
-  /** On a photo: adds a 1.5pt `onMedia` outline. */
+  /** Kept for call-site compatibility; the badge draws no outline (fill only). */
   onMedia?: boolean;
 }
 
-/** Fill / hairline for the 11x11 tape swatch (colour-filter chip, thumbnail dot). */
-export function useTapeSwatch(color: string): { fill: string; hair?: string } {
+/** Fill for the tape swatch (colour-filter chip, thumbnail dot, picker tile) plus the readable mark colour for a checkmark on it. Fill only, no ring. */
+export function useTapeSwatch(color: string): { fill: string; mark: string } {
   const { theme } = useTheme();
   const mode = theme.isDark ? 'dark' : 'light';
   const tape = resolveTape(mode, color);
-  if (!tape.known) return { fill: theme.colors.surfaceAlt, hair: TAPE_HAIR[mode] };
-  return { fill: tape.entry.fill, hair: tape.entry.hair ? TAPE_HAIR[mode] : undefined };
+  if (!tape.known) return { fill: theme.colors.surfaceAlt, mark: theme.colors.textPrimary };
+  return { fill: tape.entry.fill, mark: tape.entry.label };
 }
 
 export default function RouteColorBadge({
   color,
   size = 'md',
   grade,
-  onMedia = false,
 }: RouteColorBadgeProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -51,7 +50,6 @@ export default function RouteColorBadge({
 
   const fill = tape.known ? tape.entry.fill : theme.colors.surfaceAlt;
   const labelColor = tape.known ? tape.entry.label : theme.colors.textPrimary;
-  const hasHair = tape.known ? !!tape.entry.hair : true;
 
   const name = t(`routeCatalog.colors.${tape.known ? color : 'other'}`);
   const tl = theme.typeVariant.tapeLabel[size];
@@ -90,32 +88,6 @@ export default function RouteColorBadge({
       >
         {text}
       </Text>
-      {onMedia ? (
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              borderWidth: theme.stroke.emphasis,
-              borderColor: theme.colors.onMedia,
-              borderRadius: theme.radius.tape,
-            },
-          ]}
-        />
-      ) : hasHair ? (
-        // Overlay so the 1pt hairline never changes the 22 / 26 visual height.
-        <View
-          pointerEvents="none"
-          style={[
-            StyleSheet.absoluteFill,
-            {
-              borderWidth: theme.stroke.thin,
-              borderColor: TAPE_HAIR[mode],
-              borderRadius: theme.radius.tape,
-            },
-          ]}
-        />
-      ) : null}
     </View>
   );
 }

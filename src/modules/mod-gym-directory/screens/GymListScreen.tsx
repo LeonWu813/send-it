@@ -28,11 +28,9 @@ import {
   Card,
   Chip,
   EmptyState,
-  InlineError,
-  Skeleton,
-  SkeletonGroup,
+  PageLoading,
   TextField,
-  useSkeletonPhase,
+  useLoadingPhase,
 } from '../../../components/ui';
 import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
@@ -41,6 +39,10 @@ import { useAppHeaderRoot } from '@/lib/AppHeaderContext';
 import { fetchSavedGymIds, listGyms } from '../gym-service';
 import type { GymSummary } from '../types';
 import { getGymInitials } from '../gym-initials';
+
+/** Fixed gym row: 12 padding + 48 thumbnail + 12 padding (R14, G-1). */
+const THUMB = 48;
+const ROW_HEIGHT = 72;
 
 interface GymListScreenProps {
   onSelectGym: (gymId: string) => void;
@@ -63,12 +65,12 @@ export default function GymListScreen({
   const { screenMargin } = useLayout();
   const header = useAppHeaderRoot();
   const topPad = header.contentTopInset > 0 ? header.contentTopInset : theme.spacing.md;
-  const styles = makeStyles(theme, screenMargin, topPad, header.contentBottomInset);
+  const styles = makeStyles(theme, screenMargin, topPad, header.contentTopInset + theme.spacing.md, header.contentTopInset, header.contentBottomInset);
 
   const [gyms, setGyms] = useState<GymSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const skeletonPhase = useSkeletonPhase(isLoading);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
+  const [hasError, setHasError] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [cityFilter, setCityFilter] = useState<string | null>(null);
 
@@ -77,16 +79,16 @@ export default function GymListScreen({
 
   const fetchGyms = useCallback(async (): Promise<void> => {
     setIsLoading(true);
-    setErrorMessage(null);
+    setHasError(false);
     try {
       const data = await listGyms();
       setGyms(data);
     } catch {
-      setErrorMessage(t('gymDirectory.errors.loadFailed'));
+      setHasError(true);
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
+  }, []);
 
   const fetchSaved = useCallback(async (): Promise<void> => {
     try {
@@ -155,12 +157,20 @@ export default function GymListScreen({
     [sortedGyms],
   );
 
+  const Separator = useCallback(
+    (): React.JSX.Element => <View style={styles.separator} />,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [theme.layout.cardGap],
+  );
+
   function renderGymCard({ item }: { item: GymSummary }): React.JSX.Element {
     const isItemSaved = savedGymIds.has(item.id);
     return (
       <Card
         variant="pressable"
         inScroll
+        padding={theme.spacing.smd}
+        style={styles.card}
         onPress={() => onSelectGym(item.id)}
         accessibilityLabel={`${item.name}, ${localizedDistrict(item)}`}
       >
@@ -176,79 +186,64 @@ export default function GymListScreen({
             />
           ) : (
             <View style={styles.initialsAvatar}>
-              <AppText variant="headline" color="textSecondary">
+              <AppText variant="callout" color="textSecondary">
                 {getGymInitials(item.name ?? '')}
               </AppText>
             </View>
           )}
 
           <View style={styles.cardContent}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardTitleBlock}>
-                <AppText variant="headline" numberOfLines={2}>
-                  {item.name}
-                </AppText>
-                {item.branch_label ? (
-                  <AppText variant="footnote" color="textSecondary">
-                    {item.branch_label}
-                  </AppText>
-                ) : null}
-              </View>
-              {/* AC-122: filled bookmark status marker for saved gyms only (read-only, not pressable) */}
-              {isItemSaved ? (
-                <Ionicons
-                  name={ICON.bookmark.filled}
-                  size={theme.iconSize.sm}
-                  color={theme.colors.textSecondary}
-                  accessibilityLabel={t('gymDirectory.bookmark.saved')}
-                />
-              ) : null}
-            </View>
-            <AppText variant="subhead" color="textSecondary" style={styles.district}>
-              {localizedCity(item)} · {localizedDistrict(item)}
+            <AppText variant="headline" numberOfLines={1}>
+              {item.name}
+            </AppText>
+            {/* R14: one meta line, stackTight gap below the name (fixed 72pt row) */}
+            <AppText variant="footnote" color="textSecondary" numberOfLines={1} style={styles.meta}>
+              {[item.branch_label, localizedCity(item), localizedDistrict(item)]
+                .filter(Boolean)
+                .join(' · ')}
             </AppText>
           </View>
+          {/* AC-122: filled bookmark status marker for saved gyms only (read-only, not pressable) */}
+          {isItemSaved ? (
+            <Ionicons
+              name={ICON.bookmark.filled}
+              size={theme.iconSize.sm}
+              color={theme.colors.textSecondary}
+              accessibilityLabel={t('gymDirectory.bookmark.saved')}
+            />
+          ) : null}
         </View>
       </Card>
     );
   }
 
+  const retryError = (
+    <EmptyState
+      variant="error"
+      title={t('gymDirectory.errors.loadFailedTitle')}
+      description={t('gymDirectory.errors.loadFailedBody')}
+      primaryLabel={t('common.retry')}
+      onPrimary={() => {
+        void fetchGyms();
+      }}
+    />
+  );
+
+  // One loading design for every page: nothing for 300ms, PageLoading, then E4 after 10s.
   if (isLoading) {
-    return (
-      <View style={[styles.root, styles.pageTop]}>
-        {skeletonPhase !== 'idle' ? (
-          <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonList}>
-            {[0, 1, 2, 3].map((i) => (
-              <Card key={i}>
-                <Skeleton shape="text" textVariant="headline" width="60%" />
-                <Skeleton shape="text" textVariant="footnote" width="30%" />
-                <View style={styles.skeletonDistrict}>
-                  <Skeleton shape="text" textVariant="subhead" width="45%" />
-                </View>
-              </Card>
-            ))}
-          </SkeletonGroup>
-        ) : null}
-      </View>
-    );
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') return <View style={[styles.root, styles.pageTop]}>{retryError}</View>;
+    return <View style={styles.root} />;
   }
 
-  if (errorMessage) {
-    return (
-      <View style={[styles.root, styles.pageTop]}>
-        <InlineError
-          variant="block"
-          message={errorMessage}
-          actionLabel={t('common.retry')}
-          onAction={() => {
-            void fetchGyms();
-          }}
-        />
-      </View>
-    );
+  if (hasError) {
+    return <View style={[styles.root, styles.pageTop]}>{retryError}</View>;
   }
 
-  const listHeader = (
+  const isFiltered = searchText.trim() !== '' || cityFilter !== null;
+
+  // E1 (the directory itself is empty): nothing to search, so no controls above the empty state.
+  const listHeader = gyms.length === 0 ? null : (
     <>
       {/* Search input */}
       <View style={styles.searchWrap}>
@@ -263,7 +258,8 @@ export default function GymListScreen({
       </View>
 
       {/* City filter chips */}
-      <View style={styles.filterRow}>
+      {/* Empty result: the anchor is the chip row's bottom, so drop its trailing margin. */}
+      <View style={[styles.filterRow, sortedGyms.length === 0 ? styles.filterRowLast : null]}>
         <Chip
           variant="multi"
           label={t('gymDirectory.cityFilter.taipei')}
@@ -287,20 +283,21 @@ export default function GymListScreen({
     <View>
       {/* AC-197: Google Maps Platform ToS — show attribution when any card has a Google photo */}
       {hasGooglePhotos ? (
-        <AppText variant="caption1" color="textSecondary" style={styles.googleAttribution}>
+        <AppText variant="footnote" color="textSecondary" style={styles.googleAttribution}>
           {t('gymDirectory.googlePhotosAttribution')}
         </AppText>
       ) : null}
-      <View style={styles.requestRow}>
-        <Button
-          variant="ghost"
-          size="md"
-          on="background"
-          label={t('gymDirectory.requestGym.cta')}
-          trailingIcon={ICON.forward.outline}
-          onPress={onRequestGym}
-        />
-      </View>
+      {sortedGyms.length > 0 ? (
+        <View style={styles.requestRow}>
+          <Button
+            variant="text"
+            size="md"
+            placement="inline"
+            label={t('gymDirectory.requestGym.cta')}
+            onPress={onRequestGym}
+          />
+        </View>
+      ) : null}
     </View>
   );
 
@@ -311,17 +308,39 @@ export default function GymListScreen({
         data={sortedGyms}
         keyExtractor={(item: GymSummary) => item.id}
         renderItem={renderGymCard}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, gyms.length === 0 && styles.listContentEmpty]}
         scrollIndicatorInsets={{ top: header.contentTopInset, bottom: header.indicatorBottomInset }}
         onScroll={header.onScroll}
         onContentSizeChange={header.onContentSizeChange}
         onLayout={header.onLayout}
         scrollEventThrottle={header.scrollEventThrottle}
         keyboardShouldPersistTaps="handled"
+        ItemSeparatorComponent={Separator}
         ListHeaderComponent={listHeader}
         ListFooterComponent={listFooter}
         ListEmptyComponent={
-          <EmptyState variant="filtered" title={t('gymDirectory.noResults')} />
+          isFiltered ? (
+            <EmptyState
+              variant="filtered"
+              title={t('gymDirectory.filteredEmpty.title')}
+              description={t('gymDirectory.filteredEmpty.description')}
+              primaryLabel={t('gymDirectory.filteredEmpty.clear')}
+              onPrimary={() => {
+                setSearchText('');
+                setCityFilter(null);
+              }}
+              secondaryLabel={t('gymDirectory.requestGym.cta')}
+              onSecondary={onRequestGym}
+            />
+          ) : (
+            <EmptyState
+              variant="page"
+              icon={ICON.gyms.outline}
+              title={t('gymDirectory.empty.title')}
+              secondaryLabel={t('gymDirectory.requestGym.cta')}
+              onSecondary={onRequestGym}
+            />
+          )
         }
       />
     </View>
@@ -333,6 +352,8 @@ function makeStyles(
   theme: ReturnType<typeof useTheme>['theme'],
   screenMargin: number,
   topPad: number,
+  listTopPad: number,
+  emptyTopPad: number,
   bottomInset: number,
 ) {
   return StyleSheet.create({
@@ -344,12 +365,6 @@ function makeStyles(
     pageTop: {
       paddingTop: topPad,
     },
-    skeletonList: {
-      gap: theme.layout.cardGap,
-    },
-    skeletonDistrict: {
-      marginTop: theme.spacing.xs,
-    },
     searchWrap: {
       marginBottom: theme.spacing.smd,
     },
@@ -360,10 +375,24 @@ function makeStyles(
       rowGap: theme.spacing.smd,
       marginBottom: theme.spacing.md,
     },
+    filterRowLast: {
+      marginBottom: 0,
+    },
+    separator: {
+      height: theme.layout.cardGap,
+    },
     listContent: {
-      gap: theme.layout.cardGap,
-      paddingTop: topPad,
+      // R2: content starts 16 below the header, same as Home.
+      paddingTop: listTopPad,
       paddingBottom: bottomInset > 0 ? bottomInset : theme.spacing.lg,
+    },
+    // E1 (directory empty): no search field above, so EmptyState alone sets the 48pt start.
+    listContentEmpty: {
+      paddingTop: emptyTopPad,
+    },
+    card: {
+      height: ROW_HEIGHT,
+      justifyContent: 'center',
     },
     cardRow: {
       flexDirection: 'row',
@@ -371,15 +400,15 @@ function makeStyles(
       gap: theme.spacing.sm,
     },
     thumbnail: {
-      width: 56,
-      height: 56,
+      width: THUMB,
+      height: THUMB,
       borderRadius: theme.radius.media,
       backgroundColor: theme.colors.surfaceAlt,
       flexShrink: 0,
     },
     initialsAvatar: {
-      width: 56,
-      height: 56,
+      width: THUMB,
+      height: THUMB,
       borderRadius: theme.radius.media,
       backgroundColor: theme.colors.surfaceAlt,
       alignItems: 'center',
@@ -389,25 +418,17 @@ function makeStyles(
     cardContent: {
       flex: 1,
     },
-    cardHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      gap: theme.spacing.sm,
-    },
-    cardTitleBlock: {
-      flex: 1,
-    },
-    district: {
-      marginTop: theme.spacing.xs,
+    meta: {
+      marginTop: theme.layout.stackTight,
     },
     googleAttribution: {
-      textAlign: 'center',
+      textAlign: 'right',
       marginTop: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
+    // T2 list footer: 16 below the last card; the text button carries its own keyline geometry.
     requestRow: {
-      alignItems: 'center',
+      marginTop: theme.spacing.md,
     },
   });
 }

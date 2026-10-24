@@ -1,3 +1,4 @@
+// UNUSED (dead code): not imported anywhere; live other-user profile is social-feed UserProfileScreen. See page-review §6 #7.
 /**
  * OtherUserProfileScreen — view another user's profile with Report + Block controls.
  *

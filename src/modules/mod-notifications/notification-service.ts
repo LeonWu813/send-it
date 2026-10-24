@@ -116,6 +116,25 @@ export async function fetchNotifications(limit: number = 50): Promise<Notificati
     }
   }
 
+  // Step 2b (L-1): batch-fetch the liked video's route grade/color for the context line.
+  // Non-fatal and display-only: failure just omits the grade/color from line 2.
+  type VideoRouteRow = { id: string; routes: { grade: string; color_tag: string } | null };
+  let videoMap: Record<string, VideoRouteRow> = {};
+  const videoIds = [...new Set(data.map((row) => row.target_id as string))];
+  if (videoIds.length > 0) {
+    const { data: videoData, error: videoError } = await supabase
+      .from('beta_videos')
+      .select('id, routes(grade, color_tag)')
+      .in('id', videoIds);
+    if (videoError) {
+      console.error('[fetchNotifications] video route fetch error:', videoError);
+    } else if (videoData) {
+      videoMap = Object.fromEntries(
+        (videoData as unknown as VideoRouteRow[]).map((v) => [v.id, v]),
+      );
+    }
+  }
+
   // Step 3: Merge notification rows with actor profile data.
   const results: Notification[] = [];
   for (const rawRow of data) {
@@ -137,6 +156,8 @@ export async function fetchNotifications(limit: number = 50): Promise<Notificati
       actor_user_id: row.actor_user_id,
       actor_display_name: actor?.display_name,
       actor_avatar_url: actor?.avatar_url ?? null,
+      route_grade: videoMap[row.target_id]?.routes?.grade ?? null,
+      route_color: videoMap[row.target_id]?.routes?.color_tag ?? null,
       type: row.type as 'beta_video_like',
       target_type: row.target_type,
       target_id: row.target_id,

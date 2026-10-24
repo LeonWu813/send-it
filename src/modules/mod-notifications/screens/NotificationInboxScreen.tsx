@@ -21,7 +21,6 @@
  * i18n: all user-facing strings use useTranslation('common') hook.
  */
 
-import { Ionicons } from '@expo/vector-icons';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,14 +32,14 @@ import {
   AppText,
   Avatar,
   EmptyState,
+  FistBumpIcon,
   InlineError,
+  PageLoading,
   PressableScale,
-  Skeleton,
-  SkeletonGroup,
-  useSkeletonPhase,
+  useLoadingPhase,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
-import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
+import { CONTINUOUS, ICON_SIZE, useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader } from '@/lib/AppHeaderContext';
 import {
   fetchNotifications,
@@ -67,6 +66,9 @@ interface NotificationInboxScreenProps {
   onNavigateToUser?: (userId: string) => void;
 }
 
+/** L-1 (page-review): fixed two-line row height. */
+const INBOX_ROW_HEIGHT = 72;
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function NotificationInboxScreen({
@@ -75,7 +77,7 @@ export default function NotificationInboxScreen({
   onBack,
   onNavigateToUser,
 }: NotificationInboxScreenProps): React.JSX.Element {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const { theme } = useTheme();
   const insets = useSafeAreaInsets();
   const { screenMargin } = useLayout();
@@ -96,7 +98,7 @@ export default function NotificationInboxScreen({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const skeletonPhase = useSkeletonPhase(loading);
+  const loadingPhase = useLoadingPhase(loading);
 
   // ── Load and mark-read ──────────────────────────────────────────────────────
 
@@ -152,25 +154,36 @@ export default function NotificationInboxScreen({
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  // Full-page loading: PageLoading after 300ms; after 10s E4 replaces it (a late success swaps back to content).
   if (loading) {
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') {
+      return (
+        <View style={styles.root}>
+          <EmptyState
+            variant="error"
+            title={t('notifications.loadErrorTitle')}
+            description={t('notifications.loadErrorDescription')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => void handleRefresh()}
+          />
+        </View>
+      );
+    }
+    return <View style={styles.root} />;
+  }
+
+  // Whole-page failure (nothing to show): E4. With rows on screen a failed refresh keeps the block notice below.
+  if (error !== null && notifications.length === 0) {
     return (
       <View style={styles.root}>
-        {skeletonPhase !== 'idle' && (
-          <SkeletonGroup label={t('notifications.title')} style={styles.skeletonList}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i}>
-                <View style={styles.skeletonRow}>
-                  <Skeleton shape="circle" width={theme.avatarSize.md} height={theme.avatarSize.md} />
-                  <View style={styles.body}>
-                    <Skeleton shape="text" textVariant="subhead" width="80%" />
-                    <Skeleton shape="text" textVariant="caption1" width="30%" />
-                  </View>
-                </View>
-                {i < 3 && <View style={styles.divider} />}
-              </View>
-            ))}
-          </SkeletonGroup>
-        )}
+        <EmptyState
+          variant="error"
+          title={t('notifications.loadErrorTitle')}
+          description={t('notifications.loadErrorDescription')}
+          primaryLabel={t('common.retry')}
+          onPrimary={() => void handleRefresh()}
+        />
       </View>
     );
   }
@@ -188,7 +201,7 @@ export default function NotificationInboxScreen({
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => void handleRefresh()}
-              tintColor={theme.colors.primary}
+              tintColor={theme.colors.textSecondary}
             />
           }
         >
@@ -212,27 +225,36 @@ export default function NotificationInboxScreen({
 
           {/* Empty state */}
           {error === null && notifications.length === 0 && (
-            <View style={styles.emptyCard}>
-              <EmptyState variant="inline" title={t('notifications.empty')} />
-            </View>
+            <EmptyState
+              variant="page"
+              icon={ICON.notifications.outline}
+              title={t('notifications.emptyTitle')}
+              description={t('notifications.emptyDescription')}
+            />
           )}
 
-          {/* Notification list: rows sit on a surface container, never on the sand page */}
-          {notifications.length > 0 && (
-            <View style={styles.list}>
-              {notifications.map((item, index) => (
-                <NotificationRow
-                  key={item.id}
-                  item={item}
-                  styles={styles}
-                  theme={theme}
-                  t={t}
-                  divider={index < notifications.length - 1}
-                  onPress={handleNotificationPress}
-                />
-              ))}
+          {/* L-1: grouped 今天 / 本週 / 更早; each group is a surface card, never on the sand page */}
+          {groupNotifications(notifications, new Date()).map((group) => (
+            <View key={group.key}>
+              <AppText variant="groupHeader" accessibilityRole="header" style={styles.sectionHeader}>
+                {t(`notifications.section.${group.key}`)}
+              </AppText>
+              <View style={styles.list}>
+                {group.items.map((item, index) => (
+                  <NotificationRow
+                    key={item.id}
+                    item={item}
+                    styles={styles}
+                    theme={theme}
+                    t={t}
+                    language={i18n.language}
+                    divider={index < group.items.length - 1}
+                    onPress={handleNotificationPress}
+                  />
+                ))}
+              </View>
             </View>
-          )}
+          ))}
         </ScrollView>
       </View>
     </SwipeBackWrapper>
@@ -252,7 +274,8 @@ interface NotificationRowProps {
   item: Notification;
   styles: ReturnType<typeof makeStyles>;
   theme: ReturnType<typeof useTheme>['theme'];
-  t: (key: string) => string;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+  language: string;
   divider: boolean;
   onPress: (notification: Notification) => void;
 }
@@ -262,10 +285,17 @@ function NotificationRow({
   styles,
   theme,
   t,
+  language,
   divider,
   onPress,
 }: NotificationRowProps): React.JSX.Element {
   const actorName = item.actor_display_name ?? t('notifications.unknownActor');
+  const date = formatDate(item.created_at, language);
+  const routeLabel =
+    item.route_grade && item.route_color
+      ? `${item.route_grade} ${t(`routeCatalog.colors.${item.route_color}`)}`
+      : null;
+  const contextLine = routeLabel ? `${routeLabel} · ${date}` : date;
 
   return (
     <View>
@@ -278,36 +308,32 @@ function NotificationRow({
         accessibilityRole="button"
         accessibilityLabel={t('notifications.betaVideoLikeA11y')}
       >
-        {/* Unread indicator dot: 8x8 error (spec 15.9 / COMPONENT_SIZE.unreadDot) */}
-        {!item.is_read && <View style={styles.unreadDot} />}
-
         {/* Actor avatar */}
         <View style={styles.avatarContainer}>
           <Avatar size="md" uri={item.actor_avatar_url} name={actorName} decorative />
         </View>
 
-        {/* Notification body */}
+        {/* Notification body: line 1 sentence, line 2 object context (L-1) */}
         <View style={styles.body}>
-          <AppText variant="subhead">
+          <AppText variant="subhead" numberOfLines={1}>
             <AppText variant="subhead" weight="600">{actorName}</AppText>
             {' '}
             <AppText variant="subhead">{t('notifications.betaVideoLikedBody')}</AppText>
           </AppText>
-          <AppText variant="caption1" color="textSecondary" style={styles.timestamp}>
-            {formatDate(item.created_at)}
+          <AppText variant="footnote" color="textSecondary" numberOfLines={1}>
+            {contextLine}
           </AppText>
         </View>
 
-        {/* Type marker: like glyph + text (no emoji / text symbol) */}
+        {/* Type marker: custom fist-bump glyph, no chip text (L-1) */}
         <View style={styles.typeBadge}>
-          <Ionicons
-            name={ICON.like.filled}
-            size={theme.iconSize.sm}
-            color={theme.colors.textSecondary}
-          />
-          <AppText variant="caption1" color="textSecondary">
-            {t('notifications.badgeBetaVideoLike')}
-          </AppText>
+          <FistBumpIcon variant="outline" size={ICON_SIZE.sm} color={theme.colors.textSecondary} />
+        </View>
+
+        {/* Unread dot: trailing, centred, right edge on R16 (audit C1/C4). The slot is
+            always reserved so the like icons stay aligned across read/unread rows. */}
+        <View style={styles.unreadSlot}>
+          {!item.is_read && <View testID="unread-dot" style={styles.unreadDot} />}
         </View>
       </PressableScale>
       {divider && <View style={styles.divider} />}
@@ -317,14 +343,35 @@ function NotificationRow({
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Format an ISO timestamp as a short readable date (locale-agnostic). */
-function formatDate(iso: string): string {
+/** Format an ISO timestamp as a short readable date, e.g. 10月20日 / Oct 20. */
+function formatDate(iso: string, language?: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(language, { month: 'short', day: 'numeric' });
   } catch {
     return iso;
   }
+}
+
+type SectionKey = 'today' | 'thisWeek' | 'earlier';
+
+/** L-1: bucket most-recent-first notifications into today / last 7 days / earlier. */
+export function groupNotifications(
+  items: Notification[],
+  now: Date,
+): { key: SectionKey; items: Notification[] }[] {
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const weekAgo = startOfToday - 6 * 24 * 60 * 60 * 1000;
+  const buckets: Record<SectionKey, Notification[]> = { today: [], thisWeek: [], earlier: [] };
+  for (const item of items) {
+    const ts = new Date(item.created_at).getTime();
+    if (ts >= startOfToday) buckets.today.push(item);
+    else if (ts >= weekAgo) buckets.thisWeek.push(item);
+    else buckets.earlier.push(item);
+  }
+  return (['today', 'thisWeek', 'earlier'] as const)
+    .filter((key) => buckets[key].length > 0)
+    .map((key) => ({ key, items: buckets[key] }));
 }
 
 // ── Styles ────────────────────────────────────────────────────────────────────
@@ -347,8 +394,8 @@ function makeStyles(
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
     },
+    // R0: the section header carries the top gap, so no extra padding here
     contentContainerNested: {
-      paddingTop: theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
     },
     screenTitle: {
@@ -356,6 +403,7 @@ function makeStyles(
       marginBottom: theme.spacing.md,
     },
     errorBlock: {
+      marginTop: theme.spacing.md,
       marginHorizontal: screenMargin,
       marginBottom: theme.spacing.md,
     },
@@ -367,47 +415,29 @@ function makeStyles(
       ...CONTINUOUS,
       overflow: 'hidden',
     },
-    emptyCard: {
-      backgroundColor: theme.colors.surface,
-      marginHorizontal: screenMargin,
-      paddingHorizontal: theme.spacing.md,
-      borderRadius: theme.radius.card,
-      ...CONTINUOUS,
-      overflow: 'hidden',
-    },
-    skeletonList: {
-      backgroundColor: theme.colors.surface,
-      marginHorizontal: screenMargin,
-      marginTop: theme.spacing.md,
-      borderRadius: theme.radius.card,
-      ...CONTINUOUS,
-      overflow: 'hidden',
-    },
-    skeletonRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.smd,
-      minHeight: theme.layout.listRowMinHeight,
-      paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.layout.listRowPaddingV,
-    },
+    // L-1: fixed 72pt two-line row (Avatar md 48)
     notificationRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      minHeight: theme.layout.listRowMinHeight,
+      height: INBOX_ROW_HEIGHT,
       paddingHorizontal: theme.spacing.md,
-      paddingVertical: theme.layout.listRowPaddingV,
+    },
+    sectionHeader: {
+      paddingHorizontal: screenMargin,
+      paddingTop: theme.spacing.md,
+      paddingBottom: theme.spacing.sm,
     },
     divider: {
       height: theme.stroke.hairline,
       marginLeft: theme.spacing.md + avatarWidth + theme.spacing.smd,
       backgroundColor: theme.colors.divider,
     },
+    unreadSlot: {
+      width: theme.componentSize.unreadDot,
+      height: theme.componentSize.unreadDot,
+      marginLeft: theme.spacing.smd,
+    },
     unreadDot: {
-      position: 'absolute',
-      left: theme.spacing.xs,
-      top: '50%',
-      marginTop: -theme.componentSize.unreadDot / 2,
       width: theme.componentSize.unreadDot,
       height: theme.componentSize.unreadDot,
       borderRadius: theme.radius.full,
@@ -419,9 +449,6 @@ function makeStyles(
     body: {
       flex: 1,
       gap: theme.spacing.xxs,
-    },
-    timestamp: {
-      marginTop: theme.layout.stackTight,
     },
     typeBadge: {
       flexDirection: 'row',

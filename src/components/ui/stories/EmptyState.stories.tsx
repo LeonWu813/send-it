@@ -3,8 +3,11 @@ import React from 'react';
 import { View } from 'react-native';
 
 import { ICON } from '../../../lib/icons';
+import { useTheme } from '../../../lib/theme';
+import { AppText } from '../AppText';
 import { EmptyState } from '../EmptyState';
 import type { EmptyStateProps } from '../EmptyState';
+import { SectionHeader } from '../SectionHeader';
 
 const glyphs = {
   default: undefined,
@@ -13,49 +16,140 @@ const glyphs = {
   sends: ICON.sends.outline,
   notifications: ICON.notifications.outline,
   followers: ICON.followers.outline,
+  locked: ICON.locked.outline,
 };
 
-function Demo(props: EmptyStateProps): React.JSX.Element {
+/** Page-width frame with a 58 high stand-in header, so the 48pt anchor under the header shows. */
+function Frame({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const { theme } = useTheme();
   return (
-    <View style={{ padding: 16, width: 375 }}>
-      <EmptyState {...props} />
+    <View style={{ width: 393, minHeight: 480, backgroundColor: theme.colors.background, paddingHorizontal: 16 }}>
+      <View style={{ height: 58, justifyContent: 'center' }}>
+        <AppText variant="headline">標題</AppText>
+      </View>
+      {children}
     </View>
   );
 }
 
+function Demo(props: EmptyStateProps): React.JSX.Element {
+  return (
+    <Frame>
+      <EmptyState {...props} />
+    </Frame>
+  );
+}
+
 const meta: Meta<EmptyStateProps> = {
-  title: 'UI/EmptyState',
+  title: 'Components/EmptyState',
   component: Demo,
   args: {
-    variant: 'prompt',
-    eyebrow: '開始記錄',
+    variant: 'page',
     icon: undefined,
-    title: '記下你的第一次完攀',
-    description: '去岩館爬一條，回來記在這裡。',
-    primaryLabel: '找路線',
+    title: '還沒有追蹤者',
+    description: '分享 Beta 影片，讓其他攀岩者認識你。',
+    primaryLabel: '',
     secondaryLabel: '',
   },
   argTypes: {
-    variant: { control: 'inline-radio', options: ['slot', 'prompt', 'filtered', 'private', 'inline'], description: 'slot = dashed whole-card button; prompt = primaryContainer card (zero records); firstUse is an alias of prompt' },
-    icon: { control: 'select', options: Object.keys(glyphs), mapping: glyphs },
+    variant: {
+      control: 'inline-radio',
+      options: ['page', 'section', 'filtered', 'error'],
+      description: 'E1 page / E2 section / E3 filtered / E4 error. Old names (prompt, firstUse, private, inline, slot) are deprecated aliases kept one version.',
+    },
+    icon: { control: 'select', options: Object.keys(glyphs), mapping: glyphs, description: 'Deprecated: ignored by every variant (no icon).' },
+    primaryTone: { control: 'inline-radio', options: ['primary', 'secondary'] },
     onPrimary: { action: 'primary' },
     onSecondary: { action: 'secondary' },
   },
 };
 export default meta;
 
-/** The five variants. */
-export const AllVariants: StoryObj<EmptyStateProps> = {
+export const Playground: StoryObj<EmptyStateProps> = {};
+
+/** E1 page: nothing on the screen. Title, description, optional primary (hug) and centred link. */
+export const Page: StoryObj<EmptyStateProps> = {
   render: () => (
-    <View style={{ padding: 16, width: 375, rowGap: 24 }}>
-      <EmptyState variant="slot" title="正在 project" description="在路線上點書籤，它就會出現在這裡。" primaryLabel="找路線" />
-      <EmptyState variant="prompt" eyebrow="開始記錄" title="記下你的第一次完攀" description="去岩館爬一條，回來記在這裡。" primaryLabel="找路線" />
-      <EmptyState variant="filtered" title="沒有符合的紀錄" description="換個篩選條件試試。" primaryLabel="清除篩選" />
-      <EmptyState variant="private" title="這個帳號是私人的" description="追蹤後才看得到他的紀錄。" primaryLabel="追蹤" />
-      <EmptyState variant="inline" description="還沒有完攀紀錄。" secondaryLabel="記錄一條" />
+    <Frame>
+      <EmptyState
+        variant="page"
+        title="這間岩館還沒有路線"
+        description="看到牆上的路線，就新增第一條。"
+        primaryLabel="新增路線"
+        secondaryLabel="找不到你的岩館？申請加入"
+      />
+    </Frame>
+  ),
+};
+
+/** E2 section: just the sentence; the action lives in the header's T1 slot (SectionHeader). */
+export const Section: StoryObj<EmptyStateProps> = {
+  render: () => (
+    <Frame>
+      <View style={{ marginTop: 8 }}>
+        <SectionHeader title="完攀紀錄" action={{ label: '找路線', onPress: () => {} }} />
+      </View>
+      <EmptyState variant="section" description="還沒有完攀紀錄。" />
+    </Frame>
+  ),
+};
+
+/** E2 without a header row (e.g. a detail page): the action may still sit under the sentence as a `text md inline`. */
+export const SectionNoHeader: StoryObj<EmptyStateProps> = {
+  render: () => (
+    <Frame>
+      <EmptyState variant="section" description="還沒有完攀紀錄。" secondaryLabel="記錄完攀" />
+    </Frame>
+  ),
+};
+
+/** E3 filtered: data exists but the filter excluded it. Primary "clear filters" hugs, link is centred. */
+export const Filtered: StoryObj<EmptyStateProps> = {
+  render: () => (
+    <Frame>
+      <EmptyState
+        variant="filtered"
+        title="找不到符合的路線"
+        description="換個難度或顏色試試。"
+        primaryLabel="清除篩選"
+        secondaryLabel="找不到路線？新增一條"
+      />
+    </Frame>
+  ),
+};
+
+/** E4 error: the page failed to load. No icon, default-colour title, secondary Retry with the reload glyph. */
+export const ErrorState: StoryObj<EmptyStateProps> = {
+  name: 'Error',
+  render: () => (
+    <Frame>
+      <EmptyState variant="error" title="岩館載不出來" description="檢查網路後再試一次。" primaryLabel="重試" />
+    </Frame>
+  ),
+};
+
+/** Title only, and title + description without an action. */
+export const Compositions: StoryObj<EmptyStateProps> = {
+  render: () => (
+    <View style={{ rowGap: 8 }}>
+      <Frame>
+        <EmptyState variant="page" title="沒有封鎖任何人" />
+      </Frame>
+      <Frame>
+        <EmptyState variant="page" title="還沒有追蹤者" description="分享 Beta 影片，讓其他攀岩者認識你。" />
+      </Frame>
     </View>
   ),
 };
 
-/** inline: only `description` + `secondaryLabel` (ghost) are used. No illustrations, ever. */
-export const Playground: StoryObj<EmptyStateProps> = {};
+/** The five variants side by side (E1 page, E2 section, E3 filtered, E4 error). */
+export const AllVariants: StoryObj<EmptyStateProps> = {
+  render: () => (
+    <View style={{ padding: 16, width: 375, rowGap: 24 }}>
+      <EmptyState variant="page" title="還沒有追蹤者" description="分享 Beta 影片，讓其他攀岩者認識你。" style={{ paddingTop: 0 }} />
+      <EmptyState variant="section" description="還沒有完攀紀錄。" secondaryLabel="找路線" />
+      <EmptyState variant="filtered" title="找不到符合的岩館" description="換個關鍵字或城市試試。" primaryLabel="清除篩選" style={{ paddingTop: 0 }} />
+      <EmptyState variant="error" title="路線載不出來" description="檢查網路後再試一次。" primaryLabel="重試" style={{ paddingTop: 0 }} />
+    </View>
+  ),
+};

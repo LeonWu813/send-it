@@ -4,8 +4,8 @@ import { ActivityIndicator, Animated, Image, View } from 'react-native';
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
 
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
-import { useTheme } from '../../lib/theme';
-import type { PaletteKey } from '../../lib/theme';
+import { SPINNER, useTheme } from '../../lib/theme';
+import type { PaletteKey, SpinnerContext } from '../../lib/theme';
 import { ICON } from '../../lib/icons';
 import { AppText } from './AppText';
 import { Button } from './Button';
@@ -18,7 +18,7 @@ export interface ProgressBarProps {
   tone?: 'default' | 'media';
   /** The fill turns `error` and stays where it stopped. */
   failed?: boolean;
-  /** "62%" above the bar, right-aligned (caption1 numeric textSecondary). */
+  /** "62%" above the bar, right-aligned (footnote numeric textSecondary). */
   showPercent?: boolean;
   /** Required: describes what is progressing ("Uploading"). */
   accessibilityLabel: string;
@@ -70,7 +70,7 @@ export function ProgressBar({
       style={style}
     >
       {showPercent ? (
-        <AppText variant="caption1" numeric color="textSecondary" align="right" style={{ marginBottom: theme.spacing.xs }}>
+        <AppText variant="footnote" numeric color="textSecondary" align="right" style={{ marginBottom: theme.spacing.xs }}>
           {`${pct}%`}
         </AppText>
       ) : null}
@@ -98,16 +98,27 @@ export function ProgressBar({
 }
 
 export interface SpinnerProps {
-  /** Button label colour / textSecondary (search bar, small region) / onMedia (Reel buffering). */
+  /**
+   * Where the spinner is used; decides size and colour (states-audit-ui 1.3): page = large textSecondary
+   * (use <PageLoading />), section = small textSecondary, control = small (pass `color` = the control's
+   * glyph colour), field = small textSecondary, media = large onMedia, mediaControl = small onMedia.
+   */
+  context?: SpinnerContext;
+  /** control: the button's own colour. @deprecated for other contexts: the context decides. */
   color?: PaletteKey;
+  /** @deprecated use `context`. */
   size?: 'small' | 'large';
   accessibilityLabel?: string;
 }
 
+const MEDIA_CONTEXTS: readonly SpinnerContext[] = ['media', 'mediaControl'];
+
 /** System ActivityIndicator with palette colours. Use for indeterminate waits; pull-to-refresh uses RefreshControl. */
-export function Spinner({ color = 'textSecondary', size = 'small', accessibilityLabel }: SpinnerProps): React.JSX.Element {
+export function Spinner({ context, color, size, accessibilityLabel }: SpinnerProps): React.JSX.Element {
   const { theme } = useTheme();
-  return <ActivityIndicator size={size} color={theme.colors[color]} accessibilityLabel={accessibilityLabel} />;
+  const resolvedSize = size ?? (context ? SPINNER[context] : 'small');
+  const resolvedColor: PaletteKey = color ?? (context && MEDIA_CONTEXTS.includes(context) ? 'onMedia' : 'textSecondary');
+  return <ActivityIndicator size={resolvedSize} color={theme.colors[resolvedColor]} accessibilityLabel={accessibilityLabel} />;
 }
 
 export interface UploadProgressCardProps {
@@ -167,17 +178,17 @@ export function UploadProgressCard({
         >
           {thumbnailUri ? <Image source={{ uri: thumbnailUri }} resizeMode="cover" accessibilityIgnoresInvertColors style={{ width, height }} /> : null}
         </View>
-        <View style={{ flex: 1, marginLeft: theme.spacing.md, justifyContent: 'center' }}>
+        <View style={{ flex: 1, marginLeft: theme.spacing.smd, justifyContent: 'center' }}>
           <AppText variant="headline" accessibilityRole="header">
             {title}
           </AppText>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: theme.spacing.xs }}>
             <AppText variant="footnote" color="textSecondary" numberOfLines={1} style={{ flex: 1 }}>
               {routeName}
             </AppText>
             <AppText variant="footnote" numeric color="textSecondary" style={{ marginLeft: theme.spacing.sm }}>{`${pct}%`}</AppText>
           </View>
-          <ProgressBar value={pct} failed={failed} accessibilityLabel={progressLabel} style={{ marginTop: 6 }} />
+          <ProgressBar value={pct} failed={failed} accessibilityLabel={progressLabel} style={{ marginTop: theme.spacing.sm }} />
           {failed ? (
             errorCaption ? (
               <View style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: theme.spacing.sm }}>
@@ -197,7 +208,7 @@ export function UploadProgressCard({
       {failed && (retryLabel || cancelLabel) ? (
         <View style={{ flexDirection: 'row', columnGap: theme.spacing.sm, marginTop: theme.spacing.md, justifyContent: 'flex-end' }}>
           {cancelLabel ? <Button variant="secondary" size="sm" label={cancelLabel} onPress={() => onCancel?.()} /> : null}
-          {retryLabel ? <Button variant="primary" size="sm" label={retryLabel} onPress={() => onRetry?.()} /> : null}
+          {retryLabel ? <Button variant="primary" size="sm" icon={ICON.retry.outline} label={retryLabel} onPress={() => onRetry?.()} /> : null}
         </View>
       ) : null}
     </Card>

@@ -39,7 +39,7 @@ function Demo({ variant, value: initial, disabled, options }: Args): React.JSX.E
 }
 
 const meta: Meta<Args> = {
-  title: 'UI/SegmentedControl',
+  title: 'Components/SegmentedControl',
   component: Demo,
   args: { variant: 'standard', value: 'all', disabled: false, options: 3 },
   argTypes: {

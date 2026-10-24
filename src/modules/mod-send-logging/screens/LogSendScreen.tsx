@@ -2,7 +2,7 @@
  * LogSendScreen — the send-logging form.
  *
  * Design system v2.2 (§18A, §19.9): optional compact route summary card, icon SegmentedControl for the
- * style, grouped form card, Stepper for attempts. The submitted payload is unchanged.
+ * style, flat form, Stepper for attempts. The submitted payload is unchanged.
  *
  * Entry point 2 (from Route Detail): routeId and grade are pre-populated.
  * Entry point 1 (from global "+"): caller passes routeId + grade after the
@@ -159,7 +159,7 @@ export default function LogSendScreen({
           marginBottom: theme.layout.sectionGap,
         }}
       >
-        <Button label={t('common.cancel')} onPress={onCancel} variant="ghost" size="md" on="background" />
+        <Button variant="text" size="md" placement="bar" label={t('common.cancel')} onPress={onCancel} />
         <View
           pointerEvents="none"
           style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}
@@ -215,15 +215,15 @@ export default function LogSendScreen({
         </Card>
       )}
 
-      {/* Grouped form card: ONE card, fields gap 16, each field keeps its own border. */}
-      <Card variant="static" style={{ rowGap: theme.layout.fieldGap }}>
+      {/* Flat form (F4): no card container, labels on the 16pt keyline, fields gap 16. */}
+      <View style={{ rowGap: theme.layout.fieldGap }}>
         {/* Style selector — Tap 2 in the ≤4-tap flow */}
         <View style={{ rowGap: theme.spacing.sm }}>
           <AppText variant="fieldLabel">{t('sends.style')}</AppText>
           <SendStylePicker value={style} onChange={handleStyleSelect} />
         </View>
 
-        {/* Attempts — locked to 1 for flash; the previous count returns on unlock. */}
+        {/* Attempts — C1 row band (12 top/bottom, 16 left/right); the -/+ discs sit on the right padding line (C4). Locked to 1 for flash; the previous count returns on unlock. */}
         <Stepper
           label={attemptsLabel}
           description={t('sends.attemptsDescription')}
@@ -238,6 +238,11 @@ export default function LogSendScreen({
           })}
           doneLabel={t('ui.stepper.done')}
           hapticSource="stepper-attempts"
+          style={{
+            paddingVertical: theme.layout.listRowPaddingV,
+            paddingLeft: theme.spacing.md,
+            paddingRight: theme.spacing.md,
+          }}
         />
 
         {/* Date input (ISO date string YYYY-MM-DD). No date picker exists today. */}
@@ -260,7 +265,7 @@ export default function LogSendScreen({
           maxLength={500}
           showCount
         />
-      </Card>
+      </View>
 
       {/* Error message — AC-012: always shown on failure */}
       {errorMessage !== null && (

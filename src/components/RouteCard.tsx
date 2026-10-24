@@ -4,17 +4,17 @@
  * Owned by MOD-012. Consumed by HomeScreen (Projecting Routes), RouteListScreen (MOD-003) and
  * the send-history section. Import path (all consumers): `src/components/RouteCard`.
  *
- * Layout (thumbnail + three lines; AC-191 / AC-192 overridden by the human decision):
- *   Card (surface, radius 20, padding 8, minHeight 104)
- *     ├── text column (flex-1, paddingLeft 8, vertically centred)
- *     │     ├── row 1: TapeBadge lg (grade 24/800, the card's only focal point) + SendStatus tag
- *     │     │          (flash / top only) + flex + bookmark (44pt, IN the text column)
- *     │     ├── row 2: `{colour}・{section}` subhead 600 (+ `・{gym}` 400 textSecondary on cross-gym lists)
- *     │     └── row 3: play-circle icon + beta count (footnote; hidden when 0)
- *     └── thumbnail 88 (64 below 360pt wide), radius innerRadius(card, 8) = 12; missing photo =
- *         surfaceAlt + image icon; play disc (decorative) when beta >= 1 and a photo exists
- *   Font scale >= 1.6: the thumbnail is hidden, the text column is full width, row 1 wraps and the
- *   bookmark is pinned top-right.
+ * `variant="compact"` (DEFAULT, page-review RL-1): thumb 64, card 80pt. `variant="regular"`: thumb 88, 104pt.
+ *
+ * Layout (flat-alignment audit A4/A5, deviation #4: ONE vertical centre for the whole row):
+ *   Card (surface, radius 20, padding 8; flat, no shadow)
+ *     ├── text block (flex-1, vertically centred on the card): badge + send tag, then
+ *     │          `{colour}・{section}` subhead 600 (+ `・{gym}` 400 textSecondary on cross-gym lists)
+ *     ├── bookmark (44pt, centred on the card, not on the badge line)
+ *     └── thumbnail 88 (64 compact / below 360pt wide), radius innerRadius(card, 8) = 12; missing photo =
+ *         surfaceAlt + image icon; play chip 「▶ n」 (decorative) bottom-right when beta >= 1
+ *   Font scale >= 1.6: the thumbnail is hidden, the text column is full width, the badge row wraps, the
+ *   beta count is a text line and the bookmark is pinned top-right.
  *
  * The card body (a full-card PressableScale) and the bookmark are SIBLINGS — no nested buttons.
  * Everything visual is hidden from VoiceOver; the body label is the one sentence:
@@ -69,6 +69,11 @@ export interface RouteCardProps {
   isSaved?: boolean;
   /** Called when the bookmark is tapped (AC-046/047). */
   onBookmarkToggle?: () => void;
+  /**
+   * 'compact' (default, page-review RL-1 / AC-192): 64 thumb + 2 x routeCardPadding = 80pt, ONE meta line
+   * (colour・section・gym + beta count). 'regular': the previous 104pt card (88 thumb, separate beta row).
+   */
+  variant?: 'compact' | 'regular';
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -83,7 +88,7 @@ const BOOKMARK_PIVOT_MS = 60;
 const PLACEHOLDER_ICON = 26;
 /** Beta-count glyph size (§32.1). */
 const BETA_ICON = 15;
-/** Play disc inset from the thumbnail's bottom-right corner (§32.1). */
+/** Play chip inset from the thumbnail's bottom-right corner (§32.1). */
 const DISC_INSET = 6;
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -96,6 +101,7 @@ export default function RouteCard({
   sendStyle = null,
   isSaved = false,
   onBookmarkToggle,
+  variant = 'compact',
 }: RouteCardProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -103,8 +109,9 @@ export default function RouteCard({
   const { fontScale, width } = useWindowDimensions();
   const c = theme.colors;
   const isAx = fontScale >= AX_FONT_SCALE;
-  const compact = width < theme.layout.compactWidthBreakpoint;
-  const thumbSize = compact ? theme.componentSize.routeThumbCompact : theme.componentSize.routeThumb;
+  const isCompact = variant === 'compact';
+  const narrow = width < theme.layout.compactWidthBreakpoint;
+  const thumbSize = isCompact || narrow ? theme.componentSize.routeThumbCompact : theme.componentSize.routeThumb;
   const pad = theme.layout.routeCardPadding;
 
   const [signedPhotoUrl, setSignedPhotoUrl] = useState<string | null>(null);
@@ -222,22 +229,28 @@ export default function RouteCard({
       ) : (
         <Ionicons testID="thumb-placeholder" name={ICON.image.outline} size={PLACEHOLDER_ICON} color={c.outline} />
       )}
-      {betaVideoCount > 0 && route.photo_url !== null ? (
+      {betaVideoCount > 0 ? (
         <View
           testID="play-disc"
           style={{
             position: 'absolute',
             right: DISC_INSET,
             bottom: DISC_INSET,
-            width: theme.componentSize.playDisc,
             height: theme.componentSize.playDisc,
+            minWidth: theme.componentSize.playDisc,
+            paddingHorizontal: theme.spacing.xs,
+            columnGap: 2,
             borderRadius: theme.radius.full,
             backgroundColor: c.accentIllustration,
+            flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'center',
           }}
         >
-          <Ionicons name={ICON.play.filled} size={theme.iconSize.xs} color={c.onAccentIllustration} style={{ marginLeft: 1 }} />
+          <Ionicons name={ICON.play.filled} size={theme.iconSize.xs} color={c.onAccentIllustration} />
+          <AppText variant="footnote" weight="600" style={{ color: c.onAccentIllustration }} numberOfLines={1}>
+            {String(betaVideoCount)}
+          </AppText>
         </View>
       ) : null}
     </View>
@@ -247,8 +260,8 @@ export default function RouteCard({
     <Animated.View
       style={[
         { transform: popTransform, transformOrigin: 'top' },
-        // The 44pt touch target keeps its size; negative margins keep row 1 at the badge height.
-        isAx ? styles.axBookmark : { marginVertical: -5 },
+        // Centred on the card by the row (A5); in the AX layout it is pinned top-right.
+        isAx ? styles.axBookmark : null,
       ]}
     >
       <IconButton
@@ -263,6 +276,16 @@ export default function RouteCard({
         onPress={toggleBookmark}
       />
     </Animated.View>
+  );
+
+  // AX layout only (no thumbnail to carry the chip): the count is a text line.
+  const betaCount = (
+    <View style={[styles.betaRow, { columnGap: theme.layout.iconTextGap }]}>
+      <Ionicons name={ICON.betaCount.outline} size={BETA_ICON} color={c.textSecondary} />
+      <AppText variant="footnote" color="textSecondary" numberOfLines={1}>
+        {t('routeCard.betaCount', { count: betaVideoCount })}
+      </AppText>
+    </View>
   );
 
   const textBlock = (
@@ -283,8 +306,7 @@ export default function RouteCard({
             <SendStatus sendStyle={sendStyle as 'flash' | 'top'} variant="tag" />
           </View>
         ) : null}
-        <View style={styles.flex} pointerEvents="none" />
-        {bookmark}
+        {isAx ? bookmark : null}
       </View>
       <View pointerEvents="none" {...hiddenFromAx}>
         <AppText variant="subhead" weight="600" numberOfLines={1}>
@@ -296,19 +318,16 @@ export default function RouteCard({
           ) : null}
         </AppText>
       </View>
-      {betaVideoCount > 0 ? (
-        <View style={[styles.betaRow, { columnGap: theme.layout.iconTextGap }]} pointerEvents="none" {...hiddenFromAx}>
-          <Ionicons name={ICON.betaCount.outline} size={BETA_ICON} color={c.textSecondary} />
-          <AppText variant="footnote" color="textSecondary" numberOfLines={1}>
-            {t('routeCard.betaCount', { count: betaVideoCount })}
-          </AppText>
+      {isAx && betaVideoCount > 0 ? (
+        <View pointerEvents="none" {...hiddenFromAx}>
+          {betaCount}
         </View>
       ) : null}
     </View>
   );
 
   return (
-    <Card variant="static" padding={pad} style={{ minHeight: theme.componentSize.routeThumb + 2 * pad }}>
+    <Card variant="static" padding={pad} style={{ minHeight: (isCompact ? thumbSize : theme.componentSize.routeThumb) + 2 * pad }}>
       {/* Card body: a full-card pressable. Siblings (text, bookmark, thumbnail) are layered above. */}
       <PressableScale
         feedback="row"
@@ -327,6 +346,7 @@ export default function RouteCard({
 
       <View pointerEvents="box-none" style={styles.row}>
         {textBlock}
+        {isAx ? null : bookmark}
         {isAx ? null : (
           <View pointerEvents="none" style={{ marginLeft: theme.spacing.xs }}>
             {thumb}

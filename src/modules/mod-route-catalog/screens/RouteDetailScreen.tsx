@@ -2,10 +2,13 @@
  * RouteDetailScreen.
  *
  * Shows the full detail of a single route:
- *   - Route name (large font) with gym name as subtitle beneath it (AC-125)
- *   - Grade, color badge, photo, status (active/retired)
- *   - Two-column send-summary section: Sends + Attempts (AC-127)
- *   - Two action buttons: Record Send / Upload Beta Video (AC-130)
+ *   - Large title "{Colour} · {Section}" (RD-2: no grade, the badge carries it, AC-191) with the gym
+ *     name as subtitle beneath it (AC-125). The header title appears only after the large title
+ *     scrolls off.
+ *   - Photo, status (active/retired)
+ *   - One inline send-summary line "Sends 2 · Attempts 4" (RD-4, AC-127 wording), tappable (AC-128)
+ *   - One full-width primary Record Send button (RD-1, AC-130 change). The upload entry lives in the
+ *     Beta section header / empty-state tile owned by BetaVideoSection.
  *   - Beta video section (MOD-005)
  *   - Added date as footer at the bottom (AC-126)
  *
@@ -23,11 +26,10 @@
  *         optimistic update; achievement icon next to route name.
  * AC-125: gym name as subtitle directly beneath the route name; no "岩館" section label.
  * AC-126: added date as footer at the very bottom of the ScrollView.
- * AC-127: two-column send summary (Sends / Attempts) from summarizeAscents.
- * AC-128: tapping either summary card navigates to SendHistoryDetailScreen.
- * AC-130: two action buttons (Record Send, Upload Beta Video) below the summary section;
- *         old entry points ("Log Send" button in ascent header, BetaVideoUploader button
- *         inside BetaVideoSection) have been removed.
+ * AC-127: inline send summary (Sends / Attempts) from summarizeAscents.
+ * AC-128: tapping the summary line navigates to SendHistoryDetailScreen.
+ * AC-130 (page-review RD-1): a single primary Record Send button. BetaVideoSection renders the
+ *         upload entry itself once it has a launcher registered (onRegisterUploadLauncher).
  *
  * Note: Route retirement is now admin-only via Supabase Studio (AC-024b).
  * The retire button and retireRoute() call have been removed.
@@ -42,15 +44,18 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Image, Modal, ScrollView, StyleSheet, View } from 'react-native';
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
   Button,
   IconButton,
+  EmptyState,
   InlineError,
+  PageLoading,
   PressableScale,
-  Spinner,
+  useLoadingPhase,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
@@ -117,7 +122,9 @@ export default function RouteDetailScreen({
   const [route, setRoute] = useState<Route | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 'notFound' = the route does not exist (E1); 'network' = the request failed (E4).
+  const [loadError, setLoadError] = useState<'notFound' | 'network' | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
   const [isLogSendVisible, setIsLogSendVisible] = useState(false);
 
   // AC-046: bookmark state
@@ -130,7 +137,7 @@ export default function RouteDetailScreen({
   // Used to compute the AC-127 summary cards via summarizeAscents.
   const [myAscents, setMyAscents] = useState<AscentWithProfile[]>([]);
 
-  // Upload error message — shown between the action buttons row and BetaVideoSection.
+  // Upload error message — shown between the Record Send button and BetaVideoSection.
   // Set by onUploadError from BetaVideoSection; cleared when a new upload attempt begins.
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(null);
 
@@ -143,14 +150,22 @@ export default function RouteDetailScreen({
   const hasLoadedOnceRef = useRef<boolean>(false);
 
   /**
-   * AC-130: ref to the BetaVideoSection's upload launcher.
-   * BetaVideoSection registers its launch handler here via onRegisterUploadLauncher.
-   * The "Upload Beta Video" action button calls this ref when pressed.
+   * RD-1: upload entry lives inside BetaVideoSection (section header + empty tile). Passing
+   * onRegisterUploadLauncher puts the section in "host-driven" mode: it hides the legacy inline
+   * button and renders its own header / empty-state triggers. The launcher itself is not needed here.
    */
-  const uploadLauncherRef = useRef<(() => void) | null>(null);
+  const handleRegisterUploadLauncher = useCallback((): void => {
+    // intentionally empty: BetaVideoSection invokes its own launcher
+  }, []);
 
-  const handleRegisterUploadLauncher = useCallback((launcher: () => void): void => {
-    uploadLauncherRef.current = launcher;
+  // RD-2: the header title appears only once the large title has scrolled off.
+  const titleBottomRef = useRef<number>(48);
+  const [showHeaderTitle, setShowHeaderTitle] = useState(false);
+  const handleTitleLayout = useCallback((e: LayoutChangeEvent): void => {
+    titleBottomRef.current = e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+  }, []);
+  const handleScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>): void => {
+    setShowHeaderTitle(e.nativeEvent.contentOffset.y > titleBottomRef.current);
   }, []);
 
   /**
@@ -175,7 +190,7 @@ export default function RouteDetailScreen({
     if (!hasLoadedOnceRef.current) {
       setIsLoading(true);
     }
-    setErrorMessage(null);
+    setLoadError(null);
     try {
       // Fetch route detail, saved status, and current user's ascents in parallel.
       const [data, savedIds] = await Promise.all([
@@ -184,7 +199,7 @@ export default function RouteDetailScreen({
       ]);
 
       if (!data) {
-        setErrorMessage(t('routes.errors.notFound'));
+        setLoadError('notFound');
       } else {
         // Mark that we have successfully loaded data at least once. After this
         // point, re-focus refetches will update state silently (no spinner).
@@ -215,7 +230,7 @@ export default function RouteDetailScreen({
         }
       }
     } catch {
-      setErrorMessage(t('routes.errors.loadFailed'));
+      setLoadError('network');
     } finally {
       setIsLoading(false);
     }
@@ -268,14 +283,8 @@ export default function RouteDetailScreen({
     setIsLogSendVisible(false);
   }
 
-  function handleUploadBetaPress(): void {
-    // Clear any previous upload error when a new attempt begins.
-    setUploadErrorMessage(null);
-    uploadLauncherRef.current?.();
-  }
-
   useAppHeader({
-    title: route ? formatRouteName(route.grade, route.color_tag, route.section_label, t) : '',
+    title: route && showHeaderTitle ? formatRouteName(route.grade, route.color_tag, route.section_label, t) : '',
     onBack,
     trailing: route ? (
       <IconButton
@@ -292,28 +301,37 @@ export default function RouteDetailScreen({
     ) : undefined,
   });
 
-  if (isLoading) {
+  // Full-page loading: nothing for 300ms, then PageLoading; after 10s the E4 error replaces it
+  // (a late success swaps back to content).
+  if (isLoading && !route && loadingPhase !== 'timeout') {
     return (
       <SwipeBackWrapper onBack={onBack}>
-        <View style={styles.centeredContainer}>
-          <Spinner />
-        </View>
+        {loadingPhase === 'loading' ? <PageLoading /> : <View style={styles.root} />}
       </SwipeBackWrapper>
     );
   }
 
-  if (errorMessage || !route) {
+  if (!route) {
+    const notFound = loadError === 'notFound';
     return (
       <SwipeBackWrapper onBack={onBack}>
         <View style={styles.root}>
-          <View style={styles.errorBlock}>
-            <InlineError
-              variant="block"
-              message={errorMessage ?? t('common.error')}
-              actionLabel={t('common.retry')}
-              onAction={fetchRoute}
+          {notFound ? (
+            <EmptyState
+              variant="page"
+              icon={ICON.route.outline}
+              title={t('routeCatalog.detail.notFoundTitle')}
+              description={t('routeCatalog.detail.notFoundDescription')}
             />
-          </View>
+          ) : (
+            <EmptyState
+              variant="error"
+              title={t('routeCatalog.detail.loadErrorTitle')}
+              description={t('routeCatalog.loadErrorDescription')}
+              primaryLabel={t('common.retry')}
+              onPrimary={() => { void fetchRoute(); }}
+            />
+          )}
         </View>
       </SwipeBackWrapper>
     );
@@ -326,15 +344,31 @@ export default function RouteDetailScreen({
   // AC-127: derive send summary client-side from already-fetched ascents
   const summary = summarizeAscents(myAscents);
 
+  // RD-2: large title is "{Colour} · {Section}" (grade lives in the badge); AC-045 name stays for the
+  // collapsed header title, the Log Send card and the reel viewer.
+  const colourName = t(`routeCatalog.colors.${route.color_tag}`);
+  const largeTitle = route.section_label ? `${colourName} · ${route.section_label}` : colourName;
+  const summaryLabel = `${t('routeCatalog.detail.sends')} ${summary.sends}, ${t('routeCatalog.detail.attemptsShort')} ${summary.attempts}`;
+
   // AC-126: format the added date
   const addedDateStr = new Date(route.created_at).toISOString().slice(0, 10); // YYYY-MM-DD
-  const addedDateLabel = t('routeCatalog.detail.addedDate', { date: addedDateStr });
+  // Retired routes: one meta line "Added … · Retired …" (same footnote, same date format).
+  const addedDateLabel =
+    isRetired && route.retired_at
+      ? t('routeCatalog.detail.addedAndRetired', {
+          added: addedDateStr,
+          retired: new Date(route.retired_at).toISOString().slice(0, 10),
+        })
+      : t('routeCatalog.detail.addedDate', { date: addedDateStr });
 
   return (
     <SwipeBackWrapper onBack={onBack} enabled={!isLogSendVisible}>
     <View style={styles.root}>
       <ScrollView
         style={styles.scrollView}
+        testID="route-detail-scroll"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={[styles.contentContainer, { paddingBottom: theme.spacing.xxl + tabInset.contentBottom }]}
         scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
       >
@@ -350,106 +384,62 @@ export default function RouteDetailScreen({
         />
       ) : null}
 
-      {/* Status badge (retired only — active is the default state) */}
-      {isRetired && (
-        <View style={styles.retiredStatusBadge}>
-          <AppText variant="caption1" weight="600" color="textSecondary">
-            {t('routes.status.retired')}
-          </AppText>
+      {/* Title block: RD-2 large title "{Colour} · {Section}" (no grade) + AC-046 achievement icon,
+           AC-125 gym subtitle with the tape badge (the badge carries the grade, AC-191). */}
+      <View style={styles.titleBlock} onLayout={handleTitleLayout}>
+        {/* Status badge (retired only — active is the default state) */}
+        {isRetired && (
+          <View style={styles.retiredStatusBadge}>
+            <AppText variant="footnote" weight="600" color="textSecondary">
+              {t('routes.status.retired')}
+            </AppText>
+          </View>
+        )}
+        <View style={styles.routeNameRow}>
+          <AppText variant="title1" style={styles.routeNameText}>{largeTitle}</AppText>
+          {achievement === 'flash' ? (
+            <Ionicons name={ICON.sendFlash.filled} size={theme.iconSize.md} color={theme.colors.sendFlash} />
+          ) : achievement === 'top' ? (
+            <Ionicons name={ICON.sendTop.filled} size={theme.iconSize.md} color={theme.colors.sendTop} />
+          ) : achievement === 'attempt' ? (
+            <Ionicons name={ICON.sendAttempt.outline} size={theme.iconSize.md} color={theme.colors.textSecondary} />
+          ) : null}
         </View>
-      )}
-
-      {/* AC-125 / AC-045: route name (large) + AC-046: achievement icon */}
-      <View style={styles.routeNameRow}>
-        <AppText variant="title1" style={styles.routeNameText}>{routeName}</AppText>
-        {achievement === 'flash' ? (
-          <Ionicons name={ICON.sendFlash.filled} size={theme.iconSize.md} color={theme.colors.sendFlash} />
-        ) : achievement === 'top' ? (
-          <Ionicons name={ICON.sendTop.filled} size={theme.iconSize.md} color={theme.colors.sendTop} />
-        ) : achievement === 'attempt' ? (
-          <Ionicons name={ICON.sendAttempt.outline} size={theme.iconSize.md} color={theme.colors.textSecondary} />
-        ) : null}
-      </View>
-
-      {/* AC-125: gym name as subtitle directly beneath the route name, with the tape badge */}
-      <View style={styles.subtitleRow}>
-        <RouteColorBadge color={route.color_tag} grade={route.grade} size="lg" />
-        <AppText variant="body" color="textSecondary" style={styles.gymSubtitle}>{gymName}</AppText>
-      </View>
-
-      {/* Section label (if present) — keep as informational detail */}
-      {route.section_label ? (
-        <>
-          <AppText variant="pageSection" style={styles.sectionLabel}>
-            {t('routes.detail.section')}
-          </AppText>
-          <AppText variant="body">{route.section_label}</AppText>
-        </>
-      ) : null}
-
-      {/* Retired info */}
-      {isRetired && route.retired_at ? (
-        <>
-          <AppText variant="pageSection" style={styles.sectionLabel}>
-            {t('routes.detail.retiredOn')}
-          </AppText>
-          <AppText variant="body">
-            {new Date(route.retired_at).toLocaleDateString()}
-          </AppText>
-        </>
-      ) : null}
-
-      {/* ── AC-127: Two-column send summary ──────────────────────────────────── */}
-      <View style={styles.summaryRow}>
-        {/* Sends card */}
-        <PressableScale
-          feedback="row"
-          pressedColor={theme.colors.surfacePressed}
-          style={styles.summaryCard}
-          onPress={() => { onViewSendHistory(route.id); }}
-          accessibilityLabel={t('routeCatalog.detail.sends')}
-          testID="sends-summary-card"
-        >
-          <AppText variant="title1" numeric>{summary.sends}</AppText>
-          <AppText variant="footnote" color="textSecondary">{t('routeCatalog.detail.sends')}</AppText>
-        </PressableScale>
-        {/* Attempts card */}
-        <PressableScale
-          feedback="row"
-          pressedColor={theme.colors.surfacePressed}
-          style={styles.summaryCard}
-          onPress={() => { onViewSendHistory(route.id); }}
-          accessibilityLabel={t('routeCatalog.detail.attempts')}
-          testID="attempts-summary-card"
-        >
-          <AppText variant="title1" numeric>{summary.attempts}</AppText>
-          <AppText variant="footnote" color="textSecondary">{t('routeCatalog.detail.attempts')}</AppText>
-        </PressableScale>
-      </View>
-
-      {/* ── AC-130: Action buttons row ───────────────────────────────────────── */}
-      <View style={styles.actionRow}>
-        <View style={styles.actionCell}>
-          <Button
-            variant="primary"
-            size="md"
-            fullWidth
-            icon={ICON.log.outline}
-            label={t('routeCatalog.detail.recordSend')}
-            onPress={handleLogSendPress}
-          />
-        </View>
-        <View style={styles.actionCell}>
-          <Button
-            variant="secondary"
-            size="md"
-            fullWidth
-            icon={ICON.upload.outline}
-            label={t('routeCatalog.detail.uploadBeta')}
-            onPress={handleUploadBetaPress}
-          />
+        <View style={styles.subtitleRow}>
+          <RouteColorBadge color={route.color_tag} grade={route.grade} size="lg" />
+          <AppText variant="body" color="textSecondary" style={styles.gymSubtitle}>{gymName}</AppText>
         </View>
       </View>
+
+      {/* ── RD-4 / AC-127: one inline send summary line, tap → Send History (AC-128) ── */}
+      <PressableScale
+        feedback="row"
+        pressedColor={theme.colors.surfacePressed}
+        style={styles.summaryLine}
+        onPress={() => { onViewSendHistory(route.id); }}
+        accessibilityRole="button"
+        accessibilityLabel={summaryLabel}
+        testID="send-summary-line"
+      >
+        <AppText variant="subhead" color="textSecondary" style={styles.summaryText}>
+          {t('routeCatalog.detail.sends')}{' '}
+          <AppText variant="subhead" weight="600" numeric>{summary.sends}</AppText>
+          {' · '}
+          {t('routeCatalog.detail.attemptsShort')}{' '}
+          <AppText variant="subhead" weight="600" numeric>{summary.attempts}</AppText>
+        </AppText>
+        <Ionicons name={ICON.forward.outline} size={theme.iconSize.sm} color={theme.colors.textSecondary} />
+      </PressableScale>
+
+      {/* ── RD-1 / AC-130: one full-width primary action ─────────────────────── */}
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        icon={ICON.log.outline}
+        label={t('routeCatalog.detail.recordSend')}
+        onPress={handleLogSendPress}
+      />
 
       {/* Log Send modal — opens on tap of the AC-130 "Record Send" button */}
       <Modal
@@ -474,24 +464,23 @@ export default function RouteDetailScreen({
         />
       </Modal>
 
-      {/* Upload error — rendered between the action buttons row and BetaVideoSection
+      {/* Upload error — rendered between the Record Send button and BetaVideoSection
            so it is visible without scrolling into the beta video section. */}
       {uploadErrorMessage ? (
-        <InlineError variant="block" message={uploadErrorMessage} style={styles.uploadError} />
+        <InlineError variant="block" message={uploadErrorMessage} />
       ) : null}
 
       {/* ── Beta Videos (MOD-005) — AC-033, AC-037 ───────────────────────────
            BetaVideoSection is the public entry point imported from mod-beta-video.
-           AC-130: onRegisterUploadLauncher wires the AC-130 "Upload Beta Video"
-           button to BetaVideoSection's upload flow, so no upload button is
-           rendered inside the section itself.
+           RD-1: onRegisterUploadLauncher puts the section in host-driven mode; it
+           renders the upload entry in its own header / empty-state tile.
            onUploadError: forwards file-too-large / video-too-long errors to
-           this screen so they render between the action row and the section. */}
+           this screen so they render between the Record Send button and the section. */}
       <BetaVideoSection
         routeId={route.id}
         session={session}
         onRegisterUploadLauncher={handleRegisterUploadLauncher}
-        onUploadError={(msg) => { setUploadErrorMessage(msg); }}
+        onUploadError={(msg) => { setUploadErrorMessage(msg || null); }}
         routeName={routeName}
         routeColor={route.color_tag}
         routeGrade={route.grade}
@@ -500,7 +489,7 @@ export default function RouteDetailScreen({
       />
 
       {/* ── AC-126: Added date footer ─────────────────────────────────────── */}
-      <AppText variant="footnote" color="textSecondary" align="center" style={styles.addedDateFooter}>
+      <AppText variant="footnote" color="textSecondary" align="left">
         {addedDateLabel}
       </AppText>
 
@@ -520,29 +509,22 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     scrollView: {
       flex: 1,
     },
+    // R0: the scroll container owns the margin and the gaps; children set none.
     contentContainer: {
       paddingTop: theme.spacing.md,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
-    },
-    centeredContainer: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: screenMargin,
-    },
-    errorBlock: {
-      paddingHorizontal: screenMargin,
-      paddingTop: theme.spacing.md,
+      gap: theme.layout.sectionGap,
     },
     photo: {
       width: '100%',
       height: 280,
       borderRadius: theme.radius.card,
       ...CONTINUOUS,
-      marginBottom: theme.spacing.md,
       backgroundColor: theme.colors.surfaceAlt,
+    },
+    titleBlock: {
+      gap: theme.spacing.xs,
     },
     retiredStatusBadge: {
       alignSelf: 'flex-start',
@@ -550,13 +532,11 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       paddingVertical: theme.spacing.xxs,
       borderRadius: theme.radius.full,
       backgroundColor: theme.colors.surfaceAlt,
-      marginBottom: theme.spacing.sm,
     },
     routeNameRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: theme.spacing.sm,
-      marginBottom: theme.spacing.xs,
     },
     // AC-125: large title for the route name
     routeNameText: {
@@ -567,50 +547,19 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flexDirection: 'row',
       alignItems: 'center',
       columnGap: theme.layout.inlineGap,
-      marginBottom: theme.spacing.md,
     },
     gymSubtitle: {
       flexShrink: 1,
     },
-    sectionLabel: {
-      marginTop: theme.layout.sectionGap,
-      marginBottom: theme.spacing.xs,
-    },
-    // ── AC-127: send summary ──────────────────────────────────────────────────
-    summaryRow: {
+    // ── RD-4: inline send summary (44pt hit area) ─────────────────────────────
+    summaryLine: {
       flexDirection: 'row',
-      gap: theme.layout.cardGap,
-      marginTop: theme.layout.sectionGap,
-      marginBottom: theme.spacing.sm,
-    },
-    summaryCard: {
-      flex: 1,
-      minHeight: theme.layout.minTouchTarget,
-      padding: theme.layout.cardPadding,
-      borderRadius: theme.radius.card,
-      ...CONTINUOUS,
-      backgroundColor: theme.colors.surface,
-      borderWidth: theme.isDark ? theme.stroke.thin : 0,
-      borderColor: theme.colors.border,
       alignItems: 'center',
-      ...theme.elevation.card,
+      justifyContent: 'space-between',
+      minHeight: theme.layout.minTouchTarget,
     },
-    // ── AC-130: action row ────────────────────────────────────────────────────
-    actionRow: {
-      flexDirection: 'row',
-      gap: theme.spacing.sm,
-      marginTop: theme.spacing.sm,
-      marginBottom: theme.layout.sectionGap,
-    },
-    actionCell: {
-      flex: 1,
-    },
-    uploadError: {
-      marginBottom: theme.spacing.sm,
-    },
-    // ── AC-126: added date footer ─────────────────────────────────────────────
-    addedDateFooter: {
-      marginTop: theme.spacing.xl,
+    summaryText: {
+      flexShrink: 1,
     },
   });
 }

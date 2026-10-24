@@ -1,23 +1,15 @@
 /**
- * GymListScreen stories — gym directory list with search and filter.
+ * Pages/Gyms/Gym List: gym directory list with search and filter (AC-122, AC-197).
+ * Renders inside PhoneFrame (real AppHeader + TabBar, gyms tab active).
  *
- * States:
- *  Populated   — 5 gyms (gym-001 saved, gym-003 has a cover photo)
- *  Empty       — no gyms match (empty stub)
- *  Loading     — skeleton cards shown during the initial fetch
- *  Error       — block error when the gym-list fetch fails
- *
- * Navigation: this module uses custom state-machine navigation — no
- * @react-navigation/native hooks are used or mocked.
+ * The stub cannot return errors, so the Error story waits for the 10s loading timeout (E4).
  */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
-import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
-import { Card, InlineError, Skeleton, SkeletonGroup } from '../../../components/ui';
-import { useLayout, useTheme } from '../../../lib/theme';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
 import GymListScreen from '../screens/GymListScreen';
 import type { GymSummary } from '../types';
 
@@ -92,124 +84,76 @@ const GYM_FIXTURES: GymSummary[] = [
   },
 ];
 
-// ── Shared frame ──────────────────────────────────────────────────────────────
+type StubState = 'populated' | 'empty' | 'filtered' | 'loading';
 
-function ScreenFrame({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <View style={{ width: 390, height: 844 }}>{children}</View>;
+function setupStubs(state: StubState): void {
+  resetStubData();
+  setStubData('auth:session', { user: { id: 'story-user-me' } });
+  if (state === 'loading') {
+    setStubData('gyms', STUB_PENDING);
+    setStubData('saved_gyms', STUB_PENDING);
+  } else if (state === 'filtered') {
+    // Taipei-only directory: the New Taipei chip (pressed by the story) excludes everything
+    setStubData('gyms', GYM_FIXTURES.filter((g) => g.city === 'Taipei'));
+    setStubData('saved_gyms', []);
+  } else if (state === 'populated') {
+    setStubData('gyms', GYM_FIXTURES);
+    // gym-001 is saved: it floats to the top and shows the bookmark indicator
+    setStubData('saved_gyms', [{ gym_id: 'gym-001' }]);
+  }
 }
 
-// ── Meta ──────────────────────────────────────────────────────────────────────
+/** Seed stubs synchronously so the screen's first fetch sees the data. */
+function WithStubs({ state, children }: { state: StubState; children: React.ReactNode }): React.JSX.Element {
+  setupStubs(state);
+  return <>{children}</>;
+}
 
-const meta: Meta = {
-  title: 'GymDirectory/GymListScreen',
-  parameters: { layout: 'fullscreen' },
-  decorators: [(Story) => <ScreenFrame><Story /></ScreenFrame>],
+type Args = { state: StubState };
+
+const meta: Meta<Args> = {
+  title: 'Pages/Gyms/Gym List',
+  component: GymListScreen as never,
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { tab: 'gyms' } },
+  decorators: [
+    (Story, ctx) => (
+      <WithStubs state={(ctx.args as Args).state}>
+        <Story />
+      </WithStubs>
+    ),
+    withPhoneFrame,
+  ],
+  argTypes: { state: { control: false } },
+  render: () => (
+    <GymListScreen
+      onSelectGym={(id) => console.log('onSelectGym', id)}
+      onRequestGym={() => console.log('onRequestGym')}
+    />
+  ),
 };
 export default meta;
-type Story = StoryObj;
 
-// ── Populated ─────────────────────────────────────────────────────────────────
-// 5 gyms; gym-001 shows the saved bookmark indicator (AC-122).
-// gym-003 has a cover photo, triggering the "Photos from Google" attribution (AC-197).
+type Story = StoryObj<Args>;
 
-export const Populated: Story = {
-  decorators: [
-    (Story) => {
-      resetStubData();
-      setStubData('gyms', GYM_FIXTURES);
-      // gym-001 is saved — it floats to the top and shows the bookmark indicator
-      setStubData('saved_gyms', [{ gym_id: 'gym-001' }]);
-      return <Story />;
-    },
-  ],
-  render: () => (
-    <GymListScreen
-      onSelectGym={(id) => console.log('onSelectGym', id)}
-      onRequestGym={() => console.log('onRequestGym')}
-    />
-  ),
+/** 5 gyms; gym-001 saved (bookmark), gym-003 has a cover photo (Google attribution). */
+export const Populated: Story = { args: { state: 'populated' } };
+
+/** E1 page empty: the directory has no gyms. No search controls; the icon disc sits 48 below the header. */
+export const Empty: Story = { args: { state: 'empty' } };
+
+/** E3 filtered empty: the New Taipei chip is pressed on a Taipei-only directory; controls stay, the anchor is the chip row. */
+export const Filtered: Story = {
+  args: { state: 'filtered' },
+  play: async ({ canvasElement }) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    const nodes = Array.from(canvasElement.querySelectorAll<HTMLElement>('[role="button"], [role="checkbox"]'));
+    nodes.find((n) => /(新北市|New Taipei)/.test(n.textContent ?? '') && n.getAttribute('role') === 'checkbox')?.click();
+  },
 };
 
-// ── Empty State ───────────────────────────────────────────────────────────────
-// No gyms match — the EmptyState component is shown.
+/** First load (queries never resolve): the one full-page PageLoading spinner. Appears after the 300ms delay. */
+export const Loading: Story = { args: { state: 'loading' } };
 
-export const Empty: Story = {
-  decorators: [
-    (Story) => {
-      resetStubData();
-      setStubData('gyms', []);
-      setStubData('saved_gyms', []);
-      return <Story />;
-    },
-  ],
-  render: () => (
-    <GymListScreen
-      onSelectGym={(id) => console.log('onSelectGym', id)}
-      onRequestGym={() => console.log('onRequestGym')}
-    />
-  ),
-};
-
-// ── Loading Skeleton ──────────────────────────────────────────────────────────
-// Shows the skeleton state rendered during the initial gym-list fetch.
-// (The real screen transitions through this state on every mount.)
-
-function LoadingShell(): React.JSX.Element {
-  const { theme } = useTheme();
-  const { screenMargin } = useLayout();
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        paddingHorizontal: screenMargin,
-        paddingTop: theme.spacing.md,
-      }}
-    >
-      <SkeletonGroup label="Loading gyms">
-        {[0, 1, 2, 3].map((i) => (
-          <Card key={i} style={{ marginBottom: theme.layout.cardGap }}>
-            <Skeleton shape="text" textVariant="headline" width="60%" />
-            <Skeleton shape="text" textVariant="footnote" width="30%" />
-            <View style={{ marginTop: theme.spacing.xs }}>
-              <Skeleton shape="text" textVariant="subhead" width="45%" />
-            </View>
-          </Card>
-        ))}
-      </SkeletonGroup>
-    </View>
-  );
-}
-
-export const Loading: Story = {
-  render: () => <LoadingShell />,
-};
-
-// ── Error ─────────────────────────────────────────────────────────────────────
-// Block error shown when the gym-list fetch fails.
-
-function ErrorShell(): React.JSX.Element {
-  const { theme } = useTheme();
-  const { screenMargin } = useLayout();
-  return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        paddingHorizontal: screenMargin,
-        paddingTop: theme.spacing.md,
-      }}
-    >
-      <InlineError
-        variant="block"
-        message="Gyms could not be loaded. Please try again."
-        actionLabel="Retry"
-        onAction={() => console.log('retry')}
-      />
-    </View>
-  );
-}
-
-export const Error: Story = {
-  render: () => <ErrorShell />,
-};
+/** E4 page error. Appears 10s after the Loading story starts (queries never resolve); Retry with the reload icon. */
+export const Error: Story = { args: { state: 'loading' } };

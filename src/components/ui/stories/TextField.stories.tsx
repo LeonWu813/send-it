@@ -18,7 +18,7 @@ function Demo({ value: initial, ...rest }: TextFieldProps): React.JSX.Element {
 }
 
 const meta: Meta<TextFieldProps> = {
-  title: 'UI/TextField',
+  title: 'Components/TextField',
   component: Demo,
   args: {
     variant: 'singleLine',
@@ -41,6 +41,9 @@ const meta: Meta<TextFieldProps> = {
   },
 };
 export default meta;
+
+/** Focus the field to see the 1.5pt primary outline. search: type to get the clear button; secureTextEntry: eye toggle. */
+export const Playground: StoryObj<TextFieldProps> = {};
 
 /** Grouped form (one Card, fields keep their own 1pt border + radius 12), search capsule and every state. */
 export const AllStates: StoryObj<TextFieldProps> = {
@@ -67,5 +70,22 @@ export const AllStates: StoryObj<TextFieldProps> = {
   ),
 };
 
-/** Focus the field to see the 1.5pt primary outline. search: type to get the clear button; secureTextEntry: eye toggle. */
-export const Playground: StoryObj<TextFieldProps> = {};
+/** Focused: 1pt primary outline + inner 2pt ring, fill stays surfaceAlt, no layout shift. Switch the Theme toolbar for dark. */
+export const Focused: StoryObj<TextFieldProps> = {
+  args: { value: '小人摳點', autoFocus: true },
+};
+
+/** Error + focus: 1.5pt error outline + inner 2pt error ring; InlineError is always shown. */
+export const ErrorFocused: StoryObj<TextFieldProps> = {
+  args: { value: '', error: '請輸入暱稱', autoFocus: true },
+};
+
+/** Multiline focused. */
+export const FocusedMultiline: StoryObj<TextFieldProps> = {
+  args: { variant: 'multiline', label: '補充說明', value: '', placeholder: '例如：Crimpy', autoFocus: true, showCount: true },
+};
+
+/** Search capsule focused. */
+export const FocusedSearch: StoryObj<TextFieldProps> = {
+  args: { variant: 'search', label: undefined, accessibilityLabel: '搜尋路線', value: '紅色', placeholder: '搜尋路線', autoFocus: true },
+};

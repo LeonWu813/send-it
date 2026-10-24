@@ -156,7 +156,7 @@ describe('RouteListScreen', () => {
     await waitFor(() => {
       // RouteCard renders the name as a Text node — find by text content.
       // V3 Red route: formatted name "V3 Red" or "V3 紅色".
-      const v3Cards = screen.queryAllByText(/^V3/);
+      const v3Cards = screen.queryAllByText(/^V3/, { includeHiddenElements: true });
       expect(v3Cards.length).toBeGreaterThan(0);
     });
   });
@@ -252,32 +252,46 @@ describe('RouteListScreen', () => {
     }
   });
 
-  it('shows the always-visible add-route CTA and calls onSubmitRoute when pressed', async () => {
+  it('RL-2: shows ONE filter row (no inline grade/colour chip rows) and the add-route link as the list footer', async () => {
     mockListRoutes.mockResolvedValueOnce(ACTIVE_ROUTES);
 
     render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    // Wait for routes to render before looking for the CTA button.
     await waitFor(() => {
-      const routeCards = screen.queryAllByRole('button').filter(
-        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
-      );
-      expect(routeCards.length).toBeGreaterThan(0);
+      expect(screen.getByTestId('filter-row')).toBeTruthy();
     });
+    // Only the single Filter chip; grade chips live in the sheet.
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    const footer = screen.getAllByLabelText(/Can't find it|找不到路線/);
+    expect(footer).toHaveLength(1);
+    fireEvent.press(footer[0]!);
+    expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
+  });
 
-    // CTA uses routeCatalog.addRoute i18n key
-    const submitButtons = screen.queryAllByRole('button');
-    const ctaButton = submitButtons.find(
-      (el) =>
-        el.props.accessibilityLabel?.includes('Add a new route') ||
-        el.props.accessibilityLabel?.includes('新增一條') ||
-        el.props.accessibilityLabel?.includes('find') ||
-        el.props.accessibilityLabel?.includes('找不到'),
-    );
-    if (ctaButton) {
-      fireEvent.press(ctaButton);
-      expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
-    }
+  it('RL-2: E1 offers only the primary add-route button (no duplicate link)', async () => {
+    mockListRoutes.mockResolvedValueOnce([]);
+
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    await screen.findByText(/No routes at this gym yet|這間岩館還沒有路線/);
+    expect(screen.queryAllByLabelText(/Can't find it|找不到路線/)).toHaveLength(0);
+    fireEvent.press(screen.getByLabelText(/^Add Route$|^新增路線$/));
+    expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
+  });
+
+  it('0 routes and no filter: E1 page empty with the add-route CTA, no filter row', async () => {
+    mockListRoutes.mockResolvedValueOnce([]);
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+    expect(await screen.findByText(/No routes at this gym yet|這間岩館還沒有路線/)).toBeTruthy();
+    expect(screen.queryByTestId('filter-row')).toBeNull();
+  });
+
+  it('filter excludes everything: E3 with clear-filters primary and the add-route link', async () => {
+    mockListRoutes.mockResolvedValueOnce([]);
+    render(<RouteListScreen {...DEFAULT_PROPS} gradeFilter="V9" onGradeFilterChange={jest.fn()} />, renderOptions());
+    expect(await screen.findByText(/No routes match|找不到符合的路線/)).toBeTruthy();
+    expect(screen.getByLabelText(/Clear filters|清除篩選/)).toBeTruthy();
+    expect(screen.getByLabelText(/Can't find it|找不到路線/)).toBeTruthy();
   });
 
   it('shows a no-routes message when the list is empty', async () => {
@@ -433,34 +447,22 @@ describe('RouteListScreen', () => {
     }
   });
 
-  it('applies grade filter when a grade chip is pressed', async () => {
+  it('RL-2: grade chip in the filter sheet applies the filter and shows a removable chip', async () => {
     mockListRoutes
       .mockResolvedValueOnce(ACTIVE_ROUTES)
-      .mockResolvedValueOnce([ACTIVE_ROUTES[0]]);
+      .mockResolvedValueOnce([ACTIVE_ROUTES[0]])
+      .mockResolvedValue([ACTIVE_ROUTES[0]]);
 
-    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+    render(<RouteListScreen {...DEFAULT_PROPS} initialFilterSheetOpen />, renderOptions());
 
-    // Wait for initial routes to render via RouteCard.
+    const gradeChip = await screen.findByRole('radio', { name: 'V3' });
+    fireEvent.press(gradeChip);
+
     await waitFor(() => {
-      const routeCards = screen.queryAllByRole('button').filter(
-        (el) => el.props.accessibilityLabel?.includes('V3') || el.props.accessibilityLabel?.includes('V5'),
+      expect(mockListRoutes).toHaveBeenCalledWith(
+        'gym-001',
+        expect.objectContaining({ grade: 'V3' }),
       );
-      expect(routeCards.length).toBeGreaterThan(0);
     });
-
-    // The grade chips appear in the header — press V3 chip (not card grade text)
-    const checkboxes = screen.queryAllByRole('radio');
-    const gradeChip = checkboxes.find(
-      (el) => el.props.accessibilityLabel === 'V3',
-    );
-    if (gradeChip) {
-      fireEvent.press(gradeChip);
-      await waitFor(() => {
-        expect(mockListRoutes).toHaveBeenCalledWith(
-          'gym-001',
-          expect.objectContaining({ grade: 'V3' }),
-        );
-      });
-    }
   });
 });

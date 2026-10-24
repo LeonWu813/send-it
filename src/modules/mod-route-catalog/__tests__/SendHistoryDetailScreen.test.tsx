@@ -12,22 +12,29 @@ jest.mock('../../../lib/supabase', () => ({
   supabase: { from: jest.fn() },
 }));
 
+jest.mock('../route-service', () => ({
+  loadRoute: jest.fn(),
+  getPhotoSignedUrl: jest.fn().mockResolvedValue('https://signed.example.com/photo.jpg'),
+}));
+
 jest.mock('../../mod-send-logging', () => ({
   fetchMyAscentsForRoute: jest.fn(),
   deleteAscent: jest.fn(),
 }));
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 import React from 'react';
 import type { Session } from '@supabase/supabase-js';
 
-import { Alert } from 'react-native';
+import { loadRoute } from '../route-service';
 import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import SendHistoryDetailScreen from '../screens/SendHistoryDetailScreen';
 import { renderOptionsWithHeader as renderOptions } from '../test-utils';
 import type { AscentWithProfile } from '../../mod-send-logging';
 
 const mockFetchMyAscentsForRoute = fetchMyAscentsForRoute as jest.MockedFunction<typeof fetchMyAscentsForRoute>;
+const mockLoadRoute = loadRoute as jest.MockedFunction<typeof loadRoute>;
 const mockDeleteAscent = deleteAscent as jest.MockedFunction<typeof deleteAscent>;
 
 const MOCK_SESSION = {
@@ -70,6 +77,7 @@ describe('SendHistoryDetailScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFetchMyAscentsForRoute.mockResolvedValue([]);
+    mockLoadRoute.mockResolvedValue(null);
   });
 
   it('shows loading indicator while fetching', () => {
@@ -87,8 +95,8 @@ describe('SendHistoryDetailScreen', () => {
     render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      const emptyTexts = screen.queryAllByText(/No sends recorded yet/i)
-        .concat(screen.queryAllByText(/尚無紀錄/));
+      const emptyTexts = screen.queryAllByText(/No sends recorded for this route yet\./i)
+        .concat(screen.queryAllByText(/這條路線還沒有紀錄。/));
       expect(emptyTexts.length).toBeGreaterThan(0);
     });
   });
@@ -142,6 +150,19 @@ describe('SendHistoryDetailScreen', () => {
     await waitFor(() => {
       expect(screen.getByText('Struggled on the crux')).toBeTruthy();
     });
+  });
+
+  it('C5: the note is plain upright text (no tinted box, no italic) and the header row has a fixed hitSlop target', async () => {
+    mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT_WITH_NOTE]);
+
+    render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    const note = await screen.findByText('Struggled on the crux');
+    const flat = StyleSheet.flatten(note.props.style) ?? {};
+    expect(flat.fontStyle).not.toBe('italic');
+    expect(StyleSheet.flatten(note.parent?.props.style)?.backgroundColor).toBeUndefined();
+    const more = screen.getByLabelText('More actions');
+    expect(more.props.hitSlop).toEqual({ top: 12, bottom: 12, left: 12, right: 12 });
   });
 
   it('AC-129: shows private indicator for private ascents', async () => {
@@ -230,71 +251,72 @@ describe('SendHistoryDetailScreen', () => {
     });
   });
 
-  it('shows a delete button on each ascent row (Bug G fix)', async () => {
+  it('SH-1: shows a "..." action on each ascent row instead of a trash icon', async () => {
     mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT, MOCK_ASCENT_WITH_NOTE]);
 
     render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      // All rows belong to the current user — each should have a delete button
-      const deleteButtons = screen.queryAllByRole('button').filter(
-        (el) =>
-          el.props.accessibilityLabel === 'Delete' ||
-          el.props.accessibilityLabel === '刪除',
+      const moreButtons = screen.queryAllByRole('button').filter(
+        (el) => el.props.accessibilityLabel === 'More actions',
       );
-      expect(deleteButtons).toHaveLength(2);
+      expect(moreButtons).toHaveLength(2);
     });
+    // No delete button until the user opens the action.
+    expect(screen.queryAllByLabelText('Delete')).toHaveLength(0);
   });
 
-  it('shows Alert confirmation dialog when delete button is tapped', async () => {
+  it('SH-1: shows a route summary card on top (colour · section, gym name)', async () => {
     mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT]);
-    const alertSpy = jest.spyOn(Alert, 'alert');
+    mockLoadRoute.mockResolvedValue({
+      id: 'route-001',
+      gym_id: 'gym-001',
+      grade: 'V5',
+      color_tag: 'purple',
+      section_label: 'Cave',
+      photo_url: null,
+      status: 'active',
+      submitted_by_user_id: 'user-001',
+      created_at: '2026-09-20T00:00:00Z',
+      retired_at: null,
+      retired_by_user_id: null,
+    } as never);
+
+    render(<SendHistoryDetailScreen {...DEFAULT_PROPS} gymName="Test Gym" />, renderOptions());
+
+    const card = await screen.findByTestId('route-summary-card');
+    expect(card.props.accessibilityLabel).toBe('V5, Purple · Cave, Test Gym');
+  });
+
+  it('SH-1: "..." opens a confirm sheet; cancel does not delete', async () => {
+    mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT]);
 
     render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    await waitFor(() => {
-      const deleteButtons = screen.queryAllByRole('button').filter(
-        (el) =>
-          el.props.accessibilityLabel === 'Delete' ||
-          el.props.accessibilityLabel === '刪除',
-      );
-      expect(deleteButtons).toHaveLength(1);
-      fireEvent.press(deleteButtons[0]);
-    });
+    const more = await screen.findByLabelText('More actions');
+    fireEvent.press(more);
 
-    expect(alertSpy).toHaveBeenCalledTimes(1);
-    alertSpy.mockRestore();
+    expect(await screen.findByText('Delete this send?')).toBeTruthy();
+    expect(mockDeleteAscent).not.toHaveBeenCalled();
   });
 
-  it('calls deleteAscent and removes the row optimistically when user confirms', async () => {
+  it('SH-1: confirming calls deleteAscent and removes the row optimistically', async () => {
     mockFetchMyAscentsForRoute.mockResolvedValue([MOCK_ASCENT, MOCK_ASCENT_WITH_NOTE]);
     mockDeleteAscent.mockResolvedValueOnce(undefined);
 
-    // Intercept Alert.alert and immediately invoke the destructive "Delete" handler
-    jest.spyOn(Alert, 'alert').mockImplementationOnce((_title, _message, buttons) => {
-      const deleteButton = buttons?.find((b) => b.style === 'destructive');
-      deleteButton?.onPress?.();
-    });
-
     render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    // Wait for ascents to load — MOCK_ASCENT has style 'flash'
     await waitFor(() => {
       const flashBadges = screen.queryAllByText(/Flash/i).concat(screen.queryAllByText(/閃攀/));
       expect(flashBadges.length).toBeGreaterThan(0);
     });
 
-    const deleteButtons = screen.queryAllByRole('button').filter(
-      (el) =>
-        el.props.accessibilityLabel === 'Delete' ||
-        el.props.accessibilityLabel === '刪除',
-    );
-    // Press the first delete button (MOCK_ASCENT — 'flash')
-    fireEvent.press(deleteButtons[0]);
+    // First "..." belongs to MOCK_ASCENT (a-001, flash)
+    fireEvent.press(screen.getAllByLabelText('More actions')[0]);
+    fireEvent.press(await screen.findByLabelText('Delete'));
 
     await waitFor(() => {
       expect(mockDeleteAscent).toHaveBeenCalledWith('a-001');
-      // After optimistic removal only MOCK_ASCENT_WITH_NOTE remains (Top badge)
       const flashBadges = screen.queryAllByText(/^Flash$/i).concat(screen.queryAllByText(/^閃攀$/));
       expect(flashBadges).toHaveLength(0);
     });

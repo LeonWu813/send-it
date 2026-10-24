@@ -3,62 +3,58 @@
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
-import { View } from 'react-native';
 
-import { setStubData } from '../../../../.storybook/stubs/supabase';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
+import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import NotificationPreferenceScreen from '../screens/NotificationPreferenceScreen';
 
-const session = { user: { id: 'user-me' } } as unknown as Session;
+const session = { user: { id: 'story-user-me' } } as unknown as Session;
 
-// ── Meta ──────────────────────────────────────────────────────────────────────
+type StubState = 'on' | 'off' | 'loading';
 
-const meta: Meta = {
-  title: 'Notifications/NotificationPreferenceScreen',
-  parameters: { layout: 'fullscreen' },
+/** Seed stubs synchronously so the screen's first fetch sees the data. */
+function WithStubs({ state, children }: { state: StubState; children: React.ReactNode }): React.JSX.Element {
+  resetStubData();
+  setStubData('auth:session', { user: { id: 'story-user-me' } });
+  if (state === 'loading') {
+    setStubData('notification_preferences', STUB_PENDING);
+  } else {
+    setStubData('notification_preferences', [
+      { user_id: 'story-user-me', beta_video_like: state === 'on', updated_at: '2026-10-20T10:00:00Z' },
+    ]);
+  }
+  return <>{children}</>;
+}
+
+type Args = { state: StubState };
+
+const meta: Meta<Args> = {
+  title: 'Pages/Settings & Notifications/Notification Preferences',
+  component: NotificationPreferenceScreen as never, // real component; story args only drive the stub data
+  tags: ['!autodocs'],
+  parameters: { layout: 'centered', page: { overlay: true } },
   decorators: [
-    (Story) => (
-      <View style={{ width: 390, height: 780 }}>
+    (Story, ctx) => (
+      <WithStubs state={(ctx.args as Args).state}>
         <Story />
-      </View>
+      </WithStubs>
     ),
+    withPhoneFrame,
   ],
+  argTypes: { state: { control: false } },
+  render: () => <NotificationPreferenceScreen session={session} onBack={() => {}} />,
 };
 
 export default meta;
-type Story = StoryObj;
+type Story = StoryObj<Args>;
 
-// ── Stories ───────────────────────────────────────────────────────────────────
+/** Beta-video-like toggle ON (default opt-in). */
+export const Populated: Story = { args: { state: 'on' } };
 
-/** Loaded — toggle ON, default opt-in (beta_video_like = true). */
-export const Loaded: Story = {
-  decorators: [
-    (Story) => {
-      setStubData('notification_preferences', [
-        {
-          user_id: 'user-me',
-          beta_video_like: true,
-          updated_at: '2026-10-20T10:00:00Z',
-        },
-      ]);
-      return <Story />;
-    },
-  ],
-  render: () => <NotificationPreferenceScreen session={session} />,
-};
+/** Toggle OFF (beta_video_like = false). */
+export const PreferenceOff: Story = { name: 'Preference Off', args: { state: 'off' } };
 
-/** PreferenceOff — toggle OFF (beta_video_like = false, push disabled). */
-export const PreferenceOff: Story = {
-  decorators: [
-    (Story) => {
-      setStubData('notification_preferences', [
-        {
-          user_id: 'user-me',
-          beta_video_like: false,
-          updated_at: '2026-10-20T10:00:00Z',
-        },
-      ]);
-      return <Story />;
-    },
-  ],
-  render: () => <NotificationPreferenceScreen session={session} />,
-};
+/** Preference fetch never resolves: PageLoading (spinner); after 10s it swaps to the E4 error. */
+export const Loading: Story = { args: { state: 'loading' } };
+
+// No Error story: the stub cannot return query errors.

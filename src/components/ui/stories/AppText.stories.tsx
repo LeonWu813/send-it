@@ -6,7 +6,7 @@ import { AppText } from '../AppText';
 import type { AppTextProps } from '../AppText';
 
 const meta: Meta<AppTextProps> = {
-  title: 'UI/AppText',
+  title: 'Components/AppText',
   component: AppText,
   decorators: [(Story) => <View style={{ padding: 16 }}><Story /></View>],
   args: { variant: 'body', children: 'ProjectDay 攀岩紀錄 The quick brown fox', numeric: false, color: 'textPrimary' },
@@ -24,7 +24,7 @@ export default meta;
 export const Playground: StoryObj<AppTextProps> = {};
 
 /** The full scale at once (a genuinely different layout from Playground). */
-export const Scale: StoryObj<AppTextProps> = {
+export const AllVariants: StoryObj<AppTextProps> = {
   render: () => (
     <View style={{ padding: 16 }}>
       {(['largeTitle', 'title1', 'title2', 'title3', 'headline', 'body', 'callout', 'subhead', 'footnote', 'caption1', 'caption2', 'sectionHeader'] as const).map((v) => (

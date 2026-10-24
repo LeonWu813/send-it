@@ -31,7 +31,11 @@
       "appleSignInFailed": "Apple 登入失敗，請再試一次。",
       "googleSignInFailed": "Google 登入失敗，請再試一次。",
       "signOutFailed": "登出失敗，請再試一次。",
-      "networkError": "網路錯誤，請確認連線狀態後重試。"
+      "networkError": "網路錯誤，請確認連線狀態後重試。",
+      "signInFailedTitle": "無法登入",
+      "signInFailedBody": "請確認電子郵件和密碼後再試一次。",
+      "signUpFailedTitle": "無法註冊",
+      "signUpFailedBody": "發生問題，請再試一次。"
     }
   },
   "profile": {
@@ -51,12 +55,19 @@
     "sendHistory": "完攀紀錄",
     "logout": "登出",
     "save": "儲存",
-    "cancel": "取消",
     "errors": {
       "saveFailed": "儲存個人資料失敗，請再試一次。",
       "avatarUploadFailed": "上傳照片失敗，請再試一次。",
-      "loadFailed": "載入個人資料失敗。"
-    }
+      "loadFailed": "載入個人資料失敗。",
+      "loadFailedTitle": "個人頁面載不出來",
+      "loadFailedBody": "請確認網路連線後再試一次。"
+    },
+    "discardConfirmTitle": "捨棄變更？",
+    "discardConfirmBody": "你修改的內容不會儲存。",
+    "discard": "捨棄",
+    "keepEditing": "繼續編輯",
+    "noSendsYet": "還沒有完攀紀錄。",
+    "betaEmpty": "上傳的 Beta 影片會出現在這裡。"
   },
   "settings": {
     "title": "設定",
@@ -77,12 +88,23 @@
       "system": "跟隨系統",
       "light": "淺色",
       "dark": "深色"
-    }
+    },
+    "notifications": "通知",
+    "betaVideoPrivacyOnEffect": "開啟後，僅限追蹤者可觀看你的 Beta 影片",
+    "logoutConfirmTitle": "要登出嗎？",
+    "logoutConfirmBody": "之後需要重新登入才能使用你的帳號。"
   },
   "gymDirectory": {
     "title": "岩館",
     "searchPlaceholder": "搜尋岩館…",
-    "noResults": "找不到岩館。",
+    "empty": {
+      "title": "還沒有岩館"
+    },
+    "filteredEmpty": {
+      "title": "找不到符合的岩館",
+      "description": "換個關鍵字或城市試試。",
+      "clear": "清除篩選"
+    },
     "gymTypeBadge": {
       "bouldering": "抱石",
       "topRope": "上方固定點",
@@ -125,8 +147,10 @@
       "saved": "已收藏"
     },
     "errors": {
-      "loadFailed": "載入岩館失敗，請再試一次。",
-      "notFound": "找不到該岩館。"
+      "loadFailedTitle": "岩館載不出來",
+      "loadFailedBody": "檢查網路後再試一次。",
+      "notFoundTitle": "找不到這間岩館",
+      "notFoundBody": "它可能已經被移除或合併。"
     },
     "googlePhotosAttribution": "相片來自 Google"
   },
@@ -134,6 +158,12 @@
     "noResults": "找不到符合的路線",
     "addRoute": "找不到路線？新增一條",
     "pendingApproval": "你的路線將在管理員審核後顯示",
+    "pendingToast": "已送出，審核通過後會出現在路線列表。",
+    "emptyTitle": "這間岩館還沒有路線",
+    "emptyDescription": "看到牆上的路線，就新增第一條。",
+    "filteredDescription": "換個難度或顏色試試。",
+    "loadErrorTitle": "路線載不出來",
+    "loadErrorDescription": "檢查網路後再試一次。",
     "colors": {
       "red": "紅色",
       "orange": "橙色",
@@ -165,14 +195,30 @@
       "recordSend": "記錄攀登",
       "uploadBeta": "上傳 Beta 影片",
       "sendHistoryTitle": "攀登紀錄",
-      "noSends": "尚無紀錄"
+      "noSends": "這條路線還沒有紀錄。",
+      "recordSendLink": "記錄完攀",
+      "addedAndRetired": "新增於 {{added}} · 退場於 {{retired}}",
+      "notFoundTitle": "找不到這條路線",
+      "notFoundDescription": "它可能已經退場或被合併。",
+      "loadErrorTitle": "路線載不出來",
+      "historyLoadErrorTitle": "攀登紀錄載不出來",
+      "attemptsShort": "嘗試",
+      "moreActions": "更多操作"
+    },
+    "filter": {
+      "button": "篩選",
+      "sheetTitle": "篩選路線",
+      "grade": "難度",
+      "color": "岩點顏色",
+      "clearAll": "清除篩選",
+      "removeChip": "移除篩選：{{label}}"
     }
   },
   "routes": {
     "noResults": "找不到路線。",
     "duplicateNotice": {
       "title": "已有相似路線",
-      "body": "此岩館已有 {{count}} 條現役 {{grade}} {{color}} 路線。"
+      "body": "此岩館已有 {{count}} 條現役 {{grade}} {{color}}路線。"
     },
     "duplicateSheet": {
       "title": "找到相似路線",
@@ -203,12 +249,13 @@
     "submit": {
       "cta": "+ 新增路線",
       "title": "新增路線",
+      "gymContext": "岩館：{{name}}",
       "gradeLabel": "難度",
       "colorLabel": "岩點顏色",
       "sectionLabel": "區域（選填）",
       "sectionPlaceholder": "例如：洞穴、板岩、斜板…",
       "photo": {
-        "title": "新增照片",
+        "title": "照片",
         "body": "需要照片才能讓其他攀岩者辨識路線。請拍攝起手點或整條路線的清晰照片。",
         "placeholder": "尚未選擇照片",
         "preview": "路線照片預覽",
@@ -221,7 +268,9 @@
         "photoRequired": "必須附上照片。請拍攝或選擇路線照片。",
         "photoPermissionDenied": "需要相簿存取權限才能選擇照片。",
         "cameraPermissionDenied": "需要相機存取權限才能拍照。",
-        "submitFailed": "送出路線失敗，請再試一次。"
+        "submitFailed": "送出路線失敗，請再試一次。",
+        "submitFailedTitle": "路線沒有送出",
+        "submitFailedBody": "檢查網路後再試一次，你填的內容都還在。"
       }
     },
     "errors": {
@@ -274,6 +323,8 @@
     "deleted": "已刪除",
     "loading": "完攀紀錄載入中",
     "searching": "路線搜尋中",
+    "noRoutesTitle": "找不到「{{query}}」的路線",
+    "noRoutesHint": "確認岩館 ID 後再搜尋一次。",
     "logged": "已記錄：{{style}}",
     "noteMore": "更多",
     "deleteLabel": "刪除 {{date}} {{style}}的紀錄"
@@ -281,6 +332,10 @@
   "home": {
     "banner": {
       "noEvents": "目前沒有活動"
+    },
+    "loadFailed": {
+      "title": "首頁載不出來",
+      "description": "檢查網路連線後再試一次。"
     },
     "banners": {
       "competition": "比賽",
@@ -290,11 +345,11 @@
     "savedGyms": {
       "title": "已收藏岩館",
       "viewAll": "查看全部",
-      "empty": "點擊岩館的書籤圖示來收藏"
+      "empty": "在岩館頁點書籤，就能收藏。",
+      "explore": "探索岩館"
     },
     "following": {
       "title": "追蹤中",
-      "empty": "追蹤攀岩者以查看他們的動態",
       "newUpload": "新影片上傳"
     },
     "projectingRoutes": {
@@ -302,16 +357,21 @@
       "allGrades": "全部",
       "empty": "收藏一條路線來追蹤你的目標。",
       "emptyFiltered": "此難度沒有目標路線。",
+      "browse": "瀏覽路線",
       "bookmarkFailed": "無法更新收藏路線，請再試一次。"
     },
     "followingActivity": {
-      "title": "追蹤動態",
+      "title": "新 Beta 影片",
       "newVideos": "{{count}} 支新 Beta 影片",
       "newVideos_other": "{{count}} 支新 Beta 影片",
-      "empty": "追蹤攀岩者以查看他們的新 Beta 影片。",
+      "empty": "追蹤攀岩者，查看他們的新 Beta 影片。",
       "today": "今天",
       "dayAgo": "1 天前",
-      "daysAgo": "{{count}} 天前"
+      "daysAgo": "{{count}} 天前",
+      "viewAll": "查看全部",
+      "openProfileHint": "開啟個人頁面",
+      "findClimbers": "找攀岩者",
+      "rowA11y": "{{name}}，{{label}}，{{time}}"
     },
     "routeCard": {
       "thumbnailAlt": "{{name}} 的路線照片"
@@ -335,14 +395,15 @@
     "unsaveAction": "取消收藏"
   },
   "betaVideo": {
-    "sectionTitle": "BETA 影片",
+    "sectionTitle": "Beta 影片",
     "addVideo": "新增 Beta 影片",
-    "noVideos": "還沒人分享 Beta。",
+    "noVideos": "還沒有人分享 Beta。",
     "myVideos": "我的 Beta 影片",
+    "noVideosYetUser": "{{name}} 還沒有上傳 Beta 影片。",
     "noVideosYet": "還沒有 Beta 影片",
     "uploading": "上傳中…",
     "uploadProgress": "{{percent}}% 完成",
-    "loadError": "無法載入影片",
+    "loadError": "影片載不出來",
     "replaceWarning": "你已經為這條路線上傳了一支 Beta 影片，確認後將取代現有的影片。",
     "replaceConfirmTitle": "替換 Beta 影片",
     "replaceConfirmMessage": "你已有此路線的 Beta 影片，繼續操作將會取代現有影片。",
@@ -376,6 +437,7 @@
       "videoTooLargeForStorage": "影片超過上限，請修剪影片後再試。"
     },
     "emptyUpload": "上傳 Beta",
+    "replaceMine": "更換我的 Beta",
     "loadingVideos": "Beta 影片載入中",
     "uploadingHint": "上傳完成前請不要離開這個畫面。",
     "uploadFailedTitle": "上傳失敗",
@@ -405,11 +467,26 @@
     "moreOptions": "更多選項",
     "menu": {
       "actionFailed": "沒送出，再試一次。"
-    }
+    },
+    "noFollowersDescription": "分享 Beta 影片，讓其他攀岩者認識你。",
+    "noFollowingDescription": "追蹤攀岩者，就能在首頁看到他們的新 Beta 影片。",
+    "loadErrorTitle": "此頁載不出來",
+    "loadErrorDescription": "請檢查網路連線後再試一次。",
+    "emptyTitle": "還沒有動態",
+    "videosPrivate": "只有追蹤者能看到 {{name}} 的 Beta 影片。"
   },
   "notifications": {
     "title": "通知",
-    "empty": "目前沒有通知，別人對你的 Beta 影片按讚後會顯示在這裡。",
+    "emptyTitle": "目前沒有通知",
+    "emptyDescription": "別人對你的 Beta 影片按讚時，會顯示在這裡。",
+    "loadErrorTitle": "通知載不出來",
+    "loadPreferenceErrorTitle": "設定載不出來",
+    "loadErrorDescription": "檢查網路後再試一次。",
+    "section": {
+      "today": "今天",
+      "thisWeek": "本週",
+      "earlier": "更早"
+    },
     "badgeBetaVideoLike": "按讚",
     "betaVideoLikedBody": "對你的 Beta 影片按讚了。",
     "betaVideoLikeA11y": "Beta 影片按讚通知",
@@ -442,14 +519,11 @@
       "heroSends": "完攀 {{count}} 次",
       "unitTimes": "次",
       "unitDays": "天",
-      "noSendsTitle": "還沒有完攀",
-      "noSendsBody": "完攀後這裡會顯示你的最高難度",
       "heroA11y": "最高難度 {{grade}}，完攀 {{count}} 次",
       "sendsA11y": "完攀 {{count}} 次",
       "daysA11y": "完攀天數 {{count}} 天",
-      "promptEyebrow": "第一筆紀錄",
-      "promptTitle": "爬了哪條？記下來。",
-      "promptBody": "到岩館找到那條路線，點「記錄完攀」。最高難度和統計會從這裡開始。",
+      "compactHint": "查看完整統計",
+      "promptBody": "到岩館找到路線後點「記錄完攀」，最高難度和統計就會出現在這裡。",
       "promptAction": "找路線",
       "heroSends_other": "完攀 {{count}} 次",
       "sendsA11y_other": "完攀 {{count}} 次",
@@ -475,6 +549,8 @@
       "lastYear": "最近 1 年"
     },
     "empty": "尚無完攀紀錄。",
+    "emptyTitle": "還沒有完攀紀錄",
+    "emptySection": "完攀後，路線會出現在這裡。",
     "hiddenTitle": "個人頁面為私人",
     "hiddenBody": "追蹤這位攀岩者以查看其完攀紀錄。",
     "errors": {
@@ -488,7 +564,10 @@
     "blockedNotice": "你已封鎖{{name}}",
     "blockedNoticeGeneric": "你已封鎖此用戶",
     "unblock": "解除封鎖",
-    "noBlockedAccounts": "沒有已封鎖的帳號",
+    "noBlockedAccounts": "沒有封鎖任何人",
+    "noBlockedAccountsBody": "你封鎖的人會出現在這裡，也可以在這裡解除封鎖。",
+    "blockedLoadFailed": "封鎖名單載不出來",
+    "blockedLoadFailedBody": "請檢查網路連線後再試一次。",
     "sheetReport": "檢舉並封鎖",
     "sheetBlock": "封鎖",
     "sheetUnblock": "解除封鎖",
@@ -518,7 +597,9 @@
       "blocked": "已封鎖此用戶。",
       "unblocked": "已解除封鎖。",
       "error": "操作失敗，請再試一次。",
-      "confirmBody": "你們會互相看不到對方的內容，隨時可以解除封鎖。"
+      "confirmBody": "你們會互相看不到對方的內容，隨時可以解除封鎖。",
+      "confirmUnblock": "解除封鎖此用戶？",
+      "confirmUnblockBody": "你們會再次看到對方的內容，隨時可以重新封鎖。"
     },
     "sheetReportHint": "我們會審查這個帳號，你們也會立刻互相看不到對方的內容。"
   },
@@ -533,6 +614,10 @@
     "back": "返回"
   },
   "ui": {
+    "alertPrefix": {
+      "warning": "警告：",
+      "error": "錯誤："
+    },
     "close": "關閉",
     "dismiss": "忽略",
     "loading": "載入中",

@@ -27,3 +27,8 @@ export type { GymSummary, RouteCard } from './history-service';
 
 // ── Public components ──────────────────────────────────────────────────────────
 export { default as SendHistoryProfile } from './components/SendHistoryProfile';
+export { default as StatsPanel } from './components/StatsPanel';
+export { default as ProfileHistoryView } from './screens/ProfileHistoryView';
+export type { ProfileHistoryViewProps } from './screens/ProfileHistoryView';
+export { ProfileHistoryNavProvider, useOpenProfileHistory } from './navigation';
+export type { OpenProfileHistory } from './navigation';

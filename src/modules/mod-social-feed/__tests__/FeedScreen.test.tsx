@@ -29,6 +29,7 @@ import {
   likeBetaVideo,
   unlikeBetaVideo,
 } from '../social-feed-service';
+import { setHapticDriver, noopHapticDriver } from '../../../lib/haptics';
 import FeedScreen from '../screens/FeedScreen';
 import { renderOptions } from '../test-utils';
 import type { FeedItem } from '../types';
@@ -181,8 +182,8 @@ describe('FeedScreen', () => {
     render(<FeedScreen session={MOCK_SESSION} />, renderOptions());
 
     await waitFor(() => {
-      const errorTexts = screen.queryAllByText(/Failed to load activity feed/i)
-        .concat(screen.queryAllByText(/載入/));
+      const errorTexts = screen.queryAllByText(/Couldn't load this page/i)
+        .concat(screen.queryAllByText(/無法載入/));
       expect(errorTexts.length).toBeGreaterThan(0);
     });
   });
@@ -233,6 +234,25 @@ describe('FeedScreen', () => {
     await waitFor(() => {
       expect(mockUnlikeBetaVideo).toHaveBeenCalledWith('video-001');
     });
+  });
+
+  it('plays the select haptic on unlike and keeps the FistBumpLike icon', async () => {
+    const play = jest.fn();
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 10_000); // clear per-source haptic throttle
+    setHapticDriver({ play });
+    mockFetchActivityFeed.mockResolvedValue([MOCK_VIDEO_ITEM]);
+    mockFetchLikeInfo.mockResolvedValue({ like_count: 1, user_has_liked: true });
+    mockUnlikeBetaVideo.mockResolvedValue(undefined);
+
+    render(<FeedScreen session={MOCK_SESSION} />, renderOptions());
+
+    const btn = await screen.findByLabelText(/^(Unlike|取消喜歡)$/);
+    fireEvent.press(btn);
+
+    await waitFor(() => expect(mockUnlikeBetaVideo).toHaveBeenCalledWith('video-001'));
+    expect(play).toHaveBeenCalledWith('select');
+    setHapticDriver(noopHapticDriver);
+    jest.restoreAllMocks();
   });
 
   it('AC-053: no comment UI is rendered anywhere in the feed', async () => {

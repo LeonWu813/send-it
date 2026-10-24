@@ -160,6 +160,7 @@ export default function RouteNavigator({
         <SendHistoryDetailScreen
           routeId={view.routeId}
           session={session}
+          gymName={gymName}
           onBack={() => { setView({ name: 'detail', routeId: view.routeId }); }}
         />
       )}

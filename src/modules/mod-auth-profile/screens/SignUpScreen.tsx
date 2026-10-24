@@ -18,7 +18,7 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { AppText, Button, Card, InlineError, TextField } from '../../../components/ui';
+import { AppText, Button, InlineError, TextField } from '../../../components/ui';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { signUpWithEmail } from '../auth-service';
 
@@ -40,22 +40,37 @@ export default function SignUpScreen({
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Field validation sits under its field (outline + message); only a failed request is a callout above the button.
+  type FieldKey = 'email' | 'displayName' | 'password' | 'confirmPassword';
+  const [fieldError, setFieldError] = useState<{ field: FieldKey; message: string } | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  function validate(): string | null {
-    if (!email.trim()) return t('auth.errors.emailRequired');
-    if (!displayName.trim()) return t('auth.errors.displayNameRequired');
-    if (!password) return t('auth.errors.passwordRequired');
-    if (password.length < 8) return t('auth.errors.passwordMinLength');
-    if (password !== confirmPassword) return t('auth.errors.passwordMismatch');
+  function validate(): { field: FieldKey; message: string } | null {
+    if (!displayName.trim()) return { field: 'displayName', message: t('auth.errors.displayNameRequired') };
+    if (!email.trim()) return { field: 'email', message: t('auth.errors.emailRequired') };
+    if (!password) return { field: 'password', message: t('auth.errors.passwordRequired') };
+    if (password.length < 8) return { field: 'password', message: t('auth.errors.passwordMinLength') };
+    if (password !== confirmPassword) return { field: 'confirmPassword', message: t('auth.errors.passwordMismatch') };
     return null;
+  }
+
+  /** Error text for one field, and clearing it as soon as that field is edited. */
+  function errorFor(field: FieldKey): string | undefined {
+    return fieldError?.field === field ? fieldError.message : undefined;
+  }
+  function edited(field: FieldKey, set: (v: string) => void): (v: string) => void {
+    return (v) => {
+      set(v);
+      if (fieldError?.field === field) setFieldError(null);
+    };
   }
 
   async function handleSignUp(): Promise<void> {
     setErrorMessage(null);
+    setFieldError(null);
     const validationError = validate();
     if (validationError) {
-      setErrorMessage(validationError);
+      setFieldError(validationError);
       return;
     }
     setIsLoading(true);
@@ -66,9 +81,8 @@ export default function SignUpScreen({
         displayName: displayName.trim(),
       });
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('auth.errors.signUpFailed');
-      setErrorMessage(message);
+      console.warn('Sign-up failed', err);
+      setErrorMessage(t('auth.errors.signUpFailedBody'));
     } finally {
       setIsLoading(false);
     }
@@ -87,13 +101,14 @@ export default function SignUpScreen({
           {t('app.name')}
         </AppText>
 
-        {/* Grouped form card: one Card, fields keep their own 1pt border */}
-        <Card style={styles.formCard}>
+        {/* Flat form on the page background (F4): labels on the 16 keyline */}
+        <View style={styles.form}>
         {/* Display name */}
         <TextField
           label={t('auth.displayNameLabel')}
           value={displayName}
-          onChangeText={setDisplayName}
+          onChangeText={edited('displayName', setDisplayName)}
+          error={errorFor('displayName')}
           placeholder={t('auth.displayNamePlaceholder')}
           autoCapitalize="words"
           autoCorrect={false}
@@ -104,7 +119,8 @@ export default function SignUpScreen({
         <TextField
           label={t('auth.email')}
           value={email}
-          onChangeText={setEmail}
+          onChangeText={edited('email', setEmail)}
+          error={errorFor('email')}
           placeholder={t('auth.emailPlaceholder')}
           keyboardType="email-address"
           autoCapitalize="none"
@@ -116,7 +132,8 @@ export default function SignUpScreen({
         <TextField
           label={t('auth.password')}
           value={password}
-          onChangeText={setPassword}
+          onChangeText={edited('password', setPassword)}
+          error={errorFor('password')}
           placeholder={t('auth.passwordPlaceholder')}
           secureTextEntry
           disabled={isLoading}
@@ -126,16 +143,21 @@ export default function SignUpScreen({
         <TextField
           label={t('auth.confirmPassword')}
           value={confirmPassword}
-          onChangeText={setConfirmPassword}
+          onChangeText={edited('confirmPassword', setConfirmPassword)}
+          error={errorFor('confirmPassword')}
           placeholder={t('auth.passwordPlaceholder')}
           secureTextEntry
           disabled={isLoading}
         />
-        </Card>
+        </View>
 
-        {/* Error */}
+        {/* Request failure: error callout above the primary button */}
         {errorMessage ? (
-          <InlineError variant="block" message={errorMessage} />
+          <InlineError
+            variant="error"
+            title={t('auth.errors.signUpFailedTitle')}
+            message={errorMessage}
+          />
         ) : null}
 
         {/* Submit */}
@@ -154,9 +176,8 @@ export default function SignUpScreen({
         <Button
           label={t('auth.haveAccount')}
           onPress={onNavigateSignIn}
-          variant="ghost"
-          on="background"
-          fullWidth
+          variant="text"
+          placement="centered"
           disabled={isLoading}
         />
 
@@ -185,7 +206,7 @@ function makeStyles(
       paddingBottom: theme.spacing.xl,
       gap: theme.spacing.md,
     },
-    formCard: {
+    form: {
       gap: theme.layout.fieldGap,
     },
     title: {

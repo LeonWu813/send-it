@@ -144,7 +144,7 @@ describe('GymDetailScreen', () => {
     render(<GymDetailScreen gymId="nonexistent" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('Gym not found.')).toBeTruthy();
+      expect(screen.getByText('Gym not found')).toBeTruthy();
     });
   });
 
@@ -154,9 +154,7 @@ describe('GymDetailScreen', () => {
     render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Failed to load gyms. Please try again.'),
-      ).toBeTruthy();
+      expect(screen.getByText("Couldn't load gyms")).toBeTruthy();
     });
   });
 
@@ -170,8 +168,16 @@ describe('GymDetailScreen', () => {
       expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy(),
     );
 
-    // Back is wired through the AppShell header (useAppHeader onBack), not drawn by the screen.
+    // G-2: the header title is empty until the in-body title has scrolled off.
+    expect(screen.getByTestId('header-title').props.accessibilityLabel).toBe('');
+    fireEvent(screen.getByText('MegaSTONE Climbing Gym').parent as never, 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 40 } },
+    });
+    const scroller = screen.UNSAFE_getByType(require('react-native').ScrollView);
+    fireEvent.scroll(scroller, { nativeEvent: { contentOffset: { x: 0, y: 60 } } });
     expect(screen.getByTestId('header-title').props.accessibilityLabel).toBe('MegaSTONE Climbing Gym');
+
+    // Back is wired through the AppShell header (useAppHeader onBack), not drawn by the screen.
     fireEvent.press(screen.getByLabelText('Back'));
     expect(onBack).toHaveBeenCalled();
   });

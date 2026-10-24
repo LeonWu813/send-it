@@ -46,7 +46,7 @@ function Demo({ isBlocked, isOwnProfile, targetName, fail, onBlock, onUnblock }:
 }
 
 const meta: Meta<Args> = {
-  title: 'Moderation/ModerationActions',
+  title: 'Patterns/ModerationActions',
   render: (args) => <Demo {...args} />,
   args: { isBlocked: false, isOwnProfile: false, targetName: 'Ming', fail: false, onBlock: fn(), onUnblock: fn() },
   argTypes: {

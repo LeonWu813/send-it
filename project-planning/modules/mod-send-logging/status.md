@@ -2,6 +2,14 @@
 
 ## Engineering Progress
 
+### Off-spec design round 4 - flat-alignment audit rev 3 section 6 (2026-10-24)
+
+**Mode:** off-spec (design/page-templates). Log Send attempts field only (the one section 6.1 row owned by this module).
+
+- `LogSendScreen.tsx`: Stepper `style` override gives C1 row band padding (`listRowPaddingV` 12 top/bottom, `spacing.md` 16 left/right, was 6/6/6/14). The - / + discs (44 visual) end on the right padding line (C4). Measured on :6006: label x17, right disc edge 17 from box edge (1 border + 16), top gap 13 (12 + border), height 70.
+- `LogSendScreen.test.tsx`: added row-band padding test. Lint (tsc) clean, 682/682 tests pass.
+- Not done: the -/+ discs are still 44 in layout (shared `src/components/ui/Stepper.tsx`/`IconButton`, outside this module), so the C2 "visual size + hitSlop" shrink needs an owner of the shared Stepper. Story unchanged (it renders the screen).
+
 ### Storybook story — RouteSearchScreen (2026-10-22)
 
 **Mode:** stories (off-spec Storybook coverage)
@@ -1810,3 +1818,5 @@ None. All 366/366 tests pass. `tsc --noEmit` exits 0. No previously passing manu
 | New regressions | None |
 
 **Overall status: QA PASS.** All automated checks green (366/366 tests, tsc --noEmit exits 0). AC-131 and AC-132 formally closed: grade display is absent from the log-send form, and is_private is hardcoded true in the submit payload with no user-facing toggle. Human QA confirmed both ACs visually. All previously passing items continue to pass. MOD-004 (Send Logging) is ready for next phase.
+
+- 2026-10-23 flat-alignment round 3 (#15, #17): Cancel glyph on 16pt keyline (marginLeft -spacing.mdl; ghost md padH is 20 not 14), LogSend form flattened (no card, labels at 16); summary card kept.

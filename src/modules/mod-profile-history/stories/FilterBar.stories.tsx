@@ -44,7 +44,7 @@ function Interactive(args: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'Profile/FilterBar',
+  title: 'Patterns/FilterBar',
   render: (args) => <Interactive {...args} />,
   args: { gymId: 'none', grade: 'none', dateDays: 0, gymCount: 3 },
   argTypes: {

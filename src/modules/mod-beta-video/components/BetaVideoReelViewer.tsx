@@ -17,7 +17,7 @@
  * media tokens (`onMedia`, `mediaScrim`, `mediaScrimStrong`, `mediaBackground`) so it stays
  * visible in both themes; controls sit inside the safe area (no `|| 34` fallback, no fixed
  * padding); the like fistbump is `onMedia` (filled vs outline, never red) with the like motion
- * (celebratePeak + topOut + particles, Reduce Motion = cross-fade only).
+ * (v6 fist-bump FistBumpLike, Reduce Motion = cross-fade only).
  *
  * Architecture (Tech Lead decisions, Rev 13 + Rev 16):
  * 1. Portrait lock: `app.json` already sets `"orientation": "portrait"` globally.
@@ -495,7 +495,7 @@ export default function BetaVideoReelViewer({
           {urlLoading ? (
             <View style={styles.centeredOverlay}>
               <View testID="beta-video-reel-loading">
-                <Spinner color="onMedia" size="large" accessibilityLabel={t('ui.loading')} />
+                <Spinner context="media" accessibilityLabel={t('ui.loading')} />
               </View>
             </View>
           ) : null}
@@ -553,7 +553,7 @@ export default function BetaVideoReelViewer({
              */}
             {isVideoLoading && !urlError ? (
               <View style={styles.videoAreaSpinner} testID="beta-video-reel-video-loading">
-                <Spinner color="onMedia" size="large" />
+                <Spinner context="media" />
               </View>
             ) : null}
 
@@ -684,12 +684,12 @@ export default function BetaVideoReelViewer({
                 {/* Right sidebar: like placeholder + report button (AC-138) */}
                 <View style={styles.sidebar}>
 
-                  {/* Like button (AC-052): 👊 fistbump emoji, opacity = selected state (never red). */}
+                  {/* Like button (AC-052): custom fist (§9.12), outline = off, filled = on (never red). */}
                   <ReelAction
                     testID="reel-like-button"
                     accessibilityLabel={t('betaVideo.reel.likeLabel', { count: likeCount })}
                     onPress={() => { void handleLike(); }}
-                    emoji="👊"
+                    fist
                     selected={isLiked}
                     disabled={isLikePending}
                     likeMotion
@@ -723,7 +723,7 @@ export default function BetaVideoReelViewer({
                   {/* AC-139: report error text (shown below report button on failure) */}
                   {reportError ? (
                     <AppText
-                      variant="caption1"
+                      variant="footnote"
                       color="onMedia"
                       align="center"
                       style={styles.reportErrorText}

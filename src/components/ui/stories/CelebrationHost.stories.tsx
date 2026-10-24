@@ -24,7 +24,7 @@ function Demo(props: CelebrationContent): React.JSX.Element {
 }
 
 const meta: Meta<CelebrationContent> = {
-  title: 'UI/CelebrationHost',
+  title: 'Components/CelebrationHost',
   component: Demo,
   args: { title: '新的最高難度：V5', subtitle: '恭喜完攀！', actionLabel: '查看', flash: false },
   argTypes: { onAction: { action: 'view' } },

@@ -10,6 +10,7 @@ import type { PaletteKey } from '../../lib/theme';
 import { Badge, BadgeAnchor } from './Badge';
 import type { OnSurface } from './Button';
 import { PressableScale } from './PressableScale';
+import { Spinner } from './ProgressBar';
 
 export type IconButtonVariant = 'plain' | 'toggle' | 'media' | 'tonal' | 'float' | 'small';
 
@@ -35,8 +36,8 @@ export interface IconButtonProps {
   color?: PaletteKey;
   /** toggle ON colour. Default `primary`. */
   colorOn?: PaletteKey;
-  /** tonal only: disc diameter, 44 (default) or 52 (next to an `lg` Button). */
-  diameter?: 44 | 52;
+  /** tonal only: disc diameter, 44 (default), 52 (next to an `lg` Button) or 32 (inside a row: layout stays 32, touch 44 via hitSlop). */
+  diameter?: 32 | 44 | 52;
   /** tonal only: disc colour. `surface` when the button sits inside a `surfaceAlt` container (stepper). */
   tonalBase?: 'surfaceAlt' | 'surface';
   /** Glyph size: md 20 (in-card), lg 24 (header, nav, sheet), xl 28 (Reel). Default lg. */
@@ -44,6 +45,8 @@ export interface IconButtonProps {
   /** toggle: the ON state. Also reported as accessibilityState.selected. */
   selected?: boolean;
   disabled?: boolean;
+  /** A small spinner (glyph colour) replaces the glyph, the size stays; behaves as `disabled` and reports `busy` (mirrors Button `loading`). */
+  loading?: boolean;
   /** Press-and-hold hooks (Stepper auto-repeat). */
   onPressIn?: () => void;
   onPressOut?: () => void;
@@ -74,6 +77,7 @@ export function IconButton({
   tonalBase = 'surfaceAlt',
   selected,
   disabled,
+  loading = false,
   onPressIn,
   onPressOut,
   badge,
@@ -92,6 +96,7 @@ export function IconButton({
     variant === 'small' ? theme.iconSize.sm : variant === 'media' ? theme.iconSize.md : variant === 'tonal' ? theme.iconSize.md : theme.iconSize.lg;
   const glyph = size ?? defaultGlyph;
   const surface: OnSurface = variant === 'media' ? 'media' : on;
+  const inactive = !!disabled || loading;
   const [pressed, setPressed] = useState(false);
   const fade = useRef(new Animated.Value(selected ? 1 : 0)).current;
 
@@ -141,11 +146,11 @@ export function IconButton({
         setPressed(false);
         onPressOut?.();
       }}
-      disabled={disabled}
-      pressedColor={disabled || variant === 'media' || !pressedDisc ? undefined : c[pressedDisc]}
+      disabled={inactive}
+      pressedColor={inactive || variant === 'media' || !pressedDisc ? undefined : c[pressedDisc]}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: !!disabled, selected }}
+      accessibilityState={{ disabled: inactive, busy: loading, selected }}
       hitSlop={slop ? { top: slop, bottom: slop, left: slop, right: slop } : undefined}
       style={[
         {
@@ -162,7 +167,11 @@ export function IconButton({
         style,
       ]}
     >
-      {variant === 'toggle' ? (
+      {loading ? (
+        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Spinner context="control" color={variant === 'media' ? 'onMedia' : (fixedColor ?? color)} />
+        </View>
+      ) : variant === 'toggle' ? (
         <View style={{ width: glyph, height: glyph }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <Animated.View style={{ position: 'absolute', opacity: fade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }}>
             <Ionicons name={name} size={glyph} color={offColor} />

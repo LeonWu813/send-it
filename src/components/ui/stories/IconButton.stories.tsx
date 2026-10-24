@@ -11,7 +11,7 @@ import { View } from 'react-native';
 const glyphs = {
   notifications: [ICON.notifications.outline, undefined],
   bookmark: [ICON.bookmark.outline, ICON.bookmark.filled],
-  like: [ICON.like.outline, ICON.like.filled],
+  follow: [ICON.follow.outline, undefined],
   report: [ICON.report.outline, ICON.report.filled],
   password: [ICON.passwordVisibility.outline, ICON.passwordVisibility.on],
   back: [ICON.back.outline, undefined],
@@ -40,9 +40,9 @@ function Demo({ glyph, selected, ...rest }: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'UI/IconButton',
+  title: 'Components/IconButton',
   component: Demo,
-  args: { glyph: 'notifications', variant: 'plain', on: 'surface', color: 'textPrimary', selected: false, disabled: false, badge: 0 },
+  args: { glyph: 'notifications', variant: 'plain', on: 'surface', color: 'textPrimary', selected: false, disabled: false, loading: false, badge: 0 },
   argTypes: {
     glyph: { control: 'select', options: Object.keys(glyphs), description: 'ICON.* concept (toggle uses its outline/filled pair)' },
     variant: { control: 'inline-radio', options: ['plain', 'toggle', 'media', 'tonal', 'float', 'small'] },
@@ -76,6 +76,23 @@ export const AllStates: StoryObj<Args> = {
         <View style={{ flexDirection: 'row', columnGap: 12 }}>
           <IconButton disabled name={ICON.delete.outline} accessibilityLabel="d" on="background" onPress={() => {}} />
           <IconButton name={ICON.notifications.outline} badge={3} accessibilityLabel="n" on="background" onPress={() => {}} />
+        </View>
+      </Row>
+      <Row label="float: default / disabled (glyph textDisabled, disc unchanged) / loading (spinner, busy)">
+        <View style={{ flexDirection: 'row', columnGap: 12 }}>
+          <IconButton variant="float" name={ICON.save.outline} accessibilityLabel="save" on="background" onPress={() => {}} />
+          <IconButton variant="float" disabled name={ICON.save.outline} accessibilityLabel="save (disabled)" on="background" onPress={() => {}} />
+          <IconButton variant="float" loading name={ICON.save.outline} accessibilityLabel="save (loading)" on="background" onPress={() => {}} />
+        </View>
+      </Row>
+      <Row label="loading: plain / tonal / small / media">
+        <View style={{ flexDirection: 'row', columnGap: 12, alignItems: 'center' }}>
+          <IconButton loading name={ICON.more.outline} accessibilityLabel="a" on="background" onPress={() => {}} />
+          <IconButton variant="tonal" loading name={ICON.share.outline} accessibilityLabel="b" onPress={() => {}} />
+          <IconButton variant="small" loading name={ICON.close.outline} accessibilityLabel="c" onPress={() => {}} />
+          <View style={{ backgroundColor: '#000', padding: 6, borderRadius: 12 }}>
+            <IconButton variant="media" loading name={ICON.back.outline} accessibilityLabel="d" onPress={() => {}} />
+          </View>
         </View>
       </Row>
       <Row label="IconButtonGroup 96x44">

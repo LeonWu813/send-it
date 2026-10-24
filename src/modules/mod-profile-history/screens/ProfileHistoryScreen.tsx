@@ -2,8 +2,9 @@
  * ProfileHistoryScreen — send history + stats for a user profile.
  *
  * AC-061: stats panel (v2.2: top-grade hero, sends / days tiles, sends-by-grade bars).
- *         Bars hidden when total_sends = 0; zero records -> ONE EmptyState `prompt`
- *         replaces the stats panel AND the history section (spec 32.5).
+ *         Hidden when total_sends = 0 (attempts-only keeps just the section title + E2). Zero
+ *         records -> ONE E1 page EmptyState replaces the stats panel AND the history section.
+ *         Both lime cards are retired (human ruling).
  * AC-062: stats recalculate immediately after a new send is logged (via
  *         refetchKey prop — parent bumps it when MOD-004 logs a new ascent).
  * AC-064: followers_only privacy gate (server-side via RPC; client shows
@@ -25,7 +26,7 @@ import type { FlatListProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SharedRouteCard from '../../../components/RouteCard';
-import { AppText, Chip, EmptyState, InlineError, Spinner } from '../../../components/ui';
+import { AppText, Chip, EmptyState, PageLoading, useLoadingPhase } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { useTabBarInset } from '@/lib/AppHeaderContext';
@@ -83,6 +84,8 @@ interface ProfileHistoryScreenProps {
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
   /** Primary action of the zero-records prompt ("Find routes"). Omitted -> the prompt has no button. */
   onLogSend?: () => void;
+  /** True when a nested AppHeader already owns the top safe area (pushed view): no top inset padding. */
+  headerHandled?: boolean;
   /** Optional pass-through scroll props. Caller padding in contentContainerStyle overrides the TabBar inset. */
   scrollProps?: ForwardedScrollProps;
 }
@@ -97,6 +100,7 @@ export default function ProfileHistoryScreen({
   extraListFooter,
   onNavigateToRoute,
   onLogSend,
+  headerHandled = false,
   scrollProps,
 }: ProfileHistoryScreenProps): React.JSX.Element {
   const { t } = useTranslation('common');
@@ -106,7 +110,7 @@ export default function ProfileHistoryScreen({
   const tabInset = useTabBarInset();
   // When extraListHeader is provided, the host element already applies the
   // top-inset padding inside its container. Pass 0 so we don't double-pad.
-  const topInsetForStyles = extraListHeader !== undefined ? 0 : insets.top;
+  const topInsetForStyles = extraListHeader !== undefined || headerHandled ? 0 : insets.top;
   const styles = makeStyles(theme, topInsetForStyles, screenMargin);
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -116,6 +120,8 @@ export default function ProfileHistoryScreen({
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [visibility, setVisibility] = useState<HistoryVisibility>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const loadingPhase = useLoadingPhase(visibility === 'loading');
 
   // ── Data fetch ─────────────────────────────────────────────────────────────
 
@@ -155,21 +161,33 @@ export default function ProfileHistoryScreen({
   // ── Render helpers ─────────────────────────────────────────────────────────
 
   if (visibility === 'loading') {
-    return (
-      <View style={styles.centered}>
-        <Spinner />
-      </View>
-    );
+    // idle (first 300ms): nothing; loading: PageLoading; timeout (10s): E4 while the request keeps running.
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') {
+      return (
+        <View style={styles.centered}>
+          <EmptyState
+            variant="error"
+            title={t('common.error')}
+            description={t('profileHistory.errors.loadFailed')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => void loadData()}
+          />
+        </View>
+      );
+    }
+    return <View style={styles.centered} />;
   }
 
   if (visibility === 'error') {
     return (
       <View style={styles.centered}>
-        <InlineError
-          variant="block"
-          message={errorMessage ?? t('profileHistory.errors.loadFailed')}
-          actionLabel={t('common.retry')}
-          onAction={() => void loadData()}
+        <EmptyState
+          variant="error"
+          title={t('common.error')}
+          description={errorMessage ?? t('profileHistory.errors.loadFailed')}
+          primaryLabel={t('common.retry')}
+          onPrimary={() => void loadData()}
         />
       </View>
     );
@@ -179,7 +197,7 @@ export default function ProfileHistoryScreen({
     return (
       <View style={styles.hiddenContainer}>
         <EmptyState
-          variant="private"
+          variant="page"
           title={t('profileHistory.hiddenTitle')}
           description={t('profileHistory.hiddenBody')}
         />
@@ -234,24 +252,35 @@ export default function ProfileHistoryScreen({
   const ListHeader = (
     <View>
       {extraListHeader ?? null}
-      {stats !== null && (
-        <StatsPanel stats={stats} hasRecords={hasRecords} onLogSend={onLogSend} />
-      )}
+      {stats !== null && stats.total_sends > 0 ? <StatsPanel stats={stats} /> : null}
       {hasRecords ? (
         <>
           <AppText variant="pageSection" style={styles.sectionTitle} accessibilityRole="header">
             {t('profile.sendHistory')}
           </AppText>
-          {GradeTabBar}
+          {uniqueGrades.length >= 2 ? GradeTabBar : null}
         </>
       ) : null}
     </View>
   );
 
+  // E2: attempts exist but no send cards yet.
   const ListEmpty = (
     <View style={styles.emptyContainer}>
-      <EmptyState variant="inline" description={t('profileHistory.empty')} icon={ICON.sends.outline} />
+      <EmptyState variant="section" description={t('profileHistory.emptySection')} />
     </View>
+  );
+
+  // E1: zero records. Replaces stats + history; the host's extraListHeader stays above it.
+  const PageEmpty = (
+    <EmptyState
+      variant="page"
+      icon={ICON.sends.outline}
+      title={t('profileHistory.emptyTitle')}
+      description={t('profileHistory.stats.promptBody')}
+      primaryLabel={onLogSend ? t('profileHistory.stats.promptAction') : undefined}
+      onPrimary={onLogSend}
+    />
   );
 
   return (
@@ -260,6 +289,7 @@ export default function ProfileHistoryScreen({
       style={styles.root}
       contentContainerStyle={[
         styles.contentContainer,
+        !hasRecords && styles.contentContainerEmpty,
         tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom },
         scrollProps?.contentContainerStyle,
       ]}
@@ -267,23 +297,16 @@ export default function ProfileHistoryScreen({
       data={filtered}
       keyExtractor={(item) => item.route_id}
       renderItem={({ item }) => {
-        // Build the route display name per production.md Route Display Name Format:
-        // "{grade} {LocalizedColor}" with section in parentheses when non-null.
-        // e.g. "V3 Blue (Cave)"
-        const colorLabel = item.color_tag
-          ? t(`routeCatalog.colors.${item.color_tag}`)
-          : '';
-        const sectionSuffix = item.section_label ? ` (${item.section_label})` : '';
-        const routeName = `${item.grade}${colorLabel ? ` ${colorLabel}` : ''}${sectionSuffix}`;
-
         return (
           <SharedRouteCard
             route={{
               id: item.route_id,
-              name: routeName,
+              name: item.grade,
               grade: item.grade,
               photo_url: item.photo_url,
               gymName: item.gym_name,
+              colorTag: item.color_tag ?? undefined,
+              section: item.section_label,
             }}
             onPress={() => onNavigateToRoute?.(item.route_id, item.gym_id)}
           />
@@ -291,7 +314,7 @@ export default function ProfileHistoryScreen({
       }}
       ItemSeparatorComponent={() => <View style={{ height: theme.layout.cardGap }} />}
       ListHeaderComponent={ListHeader}
-      ListEmptyComponent={hasRecords ? ListEmpty : null}
+      ListEmptyComponent={hasRecords ? ListEmpty : PageEmpty}
       ListFooterComponent={extraListFooter ?? null}
       showsVerticalScrollIndicator={false}
     />
@@ -312,6 +335,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingBottom: theme.spacing.xxl,
       paddingHorizontal: screenMargin,
     },
+    // E1 brings its own 48pt top gap; no extra md on top.
+    contentContainerEmpty: {
+      paddingTop: topInset,
+    },
     centered: {
       flex: 1,
       alignItems: 'center',
@@ -320,12 +347,13 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: topInset + theme.spacing.md,
       paddingHorizontal: screenMargin,
     },
+    // R0: the list's contentContainer owns the screenMargin (16); sections never add their own.
     sectionTitle: {
-      paddingHorizontal: screenMargin,
       marginBottom: theme.layout.sectionHeaderGap,
     },
     tabRow: {
       flexGrow: 0,
+      marginHorizontal: -screenMargin, // chips scroll edge to edge, start aligned at the margin
       marginBottom: theme.spacing.md,
     },
     tabRowContent: {
@@ -333,9 +361,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingHorizontal: screenMargin,
       paddingVertical: theme.spacing.xs,
     },
-    emptyContainer: {
-      paddingHorizontal: screenMargin,
-    },
+    emptyContainer: {},
     hiddenContainer: {
       flex: 1,
       alignItems: 'center',

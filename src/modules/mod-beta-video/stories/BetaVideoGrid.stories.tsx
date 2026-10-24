@@ -35,22 +35,23 @@ interface DemoArgs {
   count: number;
   /** 0 = full-bleed profile grid (no outer rounding). 16 = route-detail inset grid (outer corners `media` 12). Tiles are 3:4, gap 2. */
   horizontalPadding: 0 | 16;
-  /** Count 0: show the upload slot tile + dashed placeholder (onUpload). Off: the legacy EmptyState `inline`. */
-  showUploadSlot: boolean;
-  /** Skeleton tiles (the caller shows these after 300ms of loading). */
+  /** Count 0: render the E2 `section` empty state (the upload entry is the section header, not the grid). */
+  showEmpty: boolean;
+  /** `section` spinner in a 52pt slot (the caller decides when to show it). */
   loading: boolean;
   /** Loadable thumbnail URLs, to preview the fade-in (cached images skip the fade). */
   thumbnails: boolean;
   onPressVideo: (index: number) => void;
 }
 
-function Demo({ count, horizontalPadding, showUploadSlot, loading, thumbnails, onPressVideo }: DemoArgs): React.JSX.Element {
+function Demo({ count, horizontalPadding, showEmpty, loading, thumbnails, onPressVideo }: DemoArgs): React.JSX.Element {
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  // Same wrapper the real screens use: the inset grid sits inside the screen margin.
+  // Same wrapper the real screens use: the PARENT owns the screen margin (16), the grid adds none.
+  // At 393 wide: grid x=16, tiles 119 (gap 2).
   const wrapper = horizontalPadding > 0 ? { paddingHorizontal: screenMargin } : null;
   return (
-    <View style={{ width: 390, backgroundColor: theme.colors.background, paddingVertical: theme.spacing.md }}>
+    <View style={{ width: 393, backgroundColor: theme.colors.background, paddingVertical: theme.spacing.md }}>
       <View style={wrapper}>
         <BetaVideoGrid
           // key: remount when thumbnails toggle so the fade-in replays
@@ -59,17 +60,7 @@ function Demo({ count, horizontalPadding, showUploadSlot, loading, thumbnails, o
           onPressVideo={onPressVideo}
           horizontalPadding={horizontalPadding}
           loading={loading}
-          onUpload={showUploadSlot ? () => console.log('upload') : undefined}
-          emptyState={
-            !showUploadSlot ? (
-              <EmptyState
-                variant="inline"
-                description="還沒人分享 Beta。"
-                secondaryLabel="上傳 Beta"
-                onSecondary={() => console.log('upload')}
-              />
-            ) : undefined
-          }
+          emptyState={showEmpty ? <EmptyState variant="section" description="還沒有人分享 Beta。" /> : undefined}
         />
       </View>
     </View>
@@ -77,12 +68,12 @@ function Demo({ count, horizontalPadding, showUploadSlot, loading, thumbnails, o
 }
 
 const meta: Meta<DemoArgs> = {
-  title: 'Beta Video/BetaVideoGrid',
+  title: 'Patterns/BetaVideoGrid',
   component: Demo,
   args: {
     count: 7,
     horizontalPadding: 16,
-    showUploadSlot: true,
+    showEmpty: true,
     loading: false,
     thumbnails: false,
     onPressVideo: (index: number) => console.log('onPressVideo', index),
@@ -90,7 +81,7 @@ const meta: Meta<DemoArgs> = {
   argTypes: {
     count: { control: { type: 'range', min: 0, max: 30, step: 1 } },
     horizontalPadding: { control: 'inline-radio', options: [0, 16] },
-    showUploadSlot: { control: 'boolean' },
+    showEmpty: { control: 'boolean' },
     loading: { control: 'boolean' },
     thumbnails: { control: 'boolean' },
     onPressVideo: { action: 'pressVideo' },
@@ -100,5 +91,36 @@ export default meta;
 
 type Story = StoryObj<DemoArgs>;
 
-/** Press a tile (mediaScrim overlay, no scale), drag Item count to 0 for the upload slot tile, toggle Loading for skeletons, Thumbnails for the fade-in. */
+/** Press a tile (mediaScrim overlay, no scale), drag Item count to 0 for the E2 empty sentence, toggle Loading for the section spinner, Thumbnails for the fade-in. */
 export const Playground: Story = {};
+
+const noop = (): void => {};
+
+/** Incomplete last row (7 and 8 videos): every outer corner of the grid is rounded per tile, including the tile above the empty cell. */
+export const IncompleteLastRow: Story = {
+  render: () => (
+    <View style={{ gap: 24 }}>
+      <Demo count={7} horizontalPadding={16} showEmpty loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={8} horizontalPadding={16} showEmpty loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={1} horizontalPadding={16} showEmpty loading={false} thumbnails={false} onPressVideo={noop} />
+    </View>
+  ),
+};
+
+/** No videos yet: the E2 section sentence, left aligned on the keyline (no dashed slot, no action; the upload entry is the section header). */
+export const Empty: Story = {
+  render: () => <Demo count={0} horizontalPadding={16} showEmpty loading={false} thumbnails={false} onPressVideo={noop} />,
+};
+
+/** Layout variants side by side: route-detail/profile inset grid (x=16, 119pt tiles), edge-to-edge grid, E2 empty sentence, no empty state at all, and the section spinner. */
+export const AllVariants: Story = {
+  render: () => (
+    <View style={{ gap: 24 }}>
+      <Demo count={7} horizontalPadding={16} showEmpty loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={7} horizontalPadding={0} showEmpty loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={0} horizontalPadding={16} showEmpty loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={0} horizontalPadding={16} showEmpty={false} loading={false} thumbnails={false} onPressVideo={noop} />
+      <Demo count={6} horizontalPadding={16} showEmpty loading thumbnails={false} onPressVideo={noop} />
+    </View>
+  ),
+};

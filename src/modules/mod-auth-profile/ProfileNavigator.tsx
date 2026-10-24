@@ -53,6 +53,8 @@ interface ProfileNavigatorProps {
    * action per the User-Profile Navigation convention.
    */
   onNavigateToUser?: (userId: string) => void;
+  /** Opens the Gyms tab: the "Find routes" action of the empty send-history section. Hidden when omitted. */
+  onFindRoutes?: () => void;
 }
 
 export default function ProfileNavigator({
@@ -60,6 +62,7 @@ export default function ProfileNavigator({
   isActive = false,
   onNavigateToRoute,
   onNavigateToUser,
+  onFindRoutes,
 }: ProfileNavigatorProps): React.JSX.Element {
   const [view, setView] = useState<ProfileView>('profile');
   const { profile } = useSession();
@@ -128,6 +131,7 @@ export default function ProfileNavigator({
       isActive={isActive}
       onNavigateEditProfile={() => setView('editProfile')}
       onNavigateToRoute={onNavigateToRoute}
+      onFindRoutes={onFindRoutes}
       onNavigateToFollowers={() => setView('followers')}
       onNavigateToFollowing={() => setView('following')}
     />

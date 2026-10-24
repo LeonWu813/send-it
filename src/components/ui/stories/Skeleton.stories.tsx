@@ -34,7 +34,7 @@ function Demo({ onPage }: { onPage: boolean }): React.JSX.Element {
 }
 
 const meta: Meta<{ onPage: boolean }> = {
-  title: 'UI/Skeleton',
+  title: 'Components/Skeleton',
   component: Demo,
   args: { onPage: false },
 };
@@ -44,7 +44,7 @@ export default meta;
 export const Playground: StoryObj<{ onPage: boolean }> = {};
 
 /** The four v2.2 compositions: identical geometry to the real content. */
-export const FourLayouts: StoryObj<{ onPage: boolean }> = {
+export const AllVariants: StoryObj<{ onPage: boolean }> = {
   render: () => (
     <View style={{ padding: 16, width: 375 }}>
       <Row label="RouteCardSkeleton (card 20, tape lg, 2 lines, thumb 88)">

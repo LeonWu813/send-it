@@ -39,8 +39,15 @@ export const MOTION = {
     toastShort: 2000,
     celebrationCard: 5000,
     highlightHold: 600,
+    /** Nothing is drawn for this long, then the loading state shows. */
+    loadingDelay: 300,
+    /** After this long the caller swaps the loading state for the E4 error. */
+    loadingTimeout: 10000,
+    /** @deprecated use `loadingDelay` (kept one version). */
     skeletonDelay: 300,
+    /** @deprecated skeletons are retired. */
     skeletonPulse: 1200,
+    /** @deprecated use `loadingTimeout` (kept one version). */
     skeletonTimeout: 10000,
     longPress: 500,
     hapticThrottle: 300,
@@ -65,6 +72,22 @@ export const MOTION = {
   shake: { distancePt: 4, segments: 4 },
   /** Translate distances. Not affected by timeScale; unused under Reduce Motion. */
   distance: { sheetFloatEnter: 24, toastEnter: 8, stepperDigit: 6, bookmarkDrop: 2 },
+  /** Fist-bump like choreography (v6). `*Ms` scale with timeScale; `*U` are 512-grid units (scale with icon size, not timeScale). */
+  likeBump: {
+    /** Left fist approach; also the contact moment. */
+    approachMs: 120,
+    nudgeMs: 60,
+    /** The left fist holds until here, then retreats. */
+    holdUntilMs: 240,
+    retreatMs: 100,
+    tickMs: 200,
+    approachU: 128,
+    nudgeU: 24,
+    retreatU: 48,
+    tickDriftU: 24,
+    /** Gap between the fists for the (deferred) double-tap burst. */
+    burstGapU: 28,
+  },
   particles: {
     flash: {
       count: 10,

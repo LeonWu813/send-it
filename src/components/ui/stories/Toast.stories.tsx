@@ -20,7 +20,8 @@ function Trigger({ message, tone, withIcon, actions }: Args): React.JSX.Element 
   return (
     <View style={{ padding: 16, flex: 1 }}>
       <Button
-        label="Show toast (press again to see replacement)"
+        size="md"
+        label="顯示 Toast"
         onPress={() =>
           toast.show({
             message,
@@ -49,7 +50,8 @@ function Demo(props: Args): React.JSX.Element {
 }
 
 const meta: Meta<Args> = {
-  title: 'UI/Toast',
+  title: 'Components/Toast',
+  parameters: { docs: { description: { component: 'Press the button again while a toast is showing to see the replacement.' } } },
   component: Demo,
   args: { message: '已記錄 V4 紅色・完攀', tone: 'default', withIcon: false, actions: 1 },
   argTypes: {
@@ -58,6 +60,9 @@ const meta: Meta<Args> = {
   },
 };
 export default meta;
+
+/** Swipe down to dismiss. An error toast is not replaced by a success toast until it is dismissed. Long messages never clamp. */
+export const Playground: StoryObj<Args> = {};
 
 /** Static render of every shape: single-line capsule (3 tones, with action) and the two-line card. */
 export const AllStates: StoryObj<Args> = {
@@ -88,6 +93,3 @@ export const AllStates: StoryObj<Args> = {
     </View>
   ),
 };
-
-/** Swipe down to dismiss. An error toast is not replaced by a success toast until it is dismissed. Long messages never clamp. */
-export const Playground: StoryObj<Args> = {};

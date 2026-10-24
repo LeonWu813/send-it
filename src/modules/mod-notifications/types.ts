@@ -25,6 +25,10 @@ export interface Notification {
   actor_user_id: string;
   actor_display_name?: string;
   actor_avatar_url?: string | null;
+  /** L-1: grade of the liked video's route (display-only context line). */
+  route_grade?: string | null;
+  /** L-1: color_tag of the liked video's route (display-only context line). */
+  route_color?: string | null;
   type: NotificationType;
   target_type: string;
   target_id: string;
