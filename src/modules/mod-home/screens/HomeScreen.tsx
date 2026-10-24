@@ -50,6 +50,10 @@ import { Avatar } from '../../../components/ui/Avatar';
 import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { Chip } from '../../../components/ui/Chip';
+import { EmptyState } from '../../../components/ui/EmptyState';
+import { PageLoading } from '../../../components/ui/PageLoading';
+import { Spinner } from '../../../components/ui/ProgressBar';
+import { useLoadingPhase } from '../../../components/ui/useLoadingPhase';
 import { PressableScale } from '../../../components/ui/PressableScale';
 import { useToast } from '../../../components/ui/Toast';
 import { useMotion } from '../../../lib/motion';
@@ -79,8 +83,6 @@ const CAPTION_HEIGHT = 40;
 const AX_FONT_SCALE = 1.6;
 /** Section-header action target: 22pt line + 11 + 11 = 44pt; layout never changes. */
 const LINK_HIT_SLOP = { top: 11, bottom: 11, left: 8, right: 0 };
-/** Skeleton tiles while Following loads. */
-const SKELETON_TILES = 4;
 /** Section header row = title3 line height (A3). */
 const SECTION_HEADER_HEIGHT = 28;
 /** Ghost `sm` button side padding (Button dims). */
@@ -414,6 +416,27 @@ export default function HomeScreen({
     }
   }, [isActive, loadBanner, loadSavedGyms, loadProjectingRoutes, loadFollowingActivity]);
 
+  // ── First load: PageLoading until all four requests have settled (states-audit-ui 1.4 #29) ──
+  // Each loader catches its own errors and always clears its flag, so "all flags false" == allSettled.
+  // After the first load, refreshes keep the content and only an empty section shows a `section` spinner.
+
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const anyLoading = bannerLoading || savedGymsLoading || projectingLoading || followingLoading;
+  useEffect(() => {
+    if (!anyLoading) setHasLoadedOnce(true);
+  }, [anyLoading]);
+  // `retrying` drops `loading` for one render so the 300ms delay of useLoadingPhase starts over (E4 -> retry).
+  const firstLoadPhase = useLoadingPhase(!hasLoadedOnce && !retrying);
+  useEffect(() => {
+    if (!retrying) return;
+    setRetrying(false);
+    void loadBanner();
+    void loadSavedGyms();
+    void loadProjectingRoutes();
+    void loadFollowingActivity();
+  }, [retrying, loadBanner, loadSavedGyms, loadProjectingRoutes, loadFollowingActivity]);
+
   // ── Clear cache on sign-out (auth-clear convention) ───────────────────────
 
   const prevUserIdRef = useRef<string | null>(session.user.id);
@@ -516,6 +539,31 @@ export default function HomeScreen({
   const followingA11y = (name: string, time: string | null): string =>
     t('home.followingActivity.rowA11y', { name, label: t('home.following.newUpload'), time: time ?? '' });
 
+  if (!hasLoadedOnce) {
+    if (firstLoadPhase === 'loading') return <PageLoading />;
+    if (firstLoadPhase === 'timeout') {
+      return (
+        <View style={[styles.root, { paddingTop: header.contentTopInset }]}>
+          <EmptyState
+            variant="error"
+            title={t('home.loadFailed.title')}
+            description={t('home.loadFailed.description')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => setRetrying(true)}
+          />
+        </View>
+      );
+    }
+    return <View style={styles.root} />;
+  }
+
+  // Section refresh (page already shown): small spinner in a fixed 52pt slot, centred.
+  const sectionSpinner = (
+    <View style={styles.sectionSpinner}>
+      <Spinner context="section" />
+    </View>
+  );
+
   return (
     <Animated.ScrollView
       style={styles.root}
@@ -571,7 +619,9 @@ export default function HomeScreen({
             : { label: t('home.savedGyms.viewAll'), onPress: onViewAllGyms },
         )}
 
-        {!savedGymsLoading && savedGyms.length === 0 ? (
+        {savedGymsLoading && savedGyms.length === 0 ? (
+          sectionSpinner
+        ) : savedGyms.length === 0 ? (
           inlineEmpty(t('home.savedGyms.empty'), { label: t('home.savedGyms.explore'), onPress: onViewAllGyms })
         ) : (
           <ScrollView
@@ -639,7 +689,9 @@ export default function HomeScreen({
           </ScrollView>
         ) : null}
 
-        {!projectingLoading && projectingRoutes.length === 0 ? (
+        {projectingLoading && projectingRoutes.length === 0 ? (
+          sectionSpinner
+        ) : projectingRoutes.length === 0 ? (
           inlineEmpty(t('home.projectingRoutes.empty'), {
             label: t('home.projectingRoutes.browse'),
             onPress: onViewAllGyms,
@@ -689,15 +741,8 @@ export default function HomeScreen({
             : undefined,
         )}
 
-        {followingLoading ? (
-          <View style={styles.followingSkeleton} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-            {Array.from({ length: SKELETON_TILES }, (_, i) => (
-              <View key={i} style={styles.followingTile}>
-                <View style={styles.skeletonAvatar} />
-                <View style={styles.skeletonBar} />
-              </View>
-            ))}
-          </View>
+        {followingLoading && followingActivity.length === 0 ? (
+          sectionSpinner
         ) : followingActivity.length === 0 ? (
           inlineEmpty(
             t('home.followingActivity.empty'),
@@ -908,21 +953,10 @@ function makeStyles(
       columnGap: theme.spacing.smd,
       minHeight: theme.layout.listRowMinHeight,
     },
-    followingSkeleton: {
-      flexDirection: 'row',
-      columnGap: theme.layout.cardGap,
-    },
-    skeletonAvatar: {
-      width: GYM_TILE,
-      height: GYM_TILE,
-      borderRadius: theme.radius.full,
-      backgroundColor: c.surfaceAlt,
-    },
-    skeletonBar: {
-      width: GYM_TILE,
-      height: CAPTION_HEIGHT / 2,
-      borderRadius: theme.radius.minor,
-      backgroundColor: c.surfaceAlt,
+    sectionSpinner: {
+      height: theme.layout.sectionLoadingSlot,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
   });
 }

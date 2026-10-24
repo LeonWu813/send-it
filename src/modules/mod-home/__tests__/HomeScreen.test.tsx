@@ -674,7 +674,7 @@ describe('HomeScreen (Rev 36)', () => {
       const onViewAllGyms = jest.fn();
       const onFindClimbers = jest.fn();
       render(<HomeScreen {...DEFAULT_PROPS} onViewAllGyms={onViewAllGyms} onFindClimbers={onFindClimbers} />, renderOptions());
-      await waitFor(() => screen.getByText('Follow climbers to see their new beta videos'));
+      await waitFor(() => screen.getByText('Follow climbers to see their new beta videos.'));
       expect(screen.getByText('Tap the bookmark on any gym to save it.')).toBeTruthy();
       expect(screen.getByText('Save a route to track your projects.')).toBeTruthy();
       expect(screen.queryByText('View All')).toBeNull();
@@ -690,7 +690,7 @@ describe('HomeScreen (Rev 36)', () => {
     it('also shows the Following empty state when followed users have no new beta videos', async () => {
       mockFetchFollowing.mockResolvedValue([{ id: 'user-002', display_name: 'Alice', avatar_url: null }]);
       render(<HomeScreen {...DEFAULT_PROPS} />, renderOptions());
-      await waitFor(() => screen.getByText('Follow climbers to see their new beta videos'));
+      await waitFor(() => screen.getByText('Follow climbers to see their new beta videos.'));
     });
   });
 

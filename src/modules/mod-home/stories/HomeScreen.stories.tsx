@@ -108,7 +108,10 @@ export const Populated: Story = { args: { state: 'populated' } };
 /** New-user state: flat centred banner placeholder; all three sections use the inline sentence + ghost sm action; no chips, no 「查看全部」. */
 export const Empty: Story = { args: { state: 'empty' } };
 
-/** Every section still fetching (queries never resolve): headings, Following shows 4 skeleton tiles. */
+/** First load (queries never resolve): the one full-page PageLoading spinner, no section headings. Appears after the 300ms delay. */
 export const Loading: Story = { args: { state: 'loading' } };
 
-// No Error story: HomeScreen has no error UI. A failed fetch logs to console and falls back to the Empty state.
+/** E4 page error. Appears 10s after the Loading story starts (queries never resolve); Retry reloads (the requests keep running; a late success swaps in the content). */
+export const Error: Story = { args: { state: 'loading' } };
+
+// A failed fetch of a single section logs to console and falls back to that section's empty state.
