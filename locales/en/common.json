@@ -162,7 +162,7 @@
     "emptyTitle": "No routes at this gym yet",
     "emptyDescription": "See a route on the wall? Add the first one.",
     "filteredDescription": "Try a different grade or colour.",
-    "loadErrorTitle": "Routes couldn't load",
+    "loadErrorTitle": "Couldn't load routes",
     "loadErrorDescription": "Check your connection and try again.",
     "colors": {
       "red": "Red",
@@ -200,8 +200,8 @@
       "addedAndRetired": "Added {{added}} · Retired {{retired}}",
       "notFoundTitle": "Route not found",
       "notFoundDescription": "It may have been retired or merged.",
-      "loadErrorTitle": "Route couldn't load",
-      "historyLoadErrorTitle": "Send history couldn't load",
+      "loadErrorTitle": "Couldn't load this route",
+      "historyLoadErrorTitle": "Couldn't load send history",
       "attemptsShort": "Attempts",
       "moreActions": "More actions"
     },
@@ -333,7 +333,7 @@
       "noEvents": "No active events"
     },
     "loadFailed": {
-      "title": "Home couldn't load",
+      "title": "Couldn't load Home",
       "description": "Check your connection and try again."
     },
     "banners": {
