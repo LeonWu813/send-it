@@ -27,6 +27,7 @@ import {
   IconButton,
   InlineError,
   ListRow,
+  SectionHeader,
   SendStatus,
   Spinner,
   useLoadingPhase,
@@ -187,22 +188,12 @@ export default function AscentList({
 
   return (
     <View style={{ marginTop: theme.layout.sectionGap }}>
-      {/* Section header. No primary here (§32.8); standalone use gets a ghost sm "Log Send". */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: theme.layout.sectionHeaderGap,
-        }}
-      >
-        <AppText variant="pageSection" accessibilityRole="header">
-          {t('sends.ascentsSectionTitle')}
-        </AppText>
-        {!isEmpty && (
-          <Button label={t('sends.logSend')} onPress={onLogSend} variant="ghost" size="sm" on="background" />
-        )}
-      </View>
+      {/* T1 slot: "Log Send" sits in the same place whether the list is empty or populated. */}
+      <SectionHeader
+        title={t('sends.ascentsSectionTitle')}
+        action={{ label: t('sends.logSend'), onPress: onLogSend }}
+        style={{ marginBottom: theme.layout.sectionHeaderGap }}
+      />
 
       {/* Loading */}
       {showSpinner && (
@@ -232,8 +223,6 @@ export default function AscentList({
         <EmptyState
           variant="section"
           description={t('sends.noAscents')}
-          secondaryLabel={t('sends.logSend')}
-          onSecondary={onLogSend}
         />
       )}
 
@@ -403,9 +392,13 @@ function AscentRow({ ascent, last, isOwn, landing, language, onDelete }: AscentR
             {ascent.note}
           </AppText>
           {noteTruncated && !noteExpanded && (
-            <View style={{ alignSelf: 'flex-start' }}>
-              <Button label={t('sends.noteMore')} onPress={() => setNoteExpanded(true)} variant="ghost" size="sm" />
-            </View>
+            <Button
+              variant="text"
+              size="sm"
+              placement="inline"
+              label={t('sends.noteMore')}
+              onPress={() => setNoteExpanded(true)}
+            />
           )}
         </View>
       )}
