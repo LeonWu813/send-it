@@ -537,7 +537,7 @@ export default function RouteListScreen({
           ListHeaderComponent={isFirstUseEmpty ? null : listHeader}
           ListHeaderComponentStyle={styles.listHeader}
           ItemSeparatorComponent={CardSeparator}
-          contentContainerStyle={[styles.listContent, { paddingBottom: tabInset.contentBottom || theme.spacing.md }]}
+          contentContainerStyle={[styles.listContent, isFirstUseEmpty && styles.listContentEmpty, { paddingBottom: tabInset.contentBottom || theme.spacing.md }]}
           scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
@@ -638,6 +638,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     listContent: {
       paddingHorizontal: screenMargin,
       paddingTop: theme.spacing.md,
+    },
+    // First-use E1 starts 48pt below the header (EmptyState owns it): no extra list top padding.
+    listContentEmpty: {
+      paddingTop: 0,
     },
     // Filter row -> first card = md (R10)
     listHeader: {
