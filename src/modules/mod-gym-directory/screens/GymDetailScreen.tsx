@@ -26,12 +26,11 @@ import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
   Button,
+  EmptyState,
   IconButton,
-  InlineError,
   NoticeBox,
-  Skeleton,
-  SkeletonGroup,
-  useSkeletonPhase,
+  PageLoading,
+  useLoadingPhase,
 } from '../../../components/ui';
 import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
@@ -66,8 +65,9 @@ export default function GymDetailScreen({
 
   const [gym, setGym] = useState<Gym | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const skeletonPhase = useSkeletonPhase(isLoading);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
+  // 'notFound' = the row is gone (no retry can help); 'network' = the request threw (retry).
+  const [loadError, setLoadError] = useState<'notFound' | 'network' | null>(null);
 
   // AC-120, AC-121: saved-gym bookmark state
   const [isSaved, setIsSaved] = useState(false);
@@ -85,7 +85,7 @@ export default function GymDetailScreen({
 
   const fetchGym = useCallback(async (): Promise<void> => {
     setIsLoading(true);
-    setErrorMessage(null);
+    setLoadError(null);
     try {
       // Fetch gym detail and saved status in parallel
       const [data, savedIds] = await Promise.all([
@@ -93,17 +93,17 @@ export default function GymDetailScreen({
         fetchSavedGymIds(),
       ]);
       if (!data) {
-        setErrorMessage(t('gymDirectory.errors.notFound'));
+        setLoadError('notFound');
       } else {
         setGym(data);
         setIsSaved(savedIds.includes(gymId));
       }
     } catch {
-      setErrorMessage(t('gymDirectory.errors.loadFailed'));
+      setLoadError('network');
     } finally {
       setIsLoading(false);
     }
-  }, [gymId, t]);
+  }, [gymId]);
 
   useEffect(() => {
     void fetchGym();
@@ -147,42 +147,53 @@ export default function GymDetailScreen({
   });
 
   const isMixed = gym?.gym_type === 'both';
+  // Photo author (truncatable first part of the credit capsule). No data yet; see the capsule comment.
+  const author: string | null = null;
+  const creditLabel = author
+    ? `${author} · ${t('gymDirectory.googlePhotosAttribution')}`
+    : t('gymDirectory.googlePhotosAttribution');
 
+  const networkError = (
+    <EmptyState
+      variant="error"
+      title={t('gymDirectory.errors.loadFailedTitle')}
+      description={t('gymDirectory.errors.loadFailedBody')}
+      primaryLabel={t('common.retry')}
+      onPrimary={() => {
+        void fetchGym();
+      }}
+    />
+  );
+
+  // One loading design for every page: nothing for 300ms, PageLoading, then E4 after 10s.
   if (isLoading) {
     return (
       <SwipeBackWrapper onBack={onBack} enabled={false}>
-        <View style={styles.root}>
-          <View style={styles.contentContainer}>
-            {skeletonPhase !== 'idle' ? (
-              <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonGroup}>
-                <Skeleton shape="card" surface="page" height={160} />
-                <Skeleton shape="text" textVariant="title1" width="70%" surface="page" />
-                <Skeleton shape="text" textVariant="title3" width="45%" surface="page" />
-                <Skeleton shape="text" textVariant="title3" width="30%" surface="page" />
-                <Skeleton shape="text" textVariant="body" width="60%" surface="page" />
-                <Skeleton shape="text" textVariant="body" width="80%" surface="page" />
-              </SkeletonGroup>
-            ) : null}
+        {loadingPhase === 'loading' ? (
+          <PageLoading />
+        ) : (
+          <View style={[styles.root, loadingPhase === 'timeout' ? styles.pageState : null]}>
+            {loadingPhase === 'timeout' ? networkError : null}
           </View>
-        </View>
+        )}
       </SwipeBackWrapper>
     );
   }
 
-  if (errorMessage || !gym) {
+  if (loadError || !gym) {
     return (
       <SwipeBackWrapper onBack={onBack}>
-        <View style={styles.root}>
-          <View style={styles.contentContainer}>
-            <InlineError
-              variant="block"
-              message={errorMessage ?? t('common.error')}
-              actionLabel={t('common.retry')}
-              onAction={() => {
-                void fetchGym();
-              }}
+        <View style={[styles.root, styles.pageState]}>
+          {loadError === 'network' ? (
+            networkError
+          ) : (
+            <EmptyState
+              variant="page"
+              icon={ICON.gyms.outline}
+              title={t('gymDirectory.errors.notFoundTitle')}
+              description={t('gymDirectory.errors.notFoundBody')}
             />
-          </View>
+          )}
         </View>
       </SwipeBackWrapper>
     );
@@ -200,7 +211,7 @@ export default function GymDetailScreen({
         >
           {/* AC-196: cover photo from Places API seeder. G-2: no photo => no photo area at all. */}
           {gym.cover_photo_url ? (
-            <View style={styles.photoBlock}>
+            <View>
               <Image
                 source={{ uri: gym.cover_photo_url }}
                 style={styles.coverPhoto}
@@ -208,10 +219,36 @@ export default function GymDetailScreen({
                 contentFit="cover"
                 cachePolicy="memory-disk"
               />
-              {/* AC-196: Google Maps Platform ToS — attribution required */}
-              <AppText variant="footnote" color="textSecondary" style={styles.googleAttribution}>
-                {t('gymDirectory.googlePhotosAttribution')}
-              </AppText>
+              {/*
+                AC-196: Google Maps Platform ToS attribution, overlaid as a scrim capsule (states-audit-ui 2.2).
+                Only the author part truncates; the credit part never shrinks or wraps.
+                `author` has no data source yet (needs the seeder to store authorAttributions).
+              */}
+              <View pointerEvents="box-none" style={styles.creditOuter}>
+                <View accessible accessibilityLabel={creditLabel} style={styles.creditPill}>
+                  {author ? (
+                    <AppText
+                      variant="footnote"
+                      color="onMedia"
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.2}
+                      style={styles.creditAuthor}
+                    >
+                      {author}
+                      {' · '}
+                    </AppText>
+                  ) : null}
+                  <AppText
+                    variant="footnote"
+                    color="onMedia"
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.2}
+                    style={styles.creditText}
+                  >
+                    {t('gymDirectory.googlePhotosAttribution')}
+                  </AppText>
+                </View>
+              </View>
             </View>
           ) : null}
 
@@ -296,11 +333,9 @@ function makeStyles(
       paddingBottom: theme.spacing.md,
       gap: theme.layout.sectionGap,
     },
-    skeletonGroup: {
-      gap: theme.layout.cardGap,
-    },
-    photoBlock: {
-      gap: theme.layout.iconTextGap,
+    // E1 / E4 sit 48 below the header bottom (EmptyState adds the 48), so no top padding here.
+    pageState: {
+      paddingHorizontal: screenMargin,
     },
     coverPhoto: {
       width: '100%',
@@ -310,8 +345,27 @@ function makeStyles(
       overflow: 'hidden',
       backgroundColor: theme.colors.surfaceAlt,
     },
-    googleAttribution: {
-      textAlign: 'right',
+    creditOuter: {
+      position: 'absolute',
+      left: theme.spacing.sm,
+      right: theme.spacing.sm,
+      bottom: theme.spacing.sm,
+      alignItems: 'flex-end',
+    },
+    creditPill: {
+      flexDirection: 'row',
+      maxWidth: '100%',
+      height: 24,
+      paddingHorizontal: theme.spacing.sm,
+      alignItems: 'center',
+      borderRadius: RADIUS.full,
+      backgroundColor: theme.colors.mediaScrimStrong,
+    },
+    creditAuthor: {
+      flexShrink: 1,
+    },
+    creditText: {
+      flexShrink: 0,
     },
     nameZh: {
       marginTop: theme.layout.stackTight,

@@ -117,8 +117,26 @@ describe('GymListScreen', () => {
     fireEvent.changeText(searchInput, 'zzz no match');
 
     await waitFor(() => {
-      expect(screen.getByText('No gyms found.')).toBeTruthy();
+      expect(screen.getByText('No matching gyms')).toBeTruthy();
     });
+
+    // E3: clearing the filters brings the list back
+    fireEvent.press(screen.getByText('Clear filters'));
+    await waitFor(() => {
+      expect(screen.getByText('MegaSTONE Climbing Gym')).toBeTruthy();
+    });
+  });
+
+  it('shows the page empty state (no search controls) when the directory has no gyms', async () => {
+    mockListGyms.mockResolvedValueOnce([]);
+
+    render(<GymListScreen onSelectGym={jest.fn()} onRequestGym={jest.fn()} />, renderOptions());
+
+    await waitFor(() => {
+      expect(screen.getByText('No gyms yet')).toBeTruthy();
+    });
+    expect(screen.queryByPlaceholderText('Search gyms…')).toBeNull();
+    expect(screen.getByText("Can't find your gym? Request it")).toBeTruthy();
   });
 
   it('calls onSelectGym with the gym id when a card is pressed', async () => {
@@ -173,7 +191,7 @@ describe('GymListScreen', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Failed to load gyms. Please try again.')).toBeTruthy();
+      expect(screen.getByText("Couldn't load gyms")).toBeTruthy();
     });
     expect(screen.getByText('Retry')).toBeTruthy();
   });
@@ -192,7 +210,7 @@ describe('GymListScreen', () => {
     );
 
     await waitFor(() =>
-      expect(screen.getByText('Failed to load gyms. Please try again.')).toBeTruthy(),
+      expect(screen.getByText("Couldn't load gyms")).toBeTruthy(),
     );
 
     fireEvent.press(screen.getByText('Retry'));

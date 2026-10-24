@@ -2,7 +2,7 @@
  * Pages/Gyms/Gym Detail: gym detail with cover photo, map pin and the "View Routes" CTA (AC-005).
  * Renders inside PhoneFrame (real AppHeader + TabBar, gyms tab active).
  *
- * Error: the screen shows its block error when the gym row is missing (not found).
+ * NotFound (E1) when the gym row is missing; Error (E4) appears after the 10s loading timeout.
  */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
@@ -37,7 +37,7 @@ const GYM_FIXTURE: Gym = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-type StubState = 'populated' | 'noPhoto' | 'loading' | 'error';
+type StubState = 'populated' | 'noPhoto' | 'loading' | 'notFound';
 
 function setupStubs(state: StubState): void {
   resetStubData();
@@ -50,7 +50,7 @@ function setupStubs(state: StubState): void {
     setStubData('gyms', [state === 'noPhoto' ? { ...GYM_FIXTURE, cover_photo_url: null, branch_label: '新莊店' } : GYM_FIXTURE]);
     setStubData('saved_gyms', [{ gym_id: 'gym-001' }]);
   }
-  // error: no gym row -> the screen's not-found block error
+  // notFound: no gym row -> the E1 not-found page
 }
 
 /** Seed stubs synchronously so the screen's first fetch sees the data. */
@@ -87,14 +87,17 @@ export default meta;
 
 type Story = StoryObj<Args>;
 
-/** Gym with a cover photo (+ Google attribution at 13pt); "View Routes" pinned at the bottom. */
+/** Gym with a cover photo (Google credit as a scrim capsule on the photo's bottom-right); "View Routes" pinned at the bottom. */
 export const Populated: Story = { args: { state: 'populated' } };
 
 /** No cover photo: the photo area collapses (no placeholder); title starts at the top. */
 export const NoPhoto: Story = { args: { state: 'noPhoto' } };
 
-/** Initial fetch never resolves: detail skeleton. */
+/** Initial fetch never resolves: the one full-page PageLoading spinner. Appears after the 300ms delay. */
 export const Loading: Story = { args: { state: 'loading' } };
 
-/** Gym not found / failed to load: block error. */
-export const Error: Story = { args: { state: 'error' } };
+/** E1: the gym row is gone (removed or merged). No retry; the header back is the way out. */
+export const NotFound: Story = { args: { state: 'notFound' } };
+
+/** E4 page error. Appears 10s after the Loading story starts (queries never resolve); Retry with the reload icon. */
+export const Error: Story = { args: { state: 'loading' } };

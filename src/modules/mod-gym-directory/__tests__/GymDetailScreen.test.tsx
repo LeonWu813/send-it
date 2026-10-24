@@ -144,7 +144,7 @@ describe('GymDetailScreen', () => {
     render(<GymDetailScreen gymId="nonexistent" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() => {
-      expect(screen.getByText('Gym not found.')).toBeTruthy();
+      expect(screen.getByText('Gym not found')).toBeTruthy();
     });
   });
 
@@ -154,9 +154,7 @@ describe('GymDetailScreen', () => {
     render(<GymDetailScreen gymId="gym-001" onBack={jest.fn()} onViewRoutes={jest.fn()} />, renderOptions());
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Failed to load gyms. Please try again.'),
-      ).toBeTruthy();
+      expect(screen.getByText("Couldn't load gyms")).toBeTruthy();
     });
   });
 

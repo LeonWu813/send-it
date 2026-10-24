@@ -28,11 +28,9 @@ import {
   Card,
   Chip,
   EmptyState,
-  InlineError,
-  Skeleton,
-  SkeletonGroup,
+  PageLoading,
   TextField,
-  useSkeletonPhase,
+  useLoadingPhase,
 } from '../../../components/ui';
 import i18n from '../../../lib/i18n';
 import { ICON } from '../../../lib/icons';
@@ -71,8 +69,8 @@ export default function GymListScreen({
 
   const [gyms, setGyms] = useState<GymSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const skeletonPhase = useSkeletonPhase(isLoading);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
+  const [hasError, setHasError] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [cityFilter, setCityFilter] = useState<string | null>(null);
 
@@ -81,16 +79,16 @@ export default function GymListScreen({
 
   const fetchGyms = useCallback(async (): Promise<void> => {
     setIsLoading(true);
-    setErrorMessage(null);
+    setHasError(false);
     try {
       const data = await listGyms();
       setGyms(data);
     } catch {
-      setErrorMessage(t('gymDirectory.errors.loadFailed'));
+      setHasError(true);
     } finally {
       setIsLoading(false);
     }
-  }, [t]);
+  }, []);
 
   const fetchSaved = useCallback(async (): Promise<void> => {
     try {
@@ -219,39 +217,33 @@ export default function GymListScreen({
     );
   }
 
+  const retryError = (
+    <EmptyState
+      variant="error"
+      title={t('gymDirectory.errors.loadFailedTitle')}
+      description={t('gymDirectory.errors.loadFailedBody')}
+      primaryLabel={t('common.retry')}
+      onPrimary={() => {
+        void fetchGyms();
+      }}
+    />
+  );
+
+  // One loading design for every page: nothing for 300ms, PageLoading, then E4 after 10s.
   if (isLoading) {
-    return (
-      <View style={[styles.root, styles.pageTop]}>
-        {skeletonPhase !== 'idle' ? (
-          <SkeletonGroup label={t('gymDirectory.title')} style={styles.skeletonList}>
-            {[0, 1, 2, 3].map((i) => (
-              <Card key={i} padding={theme.spacing.smd} style={styles.card}>
-                <Skeleton shape="text" textVariant="headline" width="60%" />
-                <Skeleton shape="text" textVariant="footnote" width="40%" />
-              </Card>
-            ))}
-          </SkeletonGroup>
-        ) : null}
-      </View>
-    );
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') return <View style={[styles.root, styles.pageTop]}>{retryError}</View>;
+    return <View style={styles.root} />;
   }
 
-  if (errorMessage) {
-    return (
-      <View style={[styles.root, styles.pageTop]}>
-        <InlineError
-          variant="block"
-          message={errorMessage}
-          actionLabel={t('common.retry')}
-          onAction={() => {
-            void fetchGyms();
-          }}
-        />
-      </View>
-    );
+  if (hasError) {
+    return <View style={[styles.root, styles.pageTop]}>{retryError}</View>;
   }
 
-  const listHeader = (
+  const isFiltered = searchText.trim() !== '' || cityFilter !== null;
+
+  // E1 (the directory itself is empty): nothing to search, so no controls above the empty state.
+  const listHeader = gyms.length === 0 ? null : (
     <>
       {/* Search input */}
       <View style={styles.searchWrap}>
@@ -266,7 +258,8 @@ export default function GymListScreen({
       </View>
 
       {/* City filter chips */}
-      <View style={styles.filterRow}>
+      {/* Empty result: the anchor is the chip row's bottom, so drop its trailing margin. */}
+      <View style={[styles.filterRow, sortedGyms.length === 0 ? styles.filterRowLast : null]}>
         <Chip
           variant="multi"
           label={t('gymDirectory.cityFilter.taipei')}
@@ -327,12 +320,28 @@ export default function GymListScreen({
         ListHeaderComponent={listHeader}
         ListFooterComponent={listFooter}
         ListEmptyComponent={
-          <EmptyState
-            variant="filtered"
-            title={t('gymDirectory.noResults')}
-            secondaryLabel={t('gymDirectory.requestGym.cta')}
-            onSecondary={onRequestGym}
-          />
+          isFiltered ? (
+            <EmptyState
+              variant="filtered"
+              title={t('gymDirectory.filteredEmpty.title')}
+              description={t('gymDirectory.filteredEmpty.description')}
+              primaryLabel={t('gymDirectory.filteredEmpty.clear')}
+              onPrimary={() => {
+                setSearchText('');
+                setCityFilter(null);
+              }}
+              secondaryLabel={t('gymDirectory.requestGym.cta')}
+              onSecondary={onRequestGym}
+            />
+          ) : (
+            <EmptyState
+              variant="page"
+              icon={ICON.gyms.outline}
+              title={t('gymDirectory.empty.title')}
+              secondaryLabel={t('gymDirectory.requestGym.cta')}
+              onSecondary={onRequestGym}
+            />
+          )
         }
       />
     </View>
@@ -355,9 +364,6 @@ function makeStyles(
     pageTop: {
       paddingTop: topPad,
     },
-    skeletonList: {
-      gap: theme.layout.cardGap,
-    },
     searchWrap: {
       marginBottom: theme.spacing.smd,
     },
@@ -367,6 +373,9 @@ function makeStyles(
       columnGap: theme.spacing.sm,
       rowGap: theme.spacing.smd,
       marginBottom: theme.spacing.md,
+    },
+    filterRowLast: {
+      marginBottom: 0,
     },
     separator: {
       height: theme.layout.cardGap,

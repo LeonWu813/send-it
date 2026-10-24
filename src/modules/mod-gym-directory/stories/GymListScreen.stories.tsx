@@ -2,7 +2,7 @@
  * Pages/Gyms/Gym List: gym directory list with search and filter (AC-122, AC-197).
  * Renders inside PhoneFrame (real AppHeader + TabBar, gyms tab active).
  *
- * No Error story: the supabase stub cannot return errors, so the load-failed block cannot be driven.
+ * The stub cannot return errors, so the Error story waits for the 10s loading timeout (E4).
  */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
@@ -84,7 +84,7 @@ const GYM_FIXTURES: GymSummary[] = [
   },
 ];
 
-type StubState = 'populated' | 'empty' | 'loading';
+type StubState = 'populated' | 'empty' | 'filtered' | 'loading';
 
 function setupStubs(state: StubState): void {
   resetStubData();
@@ -92,6 +92,10 @@ function setupStubs(state: StubState): void {
   if (state === 'loading') {
     setStubData('gyms', STUB_PENDING);
     setStubData('saved_gyms', STUB_PENDING);
+  } else if (state === 'filtered') {
+    // Taipei-only directory: the New Taipei chip (pressed by the story) excludes everything
+    setStubData('gyms', GYM_FIXTURES.filter((g) => g.city === 'Taipei'));
+    setStubData('saved_gyms', []);
   } else if (state === 'populated') {
     setStubData('gyms', GYM_FIXTURES);
     // gym-001 is saved: it floats to the top and shows the bookmark indicator
@@ -135,8 +139,21 @@ type Story = StoryObj<Args>;
 /** 5 gyms; gym-001 saved (bookmark), gym-003 has a cover photo (Google attribution). */
 export const Populated: Story = { args: { state: 'populated' } };
 
-/** No gyms in the directory. */
+/** E1 page empty: the directory has no gyms. No search controls; the icon disc sits 48 below the header. */
 export const Empty: Story = { args: { state: 'empty' } };
 
-/** Initial fetch never resolves: skeleton cards. */
+/** E3 filtered empty: the New Taipei chip is pressed on a Taipei-only directory; controls stay, the anchor is the chip row. */
+export const Filtered: Story = {
+  args: { state: 'filtered' },
+  play: async ({ canvasElement }) => {
+    await new Promise((r) => setTimeout(r, 1500));
+    const nodes = Array.from(canvasElement.querySelectorAll<HTMLElement>('[role="button"], [role="checkbox"]'));
+    nodes.find((n) => /(新北市|New Taipei)/.test(n.textContent ?? '') && n.getAttribute('role') === 'checkbox')?.click();
+  },
+};
+
+/** First load (queries never resolve): the one full-page PageLoading spinner. Appears after the 300ms delay. */
 export const Loading: Story = { args: { state: 'loading' } };
+
+/** E4 page error. Appears 10s after the Loading story starts (queries never resolve); Retry with the reload icon. */
+export const Error: Story = { args: { state: 'loading' } };
