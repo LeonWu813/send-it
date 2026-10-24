@@ -14,6 +14,7 @@ import { Pressable, Text, View } from 'react-native';
 
 // Initialize i18n before component renders
 import '../../lib/i18n';
+import { ToastProvider } from '../../components/ui/Toast';
 import { ThemeProvider } from '../../lib/theme';
 import {
   AppHeaderProvider,
@@ -32,7 +33,11 @@ interface WrapperProps {
  * - i18n (initialized via side-effect import above)
  */
 export function TestProviders({ children }: WrapperProps): React.JSX.Element {
-  return <ThemeProvider>{children}</ThemeProvider>;
+  return (
+    <ThemeProvider>
+      <ToastProvider>{children}</ToastProvider>
+    </ThemeProvider>
+  );
 }
 
 /**

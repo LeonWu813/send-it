@@ -96,11 +96,11 @@ export const Populated: Story = { render: () => <Seeded state="populated" /> };
 /** The route is bookmarked, so the header bookmark icon is filled. */
 export const Bookmarked: Story = { render: () => <Seeded state="bookmarked" /> };
 
-/** Retired route: shows the "Retired" status badge; no section label and no sends. */
+/** Retired route: shows the "Retired" status badge; the retire date joins the footnote meta ("Added … · Retired …"). */
 export const RetiredRoute: Story = { name: 'Retired Route', render: () => <Seeded state="retired" gymName="攀石山" /> };
 
-/** The route query never resolves. */
+/** The route query never resolves: PageLoading after 300ms. */
 export const Loading: Story = { render: () => <Seeded state="loading" /> };
 
-/** The route cannot be found: inline "not found" error block. */
+/** The route cannot be found: E1 "Route not found" (network failures use the E4 error instead; the stub cannot return query errors). */
 export const Error: Story = { render: () => <Seeded state="error" /> };

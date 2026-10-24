@@ -95,8 +95,8 @@ describe('SendHistoryDetailScreen', () => {
     render(<SendHistoryDetailScreen {...DEFAULT_PROPS} />, renderOptions());
 
     await waitFor(() => {
-      const emptyTexts = screen.queryAllByText(/No sends recorded yet/i)
-        .concat(screen.queryAllByText(/尚無紀錄/));
+      const emptyTexts = screen.queryAllByText(/No sends recorded for this route yet\./i)
+        .concat(screen.queryAllByText(/這條路線還沒有紀錄。/));
       expect(emptyTexts.length).toBeGreaterThan(0);
     });
   });

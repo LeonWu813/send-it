@@ -23,14 +23,15 @@
 import type { Session } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import type { LayoutChangeEvent } from 'react-native';
 
 import RouteCard from '../../../components/RouteCard';
 import type { RouteCardRoute } from '../../../components/RouteCard';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { AppText, Button, Chip, IconButton, NoticeBox, TextField } from '../../../components/ui';
+import { AppText, Button, Chip, IconButton, NoticeBox, TextField, useToast } from '../../../components/ui';
 import { BottomSheet } from '../../../components/ui/BottomSheet';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
@@ -96,6 +97,24 @@ export default function RouteSubmitScreen({
   const [colorError, setColorError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitFailed, setSubmitFailed] = useState(false);
+  const toast = useToast();
+
+  // Colour row: scroll the pre-selected chip into view on mount (centred), so the chosen value is visible.
+  const colorScrollRef = useRef<ScrollView>(null);
+  const colorLayouts = useRef<Record<string, { x: number; width: number }>>({});
+  const colorViewportWidth = useRef(0);
+  const didScrollToColor = useRef(false);
+  function scrollToSelectedColor(): void {
+    if (didScrollToColor.current || !initialColorTag) return;
+    const layout = colorLayouts.current[initialColorTag];
+    if (!layout || colorViewportWidth.current === 0) return;
+    didScrollToColor.current = true;
+    colorScrollRef.current?.scrollTo({
+      x: Math.max(0, layout.x + layout.width / 2 - colorViewportWidth.current / 2),
+      animated: false,
+    });
+  }
 
   // AC-187 Layer 2: non-dismissable confirmation sheet state.
   const [showDuplicateSheet, setShowDuplicateSheet] = useState(false);
@@ -184,6 +203,7 @@ export default function RouteSubmitScreen({
     uri: string,
   ): Promise<void> {
     setIsSubmitting(true);
+    setSubmitFailed(false);
     try {
       const uploadedPhotoUrl = await uploadRoutePhoto(
         session.user.id,
@@ -200,23 +220,17 @@ export default function RouteSubmitScreen({
       });
 
       if (newRoute.status === 'pending') {
-        // Auto-approve is OFF: show the pending approval message then go back
-        // to the route list (route is not active yet, so we can't navigate to detail).
-        Alert.alert(
-          t('routes.submit.title'),
-          t('routeCatalog.pendingApproval'),
-          [{ text: t('common.ok'), onPress: () => onBack() }],
-        );
+        // Auto-approve is OFF: confirm with a toast, then go back to the route list
+        // (route is not active yet, so we can't navigate to detail).
+        toast.show({ message: t('routeCatalog.pendingToast') });
+        onBack();
       } else {
         // Auto-approve is ON (default Phase 1): navigate to the new active route.
         onSuccess(newRoute.id);
       }
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : t('routes.submit.errors.submitFailed');
-      Alert.alert(t('common.error'), message);
+    } catch {
+      // Keep everything the user filled in; show the error callout above the submit button.
+      setSubmitFailed(true);
     } finally {
       setIsSubmitting(false);
     }
@@ -308,21 +322,33 @@ export default function RouteSubmitScreen({
       <View>
         <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</AppText>
         <ScrollView
+          ref={colorScrollRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chipRow}
           accessibilityRole="radiogroup"
+          onLayout={(e: LayoutChangeEvent) => {
+            colorViewportWidth.current = e.nativeEvent.layout.width;
+            scrollToSelectedColor();
+          }}
         >
           {ROUTE_COLORS.map((color) => (
-            <ColorOption
+            <View
               key={color}
-              color={color}
-              selected={selectedColor === color}
-              onPress={() => {
-                setSelectedColor(color);
-                setColorError(null);
+              onLayout={(e: LayoutChangeEvent) => {
+                colorLayouts.current[color] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
+                scrollToSelectedColor();
               }}
-            />
+            >
+              <ColorOption
+                color={color}
+                selected={selectedColor === color}
+                onPress={() => {
+                  setSelectedColor(color);
+                  setColorError(null);
+                }}
+              />
+            </View>
           ))}
         </ScrollView>
         {colorError ? (
@@ -399,17 +425,29 @@ export default function RouteSubmitScreen({
         />
       </View>
 
-      {/* AC-187 Layer 1: neutral-colored inline notice — reactive to grade/color selection */}
+      {/* AC-187 Layer 1: inline warning notice (neutral container, warning icon + bold title) — reactive to grade/color selection */}
       {duplicateCandidates.length > 0 ? (
         <View>
           <NoticeBox
-            message={`${t('routes.duplicateNotice.title')}. ${t('routes.duplicateNotice.body', {
+            tone="warning"
+            title={t('routes.duplicateNotice.title')}
+            message={t('routes.duplicateNotice.body', {
               grade: selectedGrade,
               color: t(`routeCatalog.colors.${selectedColor}`),
               count: duplicateCandidates.length,
-            })}`}
+            })}
           />
         </View>
+      ) : null}
+
+      {/* Submit failure: error callout above the button; the form keeps what the user filled in. */}
+      {submitFailed ? (
+        <NoticeBox
+          tone="error"
+          title={t('routes.submit.errors.submitFailedTitle')}
+          message={t('routes.submit.errors.submitFailedBody')}
+          focusOnAppear
+        />
       ) : null}
 
       {/* Add Route button — disabled while submitting or until a photo is chosen (RS-1) */}

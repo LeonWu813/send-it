@@ -32,8 +32,8 @@ import {
   Chip,
   EmptyState,
   IconButton,
-  InlineError,
-  Spinner,
+  PageLoading,
+  useLoadingPhase,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
@@ -138,6 +138,7 @@ export default function RouteListScreen({
   const [routes, setRoutes] = useState<RouteSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
 
   // Filter state — grade and color only (AC-040); status is always 'active'.
   // When the parent navigator passes controlled props (gradeFilter/colorFilter +
@@ -503,26 +504,28 @@ export default function RouteListScreen({
     </BottomSheet>
   );
 
-  if (isLoading) {
-    return (
-      <View style={styles.centeredContainer}>
-        <Spinner />
-      </View>
-    );
+  // Full-page loading: nothing for 300ms, then PageLoading; after 10s the E4 error replaces it
+  // (a late success swaps back to content).
+  if (isLoading && loadingPhase !== 'timeout') {
+    return loadingPhase === 'loading' ? <PageLoading /> : <View style={styles.root} />;
   }
 
-  if (errorMessage) {
+  if (isLoading || errorMessage) {
     return (
-      <View style={styles.centeredContainer}>
-        <InlineError
-          variant="block"
-          message={errorMessage}
-          actionLabel={t('common.retry')}
-          onAction={fetchRoutes}
+      <View style={styles.root}>
+        <EmptyState
+          variant="error"
+          title={t('routeCatalog.loadErrorTitle')}
+          description={t('routeCatalog.loadErrorDescription')}
+          primaryLabel={t('common.retry')}
+          onPrimary={() => { void fetchRoutes(); }}
         />
       </View>
     );
   }
+
+  // 0 routes and no filter applied: E1 page empty, no filter row (the header "+" stays).
+  const isFirstUseEmpty = sortedRoutes.length === 0 && !hasActiveFilters;
 
   return (
     <SwipeBackWrapper onBack={onBack ?? (() => {})}>
@@ -531,21 +534,36 @@ export default function RouteListScreen({
           data={sortedRoutes}
           keyExtractor={(item) => item.id}
           renderItem={renderRouteCard}
-          ListHeaderComponent={listHeader}
+          ListHeaderComponent={isFirstUseEmpty ? null : listHeader}
           ListHeaderComponentStyle={styles.listHeader}
           ItemSeparatorComponent={CardSeparator}
           contentContainerStyle={[styles.listContent, { paddingBottom: tabInset.contentBottom || theme.spacing.md }]}
           scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
           keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
-            <EmptyState
-              variant="filtered"
-              title={t('routeCatalog.noResults')}
-              primaryLabel={hasActiveFilters ? t('routeCatalog.filter.clearAll') : t('routeCatalog.addRoute')}
-              onPrimary={hasActiveFilters ? clearAllFilters : addRoute}
-              secondaryLabel={hasActiveFilters ? t('routeCatalog.addRoute') : undefined}
-              onSecondary={hasActiveFilters ? addRoute : undefined}
-            />
+            isFirstUseEmpty ? (
+              <EmptyState
+                variant="page"
+                icon={ICON.route.outline}
+                title={t('routeCatalog.emptyTitle')}
+                description={t('routeCatalog.emptyDescription')}
+                primaryLabel={t('routeCatalog.submit.addRoute')}
+                onPrimary={addRoute}
+                secondaryLabel={t('routeCatalog.addRoute')}
+                onSecondary={addRoute}
+              />
+            ) : (
+              <EmptyState
+                variant="filtered"
+                icon={ICON.filter.outline}
+                title={t('routeCatalog.noResults')}
+                description={t('routeCatalog.filteredDescription')}
+                primaryLabel={t('routeCatalog.filter.clearAll')}
+                onPrimary={clearAllFilters}
+                secondaryLabel={t('routeCatalog.addRoute')}
+                onSecondary={addRoute}
+              />
+            )
           }
         />
         {filterSheet}
@@ -615,13 +633,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     root: {
       flex: 1,
       backgroundColor: theme.colors.background,
-    },
-    centeredContainer: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: screenMargin,
     },
     // R0/R10: the list owns the margin; the chip row adds no vertical padding of its own.
     listContent: {

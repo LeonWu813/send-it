@@ -275,6 +275,21 @@ describe('RouteListScreen', () => {
     expect(DEFAULT_PROPS.onSubmitRoute).toHaveBeenCalled();
   });
 
+  it('0 routes and no filter: E1 page empty with the add-route CTA, no filter row', async () => {
+    mockListRoutes.mockResolvedValueOnce([]);
+    render(<RouteListScreen {...DEFAULT_PROPS} />, renderOptions());
+    expect(await screen.findByText(/No routes at this gym yet|這間岩館還沒有路線/)).toBeTruthy();
+    expect(screen.queryByTestId('filter-row')).toBeNull();
+  });
+
+  it('filter excludes everything: E3 with clear-filters primary and the add-route link', async () => {
+    mockListRoutes.mockResolvedValueOnce([]);
+    render(<RouteListScreen {...DEFAULT_PROPS} gradeFilter="V9" onGradeFilterChange={jest.fn()} />, renderOptions());
+    expect(await screen.findByText(/No routes match|找不到符合的路線/)).toBeTruthy();
+    expect(screen.getByLabelText(/Clear filters|清除篩選/)).toBeTruthy();
+    expect(screen.getByLabelText(/Can't find it|找不到路線/)).toBeTruthy();
+  });
+
   it('shows a no-routes message when the list is empty', async () => {
     mockListRoutes.mockResolvedValueOnce([]);
 

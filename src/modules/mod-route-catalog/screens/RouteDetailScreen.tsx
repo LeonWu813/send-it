@@ -51,9 +51,11 @@ import {
   AppText,
   Button,
   IconButton,
+  EmptyState,
   InlineError,
+  PageLoading,
   PressableScale,
-  Spinner,
+  useLoadingPhase,
 } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
@@ -120,7 +122,9 @@ export default function RouteDetailScreen({
   const [route, setRoute] = useState<Route | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // 'notFound' = the route does not exist (E1); 'network' = the request failed (E4).
+  const [loadError, setLoadError] = useState<'notFound' | 'network' | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
   const [isLogSendVisible, setIsLogSendVisible] = useState(false);
 
   // AC-046: bookmark state
@@ -186,7 +190,7 @@ export default function RouteDetailScreen({
     if (!hasLoadedOnceRef.current) {
       setIsLoading(true);
     }
-    setErrorMessage(null);
+    setLoadError(null);
     try {
       // Fetch route detail, saved status, and current user's ascents in parallel.
       const [data, savedIds] = await Promise.all([
@@ -195,7 +199,7 @@ export default function RouteDetailScreen({
       ]);
 
       if (!data) {
-        setErrorMessage(t('routes.errors.notFound'));
+        setLoadError('notFound');
       } else {
         // Mark that we have successfully loaded data at least once. After this
         // point, re-focus refetches will update state silently (no spinner).
@@ -226,7 +230,7 @@ export default function RouteDetailScreen({
         }
       }
     } catch {
-      setErrorMessage(t('routes.errors.loadFailed'));
+      setLoadError('network');
     } finally {
       setIsLoading(false);
     }
@@ -297,28 +301,37 @@ export default function RouteDetailScreen({
     ) : undefined,
   });
 
-  if (isLoading) {
+  // Full-page loading: nothing for 300ms, then PageLoading; after 10s the E4 error replaces it
+  // (a late success swaps back to content).
+  if (isLoading && !route && loadingPhase !== 'timeout') {
     return (
       <SwipeBackWrapper onBack={onBack}>
-        <View style={styles.centeredContainer}>
-          <Spinner />
-        </View>
+        {loadingPhase === 'loading' ? <PageLoading /> : <View style={styles.root} />}
       </SwipeBackWrapper>
     );
   }
 
-  if (errorMessage || !route) {
+  if (!route) {
+    const notFound = loadError === 'notFound';
     return (
       <SwipeBackWrapper onBack={onBack}>
         <View style={styles.root}>
-          <View style={styles.errorBlock}>
-            <InlineError
-              variant="block"
-              message={errorMessage ?? t('common.error')}
-              actionLabel={t('common.retry')}
-              onAction={fetchRoute}
+          {notFound ? (
+            <EmptyState
+              variant="page"
+              icon={ICON.route.outline}
+              title={t('routeCatalog.detail.notFoundTitle')}
+              description={t('routeCatalog.detail.notFoundDescription')}
             />
-          </View>
+          ) : (
+            <EmptyState
+              variant="error"
+              title={t('routeCatalog.detail.loadErrorTitle')}
+              description={t('routeCatalog.loadErrorDescription')}
+              primaryLabel={t('common.retry')}
+              onPrimary={() => { void fetchRoute(); }}
+            />
+          )}
         </View>
       </SwipeBackWrapper>
     );
@@ -339,7 +352,14 @@ export default function RouteDetailScreen({
 
   // AC-126: format the added date
   const addedDateStr = new Date(route.created_at).toISOString().slice(0, 10); // YYYY-MM-DD
-  const addedDateLabel = t('routeCatalog.detail.addedDate', { date: addedDateStr });
+  // Retired routes: one meta line "Added … · Retired …" (same footnote, same date format).
+  const addedDateLabel =
+    isRetired && route.retired_at
+      ? t('routeCatalog.detail.addedAndRetired', {
+          added: addedDateStr,
+          retired: new Date(route.retired_at).toISOString().slice(0, 10),
+        })
+      : t('routeCatalog.detail.addedDate', { date: addedDateStr });
 
   return (
     <SwipeBackWrapper onBack={onBack} enabled={!isLogSendVisible}>
@@ -390,14 +410,6 @@ export default function RouteDetailScreen({
           <AppText variant="body" color="textSecondary" style={styles.gymSubtitle}>{gymName}</AppText>
         </View>
       </View>
-
-      {/* Retired info */}
-      {isRetired && route.retired_at ? (
-        <View>
-          <AppText variant="pageSection">{t('routes.detail.retiredOn')}</AppText>
-          <AppText variant="body">{new Date(route.retired_at).toLocaleDateString()}</AppText>
-        </View>
-      ) : null}
 
       {/* ── RD-4 / AC-127: one inline send summary line, tap → Send History (AC-128) ── */}
       <PressableScale
@@ -503,17 +515,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
       gap: theme.layout.sectionGap,
-    },
-    centeredContainer: {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: screenMargin,
-    },
-    errorBlock: {
-      paddingHorizontal: screenMargin,
-      paddingTop: theme.spacing.md,
     },
     photo: {
       width: '100%',

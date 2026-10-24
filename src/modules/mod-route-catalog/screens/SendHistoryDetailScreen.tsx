@@ -25,23 +25,24 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, View } from 'react-native';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   AppText,
   BottomSheet,
   Card,
+  EmptyState,
   IconButton,
-  InlineError,
+  PageLoading,
   PressableScale,
   SendStatus,
-  Spinner,
+  useLoadingPhase,
 } from '../../../components/ui';
 import { Ionicons } from '@expo/vector-icons';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, RADIUS, innerRadius, useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader, useTabBarInset } from '@/lib/AppHeaderContext';
-import { deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
+import { LogSendScreen, deleteAscent, fetchMyAscentsForRoute } from '../../mod-send-logging';
 import type { AscentWithProfile } from '../../mod-send-logging';
 import RouteColorBadge from '../components/RouteColorBadge';
 import { getPhotoSignedUrl, loadRoute } from '../route-service';
@@ -59,6 +60,7 @@ interface SendHistoryDetailScreenProps {
 
 export default function SendHistoryDetailScreen({
   routeId,
+  session,
   onBack,
   gymName,
   initialDeleteAscentId,
@@ -73,6 +75,8 @@ export default function SendHistoryDetailScreen({
   const [ascents, setAscents] = useState<AscentWithProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(isLoading);
+  const [isLogSendVisible, setIsLogSendVisible] = useState(false);
   // SH-1: route summary (best-effort; the card is omitted if the route cannot be loaded)
   const [route, setRoute] = useState<Route | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -136,19 +140,17 @@ export default function SendHistoryDetailScreen({
   return (
     <SwipeBackWrapper onBack={onBack}>
     <View style={styles.root}>
-      {isLoading ? (
-        <View style={styles.centeredContainer}>
-          <Spinner />
-        </View>
-      ) : errorMessage !== null ? (
-        <View style={styles.errorBlock}>
-          <InlineError
-            variant="block"
-            message={errorMessage}
-            actionLabel={t('common.retry')}
-            onAction={() => { void loadAscents(); }}
-          />
-        </View>
+      {isLoading && loadingPhase !== 'timeout' ? (
+        // Full-page loading: nothing for 300ms, then PageLoading; after 10s the E4 error replaces it.
+        loadingPhase === 'loading' ? <PageLoading /> : null
+      ) : isLoading || errorMessage !== null ? (
+        <EmptyState
+          variant="error"
+          title={t('routeCatalog.detail.historyLoadErrorTitle')}
+          description={t('routeCatalog.loadErrorDescription')}
+          primaryLabel={t('common.retry')}
+          onPrimary={() => { void loadAscents(); }}
+        />
       ) : (
         <ScrollView
           style={styles.scrollView}
@@ -159,9 +161,12 @@ export default function SendHistoryDetailScreen({
             <RouteSummaryCard route={route} gymName={gymName} photoUri={photoUri} />
           ) : null}
           {ascents.length === 0 ? (
-            <AppText variant="body" color="textSecondary" align="left" style={styles.emptyText}>
-              {t('routeCatalog.detail.noSends')}
-            </AppText>
+            <EmptyState
+              variant="section"
+              description={t('routeCatalog.detail.noSends')}
+              secondaryLabel={route ? t('routeCatalog.detail.recordSendLink') : undefined}
+              onSecondary={route ? () => { setIsLogSendVisible(true); } : undefined}
+            />
           ) : (
             ascents.map((ascent) => {
               const displayDate = new Date(ascent.logged_at).toLocaleDateString();
@@ -203,6 +208,29 @@ export default function SendHistoryDetailScreen({
           )}
         </ScrollView>
       )}
+      {route ? (
+        <Modal
+          visible={isLogSendVisible}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => { setIsLogSendVisible(false); }}
+        >
+          <LogSendScreen
+            routeId={route.id}
+            routeGrade={route.grade}
+            routeSummary={{
+              color: route.color_tag,
+              grade: route.grade,
+              title: [t(`routeCatalog.colors.${route.color_tag}`), route.section_label].filter(Boolean).join(' · '),
+              subtitle: gymName,
+              photoUri: photoUri ?? undefined,
+            }}
+            session={session}
+            onSuccess={() => { setIsLogSendVisible(false); void loadAscents(); }}
+            onCancel={() => { setIsLogSendVisible(false); }}
+          />
+        </Modal>
+      ) : null}
       {/* SH-1: delete confirmation (destructive + cancel) */}
       <BottomSheet
         visible={pendingDeleteId !== null}
@@ -278,16 +306,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    centeredContainer: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: screenMargin,
-    },
-    errorBlock: {
-      paddingHorizontal: screenMargin,
-      paddingTop: theme.spacing.md,
-    },
     scrollView: {
       flex: 1,
     },
@@ -296,9 +314,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
       gap: theme.layout.cardGap,
-    },
-    emptyText: {
-      paddingVertical: theme.spacing.xl,
     },
     ascentCard: {
       gap: theme.spacing.sm,

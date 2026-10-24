@@ -94,13 +94,13 @@ export const FilterSheetOpen: Story = {
   render: () => <Screen routes={EIGHT} grade="V2" sheetOpen />,
 };
 
-/** No routes at this gym: empty state with the "Add a route" action. */
+/** No routes at this gym and no filter: E1 page empty (no filter row), primary "Add Route" plus the centred "Can't find it? Add a new route" link. */
 export const Empty: Story = { render: () => <Screen routes={[]} /> };
 
-/** Route query never resolves. */
+/** Route query never resolves: PageLoading (large spinner, 48 below the header), shown after 300ms. */
 export const Loading: Story = { render: () => <Screen routes={STUB_PENDING} /> };
 
-/** Grade filter V9 is active and nothing matches: "Clear filters" primary, "Add a route" secondary. */
+/** Grade filter V9 is active and nothing matches: E3 with every child centred ("Clear filters" primary, "Can't find it? Add a new route" link). */
 export const FilteredEmpty: Story = { name: 'Filtered Empty', render: () => <Screen routes={[]} grade="V9" /> };
 
 // No Error story: the stub cannot return query errors.

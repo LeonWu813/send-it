@@ -1,9 +1,11 @@
 import type { Session } from '@supabase/supabase-js';
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { withPhoneFrame } from '../../../../.storybook/PhoneFrame';
 import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
+import { useToast } from '../../../components/ui';
 import RouteSubmitScreen from '../screens/RouteSubmitScreen';
 import type { RouteSummary } from '../types';
 
@@ -73,14 +75,24 @@ type Story = StoryObj;
 /** Empty form: no pre-fills, no duplicates. Grade chips wrap into a grid (VB-V10 all visible); the photo field says a photo is required and Add Route is disabled. */
 export const Default: Story = { render: () => <Screen /> };
 
-/** Grade V4 and Red are pre-filled; two matching routes exist, so the AC-187 duplicate notice shows. */
+/** Grade V4 and Red are pre-filled; two matching routes exist, so the AC-187 warning notice (bold title + body) shows. */
 export const DuplicateCandidates: Story = {
   name: 'Duplicate Candidates',
   render: () => <Screen routes={EXISTING_ROUTES} grade="V4" color="red" />,
 };
 
-/** Auto-approve OFF: submit_route returns status 'pending'. Form is pre-filled with V3 / Blue. */
+/** Shows the toast the screen raises after a pending submit, over the pre-filled form (V3 / Blue). */
+function PendingToast(): React.JSX.Element {
+  const toast = useToast();
+  const { t } = useTranslation('common');
+  useEffect(() => {
+    toast.show({ message: t('routeCatalog.pendingToast'), durationMs: 600000 });
+  }, [toast, t]);
+  return <Screen grade="V3" color="blue" pending />;
+}
+
+/** Auto-approve OFF: after submit the screen raises a success toast and goes back. The story shows that toast; the pre-selected Blue chip is scrolled into view. */
 export const PendingApproval: Story = {
   name: 'Pending Approval',
-  render: () => <Screen grade="V3" color="blue" pending />,
+  render: () => <PendingToast />,
 };

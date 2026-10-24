@@ -96,7 +96,7 @@ export const DeleteConfirm: Story = {
   render: () => <Seeded ascents={MIXED_ASCENTS} deleteId="ascent-0" />,
 };
 
-/** No sends for this route. */
+/** No sends for this route: E2 section sentence with the ghost "Record a send" action. */
 export const Empty: Story = { render: () => <Seeded ascents={[]} /> };
 
 /** Single flash send: checks badge spacing and the "1 attempt" label. */
@@ -105,7 +105,7 @@ export const SingleFlash: Story = {
   render: () => <Seeded ascents={[ascent(0, { style: 'flash', attempts: 1, note: '閃送！' })]} />,
 };
 
-/** Ascent query never resolves. */
+/** Ascent query never resolves: PageLoading after 300ms. */
 export const Loading: Story = { render: () => <Seeded ascents={STUB_PENDING} /> };
 
 // No Error story: the stub cannot return query errors.
