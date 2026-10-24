@@ -20,7 +20,8 @@ function Trigger({ message, tone, withIcon, actions }: Args): React.JSX.Element 
   return (
     <View style={{ padding: 16, flex: 1 }}>
       <Button
-        label="Show toast (press again to see replacement)"
+        size="md"
+        label="顯示 Toast"
         onPress={() =>
           toast.show({
             message,
@@ -50,6 +51,7 @@ function Demo(props: Args): React.JSX.Element {
 
 const meta: Meta<Args> = {
   title: 'Components/Toast',
+  parameters: { docs: { description: { component: 'Press the button again while a toast is showing to see the replacement.' } } },
   component: Demo,
   args: { message: '已記錄 V4 紅色・完攀', tone: 'default', withIcon: false, actions: 1 },
   argTypes: {
