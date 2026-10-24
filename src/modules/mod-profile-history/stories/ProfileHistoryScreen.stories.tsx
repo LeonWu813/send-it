@@ -117,11 +117,11 @@ type Story = StoryObj<Args>;
 /** StatsPanel, grade tabs (All / V2-V5) and four route cards; the V6 attempt is excluded from the cards. */
 export const Populated: Story = { args: { state: 'populated' } };
 
-/** Own profile with no records: one EmptyState prompt replaces stats and history (AC-061). */
+/** Own profile with no records: one E1 page EmptyState replaces stats and history (AC-061). */
 export const Empty: Story = { args: { state: 'empty' } };
 
-/** Attempt-only ascents: records exist but no sends, so the list shows the inline empty state. */
+/** Attempt-only ascents: records exist but no sends: StatsPanel hidden, section title + E2 only. */
 export const AttemptsOnly: Story = { args: { state: 'attemptsOnly' } };
 
-/** Queries never resolve: the screen's loading spinner. */
+/** Queries never resolve: PageLoading (after the 300ms delay). */
 export const Loading: Story = { args: { state: 'loading' } };

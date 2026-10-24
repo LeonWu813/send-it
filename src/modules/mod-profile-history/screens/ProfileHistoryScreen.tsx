@@ -2,8 +2,9 @@
  * ProfileHistoryScreen — send history + stats for a user profile.
  *
  * AC-061: stats panel (v2.2: top-grade hero, sends / days tiles, sends-by-grade bars).
- *         Bars hidden when total_sends = 0; zero records -> ONE EmptyState `prompt`
- *         replaces the stats panel AND the history section (spec 32.5).
+ *         Hidden when total_sends = 0 (attempts-only keeps just the section title + E2). Zero
+ *         records -> ONE E1 page EmptyState replaces the stats panel AND the history section.
+ *         Both lime cards are retired (human ruling).
  * AC-062: stats recalculate immediately after a new send is logged (via
  *         refetchKey prop — parent bumps it when MOD-004 logs a new ascent).
  * AC-064: followers_only privacy gate (server-side via RPC; client shows
@@ -25,7 +26,7 @@ import type { FlatListProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import SharedRouteCard from '../../../components/RouteCard';
-import { AppText, Chip, EmptyState, InlineError, Spinner } from '../../../components/ui';
+import { AppText, Chip, EmptyState, PageLoading, useLoadingPhase } from '../../../components/ui';
 import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { useTabBarInset } from '@/lib/AppHeaderContext';
@@ -120,6 +121,8 @@ export default function ProfileHistoryScreen({
   const [visibility, setVisibility] = useState<HistoryVisibility>('loading');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const loadingPhase = useLoadingPhase(visibility === 'loading');
+
   // ── Data fetch ─────────────────────────────────────────────────────────────
 
   const loadData = useCallback(async (): Promise<void> => {
@@ -158,21 +161,33 @@ export default function ProfileHistoryScreen({
   // ── Render helpers ─────────────────────────────────────────────────────────
 
   if (visibility === 'loading') {
-    return (
-      <View style={styles.centered}>
-        <Spinner />
-      </View>
-    );
+    // idle (first 300ms): nothing; loading: PageLoading; timeout (10s): E4 while the request keeps running.
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') {
+      return (
+        <View style={styles.centered}>
+          <EmptyState
+            variant="error"
+            title={t('common.error')}
+            description={t('profileHistory.errors.loadFailed')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => void loadData()}
+          />
+        </View>
+      );
+    }
+    return <View style={styles.centered} />;
   }
 
   if (visibility === 'error') {
     return (
       <View style={styles.centered}>
-        <InlineError
-          variant="block"
-          message={errorMessage ?? t('profileHistory.errors.loadFailed')}
-          actionLabel={t('common.retry')}
-          onAction={() => void loadData()}
+        <EmptyState
+          variant="error"
+          title={t('common.error')}
+          description={errorMessage ?? t('profileHistory.errors.loadFailed')}
+          primaryLabel={t('common.retry')}
+          onPrimary={() => void loadData()}
         />
       </View>
     );
@@ -182,7 +197,7 @@ export default function ProfileHistoryScreen({
     return (
       <View style={styles.hiddenContainer}>
         <EmptyState
-          variant="private"
+          variant="page"
           title={t('profileHistory.hiddenTitle')}
           description={t('profileHistory.hiddenBody')}
         />
@@ -237,24 +252,35 @@ export default function ProfileHistoryScreen({
   const ListHeader = (
     <View>
       {extraListHeader ?? null}
-      {stats !== null && (
-        <StatsPanel stats={stats} hasRecords={hasRecords} onLogSend={onLogSend} />
-      )}
+      {stats !== null && stats.total_sends > 0 ? <StatsPanel stats={stats} /> : null}
       {hasRecords ? (
         <>
           <AppText variant="pageSection" style={styles.sectionTitle} accessibilityRole="header">
             {t('profile.sendHistory')}
           </AppText>
-          {GradeTabBar}
+          {uniqueGrades.length >= 2 ? GradeTabBar : null}
         </>
       ) : null}
     </View>
   );
 
+  // E2: attempts exist but no send cards yet.
   const ListEmpty = (
     <View style={styles.emptyContainer}>
-      <EmptyState variant="inline" description={t('profileHistory.empty')} icon={ICON.sends.outline} />
+      <EmptyState variant="section" description={t('profileHistory.emptySection')} />
     </View>
+  );
+
+  // E1: zero records. Replaces stats + history; the host's extraListHeader stays above it.
+  const PageEmpty = (
+    <EmptyState
+      variant="page"
+      icon={ICON.sends.outline}
+      title={t('profileHistory.emptyTitle')}
+      description={t('profileHistory.stats.promptBody')}
+      primaryLabel={onLogSend ? t('profileHistory.stats.promptAction') : undefined}
+      onPrimary={onLogSend}
+    />
   );
 
   return (
@@ -287,7 +313,7 @@ export default function ProfileHistoryScreen({
       }}
       ItemSeparatorComponent={() => <View style={{ height: theme.layout.cardGap }} />}
       ListHeaderComponent={ListHeader}
-      ListEmptyComponent={hasRecords ? ListEmpty : null}
+      ListEmptyComponent={hasRecords ? ListEmpty : PageEmpty}
       ListFooterComponent={extraListFooter ?? null}
       showsVerticalScrollIndicator={false}
     />

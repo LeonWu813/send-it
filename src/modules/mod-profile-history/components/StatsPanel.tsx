@@ -8,8 +8,8 @@
  * + a distribution card (6pt bars on `surfaceAlt` tracks; neutral `outline` fill, only the top-grade
  * row uses `sendTop` and carries the "Highest" pill in the grade column).
  *
- * States: normal, attempts-only (total_sends = 0 but records exist: structure kept, no button),
- * zero records (`hasRecords = false`: ONE EmptyState `prompt`).
+ * States: normal only. With 0 sends the host (ProfileHistoryScreen) does not render the panel; the
+ * lime attempts-only hero and the lime zero-records prompt are retired.
  *
  * Motion D7: displacement reveal. The fill has its final width inside an `overflow: hidden` capsule
  * track and `translateX` runs -W -> 0 (native driver), so the head stays round. `medium` + `enter`,
@@ -22,8 +22,7 @@
  * lives on Profile History.
  *   <StatsPanel variant="compact" stats={stats} onOpenDetails={openProfileHistory} />
  * Props for compact: `stats` (required), `onOpenDetails` (optional; when set every tile is one
- * pressable card, hint "Opens full stats"; omitted -> static tiles). `hasRecords` / `onLogSend` are
- * ignored. Adopted by Profile (auth-profile) and User Profile (social-feed) in phase 2.
+ * pressable card, hint "Opens full stats"; omitted -> static tiles). Adopted by Profile (auth-profile) and User Profile (social-feed) in phase 2.
  *
  * Margins: the panel never pads horizontally; the parent owns screenMargin (R0), so content sits at 16.
  *
@@ -34,7 +33,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, StyleSheet, useWindowDimensions, View } from 'react-native';
 
-import { AppText, Card, EmptyState } from '../../../components/ui';
+import { AppText, Card } from '../../../components/ui';
 import { SPRING_REST, USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { useTheme } from '../../../lib/theme';
 import type { ProfileStats } from '../types';
@@ -162,21 +161,12 @@ interface StatsPanelProps {
   variant?: 'full' | 'compact';
   /** Compact only: tap target that opens the full StatsPanel (Profile History). */
   onOpenDetails?: () => void;
-  /**
-   * False when the user has no ascent records at all (not even attempts): the whole panel becomes one
-   * EmptyState `prompt`. Default true (total_sends = 0 then means "attempts only").
-   */
-  hasRecords?: boolean;
-  /** The single primary action of the zero-records prompt ("Find routes"). Omitted -> no button. */
-  onLogSend?: () => void;
 }
 
 export default function StatsPanel({
   stats,
   variant = 'full',
   onOpenDetails,
-  hasRecords = true,
-  onLogSend,
 }: StatsPanelProps): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -251,23 +241,6 @@ export default function StatsPanel({
     );
   }
 
-  if (!hasRecords) {
-    return (
-      <View style={styles.container}>
-        <EmptyState
-          variant="prompt"
-          eyebrow={t('profileHistory.stats.promptEyebrow')}
-          title={t('profileHistory.stats.promptTitle')}
-          description={t('profileHistory.stats.promptBody')}
-          primaryLabel={onLogSend ? t('profileHistory.stats.promptAction') : undefined}
-          onPrimary={onLogSend}
-        />
-      </View>
-    );
-  }
-
-  const attemptsOnly = stats.total_sends === 0;
-
   const countOf = (grade: string): number =>
     stats.sends_by_grade.find((g) => g.grade === grade)?.count ?? 0;
   const summaryTop = GRADE_ORDER.indexOf(stats.highest_grade as (typeof GRADE_ORDER)[number]);
@@ -297,34 +270,19 @@ export default function StatsPanel({
       <View
         style={styles.heroInner}
         accessible
-        accessibilityLabel={
-          attemptsOnly
-            ? `${t('profileHistory.stats.highestGrade')}, ${t('profileHistory.stats.noSendsTitle')}`
-            : t('profileHistory.stats.heroA11y', { grade: topGrade, count: topCount })
-        }
+        accessibilityLabel={t('profileHistory.stats.heroA11y', { grade: topGrade, count: topCount })}
       >
         <AppText variant="subhead" weight="600" color="onPrimaryContainer">
           {t('profileHistory.stats.highestGrade')}
         </AppText>
-        {attemptsOnly ? (
-          <View style={styles.heroBottom}>
-            <AppText variant="title2" color="onPrimaryContainer">
-              {t('profileHistory.stats.noSendsTitle')}
-            </AppText>
-            <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
-              {t('profileHistory.stats.noSendsBody')}
-            </AppText>
-          </View>
-        ) : (
-          <View style={styles.heroBottom}>
-            <AppText variant="display" numeric color="onPrimaryContainer">
-              {topGrade}
-            </AppText>
-            <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
-              {t('profileHistory.stats.heroSends', { count: topCount })}
-            </AppText>
-          </View>
-        )}
+        <View style={styles.heroBottom}>
+          <AppText variant="display" numeric color="onPrimaryContainer">
+            {topGrade}
+          </AppText>
+          <AppText variant="footnote" weight="600" color="onPrimaryContainer" style={styles.heroSub}>
+            {t('profileHistory.stats.heroSends', { count: topCount })}
+          </AppText>
+        </View>
       </View>
     </Card>
   );
@@ -378,8 +336,8 @@ export default function StatsPanel({
         </View>
       )}
 
-      {/* ── Distribution (hidden when there are no sends) ───────────────────── */}
-      {attemptsOnly ? null : (
+      {/* ── Distribution ─────────────────────────────────────────────────────── */}
+      {(
         <Animated.View style={{ opacity: fade }}>
           <Card variant="static">
             <View style={styles.chartHeader}>
