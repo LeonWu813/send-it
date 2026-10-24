@@ -72,7 +72,7 @@ const meta: Meta = {
 };
 export default meta;
 
-type Seed = 'other' | 'own' | 'private' | 'loading';
+type Seed = 'other' | 'own' | 'private' | 'loading' | 'blocked';
 
 function seed(kind: Seed): void {
   resetStubData();
@@ -82,6 +82,9 @@ function seed(kind: Seed): void {
       setStubData(k, STUB_PENDING),
     );
     return;
+  }
+  if (kind === 'blocked') {
+    setStubData('blocks', [{ blocker_user_id: OWN_USER_ID, blocked_user_id: TARGET_USER_ID }]);
   }
   setStubData('users', [kind === 'own' ? OWN_PROFILE : kind === 'private' ? PRIVATE_ALICE_PROFILE : ALICE_PROFILE]);
   setStubData('rpc:get_follower_counts', kind === 'private' ? { follower_count: 89, following_count: 31 } : FOLLOWER_COUNTS);
@@ -110,7 +113,7 @@ export const OwnProfile: StoryObj = {
   },
 };
 
-/** followers_only profile viewed by a non-follower (AC-063/AC-064): beta-video grid hidden. */
+/** followers_only profile viewed by a non-follower (AC-063/AC-064): beta-video grid replaced by the E2 explanation. */
 export const PrivateProfile: StoryObj = {
   name: 'Private Profile',
   render: () => {
@@ -119,7 +122,15 @@ export const PrivateProfile: StoryObj = {
   },
 };
 
-/** Profile queries never resolve. */
+/** Viewer blocked this user (AC-153): E1 page with the "..." menu kept for Unblock. */
+export const Blocked: StoryObj = {
+  render: () => {
+    seed('blocked');
+    return profile(TARGET_USER_ID);
+  },
+};
+
+/** Profile queries never resolve: PageLoading after 300ms, then the E4 error state after 10s. */
 export const Loading: StoryObj = {
   render: () => {
     seed('loading');
@@ -127,4 +138,4 @@ export const Loading: StoryObj = {
   },
 };
 
-// No Error story: the error branch cannot be driven through the stub.
+// No separate Error story: the stub cannot fail a query; the Loading story turns into E4 after 10s.

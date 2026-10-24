@@ -502,7 +502,7 @@ describe('UserProfileScreen', () => {
     expect(screen.queryAllByRole('button').filter((el) => el.props.accessibilityLabel === 'More options')).toHaveLength(0);
   });
 
-  it('AC-163: hides BetaVideoGrid for followers_only profile when viewer is not following', async () => {
+  it('AC-163: replaces BetaVideoGrid with the E2 explanation for followers_only profile when viewer is not following', async () => {
     setupProfileMock({ ...MOCK_PROFILE, privacy_setting: 'followers_only' });
     mockFetchIsFollowing.mockResolvedValue(false);
 
@@ -520,11 +520,11 @@ describe('UserProfileScreen', () => {
       expect(getByText('Alice')).toBeTruthy();
     });
 
-    // Video section title must not appear — grid is hidden for non-follower
-    const videoTitles = screen
-      .queryAllByText('Beta Videos')
-      .concat(screen.queryAllByText('試攀影片'));
-    expect(videoTitles.length).toBe(0);
+    // Grid is hidden for a non-follower: the section keeps its title and says why (E2).
+    const explanation = screen
+      .queryAllByText(/Only followers can see Alice/)
+      .concat(screen.queryAllByText(/只有追蹤者能看到 Alice/));
+    expect(explanation.length).toBe(1);
   });
 
   it('P-2: shows the compact StatsPanel and opens full stats for the other user', async () => {

@@ -61,7 +61,8 @@ import {
   IconButton,
   InlineError,
   ListRow,
-  Spinner,
+  PageLoading,
+  useLoadingPhase,
 } from '../../../components/ui';
 import {
   fetchFollowerCounts,
@@ -112,6 +113,7 @@ export default function UserProfileScreen({
   const [loading, setLoading] = useState(true);
   const [followLoading, setFollowLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(loading);
 
   // AC-153: blocked state
   const [isProfileBlocked, setIsProfileBlocked] = useState(false);
@@ -188,10 +190,8 @@ export default function UserProfileScreen({
       } else {
         setIsBlockedByMe(false);
       }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('socialFeed.errors.profileLoadFailed');
-      setError(message);
+    } catch {
+      setError(t('socialFeed.errors.profileLoadFailed'));
     }
   }, [targetUserId, isOwnProfile, t, session.user.id]);
 
@@ -233,16 +233,14 @@ export default function UserProfileScreen({
       const freshIsFollowing = await fetchIsFollowing(targetUserId);
       setCounts(freshCounts);
       setIsFollowing(freshIsFollowing);
-    } catch (err) {
+    } catch {
       // Revert optimistic update
       setIsFollowing(wasFollowing);
       setCounts((prev) => ({
         ...prev,
         follower_count: prev.follower_count + (wasFollowing ? 1 : -1),
       }));
-      const message =
-        err instanceof Error ? err.message : t('socialFeed.errors.followFailed');
-      setError(message);
+      setError(t('socialFeed.errors.followFailed'));
     } finally {
       setFollowLoading(false);
     }
@@ -303,7 +301,8 @@ export default function UserProfileScreen({
   useAppHeader({
     title: profile?.display_name ?? '',
     onBack,
-    trailing: !isOwnProfile && (!isProfileBlocked || isBlockedByMe) ? (
+    // No "⋯" while the first load is running (nothing to act on yet).
+    trailing: !loading && !isOwnProfile && (!isProfileBlocked || isBlockedByMe) ? (
       <IconButton
         variant="float"
         name={ICON.more.outline}
@@ -312,6 +311,18 @@ export default function UserProfileScreen({
       />
     ) : undefined,
   });
+
+  function renderLoadError(): React.JSX.Element {
+    return (
+      <EmptyState
+        variant="error"
+        title={t('socialFeed.loadErrorTitle')}
+        description={t('socialFeed.loadErrorDescription')}
+        primaryLabel={t('common.retry')}
+        onPrimary={() => { setLoading(true); void loadProfile().finally(() => { setLoading(false); }); }}
+      />
+    );
+  }
 
   const actionSheet = !isOwnProfile ? (
     <ActionSheet
@@ -326,12 +337,20 @@ export default function UserProfileScreen({
     />
   ) : null;
 
+  // Full-page loading: PageLoading after 300ms; after 10s E4 replaces it (a late success swaps back to content).
   if (loading) {
     return (
       <SwipeBackWrapper onBack={onBack}>
-        <View style={styles.centered}>
-          <Spinner size="large" color="primary" accessibilityLabel={t('common.loading')} />
-        </View>
+        {loadingPhase === 'loading' ? <PageLoading /> : loadingPhase === 'timeout' ? renderLoadError() : <View style={styles.root} />}
+      </SwipeBackWrapper>
+    );
+  }
+
+  // Whole-page failure (no profile to show): E4. A failed follow keeps the block notice below.
+  if (profile === null) {
+    return (
+      <SwipeBackWrapper onBack={onBack}>
+        {renderLoadError()}
       </SwipeBackWrapper>
     );
   }
@@ -341,12 +360,12 @@ export default function UserProfileScreen({
     return (
       <SwipeBackWrapper onBack={onBack} enabled={!sheetVisible}>
         <View style={styles.root}>
-          {/* Blocked state message */}
-          <View style={styles.centered}>
-            <AppText variant="body" color="textSecondary" align="center" style={styles.profileUnavailableText}>
-              {t('moderation.profileUnavailable')}
-            </AppText>
-          </View>
+          {/* Blocked state: E1 (title only, no action; the "⋯" menu holds Unblock) */}
+          <EmptyState
+            variant="page"
+            icon={ICON.block.outline}
+            title={t('moderation.profileUnavailable')}
+          />
 
           {actionSheet}
         </View>
@@ -445,11 +464,16 @@ export default function UserProfileScreen({
             {/* AC-163: Beta video grid — below stats section.
                 Subject to AC-063/AC-064 privacy gating: hidden/403 state for
                 followers_only profiles when the viewer is not a follower. */}
-            {profile.privacy_setting === 'followers_only' && !isFollowing ? null : (
-              <View style={styles.videoSection}>
-                <AppText variant="pageSection" style={styles.videoSectionTitle}>
-                  {t('betaVideo.userVideos')}
-                </AppText>
+            <View style={styles.videoSection}>
+              <AppText variant="pageSection" style={styles.videoSectionTitle}>
+                {t('betaVideo.userVideos')}
+              </AppText>
+              {profile.privacy_setting === 'followers_only' && !isFollowing ? (
+                <EmptyState
+                  variant="section"
+                  description={t('socialFeed.videosPrivate', { name: profile.display_name })}
+                />
+              ) : (
                 <BetaVideoGrid
                   horizontalPadding={screenMargin}
                   videos={betaVideos}
@@ -458,11 +482,11 @@ export default function UserProfileScreen({
                     setShowReel(true);
                   }}
                   emptyState={
-                    <EmptyState variant="inline" description={t('betaVideo.noVideosYet')} />
+                    <EmptyState variant="section" description={t('betaVideo.noVideosYetUser', { name: profile.display_name })} />
                   }
                 />
-              </View>
-            )}
+              )}
+            </View>
           </>
         )}
       </ScrollView>
@@ -561,15 +585,6 @@ function makeStyles(
       paddingTop: theme.spacing.sm,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: theme.colors.background,
-    },
-    profileUnavailableText: {
-      paddingHorizontal: screenMargin,
     },
     errorBlock: {
       marginBottom: theme.spacing.md,

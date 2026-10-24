@@ -5,10 +5,10 @@
  * rendered in any navigator or shell. These stories exist for design coverage only.
  *
  * States:
- *   Loading   — loading spinner (visual wrapper; stub resolves synchronously)
+ *   Loading   — PageLoading (query never resolves; becomes the Error state after 10s)
  *   Populated — 3 feed items (1 ascent + 2 beta videos) with like counts
- *   Empty     — no posts yet; "follow some climbers" empty-state CTA
- *   Error     — inline error with retry affordance (visual wrapper)
+ *   Empty     — E1 page empty state
+ *   Error     — E4 page error with Retry (visual wrapper)
  *
  * No real Supabase calls — all service functions go through the Storybook
  * supabase stub (`.storybook/stubs/supabase.ts`).
@@ -19,9 +19,9 @@ import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
 import React from 'react';
 import { View } from 'react-native';
 
-import { resetStubData, setStubData } from '../../../../.storybook/stubs/supabase';
-import { useLayout, useTheme } from '../../../lib/theme';
-import { InlineError, Spinner } from '../../../components/ui';
+import { resetStubData, setStubData, STUB_PENDING } from '../../../../.storybook/stubs/supabase';
+import { useTheme } from '../../../lib/theme';
+import { EmptyState } from '../../../components/ui';
 import FeedScreen from '../screens/FeedScreen';
 import type { FeedItem } from '../types';
 
@@ -87,40 +87,17 @@ const POPULATED_FEED: FeedItem[] = [MOCK_ASCENT, MOCK_VIDEO_1, MOCK_VIDEO_2];
 // ── Visual wrappers for states that can't be driven through the stub ──────────
 
 /** Mirrors FeedScreen's loading branch: spinner centred on background. */
-function LoadingWrapper(): React.JSX.Element {
-  const { theme } = useTheme();
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: theme.colors.background,
-      }}
-    >
-      <Spinner size="large" color="primary" accessibilityLabel="Loading" />
-    </View>
-  );
-}
-
-/** Mirrors FeedScreen's error branch: InlineError in a scroll-like container. */
+/** Mirrors FeedScreen's error branch (E4). The stub cannot drive a failing query. */
 function ErrorWrapper(): React.JSX.Element {
   const { theme } = useTheme();
-  const { screenMargin } = useLayout();
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: theme.colors.background,
-        paddingHorizontal: screenMargin,
-        paddingTop: 16,
-      }}
-    >
-      <InlineError
-        variant="block"
-        message="Failed to load activity feed. Please try again."
-        actionLabel="Retry"
-        onAction={() => {}}
+    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <EmptyState
+        variant="error"
+        title="無法載入此頁"
+        description="請檢查網路連線後再試一次。"
+        primaryLabel="重試"
+        onPrimary={() => {}}
       />
     </View>
   );
@@ -144,11 +121,12 @@ export default meta;
 
 // ── Stories ───────────────────────────────────────────────────────────────────
 
-/** Loading spinner — shown while the activity feed RPC is in flight. */
+/** PageLoading — shown while the activity feed RPC is in flight. */
 export const Loading: StoryObj = {
   render: () => {
     resetStubData();
-    return <LoadingWrapper />;
+    setStubData('rpc:get_activity_feed', STUB_PENDING);
+    return <FeedScreen session={MOCK_SESSION} />;
   },
 };
 
@@ -165,10 +143,7 @@ export const Populated: StoryObj = {
   },
 };
 
-/**
- * Empty state — no posts from followed climbers yet.
- * Shows the "follow some climbers" CTA (EmptyState component).
- */
+/** E1 page empty state: no posts from followed climbers yet. */
 export const Empty: StoryObj = {
   render: () => {
     resetStubData();
@@ -177,7 +152,7 @@ export const Empty: StoryObj = {
   },
 };
 
-/** Error — feed RPC failed; inline error with a retry button. */
+/** E4 page error: feed RPC failed. */
 export const Error: StoryObj = {
   render: () => {
     resetStubData();

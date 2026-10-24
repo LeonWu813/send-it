@@ -28,9 +28,9 @@ import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
 import {
   Avatar,
   EmptyState,
-  InlineError,
   ListRow,
-  Spinner,
+  PageLoading,
+  useLoadingPhase,
 } from '../../../components/ui';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -61,6 +61,7 @@ export default function FollowingListScreen({
   const [users, setUsers] = useState<UserListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(loading);
 
   const loadFollowing = useCallback(async (): Promise<void> => {
     setError(null);
@@ -72,10 +73,8 @@ export default function FollowingListScreen({
       // Filter out blocked users (both directions — AC-082, AC-084)
       const filtered = rawList.filter((u) => !blockedIds.has(u.userId));
       setUsers(filtered);
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('socialFeed.errors.loadFailed');
-      setError(message);
+    } catch {
+      setError(t('socialFeed.errors.loadFailed'));
     }
   }, [userId, t]);
 
@@ -87,19 +86,19 @@ export default function FollowingListScreen({
   // ── Render ────────────────────────────────────────────────────────────────
 
   function renderContent(): React.JSX.Element {
-    if (loading) {
-      return (
-        <View style={styles.centered}>
-          <Spinner size="large" color="primary" accessibilityLabel={t('common.loading')} />
-        </View>
-      );
-    }
+    // Full-page loading: PageLoading after 300ms; after 10s E4 replaces it (a late success swaps back to content).
+    if (loading && loadingPhase === 'loading') return <PageLoading />;
+    if (loading && loadingPhase === 'idle') return <View />;
 
-    if (error !== null) {
+    if ((loading && loadingPhase === 'timeout') || error !== null) {
       return (
-        <View style={styles.errorWrap}>
-          <InlineError variant="block" message={error} />
-        </View>
+        <EmptyState
+          variant="error"
+          title={t('socialFeed.loadErrorTitle')}
+          description={t('socialFeed.loadErrorDescription')}
+          primaryLabel={t('common.retry')}
+          onPrimary={() => { setLoading(true); void loadFollowing().finally(() => { setLoading(false); }); }}
+        />
       );
     }
 
@@ -128,9 +127,10 @@ export default function FollowingListScreen({
         )}
         ListEmptyComponent={
           <EmptyState
-            variant="firstUse"
+            variant="page"
             icon={ICON.followers.outline}
             title={t('socialFeed.noFollowing')}
+            description={t('socialFeed.noFollowingDescription')}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -158,6 +158,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     },
     listContent: {
       paddingTop: 0,
+      paddingHorizontal: screenMargin,
     },
     // A8: inset grouped container (16), rows pad 16 so the avatar sits at x32.
     group: {
@@ -166,15 +167,6 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       borderRadius: theme.radius.card,
       overflow: 'hidden',
       flexGrow: 0,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: theme.spacing.xl,
-    },
-    errorWrap: {
-      padding: screenMargin,
     },
   });
 }

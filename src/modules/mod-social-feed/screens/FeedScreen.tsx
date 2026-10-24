@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
 import {
   AppText,
@@ -27,8 +28,8 @@ import {
   Card,
   EmptyState,
   FistBumpIcon,
-  InlineError,
-  Spinner,
+  PageLoading,
+  useLoadingPhase,
 } from '../../../components/ui';
 import {
   fetchActivityFeed,
@@ -61,6 +62,7 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const loadingPhase = useLoadingPhase(loading);
 
   // ── Load feed ───────────────────────────────────────────────────────────────
 
@@ -84,10 +86,8 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
         }
         setLikeMap(map);
       }
-    } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('socialFeed.errors.loadFailed');
-      setError(message);
+    } catch {
+      setError(t('socialFeed.errors.loadFailed'));
     }
   }, [t]);
 
@@ -139,13 +139,29 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
+  const retry = (): void => {
+    setLoading(true);
+    void loadFeed().finally(() => setLoading(false));
+  };
+  const errorState = (
+    <EmptyState
+      variant="error"
+      title={t('socialFeed.loadErrorTitle')}
+      description={t('socialFeed.loadErrorDescription')}
+      primaryLabel={t('common.retry')}
+      onPrimary={retry}
+    />
+  );
+
+  // Full-page loading: PageLoading after 300ms; after 10s E4 replaces it (a late success swaps back to content).
   if (loading) {
-    return (
-      <View style={styles.centered}>
-        <Spinner size="large" color="primary" accessibilityLabel={t('common.loading')} />
-      </View>
-    );
+    if (loadingPhase === 'loading') return <PageLoading />;
+    if (loadingPhase === 'timeout') return errorState;
+    return <View style={styles.root} />;
   }
+
+  // Whole-page failure (nothing to show): E4.
+  if (error !== null && items.length === 0) return errorState;
 
   return (
     <ScrollView
@@ -156,7 +172,7 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
         <RefreshControl
           refreshing={refreshing}
           onRefresh={() => void handleRefresh()}
-          tintColor={theme.colors.primary}
+          tintColor={theme.colors.textSecondary}
         />
       }
     >
@@ -165,19 +181,14 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
         {t('socialFeed.title')}
       </AppText>
 
-      {/* Error banner */}
-      {error !== null && (
-        <InlineError
-          variant="block"
-          message={error}
-          actionLabel={t('common.retry')}
-          onAction={() => void handleRefresh()}
+      {/* Empty state: E1 */}
+      {items.length === 0 && (
+        <EmptyState
+          variant="page"
+          icon={ICON.followers.outline}
+          title={t('socialFeed.emptyTitle')}
+          description={t('socialFeed.empty')}
         />
-      )}
-
-      {/* Empty state */}
-      {error === null && items.length === 0 && (
-        <EmptyState variant="inline" description={t('socialFeed.empty')} />
       )}
 
       {/* Feed items — AC-053: no comment UI; likes only on beta_video items */}
@@ -340,12 +351,6 @@ function makeStyles(
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
       gap: theme.layout.cardGap,
-    },
-    centered: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: theme.colors.background,
     },
     screenTitle: {
       marginBottom: theme.spacing.sm,

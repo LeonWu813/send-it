@@ -181,8 +181,8 @@ describe('FeedScreen', () => {
     render(<FeedScreen session={MOCK_SESSION} />, renderOptions());
 
     await waitFor(() => {
-      const errorTexts = screen.queryAllByText(/Failed to load activity feed/i)
-        .concat(screen.queryAllByText(/載入/));
+      const errorTexts = screen.queryAllByText(/Couldn't load this page/i)
+        .concat(screen.queryAllByText(/無法載入/));
       expect(errorTexts.length).toBeGreaterThan(0);
     });
   });

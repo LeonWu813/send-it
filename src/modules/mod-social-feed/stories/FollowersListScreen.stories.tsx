@@ -1,7 +1,7 @@
 /**
  * Pages/Profile/Followers: someone's followers list.
  * Fake data only; the supabase stub never touches the network.
- * No Error story: the screen's error branch cannot be driven through the stub.
+ * No separate Error story: the stub cannot fail a query; the Loading story turns into the E4 error state after 10s.
  */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
@@ -46,7 +46,7 @@ export const Populated: StoryObj = {
   },
 };
 
-/** First-use empty state. */
+/** E1 page empty state. */
 export const Empty: StoryObj = {
   render: () => {
     seed('empty');
@@ -54,7 +54,7 @@ export const Empty: StoryObj = {
   },
 };
 
-/** List query never resolves. */
+/** List query never resolves: PageLoading after 300ms, then the E4 error state after 10s. */
 export const Loading: StoryObj = {
   render: () => {
     seed('loading');
