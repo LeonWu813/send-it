@@ -558,6 +558,10 @@
     "back": "返回"
   },
   "ui": {
+    "alertPrefix": {
+      "warning": "警告：",
+      "error": "錯誤："
+    },
     "close": "關閉",
     "dismiss": "忽略",
     "loading": "載入中",

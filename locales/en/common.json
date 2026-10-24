@@ -558,6 +558,10 @@
     "back": "Back"
   },
   "ui": {
+    "alertPrefix": {
+      "warning": "Warning: ",
+      "error": "Error: "
+    },
     "close": "Close",
     "dismiss": "Dismiss",
     "loading": "Loading",
