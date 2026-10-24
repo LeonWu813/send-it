@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import { Animated, View, useWindowDimensions } from 'react-native';
-import type { StyleProp, ViewStyle } from 'react-native';
+import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 
 import { ICON } from '../../lib/icons';
 import type { IoniconName } from '../../lib/icons';
@@ -21,6 +21,9 @@ export type EmptyStateVariantName = 'page' | 'section' | 'filtered' | 'error';
  */
 export type EmptyStateDeprecatedVariant = 'slot' | 'prompt' | 'firstUse' | 'private' | 'inline';
 export type EmptyStateVariant = EmptyStateVariantName | EmptyStateDeprecatedVariant;
+
+/** react-native-web passes this through as CSS `text-wrap: balance`; native ignores it. */
+const BALANCED_WRAP = { textWrap: 'balance' } as TextStyle;
 
 const ALIAS: Record<EmptyStateDeprecatedVariant, EmptyStateVariantName | 'slot'> = {
   slot: 'slot',
@@ -203,7 +206,15 @@ export function EmptyState({
           </AppText>
         ) : null}
         {description ? (
-          <AppText variant="subhead" color="textSecondary" align="center" style={{ marginTop: title ? theme.spacing.xs : 0 }}>
+          <AppText
+            variant="subhead"
+            color="textSecondary"
+            align="center"
+            // No orphans: Android balances the lines, iOS pushes a short last line out, web uses text-wrap: balance.
+            textBreakStrategy="balanced"
+            lineBreakStrategyIOS="push-out"
+            style={[{ marginTop: title ? theme.spacing.xs : 0 }, BALANCED_WRAP]}
+          >
             {description}
           </AppText>
         ) : null}

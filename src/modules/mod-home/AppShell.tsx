@@ -373,6 +373,7 @@ export default function AppShell({ session }: AppShellProps): React.JSX.Element 
                   isActive={activeTab === 'profile'}
                   onNavigateToRoute={handleNavigateToRoute}
                   onNavigateToUser={handleSelectClimber}
+                  onFindRoutes={handleViewAllGyms}
                 />
                 </AppHeaderTabScope>
               </View>
