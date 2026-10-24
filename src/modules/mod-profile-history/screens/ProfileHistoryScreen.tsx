@@ -289,6 +289,7 @@ export default function ProfileHistoryScreen({
       style={styles.root}
       contentContainerStyle={[
         styles.contentContainer,
+        !hasRecords && styles.contentContainerEmpty,
         tabInset.contentBottom > 0 && { paddingBottom: tabInset.contentBottom },
         scrollProps?.contentContainerStyle,
       ]}
@@ -333,6 +334,10 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], topInset: numbe
       paddingTop: topInset + theme.spacing.md,
       paddingBottom: theme.spacing.xxl,
       paddingHorizontal: screenMargin,
+    },
+    // E1 brings its own 48pt top gap; no extra md on top.
+    contentContainerEmpty: {
+      paddingTop: topInset,
     },
     centered: {
       flex: 1,
