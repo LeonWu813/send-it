@@ -1,7 +1,7 @@
 /**
  * Pages/Profile/Edit Profile: the real EditProfileScreen inside the phone frame.
- * The form has a single normal state (pre-filled from the current profile); saving/error are only
- * reachable by interaction, so no extra state stories are faked.
+ * Save is the header trailing icon button (disabled until the form changes); back asks before discarding.
+ * Saving/error are only reachable by interaction; Unsaved and Discard drive the real screen through the DOM.
  */
 
 import type { Meta, StoryObj } from '@storybook/react-native-web-vite';
@@ -54,3 +54,31 @@ type Story = StoryObj;
 
 /** Form pre-filled with the current display name, bio and avatar placeholder. */
 export const Default: Story = {};
+
+/** Header Save is disabled (textDisabled glyph) until something changes. */
+function typeIntoName(canvasElement: HTMLElement): void {
+  const input = canvasElement.querySelector<HTMLInputElement>('input');
+  if (!input) return;
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+  setter?.call(input, `${PROFILE.display_name} 2`);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/** The name was edited: header Save is enabled. */
+export const Unsaved: Story = {
+  play: async ({ canvasElement }) => {
+    await new Promise((r) => setTimeout(r, 300));
+    typeIntoName(canvasElement);
+  },
+};
+
+/** Back on an edited form opens the discard confirmation sheet. */
+export const Discard: Story = {
+  play: async ({ canvasElement }) => {
+    await new Promise((r) => setTimeout(r, 300));
+    typeIntoName(canvasElement);
+    await new Promise((r) => setTimeout(r, 200));
+    const back = canvasElement.ownerDocument.querySelector<HTMLElement>('[aria-label="返回"], [aria-label="Back"]');
+    back?.click();
+  },
+};

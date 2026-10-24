@@ -1,7 +1,7 @@
 /**
  * Pages/Profile/Profile: the real ProfileScreen (own profile) inside the phone frame, Profile tab active.
  * Data comes from the supabase stub, seeded synchronously per state.
- * No Error story: ProfileScreen has no error UI (failed fetches keep zero counts / empty lists).
+ * Loading is the first-load PageLoading (after 300ms); the same pending queries reach the page error (E4) at 10s.
  */
 
 import type { Session } from '@supabase/supabase-js';
@@ -41,7 +41,7 @@ function setupStubs(state: StubState): void {
   resetStubData();
   setStubData('auth:session', { user: { id: ME, email: 'guanyu@example.com' } });
   if (state === 'loading') {
-    // Profile row never resolves: header stays in its placeholder state.
+    // Nothing resolves: first load shows PageLoading (no fake zero counts, no early empty state).
     setStubData('users', STUB_PENDING);
     setStubData('rpc:get_follower_counts', STUB_PENDING);
     setStubData('rpc:get_profile_stats', STUB_PENDING);
@@ -104,8 +104,8 @@ type Story = StoryObj<Args>;
 /** Own profile loaded: name, bio, follower/following counts, stats panel. */
 export const Populated: Story = { args: { state: 'populated' } };
 
-/** New climber: no bio, zero counts, zero stats, empty send history. */
+/** New climber: no bio, zero counts, no StatsPanel (0 sends), E2 sentences for send history and beta videos. */
 export const Empty: Story = { args: { state: 'empty' } };
 
-/** Profile and stats queries never resolve: header placeholders and loading stats. */
+/** Queries never resolve: PageLoading only. After 10s it becomes the page error with Retry. */
 export const Loading: Story = { args: { state: 'loading' } };

@@ -30,8 +30,16 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, StyleSheet, View } from 'react-native';
 import SharedRouteCard from '../../../components/RouteCard';
-import { AppText, Avatar, Button, Card, EmptyState, PressableScale, Spinner } from '../../../components/ui';
-import { ICON } from '../../../lib/icons';
+import {
+  AppText,
+  Avatar,
+  Button,
+  Card,
+  EmptyState,
+  PageLoading,
+  PressableScale,
+  useLoadingPhase,
+} from '../../../components/ui';
 import { useLayout, useTheme } from '../../../lib/theme';
 import {
   BetaVideoGrid,
@@ -68,6 +76,8 @@ interface ProfileScreenProps {
    * the correct gym's route list.
    */
   onNavigateToRoute?: (routeId: string, gymId: string) => void;
+  /** Opens the Gyms tab (the ghost "Find routes" action of the empty send-history section). Hidden when omitted. */
+  onFindRoutes?: () => void;
   /** Callback to navigate to the FollowersListScreen (AC-145). */
   onNavigateToFollowers?: () => void;
   /** Callback to navigate to the FollowingListScreen (AC-145). */
@@ -79,6 +89,7 @@ export default function ProfileScreen({
   onNavigateEditProfile,
   isActive = false,
   onNavigateToRoute,
+  onFindRoutes,
   onNavigateToFollowers,
   onNavigateToFollowing,
 }: ProfileScreenProps): React.JSX.Element {
@@ -100,6 +111,10 @@ export default function ProfileScreen({
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [routeCards, setRouteCards] = useState<RouteCard[]>([]);
   const [loaded, setLoaded] = useState(false);
+  // First load failed (a request threw): show the page error right away instead of waiting for the timeout.
+  const [loadFailed, setLoadFailed] = useState(false);
+  // First-load phases: 300ms of nothing, PageLoading, then the E4 error after 10s (a late success swaps back).
+  const loadPhase = useLoadingPhase(!loaded && !loadFailed);
   const openHistory = useOpenProfileHistory();
 
   // AC-164: beta video grid state.
@@ -128,19 +143,25 @@ export default function ProfileScreen({
   const loadData = useCallback(async (): Promise<void> => {
     if (!profile?.id) return;
     const userId = profile.id;
-    const [counts, videos, history, statsData] = await Promise.all([
-      fetchFollowerCounts(userId),
-      fetchBetaVideosByUser(userId),
-      fetchProfileHistory(userId).catch(() => []),
-      fetchProfileStats(userId).catch(() => null),
-    ]);
-    setFollowerCount(counts.follower_count);
-    setFollowingCount(counts.following_count);
-    setBetaVideos(videos);
-    setRouteCards(groupToRouteCards(history));
-    setStats(statsData);
-    setLoaded(true);
-    hasLoadedOnce.current = true;
+    try {
+      const [counts, videos, history, statsData] = await Promise.all([
+        fetchFollowerCounts(userId),
+        fetchBetaVideosByUser(userId),
+        fetchProfileHistory(userId).catch(() => []),
+        fetchProfileStats(userId).catch(() => null),
+      ]);
+      setFollowerCount(counts.follower_count);
+      setFollowingCount(counts.following_count);
+      setBetaVideos(videos);
+      setRouteCards(groupToRouteCards(history));
+      setStats(statsData);
+      setLoadFailed(false);
+      setLoaded(true);
+      hasLoadedOnce.current = true;
+    } catch {
+      // A silent background refresh keeps the data on screen; only the first load shows the error.
+      if (!hasLoadedOnce.current) setLoadFailed(true);
+    }
   }, [profile?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Initial load: fires on mount once profile.id is available.
@@ -155,9 +176,11 @@ export default function ProfileScreen({
   // the FlatList rather than requiring a wrapping ScrollView.
   // AC-184: Notification bell and settings gear are NOT rendered here — they
   //         live on MOD-012's global app-level header.
-  const hasRecords = routeCards.length > 0 || (stats?.total_sends ?? 0) > 0;
+  const hasSends = (stats?.total_sends ?? 0) > 0;
+  const hasRecords = routeCards.length > 0 || hasSends;
   const profileHeader = (
-    <View style={styles.headerContainer}>
+    // Empty history: the E2 sentence follows the title at sectionHeaderGap (8), like the beta section below.
+    <View style={[styles.headerContainer, !hasRecords && { paddingBottom: theme.layout.sectionHeaderGap }]}>
       {/* R13: left-aligned header card; avatar beside name + inline counts (AC-116, AC-145) */}
       <Card variant="static" style={styles.headerCard}>
         <View style={styles.identityRow}>
@@ -219,7 +242,8 @@ export default function ProfileScreen({
       </Card>
 
       {/* P-1: compact stats row; opens Profile History (full StatsPanel) */}
-      {stats ? (
+      {/* 0 sends: no StatsPanel (31.3), the send-history section below carries the empty sentence. */}
+      {stats && hasSends ? (
         <StatsPanel
           variant="compact"
           stats={stats}
@@ -227,11 +251,9 @@ export default function ProfileScreen({
         />
       ) : null}
 
-      {hasRecords ? (
-        <AppText variant="pageSection" accessibilityRole="header">
-          {t('profile.sendHistory')}
-        </AppText>
-      ) : null}
+      <AppText variant="pageSection" accessibilityRole="header">
+        {t('profile.sendHistory')}
+      </AppText>
     </View>
   );
 
@@ -251,26 +273,50 @@ export default function ProfileScreen({
           setShowReel(true);
         }}
         horizontalPadding={screenMargin}
-        emptyState={
-          <AppText
-            variant="footnote"
-            color="textSecondary"
-            align="center"
-            style={styles.videoSectionEmpty}
-          >
-            {t('betaVideo.noVideosYet')}
-          </AppText>
-        }
+        emptyState={<EmptyState variant="section" description={t('profile.betaEmpty')} />}
       />
     </View>
   );
 
   // ── Root: FlatList (sends list) is the sole scroll container ────────────────
-  const listEmpty = !loaded ? (
-    <Spinner />
-  ) : hasRecords ? null : (
-    <EmptyState variant="inline" description={t('profileHistory.empty')} icon={ICON.sends.outline} />
+  // Only reached once the first load has finished, so "empty" is certain (never shown while loading).
+  const listEmpty = hasRecords ? null : (
+    <EmptyState
+      variant="section"
+      description={t('profile.noSendsYet')}
+      secondaryLabel={onFindRoutes ? t('profileHistory.stats.promptAction') : undefined}
+      onSecondary={onFindRoutes}
+    />
   );
+
+  if (!loaded) {
+    if (loadPhase === 'loading') {
+      return (
+        <View style={styles.root}>
+          <PageLoading />
+        </View>
+      );
+    }
+    if (loadPhase === 'timeout' || loadFailed) {
+      return (
+        <View style={[styles.root, { paddingTop: h.contentTopInset }]}>
+          <EmptyState
+            variant="error"
+            title={t('profile.errors.loadFailedTitle')}
+            description={t('profile.errors.loadFailedBody')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => {
+              // Drop `loadFailed` so the 300ms / 10s phases start over, then fetch again.
+              setLoadFailed(false);
+              void loadData();
+            }}
+          />
+        </View>
+      );
+    }
+    // First 300ms: draw nothing (no flash of fake zeros).
+    return <View style={styles.root} />;
+  }
 
   return (
     <View style={styles.root}>
@@ -372,10 +418,6 @@ function makeStyles(
     },
     videoSectionTitle: {
       marginBottom: theme.spacing.sm,
-    },
-    videoSectionEmpty: {
-      paddingVertical: theme.spacing.lg,
-      paddingHorizontal: theme.spacing.lg,
     },
   });
 }

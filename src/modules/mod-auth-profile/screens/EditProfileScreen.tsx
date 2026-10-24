@@ -10,9 +10,10 @@
  */
 
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,13 +21,17 @@ import {
   View,
 } from 'react-native';
 
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import {
-  AppText,
   Avatar,
+  BottomSheet,
   Button,
+  IconButton,
   InlineError,
   TextField,
 } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader, useHideTabBar } from '@/lib/AppHeaderContext';
 import { uploadAvatar, upsertProfile } from '../auth-service';
@@ -48,11 +53,8 @@ export default function EditProfileScreen({
   const { t } = useTranslation('common');
   const { theme } = useTheme();
   const { screenMargin } = useLayout();
-  const styles = makeStyles(theme, 0, screenMargin);
-
-  // v2.2: nested screen in the Profile tab; form hides the TabBar.
-  useAppHeader({ title: t('profile.editProfile'), onBack: onCancel });
-  useHideTabBar();
+  const insets = useSafeAreaInsets();
+  const styles = makeStyles(theme, 0, screenMargin, Math.max(insets.bottom, theme.spacing.md));
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
@@ -62,6 +64,49 @@ export default function EditProfileScreen({
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // A failed submit (save or required-name validation) moves the screen-reader focus to the InlineError;
+  // a failed avatar upload is not a submit and only announces.
+  const [errorFromSubmit, setErrorFromSubmit] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  // Both sides are normalised the same way (what handleSave writes), so a trailing space is not a change.
+  const isDirty =
+    displayName.trim() !== (profile?.display_name ?? '').trim() ||
+    (bio.trim() || null) !== ((profile?.bio ?? '').trim() || null) ||
+    avatarUri !== (profile?.avatar_url ?? null);
+
+  function handleBack(): void {
+    if (isSaving) return;
+    if (isDirty || isUploadingAvatar) setDiscardOpen(true);
+    else onCancel();
+  }
+
+  // v2.2: nested screen in the Profile tab; form hides the TabBar. Save is the one contextual action (header
+  // trailing float IconButton); back doubles as cancel and asks first when there is something to lose.
+  useAppHeader({
+    title: t('profile.editProfile'),
+    onBack: handleBack,
+    trailing: (
+      <IconButton
+        variant="float"
+        name={ICON.save.outline}
+        accessibilityLabel={t('profile.save')}
+        onPress={() => {
+          void handleSave();
+        }}
+        loading={isSaving}
+        disabled={!isDirty || isUploadingAvatar}
+      />
+    ),
+  });
+  useHideTabBar();
 
   // Sync when profile prop changes
   useEffect(() => {
@@ -87,20 +132,23 @@ export default function EditProfileScreen({
     setErrorMessage(null);
     try {
       const publicUrl = await uploadAvatar(userId, uri);
-      setAvatarUri(publicUrl);
+      // Discarded while uploading: the result is not written back.
+      if (mounted.current) setAvatarUri(publicUrl);
     } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : t('profile.errors.avatarUploadFailed');
-      setErrorMessage(message);
+      console.warn('Avatar upload failed', err);
+      if (mounted.current) {
+        setErrorFromSubmit(false);
+        setErrorMessage(t('profile.errors.avatarUploadFailed'));
+      }
     } finally {
-      setIsUploadingAvatar(false);
+      if (mounted.current) setIsUploadingAvatar(false);
     }
   }
 
   async function handleSave(): Promise<void> {
+    Keyboard.dismiss();
     if (!displayName.trim()) {
+      setErrorFromSubmit(true);
       setErrorMessage(t('auth.errors.displayNameRequired'));
       return;
     }
@@ -117,11 +165,11 @@ export default function EditProfileScreen({
       setErrorMessage(null);
       onSaved(updated);
     } catch (err) {
-      const message =
-        err instanceof Error ? err.message : t('profile.errors.saveFailed');
-      setErrorMessage(message);
+      console.warn('Profile save failed', err);
+      setErrorFromSubmit(true);
+      setErrorMessage(t('profile.errors.saveFailed'));
     } finally {
-      setIsSaving(false);
+      if (mounted.current) setIsSaving(false);
     }
   }
 
@@ -174,38 +222,27 @@ export default function EditProfileScreen({
         />
         </View>
 
-        {/* Error */}
+        {/* Error: the last element of the form, nothing sits below it */}
         {errorMessage ? (
-          <InlineError variant="block" message={errorMessage} />
+          <InlineError variant="block" message={errorMessage} focusOnAppear={errorFromSubmit} />
         ) : null}
-
-        {/* Actions */}
-        <View style={styles.actionsRow}>
-          <View style={styles.cancelSlot}>
-            <Button
-              label={t('profile.cancel')}
-              onPress={onCancel}
-              variant="secondary"
-              size="lg"
-              fullWidth
-              disabled={isSaving}
-              accessibilityLabel={t('profile.cancel')}
-            />
-          </View>
-          <View style={styles.saveSlot}>
-            <Button
-              label={t('profile.save')}
-              onPress={handleSave}
-              variant="primary"
-              size="lg"
-              fullWidth
-              loading={isSaving}
-              disabled={isSaving || isUploadingAvatar}
-              accessibilityLabel={t('profile.save')}
-            />
-          </View>
-        </View>
       </ScrollView>
+
+      <BottomSheet
+        variant="confirm"
+        visible={discardOpen}
+        onClose={() => {
+          setDiscardOpen(false);
+        }}
+        title={t('profile.discardConfirmTitle')}
+        description={t('profile.discardConfirmBody')}
+        confirmLabel={t('profile.discard')}
+        cancelLabel={t('profile.keepEditing')}
+        onConfirm={() => {
+          setDiscardOpen(false);
+          onCancel();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -215,6 +252,7 @@ function makeStyles(
   theme: ReturnType<typeof useTheme>['theme'],
   topInset: number,
   screenMargin: number,
+  bottomPadding: number,
 ) {
   return StyleSheet.create({
     root: {
@@ -224,7 +262,7 @@ function makeStyles(
     scrollContent: {
       paddingTop: topInset + theme.spacing.md,
       paddingHorizontal: screenMargin,
-      paddingBottom: theme.spacing.xl,
+      paddingBottom: bottomPadding,
       gap: theme.spacing.md,
     },
     avatarContainer: {
@@ -236,17 +274,6 @@ function makeStyles(
     },
     form: {
       gap: theme.layout.fieldGap,
-    },
-    actionsRow: {
-      flexDirection: 'row',
-      gap: theme.spacing.sm,
-      marginTop: theme.spacing.md,
-    },
-    cancelSlot: {
-      flex: 1,
-    },
-    saveSlot: {
-      flex: 2,
     },
   });
 }
