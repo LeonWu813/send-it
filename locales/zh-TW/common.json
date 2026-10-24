@@ -522,7 +522,7 @@
       "sendsA11y": "完攀 {{count}} 次",
       "daysA11y": "完攀天數 {{count}} 天",
       "compactHint": "查看完整統計",
-      "promptBody": "到岩館找到那條路線，點「記錄完攀」。最高難度和統計會從這裡開始。",
+      "promptBody": "到岩館找到路線後點「記錄完攀」，最高難度和統計就會出現在這裡。",
       "promptAction": "找路線",
       "heroSends_other": "完攀 {{count}} 次",
       "sendsA11y_other": "完攀 {{count}} 次",

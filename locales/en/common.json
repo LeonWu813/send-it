@@ -522,7 +522,7 @@
       "sendsA11y": "{{count}} send",
       "daysA11y": "Days climbed, {{count}} day",
       "compactHint": "Opens full stats",
-      "promptBody": "Find the route at the gym and tap Log send. Your top grade and stats start from here.",
+      "promptBody": "Find a route at the gym and tap Log send. Your top grade and stats will show up here.",
       "promptAction": "Find routes",
       "heroSends_other": "{{count}} sends",
       "sendsA11y_other": "{{count}} sends",
