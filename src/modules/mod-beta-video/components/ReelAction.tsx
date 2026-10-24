@@ -127,7 +127,7 @@ export function ReelAction({
         }}
       >
         {busy ? (
-          <Spinner color="onMedia" size="small" />
+          <Spinner context="mediaControl" />
         ) : fist ? (
           <Animated.View
             style={{ width: glyph, height: glyph, transform: [{ scale: pop }] }}

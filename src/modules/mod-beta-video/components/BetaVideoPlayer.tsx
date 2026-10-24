@@ -118,7 +118,7 @@ export default function BetaVideoPlayer({
           />
           {isBuffering ? (
             <View style={styles.bufferingOverlay}>
-              <Spinner color="onMedia" size="large" />
+              <Spinner context="media" />
             </View>
           ) : null}
         </View>

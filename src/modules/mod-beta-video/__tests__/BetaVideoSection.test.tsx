@@ -148,17 +148,20 @@ describe('BetaVideoSection', () => {
     expect(screen.toJSON()).toBeTruthy();
   });
 
-  it('v2.2: shows the upload slot tile (first tile) when there are no videos', async () => {
+  it('states #48: no videos shows the E2 sentence only (no dashed slot, no second upload entry)', async () => {
     mockFetchBetaVideos.mockResolvedValue([]);
 
     render(
-      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} />,
+      <BetaVideoSection routeId="route-001" session={MOCK_SESSION} onRegisterUploadLauncher={jest.fn()} />,
       renderOptions(),
     );
 
     await waitFor(() => {
-      expect(screen.getByTestId('beta-video-grid-upload-slot')).toBeTruthy();
+      expect(screen.getByText('No one has shared beta yet.')).toBeTruthy();
     });
+    expect(screen.queryByTestId('beta-video-grid-upload-slot')).toBeNull();
+    expect(screen.queryByTestId('beta-video-grid-slot-row')).toBeNull();
+    expect(screen.getAllByText('Upload beta')).toHaveLength(1);
   });
 
   it('RD-1: host-driven mode shows the header upload action; it reads "Replace my beta" once the viewer has a video (AC-165)', async () => {

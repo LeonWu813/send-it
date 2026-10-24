@@ -69,7 +69,7 @@ interface BetaVideoSectionProps {
    * Host-driven mode (page-review RD-1, AC-130 change). When provided, the section hides the legacy
    * inline uploader button and renders the upload entry itself: a trailing action in the section
    * header (>= 44pt hit area; "Upload beta", or "Replace my beta" once the viewer's own video exists,
-   * AC-165) plus the upload tile of the empty state. The callback receives a launcher the host MAY
+   * AC-165). That is the only upload entry: the empty state has no action of its own. The callback receives a launcher the host MAY
    * call to open the same flow programmatically; the host does not need to render any upload button.
    * The upload flow itself remains owned by MOD-005 (this component).
    */
@@ -288,26 +288,17 @@ export default function BetaVideoSection({
       {/*
        * AC-038: Three-column thumbnail grid — shared BetaVideoGrid component (Fix 3).
        * horizontalPadding={GRID_PADDING} selects the inset layout (gap 2, per-tile outer corners); the
-       * grid measures its own width. While loading it shows skeleton tiles. The empty state is the
-       * ui/ EmptyState `inline` ("no one has shared beta yet" + ghost upload when the header
-       * launcher is in use, since the legacy button below already covers the other mode).
+       * grid measures its own width. While loading it shows the `section` spinner. The empty state is
+       * the ui/ EmptyState `section` (one sentence, no action: the single upload entry is the header
+       * action, or the legacy uploader button; states-audit-ux #48).
        */}
       <BetaVideoGrid
         videos={betaVideos}
         onPressVideo={handlePressVideo}
         horizontalPadding={GRID_PADDING}
         loading={isLoading}
-        onUpload={() => { void selectHandlerRef.current?.(); }}
         emptyState={
-          !loadError ? (
-            <EmptyState
-              variant="inline"
-              description={t('betaVideo.noVideos')}
-              secondaryLabel={onRegisterUploadLauncher ? t('betaVideo.emptyUpload') : undefined}
-              onSecondary={() => { void selectHandlerRef.current?.(); }}
-              on="background"
-            />
-          ) : undefined
+          !loadError ? <EmptyState variant="section" description={t('betaVideo.noVideos')} /> : undefined
         }
       />
 

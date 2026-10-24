@@ -495,7 +495,7 @@ export default function BetaVideoReelViewer({
           {urlLoading ? (
             <View style={styles.centeredOverlay}>
               <View testID="beta-video-reel-loading">
-                <Spinner color="onMedia" size="large" accessibilityLabel={t('ui.loading')} />
+                <Spinner context="media" accessibilityLabel={t('ui.loading')} />
               </View>
             </View>
           ) : null}
@@ -553,7 +553,7 @@ export default function BetaVideoReelViewer({
              */}
             {isVideoLoading && !urlError ? (
               <View style={styles.videoAreaSpinner} testID="beta-video-reel-video-loading">
-                <Spinner color="onMedia" size="large" />
+                <Spinner context="media" />
               </View>
             ) : null}
 

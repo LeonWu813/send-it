@@ -16,9 +16,9 @@
  * each tile's OUTER corners individually (`media` 12 + continuous curve) so a short last row still has
  * round corners; no per-tile badge or play disc;
  * press overlays `mediaScrim` (press 100 in, release 120 out, no scale: Motion #12); a real thumbnail
- * fades in over `short` unless cached; with no videos and `onUpload`, the first tile is the upload
- * slot (existing upload flow only) followed by a dashed placeholder; those slot tiles are separate
- * objects, so they sit `inlineGap` 8 apart, each fully rounded.
+ * fades in over `short` unless cached; with no videos the grid renders the caller's `emptyState` (E2
+ * `section`; the upload entry lives in the section header, never in the grid: states-audit-ux #48, the
+ * dashed slot tiles are retired); while loading it shows the `section` spinner in a 52pt slot.
  *
  * Tech Lead decisions (Rev 13, point 6):
  * - No VideoView per grid cell (avoid N live decoders).
@@ -29,7 +29,6 @@
  *   matching the route-detail inline cell style (Fix 3).
  */
 
-import { Ionicons } from '@expo/vector-icons';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -41,9 +40,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import type { LayoutChangeEvent } from 'react-native';
-import { AppText } from '../../../components/ui/AppText';
-import { Skeleton, SkeletonGroup, useSkeletonPhase } from '../../../components/ui/Skeleton';
-import { ICON } from '../../../lib/icons';
+import { Spinner } from '../../../components/ui/ProgressBar';
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../../lib/motion';
 import { CONTINUOUS, useTheme } from '../../../lib/theme';
 import type { BetaVideo } from '../types';
@@ -60,7 +57,7 @@ export interface BetaVideoGridProps {
   /** Called with the tapped cell's index when a cell is pressed. */
   onPressVideo: (index: number) => void;
   /**
-   * Optional empty-state node rendered when videos.length === 0 (use ui/ EmptyState `inline`).
+   * Optional empty-state node rendered when videos.length === 0 (use ui/ EmptyState `section`).
    * If not provided and videos is empty, nothing is rendered.
    */
   emptyState?: React.ReactNode;
@@ -71,12 +68,7 @@ export interface BetaVideoGridProps {
    * this value (it is only the first-render estimate before the layout pass). The grid adds NO margin of its own.
    */
   horizontalPadding?: number;
-  /**
-   * Existing upload entry point. When there are no videos and this is set, the first tile is the
-   * "upload beta" slot (a button) followed by a dashed placeholder, instead of `emptyState`.
-   */
-  onUpload?: () => void;
-  /** Show skeleton tiles instead of the grid (the caller decides when, see useSkeletonPhase). */
+  /** Show the `section` spinner (52pt slot) instead of the grid (the caller decides when, see useLoadingPhase). */
   loading?: boolean;
 }
 
@@ -89,9 +81,6 @@ function loadableThumbnailUri(video: BetaVideo): string | null {
 interface GridMetrics {
   cellSize: number;
   cellHeight: number;
-  /** Upload-slot tile width (its own 8pt gap) and height. */
-  slotSize: number;
-  slotHeight: number;
   gap: number;
   /** Outer corner radius of the whole grid (0 when full-bleed). */
   radius: number;
@@ -112,16 +101,11 @@ function useGridMetrics(horizontalPadding: number): {
     Math.max(0, (available - gap * (NUM_COLUMNS - 1)) / NUM_COLUMNS),
   );
   const cellHeight = PixelRatio.roundToNearestPixel(cellSize / theme.componentSize.mediaTileAspect);
-  const slotGap = theme.layout.inlineGap;
-  const slotSize = PixelRatio.roundToNearestPixel(
-    Math.max(0, (available - slotGap * (NUM_COLUMNS - 1)) / NUM_COLUMNS),
-  );
-  const slotHeight = PixelRatio.roundToNearestPixel(slotSize / theme.componentSize.mediaTileAspect);
   const onLayout = useCallback((e: LayoutChangeEvent): void => {
     const w = e.nativeEvent.layout.width;
     setMeasured((prev) => (prev === w || w <= 0 ? prev : w));
   }, []);
-  return { metrics: { cellSize, cellHeight, slotSize, slotHeight, gap, radius }, onLayout };
+  return { metrics: { cellSize, cellHeight, gap, radius }, onLayout };
 }
 
 interface TileProps {
@@ -224,76 +208,18 @@ function Tile({ video, index, total, metrics, onPress }: TileProps): React.JSX.E
   );
 }
 
-/** First tile of an empty grid: the upload slot (the existing upload flow) and a dashed placeholder. */
-function UploadSlotRow({ metrics, onUpload }: { metrics: GridMetrics; onUpload: () => void }): React.JSX.Element {
+/** `section` loading: a small textSecondary spinner centred in a 52pt slot (states-audit-ui 1.3). */
+function GridLoading(): React.JSX.Element {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
-  const c = theme.colors;
-  const outer = { borderRadius: theme.radius.media, ...CONTINUOUS } as const;
   return (
-    <View style={{ flexDirection: 'row', gap: theme.layout.inlineGap }} testID="beta-video-grid-slot-row">
-      <Pressable
-        onPress={onUpload}
-        accessibilityRole="button"
-        accessibilityLabel={t('betaVideo.emptyUpload')}
-        testID="beta-video-grid-upload-slot"
-        style={({ pressed }) => [
-          outer,
-          {
-            width: metrics.slotSize,
-            height: metrics.slotHeight,
-            backgroundColor: pressed ? c.surfacePressed : c.surface,
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: theme.spacing.xs,
-          },
-        ]}
-      >
-        <Ionicons name={ICON.add.outline} size={theme.iconSize.xl} color={c.primary} accessibilityElementsHidden />
-        <AppText variant="footnote" weight="600" color="primary" align="center">
-          {t('betaVideo.emptyUpload')}
-        </AppText>
-      </Pressable>
-      <View
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        style={[
-          outer,
-          {
-            width: metrics.slotSize,
-            height: metrics.slotHeight,
-            borderWidth: theme.stroke.emphasis,
-            borderStyle: 'dashed',
-            borderColor: c.outline,
-          },
-        ]}
-      />
+    <View
+      accessible
+      accessibilityLabel={t('betaVideo.loadingVideos')}
+      style={{ height: theme.layout.sectionLoadingSlot, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Spinner context="section" />
     </View>
-  );
-}
-
-/** Two rows of skeleton tiles (no pulse colour change: `border` on the page). Wrap-free: use inside the caller. */
-function GridSkeleton({ metrics }: { metrics: GridMetrics }): React.JSX.Element {
-  const { t } = useTranslation('common');
-  const phase = useSkeletonPhase(true);
-  return (
-    <SkeletonGroup label={t('betaVideo.loadingVideos')}>
-      {phase === 'idle'
-        ? null
-        : [0, 1].map((row) => (
-            <View key={row} style={{ flexDirection: 'row', gap: metrics.gap, marginBottom: row === 0 ? metrics.gap : 0 }}>
-              {Array.from({ length: NUM_COLUMNS }).map((_, i) => (
-                <Skeleton
-                  key={i}
-                  surface="page"
-                  width={metrics.cellSize}
-                  height={metrics.cellHeight}
-                  radius={0}
-                />
-              ))}
-            </View>
-          ))}
-    </SkeletonGroup>
   );
 }
 
@@ -305,7 +231,6 @@ export default function BetaVideoGrid({
   videos,
   onPressVideo,
   emptyState,
-  onUpload,
   horizontalPadding = 0,
   loading = false,
 }: BetaVideoGridProps): React.JSX.Element | null {
@@ -313,22 +238,13 @@ export default function BetaVideoGrid({
 
   if (loading) {
     return (
-      <View onLayout={onLayout} testID="beta-video-grid-skeleton">
-        <View style={{ borderRadius: metrics.radius, ...CONTINUOUS, overflow: 'hidden' }}>
-          <GridSkeleton metrics={metrics} />
-        </View>
+      <View testID="beta-video-grid-loading">
+        <GridLoading />
       </View>
     );
   }
 
   if (videos.length === 0) {
-    if (onUpload) {
-      return (
-        <View onLayout={onLayout} testID="beta-video-grid">
-          <UploadSlotRow metrics={metrics} onUpload={onUpload} />
-        </View>
-      );
-    }
     return emptyState ? <>{emptyState}</> : null;
   }
 
