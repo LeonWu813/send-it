@@ -19,7 +19,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { Linking, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
@@ -30,6 +30,7 @@ import {
   IconButton,
   NoticeBox,
   PageLoading,
+  PressableScale,
   useLoadingPhase,
 } from '../../../components/ui';
 import i18n from '../../../lib/i18n';
@@ -273,7 +274,9 @@ export default function GymDetailScreen({
             <AppText variant="body">
               {localizedCity(gym)} · {localizedDistrict(gym)}
             </AppText>
-            <TouchableOpacity
+            <PressableScale
+              feedback="row"
+              pressedColor={theme.colors.surfacePressed}
               accessibilityRole="link"
               accessibilityLabel={gym.address_text}
               onPress={() => {
@@ -289,7 +292,7 @@ export default function GymDetailScreen({
                 {gym.address_text}
               </AppText>
               <Ionicons name={ICON.external.outline} size={16} color={theme.colors.primary} />
-            </TouchableOpacity>
+            </PressableScale>
           </View>
 
           {/* Mixed gym note */}

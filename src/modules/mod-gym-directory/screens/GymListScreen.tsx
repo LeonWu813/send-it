@@ -290,11 +290,10 @@ export default function GymListScreen({
       {sortedGyms.length > 0 ? (
         <View style={styles.requestRow}>
           <Button
-            variant="ghost"
+            variant="text"
             size="md"
-            on="background"
+            placement="inline"
             label={t('gymDirectory.requestGym.cta')}
-            trailingIcon={ICON.forward.outline}
             onPress={onRequestGym}
           />
         </View>
@@ -427,10 +426,9 @@ function makeStyles(
       marginTop: theme.spacing.sm,
       marginBottom: theme.spacing.xs,
     },
-    // A6/A8: ghost button has 14pt padding; pull the label onto the 16pt keyline.
+    // T2 list footer: 16 below the last card; the text button carries its own keyline geometry.
     requestRow: {
-      alignItems: 'flex-start',
-      marginLeft: -14,
+      marginTop: theme.spacing.md,
     },
   });
 }
