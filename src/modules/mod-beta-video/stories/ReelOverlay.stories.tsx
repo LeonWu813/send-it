@@ -168,7 +168,7 @@ export default meta;
 
 type Story = StoryObj<DemoArgs>;
 
-/** Tap the fist bump (peak scale, particles, 3 burst ticks; Reduce Motion cross-fades only, no ticks), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
+/** Tap the fist bump (v6: left fist bumps in, ticks burst, right fist fills; nothing may be clipped; Reduce Motion cross-fades only), switch Footage to bright, and toggle the theme: the overlay must look identical in light and dark. */
 export const Playground: Story = {};
 
 /** Dark and bright footage side by side: the overlay must read identically on both. */

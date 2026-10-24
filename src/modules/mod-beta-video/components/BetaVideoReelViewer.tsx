@@ -17,7 +17,7 @@
  * media tokens (`onMedia`, `mediaScrim`, `mediaScrimStrong`, `mediaBackground`) so it stays
  * visible in both themes; controls sit inside the safe area (no `|| 34` fallback, no fixed
  * padding); the like fistbump is `onMedia` (filled vs outline, never red) with the like motion
- * (celebratePeak + topOut + particles, Reduce Motion = cross-fade only).
+ * (v6 fist-bump FistBumpLike, Reduce Motion = cross-fade only).
  *
  * Architecture (Tech Lead decisions, Rev 13 + Rev 16):
  * 1. Portrait lock: `app.json` already sets `"orientation": "portrait"` globally.
