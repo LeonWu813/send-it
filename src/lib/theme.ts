@@ -220,7 +220,7 @@ export const LAYOUT = {
   cardGap: 12,
   listRowPaddingV: 12,
   listRowMinHeight: 52,
-  /** PageLoading / E1 / E3 / E4 anchor: content-area top + this (= SPACING.xxl). */
+  /** E1 / E3 / E4 anchor (PageLoading is now centred): content-area top + this (= SPACING.xxl). */
   pageLoadingOffset: SPACING.xxl,
   /** Height of the `section` spinner slot (= listRowMinHeight). */
   sectionLoadingSlot: 52,

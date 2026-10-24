@@ -56,7 +56,7 @@ const meta: Meta<EmptyStateProps> = {
       options: ['page', 'section', 'filtered', 'error'],
       description: 'E1 page / E2 section / E3 filtered / E4 error. Old names (prompt, firstUse, private, inline, slot) are deprecated aliases kept one version.',
     },
-    icon: { control: 'select', options: Object.keys(glyphs), mapping: glyphs, description: 'Deprecated: ignored by page / filtered; only error draws an icon.' },
+    icon: { control: 'select', options: Object.keys(glyphs), mapping: glyphs, description: 'Deprecated: ignored by every variant (no icon).' },
     primaryTone: { control: 'inline-radio', options: ['primary', 'secondary'] },
     onPrimary: { action: 'primary' },
     onSecondary: { action: 'secondary' },
@@ -108,7 +108,7 @@ export const Filtered: StoryObj<EmptyStateProps> = {
   ),
 };
 
-/** E4 error: the page failed to load. Error-coloured icon, secondary Retry with the reload glyph. */
+/** E4 error: the page failed to load. No icon, default-colour title, secondary Retry with the reload glyph. */
 export const ErrorState: StoryObj<EmptyStateProps> = {
   name: 'Error',
   render: () => (

@@ -56,11 +56,11 @@ describe('useLoadingPhase', () => {
 });
 
 describe('PageLoading / Spinner', () => {
-  it('is one busy progressbar node with the large spinner 48 below the content top', () => {
+  it('is one busy progressbar node with the large spinner centred in the visible area', () => {
     wrap(<PageLoading />);
     const node = screen.getByRole('progressbar');
     expect(node.props.accessibilityState).toMatchObject({ busy: true });
-    expect(styleOf(node)).toMatchObject({ flex: 1, alignItems: 'center', paddingTop: 48 });
+    expect(styleOf(node)).toMatchObject({ flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 0, paddingBottom: 0 });
   });
 
   it('Spinner contexts map to sizes', () => {
@@ -109,16 +109,14 @@ describe('EmptyState', () => {
     }
   });
 
-  it('page and filtered draw no icon, even when one is passed; error keeps its alert icon', () => {
+  it('no variant draws an icon, even when one is passed (error only has the retry button glyph)', () => {
     const dims = jest.spyOn(Dimensions, 'get').mockReturnValue({ width: 393, height: 852, scale: 3, fontScale: 1 });
-    for (const variant of ['page', 'filtered', 'private'] as const) {
+    for (const variant of ['page', 'filtered', 'private', 'error'] as const) {
       const { unmount } = wrap(<EmptyState variant={variant} icon={ICON.route.outline} title="T" description="D" />);
       expect(screen.UNSAFE_queryAllByType(Ionicons)).toHaveLength(0);
       unmount();
     }
-    wrap(<EmptyState variant="error" title="T" description="D" />);
     dims.mockRestore();
-    expect(screen.UNSAFE_queryAllByType(Ionicons)).toHaveLength(1);
   });
 
   it('keepQuotedTogether joins the characters inside 「」 with U+2060 only', () => {

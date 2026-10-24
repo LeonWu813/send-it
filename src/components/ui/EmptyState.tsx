@@ -1,6 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
-import { Animated, View, useWindowDimensions } from 'react-native';
+import { Animated, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { ICON } from '../../lib/icons';
@@ -44,14 +43,13 @@ export interface EmptyStateProps {
    * E2 section: one region of a populated screen. Left aligned on the keyline: one subhead sentence
    * (`description`) + optional ghost `sm` action under it. No icon, no title, no link.
    * E3 filtered: data exists but the filter / search excluded it. Same layout as E1 (no icon); the primary is "clear filters".
-   * E4 error: the page failed to load. Same layout as E1 with an `error` icon; the primary is a secondary
+   * E4 error: the page failed to load. Same layout as E1 (no icon, title in the default text colour); the primary is a secondary
    * "Retry" (reload icon) in `primaryLabel` / `onPrimary`. No link.
    * The screen decides which one; see the spec before adding a fifth.
    */
   variant?: EmptyStateVariant;
   /**
-   * @deprecated page / filtered no longer draw an icon; ignored there (kept so callers compile). Only `error`
-   * draws one: the alert glyph by default (a severity cue next to the red title), or this value.
+   * @deprecated no variant draws an icon any more; ignored (kept so callers compile).
    */
   icon?: IoniconName;
   /** @deprecated retired with the lime prompt card; ignored. */
@@ -77,13 +75,12 @@ export interface EmptyStateProps {
 
 /**
  * Only shown when it is certain there is no data (never while loading). Fades in over `short` (enter).
- * Title + description read as one VoiceOver node. The error icon is hidden at font scale >= 1.6. Centred
+ * Title + description read as one VoiceOver node. Centred
  * variants centre every child, buttons and link included (each action sits in an `alignSelf: center`
  * wrapper because Button itself is `alignSelf: flex-start`).
  */
 export function EmptyState({
   variant: variantProp = 'page',
-  icon,
   title,
   description,
   primaryLabel,
@@ -97,7 +94,6 @@ export function EmptyState({
 }: EmptyStateProps): React.JSX.Element {
   const { theme } = useTheme();
   const { duration } = useMotion();
-  const { fontScale } = useWindowDimensions();
   const appear = useRef(new Animated.Value(0)).current;
   const variant = variantProp in ALIAS ? ALIAS[variantProp as EmptyStateDeprecatedVariant] : (variantProp as EmptyStateVariantName);
 
@@ -171,8 +167,6 @@ export function EmptyState({
   }
 
   const isError = variant === 'error';
-  const glyph = isError ? (icon ?? ICON.error.outline) : undefined;
-  const showIcon = !!glyph && fontScale < 1.6;
   const label = [title, description].filter(Boolean).join('. ');
   const primaryVariant = isError ? 'secondary' : primaryTone;
 
@@ -191,21 +185,6 @@ export function EmptyState({
       ]}
     >
       <View accessible accessibilityLabel={label} style={{ alignItems: 'center' }}>
-        {showIcon ? (
-          <View
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: theme.radius.full,
-              backgroundColor: theme.colors.surfaceAlt,
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: theme.spacing.smd,
-            }}
-          >
-            <Ionicons name={glyph as IoniconName} size={theme.iconSize.lg} color={theme.colors.error} />
-          </View>
-        ) : null}
         {title ? (
           <AppText variant="title2" align="center" accessibilityRole="header">
             {title}
