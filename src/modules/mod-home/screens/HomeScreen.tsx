@@ -20,7 +20,7 @@
  *   4. Following (AC-182, home-v2) — avatar strip like Saved Gyms: 64pt avatar + 2-line caption
  *      (name, MAX(updated_at) relative time), 108pt, no marker; tap → UserProfileScreen; 「查看全部」 →
  *      FollowingListScreen. At fontScale >= 1.6 the strip becomes 52pt vertical rows.
- *      Empty states of all sections: inline sentence + optional ghost sm action 8pt below.
+ *      Empty states of all sections: inline sentence only; the action sits in the SectionHeader trailing slot (T1).
  *
  * Safe area:
  *   - Top inset NOT applied here — AppHeader (mounted by AppShell) owns the top.
@@ -47,10 +47,10 @@ import { Animated, Pressable, ScrollView, StyleSheet, View, useWindowDimensions 
 import RouteCard from '../../../components/RouteCard';
 import { AppText } from '../../../components/ui/AppText';
 import { Avatar } from '../../../components/ui/Avatar';
-import { Button } from '../../../components/ui/Button';
 import { Card } from '../../../components/ui/Card';
 import { Chip } from '../../../components/ui/Chip';
 import { EmptyState } from '../../../components/ui/EmptyState';
+import { SectionHeader } from '../../../components/ui/SectionHeader';
 import { PageLoading } from '../../../components/ui/PageLoading';
 import { Spinner } from '../../../components/ui/ProgressBar';
 import { useLoadingPhase } from '../../../components/ui/useLoadingPhase';
@@ -81,12 +81,6 @@ const FOLLOWING_ACTIVITY_DAYS = 14;
 const CAPTION_HEIGHT = 40;
 /** Font scale from which the Following strip becomes vertical rows (home-v2 2.2). */
 const AX_FONT_SCALE = 1.6;
-/** Section-header action target: 22pt line + 11 + 11 = 44pt; layout never changes. */
-const LINK_HIT_SLOP = { top: 11, bottom: 11, left: 8, right: 0 };
-/** Section header row = title3 line height (A3). */
-const SECTION_HEADER_HEIGHT = 28;
-/** Ghost `sm` button side padding (Button dims). */
-const INLINE_BUTTON_PAD = 14;
 /** Saved-gym tile edge (= Avatar lg = compact RouteCard thumb) (H-3). */
 const GYM_TILE = 64;
 /** Banner height when an active banner exists. */
@@ -504,35 +498,18 @@ export default function HomeScreen({
   // R0: the scroll container owns the horizontal margin (screenMargin) and the section gap
   // (sectionGap); sections set neither. Horizontal strips bleed with a negative margin and re-inset.
 
-  // A3: the title and its action share one 28pt row; the action is `subhead` 600, baseline-aligned,
-  // right edge on the keyline; the 44pt target comes from hitSlop (no layout change).
+  // T1: the title and its action share the SectionHeader trailing slot, in the same place whether the
+  // section is empty or populated.
   const sectionHeader = (title: string, action?: { label: string; onPress: () => void }): React.JSX.Element => (
-    <View style={styles.sectionHeader}>
-      <AppText variant="pageSection" accessibilityRole="header">
-        {title}
-      </AppText>
-      {action ? (
-        <Pressable onPress={action.onPress} hitSlop={LINK_HIT_SLOP} accessibilityRole="button" accessibilityLabel={action.label}>
-          <AppText variant="subhead" weight="600" color="primary">
-            {action.label}
-          </AppText>
-        </Pressable>
-      ) : null}
-    </View>
+    <SectionHeader title={title} action={action} style={styles.sectionHeader} />
   );
 
-  // One inline empty state for every section (A6/A8): sentence on the keyline, optional ghost `sm`
-  // action 8pt under it with its glyph on x16 (marginLeft -14 cancels the button's 14pt padding).
-  const inlineEmpty = (sentence: string, action?: { label: string; onPress: () => void }): React.JSX.Element => (
+  // Empty section: the sentence only; its action lives in the header.
+  const inlineEmpty = (sentence: string): React.JSX.Element => (
     <View style={styles.inlineEmpty}>
       <AppText variant="subhead" color="textSecondary">
         {sentence}
       </AppText>
-      {action ? (
-        <View style={styles.inlineEmptyAction}>
-          <Button variant="ghost" size="sm" on="background" label={action.label} onPress={action.onPress} style={styles.inlineEmptyButton} />
-        </View>
-      ) : null}
     </View>
   );
 
@@ -615,14 +592,14 @@ export default function HomeScreen({
         {sectionHeader(
           t('home.savedGyms.title'),
           !savedGymsLoading && savedGyms.length === 0
-            ? undefined
+            ? { label: t('home.savedGyms.explore'), onPress: onViewAllGyms }
             : { label: t('home.savedGyms.viewAll'), onPress: onViewAllGyms },
         )}
 
         {savedGymsLoading && savedGyms.length === 0 ? (
           sectionSpinner
         ) : savedGyms.length === 0 ? (
-          inlineEmpty(t('home.savedGyms.empty'), { label: t('home.savedGyms.explore'), onPress: onViewAllGyms })
+          inlineEmpty(t('home.savedGyms.empty'))
         ) : (
           <ScrollView
             horizontal
@@ -666,7 +643,12 @@ export default function HomeScreen({
 
       {/* ── Section 3: Projecting Routes (AC-177, AC-178, AC-181) ─────── */}
       <View>
-        {sectionHeader(t('home.projectingRoutes.title'))}
+        {sectionHeader(
+          t('home.projectingRoutes.title'),
+          !projectingLoading && projectingRoutes.length === 0
+            ? { label: t('home.projectingRoutes.browse'), onPress: onViewAllGyms }
+            : undefined,
+        )}
 
         {/* Grade filter chips (AC-177/178): single choice, only when the routes span >= 2 grades */}
         {showGradeChips ? (
@@ -692,10 +674,7 @@ export default function HomeScreen({
         {projectingLoading && projectingRoutes.length === 0 ? (
           sectionSpinner
         ) : projectingRoutes.length === 0 ? (
-          inlineEmpty(t('home.projectingRoutes.empty'), {
-            label: t('home.projectingRoutes.browse'),
-            onPress: onViewAllGyms,
-          })
+          inlineEmpty(t('home.projectingRoutes.empty'))
         ) : (
           <View style={styles.routeList}>
             {filteredRoutes.map((route) => {
@@ -738,16 +717,15 @@ export default function HomeScreen({
           t('home.followingActivity.title'),
           !followingLoading && followingActivity.length > 0 && onViewAllFollowing
             ? { label: t('home.followingActivity.viewAll'), onPress: () => onViewAllFollowing(session.user.id) }
-            : undefined,
+            : !followingLoading && followingActivity.length === 0 && onFindClimbers
+              ? { label: t('home.followingActivity.findClimbers'), onPress: onFindClimbers }
+              : undefined,
         )}
 
         {followingLoading && followingActivity.length === 0 ? (
           sectionSpinner
         ) : followingActivity.length === 0 ? (
-          inlineEmpty(
-            t('home.followingActivity.empty'),
-            onFindClimbers ? { label: t('home.followingActivity.findClimbers'), onPress: onFindClimbers } : undefined,
-          )
+          inlineEmpty(t('home.followingActivity.empty'))
         ) : isAx ? (
           <View>
             {followingActivity.map((item) => {
@@ -847,24 +825,12 @@ function makeStyles(
     bleed: {
       marginHorizontal: -screenMargin,
     },
-    // A3: 28pt (title3 line height) with or without an action; baseline-aligned.
     sectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'baseline',
-      justifyContent: 'space-between',
-      height: SECTION_HEADER_HEIGHT,
       marginBottom: theme.layout.sectionHeaderGap,
     },
-    // Inline empty state: 16 + 22 + 16 = 54pt; with an action + 8 + 32.
+    // Inline empty state: 16 + 22 + 16 = 54pt (sentence only).
     inlineEmpty: {
       paddingVertical: theme.spacing.md,
-    },
-    inlineEmptyAction: {
-      marginTop: theme.spacing.sm,
-      alignItems: 'flex-start',
-    },
-    inlineEmptyButton: {
-      marginLeft: -INLINE_BUTTON_PAD,
     },
     // ── Banner ──────────────────────────────────────────────────────────────
     bannerPlaceholderCard: {
