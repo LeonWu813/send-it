@@ -10,7 +10,7 @@ function Demo(props: SpinnerProps): React.JSX.Element {
   const { theme } = useTheme();
   return (
     <View style={{ padding: 16, width: 375 }}>
-      <View style={{ padding: 16, borderRadius: theme.borderRadius.lg, alignItems: 'center', backgroundColor: props.color === 'onMedia' ? theme.colors.mediaBackground : theme.colors.surface }}>
+      <View style={{ padding: 16, borderRadius: theme.borderRadius.lg, alignItems: 'center', backgroundColor: props.context === 'media' || props.context === 'mediaControl' || props.color === 'onMedia' ? theme.colors.mediaBackground : theme.colors.surface }}>
         <Spinner {...props} />
       </View>
     </View>
@@ -20,10 +20,11 @@ function Demo(props: SpinnerProps): React.JSX.Element {
 const meta: Meta<SpinnerProps> = {
   title: 'Components/Spinner',
   component: Demo,
-  args: { color: 'textSecondary', size: 'small' },
+  args: { context: 'section', color: undefined, size: undefined },
   argTypes: {
-    color: { control: 'inline-radio', options: ['textSecondary', 'onMedia', 'primary'] },
-    size: { control: 'inline-radio', options: ['small', 'large'] },
+    context: { control: 'inline-radio', options: ['page', 'section', 'control', 'field', 'media', 'mediaControl'], description: 'decides size and colour (page/media large; media* onMedia)' },
+    color: { control: 'inline-radio', options: [undefined, 'textSecondary', 'onMedia', 'primary'], description: 'control only (the button colour); deprecated elsewhere' },
+    size: { control: 'inline-radio', options: [undefined, 'small', 'large'], description: 'deprecated: use context' },
   },
 };
 export default meta;

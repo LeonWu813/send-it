@@ -39,8 +39,15 @@ export const MOTION = {
     toastShort: 2000,
     celebrationCard: 5000,
     highlightHold: 600,
+    /** Nothing is drawn for this long, then the loading state shows. */
+    loadingDelay: 300,
+    /** After this long the caller swaps the loading state for the E4 error. */
+    loadingTimeout: 10000,
+    /** @deprecated use `loadingDelay` (kept one version). */
     skeletonDelay: 300,
+    /** @deprecated skeletons are retired. */
     skeletonPulse: 1200,
+    /** @deprecated use `loadingTimeout` (kept one version). */
     skeletonTimeout: 10000,
     longPress: 500,
     hapticThrottle: 300,

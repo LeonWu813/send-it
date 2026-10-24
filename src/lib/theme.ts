@@ -200,6 +200,17 @@ export const SPACING = {
   xxl: 48,
 } as const;
 
+/** Spinner size per context (states-audit-ui 1.3). Colour is decided by the context too (see Spinner). */
+export const SPINNER = {
+  page: 'large',
+  section: 'small',
+  control: 'small',
+  field: 'small',
+  media: 'large',
+  mediaControl: 'small',
+} as const;
+export type SpinnerContext = keyof typeof SPINNER;
+
 export const LAYOUT = {
   /** Screen side margin: 16 below `largeWidthBreakpoint`, 20 at/above it. Use useLayout(). */
   screenMarginCompact: 16,
@@ -209,6 +220,10 @@ export const LAYOUT = {
   cardGap: 12,
   listRowPaddingV: 12,
   listRowMinHeight: 52,
+  /** PageLoading / E1 / E3 / E4 anchor: content-area top + this (= SPACING.xxl). */
+  pageLoadingOffset: SPACING.xxl,
+  /** Height of the `section` spinner slot (= listRowMinHeight). */
+  sectionLoadingSlot: 52,
   sectionGap: 24,
   sectionHeaderGap: 8,
   inlineGap: 8,

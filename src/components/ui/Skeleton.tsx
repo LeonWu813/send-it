@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Animated, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
@@ -121,27 +121,8 @@ export function SkeletonGroup({ label, children, style }: { label?: string; chil
   );
 }
 
-/**
- * Loading phases: nothing until `skeletonDelay` (300ms), then 'skeleton', and 'timeout' after
- * `skeletonTimeout` (10s) so the caller can show an InlineError with retry.
- */
-export function useSkeletonPhase(loading: boolean): 'idle' | 'skeleton' | 'timeout' {
-  const { duration } = useMotion();
-  const [phase, setPhase] = useState<'idle' | 'skeleton' | 'timeout'>('idle');
-  useEffect(() => {
-    if (!loading) {
-      setPhase('idle');
-      return undefined;
-    }
-    const a = setTimeout(() => setPhase('skeleton'), duration.skeletonDelay);
-    const b = setTimeout(() => setPhase('timeout'), duration.skeletonTimeout);
-    return () => {
-      clearTimeout(a);
-      clearTimeout(b);
-    };
-  }, [loading, duration.skeletonDelay, duration.skeletonTimeout]);
-  return phase;
-}
+export { useLoadingPhase, useSkeletonPhase } from './useLoadingPhase';
+export type { LoadingPhase } from './useLoadingPhase';
 
 // ─── The four v2.2 layouts (22.2): identical geometry to the real content ─────
 

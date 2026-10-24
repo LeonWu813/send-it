@@ -4,8 +4,8 @@ import { ActivityIndicator, Animated, Image, View } from 'react-native';
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native';
 
 import { USE_NATIVE_DRIVER, bezierFor, useMotion } from '../../lib/motion';
-import { useTheme } from '../../lib/theme';
-import type { PaletteKey } from '../../lib/theme';
+import { SPINNER, useTheme } from '../../lib/theme';
+import type { PaletteKey, SpinnerContext } from '../../lib/theme';
 import { ICON } from '../../lib/icons';
 import { AppText } from './AppText';
 import { Button } from './Button';
@@ -98,16 +98,27 @@ export function ProgressBar({
 }
 
 export interface SpinnerProps {
-  /** Button label colour / textSecondary (search bar, small region) / onMedia (Reel buffering). */
+  /**
+   * Where the spinner is used; decides size and colour (states-audit-ui 1.3): page = large textSecondary
+   * (use <PageLoading />), section = small textSecondary, control = small (pass `color` = the control's
+   * glyph colour), field = small textSecondary, media = large onMedia, mediaControl = small onMedia.
+   */
+  context?: SpinnerContext;
+  /** control: the button's own colour. @deprecated for other contexts: the context decides. */
   color?: PaletteKey;
+  /** @deprecated use `context`. */
   size?: 'small' | 'large';
   accessibilityLabel?: string;
 }
 
+const MEDIA_CONTEXTS: readonly SpinnerContext[] = ['media', 'mediaControl'];
+
 /** System ActivityIndicator with palette colours. Use for indeterminate waits; pull-to-refresh uses RefreshControl. */
-export function Spinner({ color = 'textSecondary', size = 'small', accessibilityLabel }: SpinnerProps): React.JSX.Element {
+export function Spinner({ context, color, size, accessibilityLabel }: SpinnerProps): React.JSX.Element {
   const { theme } = useTheme();
-  return <ActivityIndicator size={size} color={theme.colors[color]} accessibilityLabel={accessibilityLabel} />;
+  const resolvedSize = size ?? (context ? SPINNER[context] : 'small');
+  const resolvedColor: PaletteKey = color ?? (context && MEDIA_CONTEXTS.includes(context) ? 'onMedia' : 'textSecondary');
+  return <ActivityIndicator size={resolvedSize} color={theme.colors[resolvedColor]} accessibilityLabel={accessibilityLabel} />;
 }
 
 export interface UploadProgressCardProps {
