@@ -72,6 +72,22 @@ export const MOTION = {
   shake: { distancePt: 4, segments: 4 },
   /** Translate distances. Not affected by timeScale; unused under Reduce Motion. */
   distance: { sheetFloatEnter: 24, toastEnter: 8, stepperDigit: 6, bookmarkDrop: 2 },
+  /** Fist-bump like choreography (v6). `*Ms` scale with timeScale; `*U` are 512-grid units (scale with icon size, not timeScale). */
+  likeBump: {
+    /** Left fist approach; also the contact moment. */
+    approachMs: 120,
+    nudgeMs: 60,
+    /** The left fist holds until here, then retreats. */
+    holdUntilMs: 240,
+    retreatMs: 100,
+    tickMs: 200,
+    approachU: 128,
+    nudgeU: 24,
+    retreatU: 48,
+    tickDriftU: 24,
+    /** Gap between the fists for the (deferred) double-tap burst. */
+    burstGapU: 28,
+  },
   particles: {
     flash: {
       count: 10,
