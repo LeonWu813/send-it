@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AccessibilityInfo, Animated, View, findNodeHandle, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Animated, Platform, View, findNodeHandle, useWindowDimensions } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 
 import { ICON } from '../../lib/icons';
@@ -108,6 +108,11 @@ export function InlineError({
 
   useEffect(() => {
     if (!focusOnAppear) return;
+    // findNodeHandle does not exist on web: focus the DOM node instead
+    if (Platform.OS === 'web') {
+      (containerRef.current as unknown as { focus?: () => void } | null)?.focus?.();
+      return;
+    }
     const handle = containerRef.current ? findNodeHandle(containerRef.current) : null;
     if (handle) AccessibilityInfo.setAccessibilityFocus(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
