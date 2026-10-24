@@ -408,6 +408,7 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
         title={t('settings.logoutConfirmTitle')}
         description={t('settings.logoutConfirmBody')}
         confirmLabel={t('profile.logout')}
+        confirmIcon={ICON.signOut.outline}
         loading={isSigningOut}
         onConfirm={() => {
           // The sheet stays open (confirm button loading) until signOut() finishes or fails.

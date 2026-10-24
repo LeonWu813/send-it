@@ -333,7 +333,7 @@
       "noEvents": "目前沒有活動"
     },
     "loadFailed": {
-      "title": "首頁載入不出來",
+      "title": "首頁載不出來",
       "description": "檢查網路連線後再試一次。"
     },
     "banners": {
