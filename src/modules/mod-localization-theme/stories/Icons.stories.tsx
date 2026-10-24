@@ -68,7 +68,7 @@ function Tile({ k, style, px, color, selected, onPress }: { k: IconKey; style: S
         accessibilityState={{ selected }}
         style={{
           alignItems: 'center',
-          minHeight: 84,
+          minHeight: 88,
           paddingVertical: theme.spacing.xs,
           paddingHorizontal: theme.spacing.xs / 2,
           backgroundColor: theme.colors.surface,
@@ -81,8 +81,8 @@ function Tile({ k, style, px, color, selected, onPress }: { k: IconKey; style: S
         <View style={{ height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Glyph k={k} style={style} px={px} color={color} />
         </View>
-        <AppText variant="caption2" weight="600" numberOfLines={1}>
-          {k}
+        <AppText variant="caption2" weight="600" numberOfLines={2} style={{ textAlign: 'center', minHeight: 28 }}>
+          {k.replace(/([a-z])([A-Z])/g, '$1\u200B$2')}
         </AppText>
         {isCustom ? (
           <AppText variant="caption2" color="primary">
