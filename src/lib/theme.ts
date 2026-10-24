@@ -245,6 +245,12 @@ export const LAYOUT = {
   fieldGap: 16,
   /** Below this width: RouteCard thumb 64, StatsPanel 1:1. */
   compactWidthBreakpoint: 360,
+  /** HIG AX font scale: ButtonGroup always stacks and ChoiceGrid uses the compact column count at/above it. */
+  axFontScale: 1.35,
+  /** ChoiceGrid columns; falls back to `choiceGridColumnsCompact` when a column would be under `choiceGridMinColumnWidth`. */
+  choiceGridColumns: 6,
+  choiceGridColumnsCompact: 4,
+  choiceGridMinColumnWidth: 48,
 } as const;
 
 export const ICON_SIZE = {
@@ -319,6 +325,8 @@ export const COMPONENT_SIZE = {
   sheetFloatMaxHeightRatio: 0.6,
   /** Reel double-tap heart. */
   likeBurst: 84,
+  /** Chip layout="tile": swatch above name. swatchGap = outer `background` ring on the selected swatch. */
+  colorTile: { minHeight: 56, padV: 6, swatch: 20, swatchGap: 2 },
 } as const;
 
 /** Line widths. Only these four are allowed. focusRing: inner focus ring of text inputs / stepper only — never for selection or decoration. */

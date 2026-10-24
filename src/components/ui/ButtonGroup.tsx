@@ -52,9 +52,6 @@ export interface ButtonGroupProps {
   style?: React.ComponentProps<typeof View>['style'];
 }
 
-/** At or above this font scale (HIG AX sizes) the group always stacks. */
-export const BUTTON_GROUP_STACK_FONT_SCALE = 1.35;
-
 export function ButtonGroup({ buttons, size, on, fontScale, style }: ButtonGroupProps): React.JSX.Element {
   const { theme } = useTheme();
   const window = useWindowDimensions();
@@ -68,7 +65,7 @@ export function ButtonGroup({ buttons, size, on, fontScale, style }: ButtonGroup
   const gap = theme.layout.inlineGap;
 
   const measured = buttons.every((_, i) => labelWidths[i] !== undefined);
-  let stacked = buttons.length < 2 || scale >= BUTTON_GROUP_STACK_FONT_SCALE;
+  let stacked = buttons.length < 2 || scale >= theme.layout.axFontScale;
   if (!stacked && width !== null && measured) {
     const slot = (width - gap) / 2;
     stacked = buttons.some((b, i) => {
