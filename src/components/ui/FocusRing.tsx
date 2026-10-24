@@ -30,4 +30,4 @@ export function FocusRing({ color, radius }: { color: string; radius: number }):
 }
 
 /** RN-web only: drop the browser's default focus outline. Spread it ONLY on inputs that also draw a FocusRing. */
-export const NO_WEB_OUTLINE: TextStyle | null = Platform.OS === 'web' ? ({ outlineStyle: 'none', outlineWidth: 0 } as TextStyle) : null;
+export const NO_WEB_OUTLINE: TextStyle | null = Platform.OS === 'web' ? ({ outlineStyle: 'none', outlineWidth: 0 } as unknown as TextStyle) : null;
