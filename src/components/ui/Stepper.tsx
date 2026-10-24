@@ -255,7 +255,7 @@ export function Stepper({
             selectionColor={c.primary}
             cursorColor={c.primary}
             maxFontSizeMultiplier={theme.typeScale.title2.maxFontSizeMultiplier}
-            style={{ ...numberStyle, minWidth: 48, color: c.textPrimary, fontSize: theme.typeScale.title2.fontSize, fontWeight: '700', paddingVertical: 0, ...NO_WEB_OUTLINE }}
+            style={{ ...numberStyle, minWidth: 48, ...(Platform.OS === 'web' ? { width: Math.max(48, String(hi).length * 16) } : null), color: c.textPrimary, fontSize: theme.typeScale.title2.fontSize, fontWeight: '700', paddingVertical: 0, ...NO_WEB_OUTLINE }}
           />
         ) : (
           <Pressable
