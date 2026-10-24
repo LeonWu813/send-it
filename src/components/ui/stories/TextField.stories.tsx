@@ -69,3 +69,23 @@ export const AllStates: StoryObj<TextFieldProps> = {
     </View>
   ),
 };
+
+/** Focused: 1pt primary outline + inner 2pt ring, fill stays surfaceAlt, no layout shift. Switch the Theme toolbar for dark. */
+export const Focused: StoryObj<TextFieldProps> = {
+  args: { value: '小人摳點', autoFocus: true },
+};
+
+/** Error + focus: 1.5pt error outline + inner 2pt error ring; InlineError is always shown. */
+export const ErrorFocused: StoryObj<TextFieldProps> = {
+  args: { value: '', error: '請輸入暱稱', autoFocus: true },
+};
+
+/** Multiline focused. */
+export const FocusedMultiline: StoryObj<TextFieldProps> = {
+  args: { variant: 'multiline', label: '補充說明', value: '', placeholder: '例如：Crimpy', autoFocus: true, showCount: true },
+};
+
+/** Search capsule focused. */
+export const FocusedSearch: StoryObj<TextFieldProps> = {
+  args: { variant: 'search', label: undefined, accessibilityLabel: '搜尋路線', value: '紅色', placeholder: '搜尋路線', autoFocus: true },
+};

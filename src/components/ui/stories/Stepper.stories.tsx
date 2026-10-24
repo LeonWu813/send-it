@@ -59,3 +59,16 @@ export const AllStates: StoryObj<Args> = {
     </View>
   ),
 };
+
+/** Typing a number (`editing`): 1pt primary outline + inner 2pt ring, fill stays surfaceAlt. The play step taps the number. */
+export const Editing: StoryObj<Args> = {
+  render: () => (
+    <View style={{ padding: 16, width: 375 }}>
+      <Stepper label="嘗試次數" description="從第一次試到完攀" value={12} onChange={() => {}} />
+    </View>
+  ),
+  play: async ({ canvasElement }) => {
+    const number = Array.from(canvasElement.querySelectorAll<HTMLElement>('div')).find((el) => el.children.length === 0 && el.textContent === '12');
+    number?.click();
+  },
+};
