@@ -582,7 +582,7 @@ function makeStyles(
       backgroundColor: theme.colors.background,
     },
     contentContainer: {
-      paddingTop: theme.spacing.sm,
+      paddingTop: theme.spacing.md,
       paddingHorizontal: screenMargin,
       paddingBottom: theme.spacing.xxl,
     },

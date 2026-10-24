@@ -161,6 +161,7 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
     },
     // A8: inset grouped container (16), rows pad 16 so the avatar sits at x32.
     group: {
+      marginTop: theme.spacing.md,
       marginHorizontal: screenMargin,
       backgroundColor: theme.colors.surface,
       borderRadius: theme.radius.card,
