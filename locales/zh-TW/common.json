@@ -249,12 +249,13 @@
     "submit": {
       "cta": "+ 新增路線",
       "title": "新增路線",
+      "gymContext": "岩館：{{name}}",
       "gradeLabel": "難度",
       "colorLabel": "岩點顏色",
       "sectionLabel": "區域（選填）",
       "sectionPlaceholder": "例如：洞穴、板岩、斜板…",
       "photo": {
-        "title": "新增照片",
+        "title": "照片",
         "body": "需要照片才能讓其他攀岩者辨識路線。請拍攝起手點或整條路線的清晰照片。",
         "placeholder": "尚未選擇照片",
         "preview": "路線照片預覽",

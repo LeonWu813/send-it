@@ -249,12 +249,13 @@
     "submit": {
       "cta": "+ Add Route",
       "title": "Add a Route",
-      "gradeLabel": "GRADE",
-      "colorLabel": "HOLD COLOR",
-      "sectionLabel": "SECTION (optional)",
+      "gymContext": "Gym: {{name}}",
+      "gradeLabel": "Grade",
+      "colorLabel": "Hold color",
+      "sectionLabel": "Section (optional)",
       "sectionPlaceholder": "e.g. Cave, Slab, Overhang…",
       "photo": {
-        "title": "Add a Photo",
+        "title": "Photo",
         "body": "A photo is required so other climbers can identify the route. Take a clear photo of the start holds or the full route.",
         "placeholder": "No photo selected",
         "preview": "Route photo preview",

@@ -2,18 +2,18 @@
  * RouteSubmitScreen — single-page route submit flow (AC-020 revised, AC-021 revised, AC-043).
  *
  * Single page containing:
- *   - Grade chips (all ROUTE_GRADES, wrapped grid: RS-1, nothing hides off-screen)
- *   - Hold-color chips (all ROUTE_COLORS, with color dots)
+ *   - Gym context line, then grade chips (ChoiceGrid, 6 columns, all ROUTE_GRADES)
+ *   - Hold-color tiles (ChoiceGrid, all ROUTE_COLORS, nothing scrolls sideways)
  *   - Inline photo picker (Take Photo / Choose from Library); after selection
  *     shows a preview image and a "Change Photo" option instead of the buttons
  *   - Optional section-label text input
- *   - "Add Route" button that validates and submits via submitRoute() RPC
+ *   - "Add Route" in a sticky FormFooter that validates and submits via submitRoute() RPC
  *
  * No match-check step. No multi-step flow.
  *
  * AC-020 (revised): single-page submit, no client-side match-check step.
- * AC-021 (revised): block submission without photo; RS-1: the CTA is disabled until a photo is
- *   chosen and the photo field says why (inline, at the field).
+ * AC-021 (revised): block submission without photo; the CTA is always enabled (AC-187) and the
+ *   missing-field error shows inline at the field on press (scrolled into view).
  * AC-022: color selector restricted to fixed enum.
  * AC-023: grade selector restricted to V-scale only.
  * AC-043: pre-fill grade + color from RouteListScreen filter state via optional props.
@@ -31,7 +31,19 @@ import type { LayoutChangeEvent } from 'react-native';
 import RouteCard from '../../../components/RouteCard';
 import type { RouteCardRoute } from '../../../components/RouteCard';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
-import { AppText, Button, Chip, IconButton, NoticeBox, TextField, useToast } from '../../../components/ui';
+import {
+  AppText,
+  Button,
+  ButtonGroup,
+  Chip,
+  ChoiceGrid,
+  FormFooter,
+  InlineError,
+  NoticeBox,
+  TextField,
+  useFooterScroll,
+  useToast,
+} from '../../../components/ui';
 import { BottomSheet } from '../../../components/ui/BottomSheet';
 import { ICON } from '../../../lib/icons';
 import { CONTINUOUS, useLayout, useTheme } from '../../../lib/theme';
@@ -100,21 +112,13 @@ export default function RouteSubmitScreen({
   const [submitFailed, setSubmitFailed] = useState(false);
   const toast = useToast();
 
-  // Colour row: scroll the pre-selected chip into view on mount (centred), so the chosen value is visible.
-  const colorScrollRef = useRef<ScrollView>(null);
-  const colorLayouts = useRef<Record<string, { x: number; width: number }>>({});
-  const colorViewportWidth = useRef(0);
-  const didScrollToColor = useRef(false);
-  function scrollToSelectedColor(): void {
-    if (didScrollToColor.current || !initialColorTag) return;
-    const layout = colorLayouts.current[initialColorTag];
-    if (!layout || colorViewportWidth.current === 0) return;
-    didScrollToColor.current = true;
-    colorScrollRef.current?.scrollTo({
-      x: Math.max(0, layout.x + layout.width / 2 - colorViewportWidth.current / 2),
-      animated: false,
-    });
-  }
+  // Scroll plumbing: the footer hairline follows the scroll position; error fields are scrolled into view.
+  const { divider, scrollProps } = useFooterScroll();
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldY = useRef<Record<'grade' | 'color' | 'photo', number>>({ grade: 0, color: 0, photo: 0 });
+  const onFieldLayout = (key: 'grade' | 'color' | 'photo') => (e: LayoutChangeEvent): void => {
+    fieldY.current[key] = e.nativeEvent.layout.y;
+  };
 
   // AC-187 Layer 2: non-dismissable confirmation sheet state.
   const [showDuplicateSheet, setShowDuplicateSheet] = useState(false);
@@ -143,6 +147,11 @@ export default function RouteSubmitScreen({
       (r) => r.grade === selectedGrade && r.color_tag === selectedColor,
     );
   }, [activeRoutes, selectedGrade, selectedColor]);
+
+  // A failed submit adds a callout at the end of the content: scroll it above the footer.
+  useEffect(() => {
+    if (submitFailed) scrollRef.current?.scrollToEnd({ animated: true });
+  }, [submitFailed]);
 
   // ── Photo picker ───────────────────────────────────────────────────────────
 
@@ -262,7 +271,12 @@ export default function RouteSubmitScreen({
       setPhotoError(null);
     }
 
-    if (hasError) return;
+    if (hasError) {
+      // Scroll to the first field with an error (the footer keeps the button visible).
+      const first = !selectedGrade ? 'grade' : !selectedColor ? 'color' : 'photo';
+      scrollRef.current?.scrollTo({ y: Math.max(0, fieldY.current[first] - theme.spacing.md), animated: true });
+      return;
+    }
 
     // Narrowing guard — redundant with the hasError check above but makes the
     // compiler aware that all three values are non-null from this point on,
@@ -290,156 +304,132 @@ export default function RouteSubmitScreen({
   return (
     <SwipeBackWrapper onBack={onBack} enabled={!isSubmitting}>
     <ScrollView
+      ref={scrollRef}
       style={styles.root}
       contentContainerStyle={styles.contentContainer}
       keyboardShouldPersistTaps="handled"
+      {...scrollProps}
     >
-      <AppText variant="body" color="textSecondary">{gymName}</AppText>
+      {/* Gym context: not tappable, read as one sentence. */}
+      <View
+        style={styles.gymRow}
+        accessible
+        accessibilityLabel={t('routes.submit.gymContext', { name: gymName })}
+      >
+        <Ionicons name={ICON.gyms.outline} size={theme.iconSize.sm} color={theme.colors.textSecondary} accessibilityElementsHidden />
+        <AppText variant="subhead" color="textSecondary" numberOfLines={2} style={styles.gymName}>{gymName}</AppText>
+      </View>
 
       {/* Grade chips — AC-023: V-scale only */}
-      <View>
-        <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.gradeLabel')}</AppText>
-        <View style={styles.gradeGrid} accessibilityRole="radiogroup">
+      <View onLayout={onFieldLayout('grade')}>
+        <AppText variant="fieldLabel" style={styles.fieldLabel}>{t('routes.submit.gradeLabel')}</AppText>
+        <ChoiceGrid accessibilityLabel={t('routes.submit.gradeLabel')}>
           {ROUTE_GRADES.map((grade) => (
             <Chip
               key={grade}
               variant="choice"
+              size="large"
               label={grade}
               selected={selectedGrade === grade}
+              disabled={isSubmitting}
               onPress={() => {
                 setSelectedGrade(grade);
                 setGradeError(null);
               }}
             />
           ))}
-        </View>
-        {gradeError ? (
-          <InlineFieldError message={gradeError} />
-        ) : null}
+        </ChoiceGrid>
+        {gradeError ? <InlineError variant="field" message={gradeError} style={styles.fieldError} /> : null}
       </View>
 
-      {/* Hold-color picker — AC-022: fixed enum, tape swatches */}
-      <View>
-        <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.colorLabel')}</AppText>
-        <ScrollView
-          ref={colorScrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-          accessibilityRole="radiogroup"
-          onLayout={(e: LayoutChangeEvent) => {
-            colorViewportWidth.current = e.nativeEvent.layout.width;
-            scrollToSelectedColor();
-          }}
-        >
+      {/* Hold-color picker — AC-022: fixed enum, tape swatch tiles, all visible */}
+      <View onLayout={onFieldLayout('color')}>
+        <AppText variant="fieldLabel" style={styles.fieldLabel}>{t('routes.submit.colorLabel')}</AppText>
+        <ChoiceGrid accessibilityLabel={t('routes.submit.colorLabel')}>
           {ROUTE_COLORS.map((color) => (
-            <View
+            <ColorOption
               key={color}
-              onLayout={(e: LayoutChangeEvent) => {
-                colorLayouts.current[color] = { x: e.nativeEvent.layout.x, width: e.nativeEvent.layout.width };
-                scrollToSelectedColor();
+              color={color}
+              selected={selectedColor === color}
+              disabled={isSubmitting}
+              onPress={() => {
+                setSelectedColor(color);
+                setColorError(null);
               }}
-            >
-              <ColorOption
-                color={color}
-                selected={selectedColor === color}
-                onPress={() => {
-                  setSelectedColor(color);
-                  setColorError(null);
-                }}
-              />
-            </View>
+            />
           ))}
-        </ScrollView>
-        {colorError ? (
-          <InlineFieldError message={colorError} />
-        ) : null}
+        </ChoiceGrid>
+        {colorError ? <InlineError variant="field" message={colorError} style={styles.fieldError} /> : null}
       </View>
 
       {/* Inline photo picker — AC-021 */}
-      <View>
-        <AppText variant="pageSection" style={styles.sectionLabel}>{t('routes.submit.photo.title')}</AppText>
+      <View onLayout={onFieldLayout('photo')}>
+        <AppText variant="fieldLabel" style={styles.fieldLabel}>{t('routes.submit.photo.title')}</AppText>
 
         {photoUri ? (
-          /* Preview + Change Photo */
-          <View style={styles.photoBlock}>
+          <View style={styles.photoRow}>
             <Image
               source={{ uri: photoUri }}
-              style={styles.photoPreview}
+              style={styles.photoThumb}
               resizeMode="cover"
               accessibilityLabel={t('routes.submit.photo.preview')}
               accessibilityIgnoresInvertColors
             />
-            <Button
-              variant="text"
-              placement="centered"
-              label={t('routeCatalog.submit.changePhoto')}
-              onPress={() => void handlePickPhoto()}
-            />
-          </View>
-        ) : (
-          /* Take Photo / Choose from Library buttons */
-          <View style={styles.photoButtonRow}>
-            <View style={styles.photoButtonFlex}>
+            {isSubmitting ? null : (
               <Button
-                variant="secondary"
+                variant="text"
                 size="md"
-                fullWidth
-                label={t('routes.submit.photo.takePhoto')}
-                onPress={() => void handleTakePhoto()}
-              />
-            </View>
-            <View style={styles.photoButtonFlex}>
-              <Button
-                variant="secondary"
-                size="md"
-                fullWidth
-                label={t('routes.submit.photo.choosePhoto')}
+                placement="inline"
+                style={styles.changePhoto}
+                label={t('routeCatalog.submit.changePhoto')}
                 onPress={() => void handlePickPhoto()}
               />
-            </View>
+            )}
           </View>
+        ) : (
+          <ButtonGroup
+            buttons={[
+              { label: t('routes.submit.photo.takePhoto'), variant: 'secondary', icon: ICON.camera.outline, onPress: () => void handleTakePhoto() },
+              { label: t('routes.submit.photo.choosePhoto'), variant: 'secondary', icon: ICON.library.outline, onPress: () => void handlePickPhoto() },
+            ]}
+            size="md"
+          />
         )}
 
-        {/* AC-021 / RS-1: inline validation at the photo field. Permission errors in red; otherwise a
-             neutral "required" line while no photo is chosen (the CTA below is disabled for that reason). */}
+        {/* AC-021: the neutral hint while empty; the red error replaces it after a press or a denied permission. */}
         {photoError ? (
-          <InlineFieldError message={photoError} />
+          <InlineError variant="field" message={photoError} style={styles.fieldError} />
         ) : !photoUri ? (
-          <AppText variant="footnote" color="textSecondary" style={styles.photoRequiredHint} testID="photo-required-hint">
+          <AppText variant="footnote" color="textSecondary" style={styles.fieldError} testID="photo-required-hint">
             {t('routeCatalog.submit.photoRequired')}
           </AppText>
         ) : null}
       </View>
 
       {/* Optional section label */}
-      <View>
-        <TextField
-          label={t('routes.submit.sectionLabel')}
-          value={sectionLabel}
-          onChangeText={setSectionLabel}
-          placeholder={t('routeCatalog.submit.sectionPlaceholder')}
-          maxLength={80}
-          autoCorrect={false}
-        />
-      </View>
+      <TextField
+        label={t('routes.submit.sectionLabel')}
+        value={sectionLabel}
+        onChangeText={setSectionLabel}
+        placeholder={t('routeCatalog.submit.sectionPlaceholder')}
+        maxLength={80}
+        autoCorrect={false}
+      />
 
-      {/* AC-187 Layer 1: inline warning notice (neutral container, warning icon + bold title) — reactive to grade/color selection */}
+      {/* AC-187 Layer 1: inline info notice (not warning-orange) — reactive to grade/color selection */}
       {duplicateCandidates.length > 0 ? (
-        <View>
-          <NoticeBox
-            tone="warning"
-            title={t('routes.duplicateNotice.title')}
-            message={t('routes.duplicateNotice.body', {
-              grade: selectedGrade,
-              color: t(`routeCatalog.colors.${selectedColor}`),
-              count: duplicateCandidates.length,
-            })}
-          />
-        </View>
+        <NoticeBox
+          tone="info"
+          title={t('routes.duplicateNotice.title')}
+          message={t('routes.duplicateNotice.body', {
+            grade: selectedGrade,
+            color: t(`routeCatalog.colors.${selectedColor}`),
+            count: duplicateCandidates.length,
+          })}
+        />
       ) : null}
 
-      {/* Submit failure: error callout above the button; the form keeps what the user filled in. */}
+      {/* Submit failure: error callout above the footer; the form keeps what the user filled in. */}
       {submitFailed ? (
         <NoticeBox
           tone="error"
@@ -448,56 +438,40 @@ export default function RouteSubmitScreen({
           focusOnAppear
         />
       ) : null}
-
-      {/* Add Route button — disabled while submitting or until a photo is chosen (RS-1) */}
-      <View>
-        <Button
-          variant="primary"
-          fullWidth
-          label={t('routeCatalog.submit.addRoute')}
-          onPress={() => void handleAddRoute()}
-          loading={isSubmitting}
-          disabled={isSubmitting || !photoUri}
-        />
-      </View>
     </ScrollView>
 
+    {/* Sticky footer: always enabled (AC-187); validates on press. */}
+    <FormFooter divider={divider}>
+      <Button
+        variant="primary"
+        size="lg"
+        fullWidth
+        label={t('routeCatalog.submit.addRoute')}
+        onPress={() => void handleAddRoute()}
+        loading={isSubmitting}
+        disabled={isSubmitting}
+      />
+    </FormFooter>
+
     {/* AC-187 Layer 2: non-dismissable confirmation sheet shown when duplicates exist on submit.
-        X button closes the sheet; swipe-to-dismiss and backdrop tap are intentionally blocked. */}
+        The confirm variant draws no X; swipe-to-dismiss and backdrop tap are blocked, so the only exits
+        are its two buttons. */}
     <BottomSheet
       visible={showDuplicateSheet}
       onClose={() => setShowDuplicateSheet(false)}
       swipeable={false}
       dismissOnBackdrop={false}
       title={t('routes.duplicateSheet.title')}
-      variant="content"
-      footer={
-        <View style={{ gap: theme.spacing.sm }}>
-          <Button
-            variant="primary"
-            size="lg"
-            fullWidth
-            label={t('routes.duplicateSheet.confirm')}
-            loading={isSubmitting}
-            onPress={() => {
-              setShowDuplicateSheet(false);
-              // Narrowing guard — values were validated in handleAddRoute before
-              // the sheet was shown, so this branch is unreachable at runtime.
-              // The explicit guard lets the compiler verify non-null here too.
-              if (!selectedGrade || !selectedColor || !photoUri) return;
-              void uploadAndSubmit(selectedGrade, selectedColor, photoUri);
-            }}
-          />
-          <Button
-            variant="secondary"
-            size="lg"
-            fullWidth
-            label={t('routes.duplicateSheet.cancel')}
-            disabled={isSubmitting}
-            onPress={() => setShowDuplicateSheet(false)}
-          />
-        </View>
-      }
+      variant="confirm"
+      loading={isSubmitting}
+      confirmLabel={t('routes.duplicateSheet.confirm')}
+      cancelLabel={t('routes.duplicateSheet.cancel')}
+      onConfirm={() => {
+        setShowDuplicateSheet(false);
+        // Values were validated in handleAddRoute before the sheet was shown; the guard narrows the types.
+        if (!selectedGrade || !selectedColor || !photoUri) return;
+        void uploadAndSubmit(selectedGrade, selectedColor, photoUri);
+      }}
     >
       {duplicateCandidates.map((candidate) => {
         const cardRoute: RouteCardRoute = {
@@ -520,25 +494,16 @@ export default function RouteSubmitScreen({
   );
 }
 
-/** Field-level validation message (error icon + text, never colour alone). */
-function InlineFieldError({ message }: { message: string }): React.JSX.Element {
-  const { theme } = useTheme();
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.layout.iconTextGap, marginTop: theme.spacing.xs }}>
-      <Ionicons name={ICON.error.outline} size={theme.iconSize.sm} color={theme.colors.error} />
-      <AppText variant="footnote" color="error" style={{ flex: 1 }}>{message}</AppText>
-    </View>
-  );
-}
-
-/** Tape colour option for the picker: inverted Chip with a 14x14 tape swatch (v2.2). */
+/** Tape colour tile for the picker: swatch above the name, checkmark on the swatch when selected. */
 function ColorOption({
   color,
   selected,
+  disabled,
   onPress,
 }: {
   color: RouteColor;
   selected: boolean;
+  disabled: boolean;
   onPress: () => void;
 }): React.JSX.Element {
   const { t } = useTranslation('common');
@@ -546,9 +511,12 @@ function ColorOption({
   return (
     <Chip
       variant="choice"
+      layout="tile"
       label={t(`routeCatalog.colors.${color}`)}
       swatch={swatch.fill}
+      swatchMark={swatch.mark}
       selected={selected}
+      disabled={disabled}
       onPress={onPress}
     />
   );
@@ -561,45 +529,42 @@ function makeStyles(theme: ReturnType<typeof useTheme>['theme'], screenMargin: n
       flex: 1,
       backgroundColor: theme.colors.background,
     },
-    // R0: the scroll container owns the margin and the gaps; sections set none.
+    // R0: the scroll container owns the margin and the gaps; fields set none. The footer sits under it,
+    // so paddingBottom sm + the footer's top sm = fieldGap between the last field and the button.
     contentContainer: {
       paddingTop: theme.spacing.md,
       paddingHorizontal: screenMargin,
-      paddingBottom: theme.spacing.xxl,
-      gap: theme.layout.sectionGap,
+      paddingBottom: theme.spacing.sm,
+      gap: theme.layout.fieldGap,
     },
-    sectionLabel: {
-      marginBottom: theme.layout.sectionHeaderGap,
-    },
-    chipRow: {
-      columnGap: theme.layout.inlineGap,
-      paddingRight: theme.spacing.sm,
-    },
-    gradeGrid: {
+    gymRow: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
-      columnGap: theme.layout.inlineGap,
-      rowGap: theme.layout.inlineGap,
+      alignItems: 'center',
+      gap: theme.layout.iconTextGap,
     },
-    photoBlock: {
-      gap: theme.spacing.sm,
-    },
-    photoPreview: {
-      width: '100%',
-      height: 260,
-      borderRadius: theme.radius.card,
-      ...CONTINUOUS,
-      backgroundColor: theme.colors.surfaceAlt,
-    },
-    photoButtonRow: {
-      flexDirection: 'row',
-      gap: theme.layout.inlineGap,
-    },
-    photoButtonFlex: {
+    gymName: {
       flex: 1,
     },
-    photoRequiredHint: {
+    fieldLabel: {
+      marginBottom: theme.spacing.xs,
+    },
+    fieldError: {
       marginTop: theme.spacing.xs,
+    },
+    photoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.smd,
+    },
+    changePhoto: {
+      alignSelf: 'center',
+    },
+    photoThumb: {
+      width: theme.componentSize.routeThumb,
+      height: theme.componentSize.routeThumb,
+      borderRadius: theme.radius.media,
+      ...CONTINUOUS,
+      backgroundColor: theme.colors.surfaceAlt,
     },
   });
 }

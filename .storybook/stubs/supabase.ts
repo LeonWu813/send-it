@@ -37,6 +37,9 @@ function builder(key: string): unknown {
           if (data.get(key) === STUB_PENDING) return new Promise(() => {}).then(resolve, reject);
           const raw = data.has(key) ? data.get(key) : single ? null : [];
           const value = single && Array.isArray(raw) ? (raw[0] ?? null) : raw;
+          if (value && typeof value === 'object' && '__stubError' in value) {
+            return Promise.resolve({ data: null, error: { message: String((value as { __stubError: unknown }).__stubError) }, count: null }).then(resolve, reject);
+          }
           return Promise.resolve({ data: value, error: null, count: Array.isArray(raw) ? raw.length : null }).then(
             resolve,
             reject,

@@ -1,4 +1,4 @@
-/** Browser stub for expo-image-picker: the pickers always resolve as canceled. */
+/** Browser stub for expo-image-picker: the pickers resolve as canceled unless a story sets a result with `setStubPickedPhoto`. */
 export type ImagePickerAsset = {
   uri: string;
   width: number;
@@ -33,5 +33,10 @@ export const requestMediaLibraryPermissionsAsync = async (): Promise<PermissionR
 export const requestCameraPermissionsAsync = async (): Promise<PermissionResponse> => granted;
 export const getMediaLibraryPermissionsAsync = async (): Promise<PermissionResponse> => granted;
 export const getCameraPermissionsAsync = async (): Promise<PermissionResponse> => granted;
-export const launchImageLibraryAsync = async (): Promise<ImagePickerResult> => canceled;
-export const launchCameraAsync = async (): Promise<ImagePickerResult> => canceled;
+let picked: ImagePickerSuccessResult | null = null;
+/** Stories: make the next pickers resolve with this image URI (null = canceled again). */
+export function setStubPickedPhoto(uri: string | null): void {
+  picked = uri ? { canceled: false, assets: [{ uri, width: 800, height: 600, type: 'image', mimeType: 'image/jpeg' }] } : null;
+}
+export const launchImageLibraryAsync = async (): Promise<ImagePickerResult> => picked ?? canceled;
+export const launchCameraAsync = async (): Promise<ImagePickerResult> => picked ?? canceled;

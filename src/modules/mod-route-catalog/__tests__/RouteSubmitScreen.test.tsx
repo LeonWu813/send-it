@@ -207,18 +207,32 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
     });
   });
 
-  it('RS-1: photo field shows the required hint and the Add Route CTA is disabled until a photo is chosen', async () => {
+  it('photo field shows the neutral required hint, and the Add Route CTA is always enabled (AC-187)', async () => {
     render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
 
     expect(screen.getByTestId('photo-required-hint')).toBeTruthy();
     const cta = screen.getAllByRole('button').find((el) => el.props.accessibilityLabel === 'Add Route');
-    expect(cta?.props.accessibilityState?.disabled).toBe(true);
+    expect(cta?.props.accessibilityState?.disabled).toBeFalsy();
   });
 
-  it('RS-1: grade chips are a wrapped grid (not a horizontal scroll) and include every grade', async () => {
+  it('pressing Add Route on an empty form shows the missing-field errors inline and submits nothing (AC-021)', async () => {
     render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
 
-    for (const grade of ['V0', 'V5', 'V10']) {
+    fireEvent.press(screen.getAllByRole('button').find((el) => el.props.accessibilityLabel === 'Add Route') as never);
+
+    expect(await screen.findByText(/Please select a grade|請選擇難度/)).toBeTruthy();
+    expect(screen.getByText(/Please select a hold color|請選擇岩點顏色/)).toBeTruthy();
+    expect(screen.getByText(/photo is required|必須附上照片/i)).toBeTruthy();
+    expect(screen.queryByTestId('photo-required-hint')).toBeNull();
+    expect(mockSubmitRoute).not.toHaveBeenCalled();
+  });
+
+  it('grade and colour are equal-width choice grids (radiogroups) that include every option', async () => {
+    render(<RouteSubmitScreen {...DEFAULT_PROPS} />, renderOptions());
+
+    expect(screen.getByLabelText('Grade', { exact: true })).toBeTruthy();
+    expect(screen.getByLabelText('Hold color', { exact: true })).toBeTruthy();
+    for (const grade of ['VB', 'V0', 'V5', 'V10']) {
       expect(screen.getByText(grade)).toBeTruthy();
     }
   });
@@ -658,6 +672,8 @@ describe('RouteSubmitScreen — single-page flow (AC-020 revised)', () => {
       // The sheet title should appear
       const sheetTitle = screen.queryByText(/Similar Routes Found|找到相似路線/);
       expect(sheetTitle).toBeTruthy();
+      // AC-187: non-dismissable, only the two buttons: no X close button (the one "Close" node left is the inert backdrop)
+      expect(screen.queryAllByLabelText(/^(Close|關閉)$/).length).toBeLessThanOrEqual(1);
     });
   });
 

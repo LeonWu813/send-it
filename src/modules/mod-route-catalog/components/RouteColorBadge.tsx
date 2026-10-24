@@ -29,13 +29,13 @@ interface RouteColorBadgeProps {
   onMedia?: boolean;
 }
 
-/** Fill for the 11x11 tape swatch (colour-filter chip, thumbnail dot). Fill only, no ring. */
-export function useTapeSwatch(color: string): { fill: string } {
+/** Fill for the tape swatch (colour-filter chip, thumbnail dot, picker tile) plus the readable mark colour for a checkmark on it. Fill only, no ring. */
+export function useTapeSwatch(color: string): { fill: string; mark: string } {
   const { theme } = useTheme();
   const mode = theme.isDark ? 'dark' : 'light';
   const tape = resolveTape(mode, color);
-  if (!tape.known) return { fill: theme.colors.surfaceAlt };
-  return { fill: tape.entry.fill };
+  if (!tape.known) return { fill: theme.colors.surfaceAlt, mark: theme.colors.textPrimary };
+  return { fill: tape.entry.fill, mark: tape.entry.label };
 }
 
 export default function RouteColorBadge({
