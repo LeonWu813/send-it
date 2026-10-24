@@ -40,10 +40,10 @@
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Pressable, View } from 'react-native';
-import { AppText } from '../../../components/ui/AppText';
+import { View } from 'react-native';
 import { EmptyState } from '../../../components/ui/EmptyState';
 import { InlineError } from '../../../components/ui/InlineError';
+import { SectionHeader } from '../../../components/ui/SectionHeader';
 import { supabase } from '../../../lib/supabase';
 import { useTheme } from '../../../lib/theme';
 import { fetchBlockedUserIds } from '../../mod-moderation';
@@ -244,39 +244,19 @@ export default function BetaVideoSection({
 
   return (
     <View>
-      {/* Section header: title + trailing upload entry (RD-1; >= 44pt hit area) */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          minHeight: theme.layout.minTouchTarget,
-          marginBottom: theme.layout.sectionHeaderGap,
-        }}
-      >
-        <AppText variant="pageSection" accessibilityRole="header" style={{ flexShrink: 1 }}>
-          {t('betaVideo.sectionTitle')}
-        </AppText>
-        {onRegisterUploadLauncher && !isLoading ? (
-          <Pressable
-            onPress={() => { void selectHandlerRef.current?.(); }}
-            accessibilityRole="button"
-            accessibilityLabel={hasOwnVideo ? t('betaVideo.replaceMine') : t('betaVideo.emptyUpload')}
-            testID="beta-video-section-upload"
-            hitSlop={{ left: theme.spacing.sm, right: theme.spacing.sm }}
-            style={{
-              minHeight: theme.layout.minTouchTarget,
-              minWidth: theme.layout.minTouchTarget,
-              justifyContent: 'center',
-              alignItems: 'flex-end',
-            }}
-          >
-            <AppText variant="subhead" weight="600" color="primary">
-              {hasOwnVideo ? t('betaVideo.replaceMine') : t('betaVideo.emptyUpload')}
-            </AppText>
-          </Pressable>
-        ) : null}
-      </View>
+      {/* Section header: title + T1 trailing upload entry (RD-1) */}
+      <SectionHeader
+        title={t('betaVideo.sectionTitle')}
+        action={
+          onRegisterUploadLauncher && !isLoading
+            ? {
+                label: hasOwnVideo ? t('betaVideo.replaceMine') : t('betaVideo.emptyUpload'),
+                onPress: () => { void selectHandlerRef.current?.(); },
+              }
+            : undefined
+        }
+        style={{ marginBottom: theme.layout.sectionHeaderGap }}
+      />
 
       {/* Load error (non-fatal) */}
       {loadError ? (

@@ -171,9 +171,9 @@ describe('BetaVideoSection', () => {
       renderOptions(),
     );
     await waitFor(() => {
-      expect(screen.getByTestId('beta-video-section-upload')).toBeTruthy();
+      expect(screen.getByRole('button', { name: /^(Upload beta|Replace my beta)$/ })).toBeTruthy();
     });
-    expect(screen.getByTestId('beta-video-section-upload').props.accessibilityLabel).toBe('Upload beta');
+    expect(screen.getByLabelText('Upload beta')).toBeTruthy();
     first.unmount();
 
     mockFetchBetaVideos.mockResolvedValue([MOCK_VIDEO]);
@@ -182,7 +182,7 @@ describe('BetaVideoSection', () => {
       renderOptions(),
     );
     await waitFor(() => {
-      expect(screen.getByTestId('beta-video-section-upload').props.accessibilityLabel).toBe('Replace my beta');
+      expect(screen.getByLabelText('Replace my beta')).toBeTruthy();
     });
   });
 
@@ -192,7 +192,7 @@ describe('BetaVideoSection', () => {
     await waitFor(() => {
       expect(screen.getByTestId('beta-video-grid')).toBeTruthy();
     });
-    expect(screen.queryByTestId('beta-video-section-upload')).toBeNull();
+    expect(screen.queryByLabelText(/^(Upload beta|Replace my beta)$/)).toBeNull();
   });
 
   it('AC-038: renders the three-column grid when videos exist', async () => {
