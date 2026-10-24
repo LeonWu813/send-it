@@ -34,16 +34,14 @@ describe('InlineError padding (C1)', () => {
     expect(style).toMatchObject({ paddingVertical: 12, paddingHorizontal: 16 });
   });
 
-  it('ghost retry glyph sits on the padding line (-14 against the button padding)', () => {
-    wrap(<InlineError variant="block" on="elevated" message="Failed" actionLabel="Retry" onAction={() => {}} />);
-    let n: any = screen.getByLabelText('Retry').parent;
-    const margins: unknown[] = [];
-    while (n) {
-      const st = StyleSheet.flatten(n.props?.style);
-      margins.push(st?.marginRight, st?.marginLeft); // marginRight inline, marginLeft when stacked (font scale >= 1.6)
-      n = n.parent;
-    }
-    expect(margins).toContain(-14);
+  it('callout action is a text button: no padding to cancel (no negative margin) and no leading icon', () => {
+    const { toJSON } = wrap(<InlineError variant="block" on="elevated" message="Failed" actionLabel="Retry" onAction={() => {}} />);
+    const json = JSON.stringify(toJSON());
+    expect(json).not.toContain('"marginRight":-14');
+    expect(json).not.toContain('"marginLeft":-14');
+    expect(json).not.toContain('refresh');
+    const btn = screen.getByLabelText('Retry');
+    expect(StyleSheet.flatten(btn.props.style)).toMatchObject({ alignSelf: 'flex-start' });
   });
 });
 

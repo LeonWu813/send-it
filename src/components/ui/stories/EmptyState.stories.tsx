@@ -7,6 +7,7 @@ import { useTheme } from '../../../lib/theme';
 import { AppText } from '../AppText';
 import { EmptyState } from '../EmptyState';
 import type { EmptyStateProps } from '../EmptyState';
+import { SectionHeader } from '../SectionHeader';
 
 const glyphs = {
   default: undefined,
@@ -81,14 +82,23 @@ export const Page: StoryObj<EmptyStateProps> = {
   ),
 };
 
-/** E2 section: left aligned on the keyline, one sentence and one ghost action. */
+/** E2 section: just the sentence; the action lives in the header's T1 slot (SectionHeader). */
 export const Section: StoryObj<EmptyStateProps> = {
   render: () => (
     <Frame>
-      <AppText variant="title3" style={{ marginTop: 8 }}>
-        完攀紀錄
-      </AppText>
-      <EmptyState variant="section" description="還沒有完攀紀錄。" secondaryLabel="找路線" />
+      <View style={{ marginTop: 8 }}>
+        <SectionHeader title="完攀紀錄" action={{ label: '找路線', onPress: () => {} }} />
+      </View>
+      <EmptyState variant="section" description="還沒有完攀紀錄。" />
+    </Frame>
+  ),
+};
+
+/** E2 without a header row (e.g. a detail page): the action may still sit under the sentence as a `text md inline`. */
+export const SectionNoHeader: StoryObj<EmptyStateProps> = {
+  render: () => (
+    <Frame>
+      <EmptyState variant="section" description="還沒有完攀紀錄。" secondaryLabel="記錄完攀" />
     </Frame>
   ),
 };

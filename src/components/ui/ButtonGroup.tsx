@@ -36,7 +36,7 @@ import type { ButtonSize, ButtonVariant, OnSurface } from './Button';
 export interface ButtonGroupItem {
   label: string;
   onPress: () => void;
-  variant?: ButtonVariant;
+  variant?: Exclude<ButtonVariant, 'text'>;
   icon?: IoniconName;
   loading?: boolean;
   disabled?: boolean;

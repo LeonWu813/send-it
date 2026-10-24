@@ -40,7 +40,7 @@ export interface InlineErrorProps {
   /** `sm` action: Retry / Open Settings / Choose another. Same row as the text; under it at font scale >= 1.6. */
   actionLabel?: string;
   onAction?: () => void;
-  /** 16pt leading icon on the action. Default `ICON.retry.outline` (every action is a Retry today); pass `null` for none. */
+  /** 16pt leading icon on the action. Only the block-on-page `secondary` action takes one (default `ICON.retry.outline`; `null` for none); the text-style action of callouts never has an icon. */
   actionIcon?: IoniconName | null;
   actionLoading?: boolean;
   /** block only: the surface it sits on (page card = surface, inside a BottomSheet = elevated). */
@@ -146,13 +146,16 @@ export function InlineError({
   // icon centred on the headline line when there is a title, else on the first body line
   const iconLine = notice && !title ? theme.typeScale.subhead.lineHeight : theme.typeScale.headline.lineHeight;
   const iconTop = (iconLine - iconSize) / 2;
-  const ghostAction = notice || !page;
-  const ghostPad = 14; // Button sm side padding (14): glyph lands on the padding line (C4/A8)
+  const textAction = notice || !page;
   const resolvedActionIcon = actionIcon === null ? undefined : (actionIcon ?? ICON.retry.outline);
   // A4: a single-line message and its action share one centre
   const centreRow = !title && oneLine && !stacked;
   const action = actionLabel ? (
-    <Button variant={ghostAction ? 'ghost' : 'secondary'} size="sm" on="tinted" label={actionLabel} icon={resolvedActionIcon} loading={actionLoading} onPress={() => onAction?.()} />
+    textAction ? (
+      <Button variant="text" size="sm" placement="container" on="tinted" label={actionLabel} loading={actionLoading} onPress={() => onAction?.()} />
+    ) : (
+      <Button variant="secondary" size="sm" on="tinted" label={actionLabel} icon={resolvedActionIcon} loading={actionLoading} onPress={() => onAction?.()} />
+    )
   ) : null;
 
   return (
@@ -197,9 +200,9 @@ export function InlineError({
           >
             {message}
           </AppText>
-          {action && stacked ? <View style={{ marginTop: theme.spacing.sm, alignItems: 'flex-start', marginLeft: ghostAction ? -ghostPad : 0 }}>{action}</View> : null}
+          {action && stacked ? <View style={{ marginTop: theme.spacing.sm, alignItems: 'flex-start' }}>{action}</View> : null}
         </View>
-        {action && !stacked ? <View style={{ marginLeft: theme.spacing.smd, alignSelf: 'center', marginRight: ghostAction ? -ghostPad : 0 }}>{action}</View> : null}
+        {action && !stacked ? <View style={{ marginLeft: theme.spacing.smd, alignSelf: 'center' }}>{action}</View> : null}
       </View>
     </Animated.View>
   );

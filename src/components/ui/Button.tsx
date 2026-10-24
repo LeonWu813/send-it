@@ -9,8 +9,15 @@ import { useTheme } from '../../lib/theme';
 import type { PaletteKey } from '../../lib/theme';
 import { AppText } from './AppText';
 import { PressableScale } from './PressableScale';
+import { TextButton } from './TextButton';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'destructiveTonal' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'destructive' | 'destructiveTonal' | 'ghost' | 'text';
+/**
+ * text only: which role the text button plays (text-button spec §1.2); decides hitSlop, self-alignment and
+ * the default label lines. trailing = T1 section-header slot, inline = T2 under its text / list footer,
+ * centered = T3 under a centred body, bar = T4 modal top bar, container = T5 inside a tinted box.
+ */
+export type TextPlacement = 'trailing' | 'inline' | 'centered' | 'bar' | 'container';
 export type ButtonSize = 'lg' | 'md' | 'sm';
 /** Which surface the button sits on; decides the ghost pressed colour (design system §8.5). */
 export type OnSurface = 'surface' | 'background' | 'media' | 'tinted';
@@ -22,14 +29,14 @@ export interface ButtonProps {
   /** lg = 52 (primary default, sheet actions, forms; headline), md = 44 (callout), sm = 32 (+6 hitSlop; footnote). All capsules. */
   size?: ButtonSize;
   /**
-   * Surface under the button. Only ghost changes: surface -> surfacePressed wash, background ->
+   * Surface under the button. Only ghost changes (text is the same colour on every surface): surface -> surfacePressed wash, background ->
    * surfaceAltPressed wash, media -> mediaScrimStrong wash, tinted -> no wash, label turns primaryPressed.
    * Secondary always presses to surfaceAltPressed.
    */
   on?: OnSurface;
   /** Leading icon (use `ICON.*` glyphs). Optional on every variant. */
   icon?: IoniconName;
-  /** Trailing icon, only for link-style ghost buttons (`ICON.forward.outline`, `ICON.external.outline`). */
+  /** Trailing icon for ghost buttons (`ICON.forward.outline`, `ICON.external.outline`); text allows only `ICON.external.outline`. */
   trailingIcon?: IoniconName;
   /** Spinner cross-fades in over the label; width is locked and the button is not pressable. */
   loading?: boolean;
@@ -40,8 +47,15 @@ export interface ButtonProps {
   minHeight?: number;
   accessibilityLabel?: string;
   accessibilityHint?: string;
-  /** Max label lines. Default 2; 0 = unlimited (never truncate). ButtonGroup sets 1 side by side, 0 stacked. */
+  /**
+   * Max label lines. Default 2 (text: 1 for trailing / bar, 0 for inline / centered); 0 = unlimited (never truncate).
+   * ButtonGroup sets 1 side by side, 0 stacked.
+   */
   labelLines?: number;
+  /** text only (default 'inline'). */
+  placement?: TextPlacement;
+  /** text + centered only: true (default) when a primary button sits right above, so the top slop stays off it. */
+  afterPrimary?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -51,6 +65,7 @@ const COLORS: Record<ButtonVariant, { bg: PaletteKey | null; fg: PaletteKey; pre
   destructive: { bg: 'error', fg: 'onError', pressed: 'errorPressed' },
   destructiveTonal: { bg: 'surfaceAlt', fg: 'error', pressed: 'surfaceAltPressed' },
   ghost: { bg: null, fg: 'primary', pressed: 'surfacePressed' },
+  text: { bg: null, fg: 'primary', pressed: 'primaryPressed' },
 };
 
 const GHOST_PRESSED: Record<OnSurface, PaletteKey | null> = {
@@ -74,7 +89,11 @@ export function buttonDims(theme: ReturnType<typeof useTheme>['theme'], size: Bu
   }[size];
 }
 
-export function Button({
+export function Button(props: ButtonProps): React.JSX.Element {
+  return props.variant === 'text' ? <TextButton {...props} /> : <FilledButton {...props} />;
+}
+
+function FilledButton({
   label,
   onPress,
   variant = 'primary',

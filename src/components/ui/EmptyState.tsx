@@ -39,9 +39,10 @@ const ALIAS: Record<EmptyStateDeprecatedVariant, EmptyStateVariantName | 'slot'>
 export interface EmptyStateProps {
   /**
    * E1 page: the whole screen has no content. Centred, top = content top + 48 (not vertically centred),
-   * title2 + subhead + optional primary (hug) + optional ghost link. No icon: the text carries it.
+   * title2 + subhead + optional primary (hug) + optional centred text link. No icon: the text carries it.
    * E2 section: one region of a populated screen. Left aligned on the keyline: one subhead sentence
-   * (`description`) + optional ghost `sm` action under it. No icon, no title, no link.
+   * (`description`). The action belongs in the header's T1 slot (<SectionHeader action>), so the usual E2 is just the
+   * sentence; a region without a header may still pass `secondaryLabel` (a `text md inline` action under it).
    * E3 filtered: data exists but the filter / search excluded it. Same layout as E1 (no icon); the primary is "clear filters".
    * E4 error: the page failed to load. Same layout as E1 (no icon, title in the default text colour); the primary is a secondary
    * "Retry" (reload icon) in `primaryLabel` / `onPrimary`. No link.
@@ -58,17 +59,17 @@ export interface EmptyStateProps {
   title?: string;
   /** page / filtered / error: one or two lines on what to do (end with a full stop). section: the one sentence. */
   description?: string;
-  /** Primary action, hugs its content (md). Section: the single ghost sm action's label is `secondaryLabel`. */
+  /** Primary action, hugs its content (md). Section: omit; the action goes in the header slot. */
   primaryLabel?: string;
   onPrimary?: () => void;
   /** page / filtered: `secondary` instead of `primary` when another primary is already on the page. error is always secondary. */
   primaryTone?: 'primary' | 'secondary';
   /** Leading icon on the primary action (error defaults to the retry glyph). */
   primaryIcon?: IoniconName;
-  /** Ghost action: page / filtered = centred link under the primary; section = the only action, under the sentence. */
+  /** Text action: page / filtered = centred link under the primary; section = optional, only when there is no header slot. */
   secondaryLabel?: string;
   onSecondary?: () => void;
-  /** Surface behind the ghost button (it decides the pressed colour). Default 'background'. */
+  /** Surface behind the text action. Default 'background'. */
   on?: OnSurface;
   style?: StyleProp<ViewStyle>;
 }
@@ -76,8 +77,8 @@ export interface EmptyStateProps {
 /**
  * Only shown when it is certain there is no data (never while loading). Fades in over `short` (enter).
  * Title + description read as one VoiceOver node. Centred
- * variants centre every child, buttons and link included (each action sits in an `alignSelf: center`
- * wrapper because Button itself is `alignSelf: flex-start`).
+ * variants centre every child, buttons and link included (the primary sits in an `alignSelf: center`
+ * wrapper because Button itself is `alignSelf: flex-start`; the text link centres itself).
  */
 export function EmptyState({
   variant: variantProp = 'page',
@@ -158,9 +159,7 @@ export function EmptyState({
           {description ?? title}
         </AppText>
         {secondaryLabel ? (
-          <View style={{ marginTop: theme.spacing.sm }}>
-            <Button variant="ghost" size="sm" on={on} label={secondaryLabel} onPress={() => onSecondary?.()} style={{ marginLeft: -14 }} />
-          </View>
+          <Button variant="text" placement="inline" on={on} label={secondaryLabel} onPress={() => onSecondary?.()} style={{ marginTop: theme.spacing.sm }} />
         ) : null}
       </Animated.View>
     );
@@ -213,9 +212,15 @@ export function EmptyState({
         </View>
       ) : null}
       {secondaryLabel && !isError ? (
-        <View style={{ alignSelf: 'center', marginTop: primaryLabel ? theme.spacing.sm : theme.spacing.lg }}>
-          <Button variant="ghost" size="md" on={on} label={secondaryLabel} onPress={() => onSecondary?.()} />
-        </View>
+        <Button
+          variant="text"
+          placement="centered"
+          afterPrimary={!!primaryLabel}
+          on={on}
+          label={secondaryLabel}
+          onPress={() => onSecondary?.()}
+          style={{ marginTop: primaryLabel ? theme.spacing.sm : theme.spacing.lg }}
+        />
       ) : null}
     </Animated.View>
   );
