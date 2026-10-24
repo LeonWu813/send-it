@@ -11,5 +11,5 @@ export const ICON_GROUPS: { id: string; title: string; keys: IconKey[] }[] = [
   },
   { id: 'BetaVideo', title: 'Beta 影片', keys: ['betaVideo', 'play', 'betaCount', 'image', 'upload', 'uploaded', 'library', 'camera', 'like', 'report'] },
   { id: 'Social', title: '社群', keys: ['follow', 'followers', 'share', 'edit', 'delete', 'block'] },
-  { id: 'Feedback', title: '回饋與表單', keys: ['error', 'warning', 'info', 'retry', 'selected', 'passwordVisibility'] },
+  { id: 'Feedback', title: '回饋與表單', keys: ['error', 'warning', 'info', 'retry', 'save', 'selected', 'passwordVisibility'] },
 ];
