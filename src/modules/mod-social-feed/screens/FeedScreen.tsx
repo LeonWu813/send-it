@@ -21,13 +21,14 @@ import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ICON } from '../../../lib/icons';
+import { useMotion } from '../../../lib/motion';
 import { useLayout, useTheme } from '../../../lib/theme';
 import {
   AppText,
   Avatar,
   Card,
   EmptyState,
-  FistBumpIcon,
+  FistBumpLike,
   PageLoading,
   useLoadingPhase,
 } from '../../../components/ui';
@@ -59,6 +60,8 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
 
   const [items, setItems] = useState<FeedItem[]>([]);
   const [likeMap, setLikeMap] = useState<LikeMap>({});
+  const [playKeys, setPlayKeys] = useState<Record<string, number>>({});
+  const { haptic } = useMotion();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +111,13 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
       const current = likeMap[itemId];
       const wasLiked = current?.user_has_liked ?? false;
 
+      // Only a user like replays the bump; data syncs never touch playKey.
+      if (wasLiked) {
+        haptic('select', 'feed-like');
+      } else {
+        setPlayKeys((prev) => ({ ...prev, [itemId]: (prev[itemId] ?? 0) + 1 }));
+      }
+
       // Optimistic update
       setLikeMap((prev) => ({
         ...prev,
@@ -134,7 +144,7 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
         }));
       }
     },
-    [likeMap],
+    [likeMap, haptic],
   );
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -195,7 +205,7 @@ export default function FeedScreen({ session: _session }: FeedScreenProps): Reac
       {items.map((item) =>
         item.item_type === 'ascent'
           ? renderAscentCard(item, styles, t)
-          : renderBetaVideoCard(item, styles, t, likeMap, handleLikeToggle, theme),
+          : renderBetaVideoCard(item, styles, t, likeMap, playKeys, handleLikeToggle, () => haptic('toggle', 'feed-like'), theme),
       )}
     </ScrollView>
   );
@@ -255,7 +265,9 @@ function renderBetaVideoCard(
   styles: ReturnType<typeof makeStyles>,
   t: Translate,
   likeMap: LikeMap,
+  playKeys: Record<string, number>,
   onLikeToggle: (itemId: string) => void,
+  onContact: () => void,
   theme: ReturnType<typeof useTheme>['theme'],
 ): React.JSX.Element {
   const likeInfo = likeMap[item.item_id] ?? { like_count: 0, user_has_liked: false };
@@ -304,8 +316,10 @@ function renderBetaVideoCard(
           style={styles.likeButton}
           onPress={() => onLikeToggle(item.item_id)}
         >
-          <FistBumpIcon
-            variant={likeInfo.user_has_liked ? 'filled' : 'outline'}
+          <FistBumpLike
+            liked={likeInfo.user_has_liked}
+            playKey={playKeys[item.item_id] ?? 0}
+            onContact={onContact}
             size={theme.iconSize.md}
             color={likeInfo.user_has_liked ? theme.colors.primary : theme.colors.textSecondary}
           />
