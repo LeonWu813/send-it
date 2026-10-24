@@ -4,12 +4,12 @@
  * Header: AppShell nested header via useAppHeader (back + title).
  *
  * On mount: fetches fetchMyBlockedUsers() from mod-moderation.
- * Loading state: ActivityIndicator centered.
- * Error state: error text with retry.
+ * Loading state: <PageLoading /> (nothing for 300ms; after 10s the E4 error replaces it, a late success swaps back).
+ * Error state: E4 EmptyState (error) with a Retry button.
  * Inset grouped container (16). Each row (L-2): listRowMinHeight 52, Avatar sm 32, display_name, "Unblock" button centred.
  * Unblock tap: opens a confirm sheet; on confirm calls unblockUser(), removes the
  *              entry optimistically, re-fetches on error.
- * Empty state: "No blocked accounts" / "沒有已封鎖的帳號".
+ * Empty state: E1 EmptyState (ban-outline, title + one-line description).
  *
  * useSafeAreaInsets() + useTheme() — no hardcoded hex.
  */
@@ -17,7 +17,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   FlatList,
   StyleSheet,
   View,
@@ -32,6 +31,8 @@ import { AppText } from '../../../components/ui/AppText';
 import { Avatar } from '../../../components/ui/Avatar';
 import { BottomSheet } from '../../../components/ui/BottomSheet';
 import { Button } from '../../../components/ui/Button';
+import { EmptyState, PageLoading, useLoadingPhase } from '../../../components/ui';
+import { ICON } from '../../../lib/icons';
 import { useLayout, useTheme } from '../../../lib/theme';
 import { useAppHeader, useHeaderContentInset, useTabBarInset } from '@/lib/AppHeaderContext';
 import SwipeBackWrapper from '../../../components/SwipeBackWrapper';
@@ -134,6 +135,7 @@ export default function BlockedAccountsScreen({
   const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const phase = useLoadingPhase(loading);
   const [pendingUnblock, setPendingUnblock] = useState<BlockedUser | null>(null);
 
   const loadBlockedUsers = useCallback(async (): Promise<void> => {
@@ -171,25 +173,43 @@ export default function BlockedAccountsScreen({
 
   function renderContent(): React.JSX.Element {
     if (loading) {
-      return (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      );
+      // idle (first 300ms): draw nothing; loading: PageLoading; timeout: E4 while the request keeps running
+      if (phase === 'loading') return <PageLoading />;
+      if (phase === 'timeout') {
+        return (
+          <View style={[styles.pageSlot, { paddingTop: headerTop }]}>
+            <EmptyState variant="error" title={t('moderation.blockedLoadFailed')} description={t('moderation.blockedLoadFailedBody')} />
+          </View>
+        );
+      }
+      return <View style={styles.pageSlot} />;
     }
 
     if (error !== null) {
       return (
-        <View style={styles.centered}>
-          <AppText variant="body" color="error" align="center" style={styles.errorText}>{error}</AppText>
-          <Button
-            variant="secondary"
-            size="sm"
-            label={t('common.retry')}
-            onPress={() => {
+        <View style={[styles.pageSlot, { paddingTop: headerTop }]}>
+          <EmptyState
+            variant="error"
+            title={t('moderation.blockedLoadFailed')}
+            description={t('moderation.blockedLoadFailedBody')}
+            primaryLabel={t('common.retry')}
+            onPrimary={() => {
               setLoading(true);
               void loadBlockedUsers().finally(() => { setLoading(false); });
             }}
+          />
+        </View>
+      );
+    }
+
+    if (blockedUsers.length === 0) {
+      return (
+        <View style={[styles.pageSlot, { paddingTop: headerTop }]}>
+          <EmptyState
+            variant="page"
+            icon={ICON.block.outline}
+            title={t('moderation.noBlockedAccounts')}
+            description={t('moderation.noBlockedAccountsBody')}
           />
         </View>
       );
@@ -210,11 +230,6 @@ export default function BlockedAccountsScreen({
             unblockLabel={t('moderation.unblock')}
           />
         )}
-        ListEmptyComponent={
-          <View style={styles.centered}>
-            <AppText variant="body" color="textSecondary" align="center">{t('moderation.noBlockedAccounts')}</AppText>
-          </View>
-        }
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingTop: headerTop + theme.spacing.md, paddingBottom: tabInset.contentBottom }}
         scrollIndicatorInsets={{ bottom: tabInset.indicatorBottom }}
@@ -249,14 +264,8 @@ export default function BlockedAccountsScreen({
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function makeStyles(theme: ReturnType<typeof useTheme>['theme']) {
   return StyleSheet.create({
-    centered: {
+    pageSlot: {
       flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: theme.spacing.xl,
-    },
-    errorText: {
-      marginBottom: theme.spacing.md,
     },
   });
 }

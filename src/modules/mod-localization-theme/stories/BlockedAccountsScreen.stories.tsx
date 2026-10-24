@@ -2,12 +2,12 @@
  * BlockedAccountsScreen stories — design review for MOD-010.
  *
  * States:
- *   Loading   — ActivityIndicator is shown while fetching blocked users.
+ *   Loading   — PageLoading (large textSecondary spinner, 48 below the header) after the 300ms delay.
  *               The blocks query never resolves (STUB_PENDING).
  *   Populated — List of 3 blocked users (52pt rows, Avatar sm 32, display name,
  *               vertically centred secondary Unblock button).
  *   Confirm Unblock — Unblock pressed on the first row: confirm sheet is open.
- *   Empty     — No blocked users; "No blocked accounts" message centred.
+ *   Empty     — No blocked users; E1 page empty state (ban icon, title, description).
  *
  * Supabase is replaced by the Storybook stub (no network). Auth session and
  * query results are seeded synchronously during render.
@@ -79,12 +79,12 @@ export const ConfirmUnblock: Story = {
   render: () => <ConfirmUnblockWrapper />,
 };
 
-/** Current user has blocked no one: empty state message shown. */
+/** Current user has blocked no one: E1 page empty state. */
 export const Empty: Story = {
   render: () => <WithBlocks blocks={[]} />,
 };
 
-/** Initial load: ActivityIndicator centred while fetching blocked users. */
+/** Initial load: PageLoading while fetching blocked users. */
 export const Loading: Story = {
   render: () => <WithBlocks blocks={STUB_PENDING} />,
 };

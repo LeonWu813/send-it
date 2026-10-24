@@ -48,7 +48,6 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -230,6 +229,7 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
       const message = err instanceof Error ? err.message : t('auth.errors.signOutFailed');
       setLogoutError(message);
       setIsSigningOut(false);
+      setLogoutConfirmOpen(false);
     }
   }
 
@@ -392,14 +392,8 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
               accessibilityLabel={t('profile.logout')}
               accessibilityState={{ disabled: isSigningOut, busy: isSigningOut }}
             >
-              {isSigningOut ? (
-                <ActivityIndicator size="small" color={theme.colors.error} />
-              ) : (
-                <>
-                  <Ionicons name={ICON.signOut.outline} size={theme.iconSize.md} color={theme.colors.error} />
-                  <AppText variant="body" color="error">{t('profile.logout')}</AppText>
-                </>
-              )}
+              <Ionicons name={ICON.signOut.outline} size={theme.iconSize.md} color={theme.colors.error} />
+              <AppText variant="body" color="error">{t('profile.logout')}</AppText>
             </Pressable>
           </View>
           {logoutError ? (
@@ -414,8 +408,9 @@ export default function SettingsScreen({ onBack, onNavigateToNotificationPrefere
         title={t('settings.logoutConfirmTitle')}
         description={t('settings.logoutConfirmBody')}
         confirmLabel={t('profile.logout')}
+        loading={isSigningOut}
         onConfirm={() => {
-          setLogoutConfirmOpen(false);
+          // The sheet stays open (confirm button loading) until signOut() finishes or fails.
           void handleLogout();
         }}
       />

@@ -6,7 +6,7 @@
  *                Notifications + Blocked Accounts rows, Beta Video Privacy toggle (subtitle
  *                states the ON effect), destructive Logout row.
  *   Confirm Logout — Logout row pressed: the confirm sheet is open (destructive + cancel).
- *   Logging Out — Logout confirmed: the row shows a spinner (disabled/loading state). Achieved by
+ *   Logging Out — Logout confirmed: the sheet stays open with the destructive button loading (the row is unchanged). Achieved by
  *                patching supabase.auth.signOut to never resolve, then
  *                programmatically clicking the row and the sheet's confirm after mount.
  *
@@ -111,7 +111,7 @@ export const ConfirmLogout: Story = {
   render: () => <ConfirmLogoutWrapper />,
 };
 
-/** Logout row is disabled and shows a loading spinner: the state while signOut is in flight. */
+/** Confirm sheet stays open with the destructive button in loading (sheet not dismissible): the state while signOut is in flight. */
 export const LoggingOut: Story = {
   name: 'Logging Out',
   render: () => <LoggingOutWrapper />,
