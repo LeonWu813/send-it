@@ -97,7 +97,7 @@ export function TextField({
   // The error outline is 1.5, so the padding shrinks by 0.5: the outer size never changes.
   const pad = (base: number): number => base - (borderW - thin);
   const minHeight = multiline ? 96 : search ? theme.componentSize.searchFieldHeight : theme.componentSize.textFieldMinHeight;
-  const maxLines = theme.typeScale.body.lineHeight * 5 + 2 * 14;
+  const maxLines = theme.typeScale.body.lineHeight * 5 + 2 * (14 + thin);
   const textColor = disabled ? c.textDisabled : readOnly ? c.textSecondary : c.textPrimary;
   const baseLabel = label ?? accessibilityLabel ?? '';
   const a11yLabel = readOnly
